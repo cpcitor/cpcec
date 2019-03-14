@@ -1,0 +1,296 @@
+ //  ####  ######    ####  #######   ####    ----------------------- //
+//  ##  ##  ##  ##  ##  ##  ##   #  ##  ##  CPCEC, plain text Amstrad //
+// ##       ##  ## ##       ## #   ##       CPC emulator written in C //
+// ##       #####  ##       ####   ##       as a postgraduate project //
+// ##       ##     ##       ## #   ##       by Cesar Nicolas-Gonzalez //
+//  ##  ##  ##      ##  ##  ##   #  ##  ##  since 2018-12-01 till now //
+ //  ####  ####      ####  #######   ####    ----------------------- //
+//- home page, news and updates - http://cngsoft.no-ip.org/cpcec.htm -//
+
+Foreword
+---
+
+CPCEC is an emulator of the family of home microcomputers Amstrad CPC
+(models 464, 664 and 6128) whose goal is to be loyal to the original
+hardware and efficient in standard modern systems. Thus it brings a
+faithful emulation of the Z80 microprocessor and it replicates the
+behavior of the CRTC 6845 and Gate Array video chips, the PSG AY-3-8912
+sound chip, the remaining circuits found in the original hardware, and
+the tape deck and floppy disc drive that made possible loading and
+running software.
+
+The source code of CPCEC and its binaries follow the GNU General Public
+License v3, described in the file GPL.TXT within the package.
+
+Requirements and setup
+---
+
+CPCEC requires a Microsoft Windows 2000 operating system or later. The
+minimal hardware requirements are those fitting the operating system,
+and it's advised that the main microprocessor runs at 400 MHz at least.
+Screen resolution in pixels must be 800x600 at least. A sound card is
+optional. Using a joystick is optional, too.
+
+The emulator spans several files: the runnable binary proper CPCEC.EXE
+and the firmware files CPC464.ROM, CPC664.ROM, CPC6128.ROM and
+CPCADOS.ROM. All these files must be copied in a single directory,
+ideally created to host the emulator.
+
+The binary can be compiled from the source files by following the
+instructions stated inside them. GCC 4.9.2 and TCC 0.9.27 work
+correctly; GCC 4.7.1 makes severe mistakes in compilation and generates
+invalid binaries.
+
+Configuration and files
+---
+
+The behavior of CPCEC can be configured by specifying optional
+parameters in the command line. It's convenient to keep the user's
+preferred parameters by creating in the system menu a link to the
+emulator that includes said parameters. Options can be abridged in Unix
+style: for example '-C -d -J' becomes '-CdJ'. In case of doubt, the
+parameter '-h' shows a short help explaining the available options.
+
+	* -C : emulate a green screen instead of (by default) full
+	colour;
+	* -c0 : set the scanline type to medium;
+	* -c1 : set the scanline type to normal (by default);
+	* -c2 : set the scanline type to simple interlace;
+	* -c3 : set the scanline type to double interlace;
+	* -d : start the emulation with the debugger on (by default
+	off);
+	* -g0 : emulate the CRTC type 0 (by default);
+	* -g1, -g2, -g3, -g4 : ditto for the other four types of CRTC;
+	* -h : short help;
+	* -j : enable emulation of joystick on keyboard (cursors and
+	keys Z and X);
+	* -J : disable the usage of a joystick plugged to the system;
+	* -K : emulate 64k RAM only instead of (by default) 128k;
+	* -m0 : start emulation with the model CPC464;
+	* -m1 : start emulation with the model CPC664;
+	* -m2 : start emulation with the model CPC6128 (by default);
+	* -R : disable real time emulation (by default enabled);
+	* -S : disable sound (by default enabled if there's a sound
+	card);
+	* -X : disable emulation of disc drives (by default enabled);
+	* -Y : disable tape analysis (by default enabled; see below);
+	* -Z : disable tape acceleration (by default enabled).
+
+It's also possible to add file names to the command line: the emulator
+will try opening and running the specified files. Thanks to it CPCEC can
+be linked to the file extensions CDT, CSW, DSK and SNA to automatically
+load said files.
+
+The file types supported by the emulator are divided in three types:
+
+	* WAV, CSW and CDT: tape files, or more properly digital dumps
+	of the contents of a magnetic tape used to store and distribute
+	data and software.
+	* DSK: disc files, virtual translations of the structure and
+	contents of a magnetic floppy disc able to contain data and
+	software.
+	* SNA: "snapshots", integral copies of the state of an emulated
+	system that make possible resuming in a later time said state of
+	emulation.
+
+Tape playback relies on two methods (enabled by default) to improve the
+user experience by shortening a procedure that was originally very slow:
+a typical programme on tape took five minutes to load. The first method
+(tape acceleration) simply detects whether there's a tape in and the
+cassette motor is active: in that case the emulator starts running at
+its maximum possible speed. The second method (tape analysis) examines
+the current state of the Z80 and detects whether it's trying to read the
+tape in a known way: in that case it modifies its state to instantly
+generate the playback results instead of waiting  for the tape to raise
+the next signal.
+
+Automatic loading of disc files tries detecting on its own the required
+booting method. Because some discs had more than one possible booting
+point and the emulator is in risk of choosing an unwanted one, the user
+can choose it on his own by typing the command RUN"FILENAME (where
+FILENAME is the booting file, that is often specified in the software
+instructions, or be simply DISC or DISK) in the emulated system and
+pressing RETURN. In case of doubt, the command CAT shows the list of
+files stored inside the disc.
+
+Function keys
+---
+
+Once it's running, CPCEC shows the screen of the emulated system and
+obeys the user's commands, that besides those belonging to said system
+(control and alphanumeric keypresses, motions of the joystick, either
+real or emulated through the keyboard) include a series of special
+function keys. In case of doubt, key F1 shows a short index of these
+function keys.
+
+	* F1: short help;
+	* F1+Control: emulator authorship;
+	* F2: record the emulation's current state into a snapshot;
+	* F2+Control: record again the last selected snapshot;
+	* F3: load and run a tape file, disc file or snapshot;
+	* F3+Control: load again the last selected snapshot;
+	* F4: enable (or disable) sound emulation;
+	* F4+Control: enable (or disable) the keyboard-emulated
+	joystick;
+	* F5: choose the emulated CPC firmware model;
+	* F5+Control: reset the emulation;
+	* F6: enable (or disable) realtime emulation;
+	* F6+Control: raise the speed of the emulated Z80 from 4 MHz to
+	8, 12 and 16 MHz;
+	* F6+Control+Shift: lower its speed to 12, 8 and 4 MHz;
+	* F7: insert a disc file into the virtual disc drive A;
+	* F7+Shift: insert a disc file into the virtual disc drive B;
+	* F7+Control: remove the disc from the virtual disc drive A;
+	* F7+Control+Shift: remove the disc from the virtual disc drive
+	B;
+	* F8: insert a tape file in the virtual tape deck;
+	* F8+Shift: start recording a new tape file;
+	* F8+Control: remove the tape from the virtual tape deck;
+	* F9: enable the debugger (see below);
+	* F9+Control: enable (or disable) tape acceleration;
+	* F9+Control+Shift: enable (or disable) tape analysis;
+	* F11: toggle the colour mode between green and three levels of
+	colour of increasing brightness;
+	* F11+Shift: ditto in reverse, moving through decreasing
+	brightness colour levels;
+	* F11+Control: change the type of scanlines, from medium to
+	double interlace;
+	* F11+Control+Shift: ditto in reverse, from double interlace to
+	medium;
+	* F12: record the content of the screen into a BMP file;
+	* F12+Control: start recording (or stop) the sound into a WAV
+	file;
+	* F12+Control+Shift: start recording (or stop) the sound into a
+	YM file;
+	* Pause: stop (or resume) emulation;
+	* Alt+Return: maximize (or restore) the window.
+
+Files BMP and WAV are the namesake standard files of image and sound. YM
+files are dumps of the sound chip states, that because of their usage in
+other platforms besides the Amstrad CPC (Spectrum 128, MSX, Atari ST...)
+can be emulated and played back independently in third party programmes
+such as STSOUND and AY-EMUL. Notice that the scanline mode (option that
+simulates several types of screen) mirrors itself on the recordings as
+well as on the screen, and that each mode has a different impact on the
+programme performance: the normal mode consumes the most processing
+power, and the double interlace, the least.
+
+The following keys adjust the frameskip: the higher this parameter, the
+lower the required processing power, but also the lower the visual
+smoothness. Ideally it should keep its value to 0 unless 1.- the system
+lacks enough processing power, or 2.- the user needs to speed the
+emulation up for a while.
+
+	* Num.+ : increases the value of frameskip, up to 50;
+	* Num.- : decreases the value of frameskip, down to 0;
+	* Num.* : sets the value of frameskip to the maximum, 50;
+	* Num./ : sets the value of frameskip to the minimum, 0.
+
+Debugger
+---
+
+The debugger is used to stop the emulation and examine its internal
+state. It's based on a command line interface that shows the current
+technical state of the system (values of the Z80 registers and of the
+Gate Array, CRTC and PSG devices) and waits for the user to type a
+command. In case of doubt 'h' shows a short command help.
+
+	* the empty string (press RETURN without writing anything) runs
+	the current instruction and goes to the next one. In a typical
+	debugger this operation is called "step into".
+	* 'af VALUE' assigns the numeric value VALUE to the Z80 register
+	AF. 'bc VALUE', 'de VALUE', 'hl VALUE', 'ir VALUE', 'ix VALUE',
+	'iy VALUE', 'sp VALUE' do the same with the Z80 registers BC,
+	DE, HL, IR, IX, IY and SP.
+	* 'j VALUE' (jump) sets the value of the Z80 PC register: it's
+	equivalent to the Z80 "jumping" to the address VALUE.
+	* 'd VALUE' (disassembly) shows a partial disassembly of the
+	memory located in the address specified by VALUE. If only 'd' is
+	written the new disassembly continues where the previous one
+	ended.
+	* 'm VALUE' (memory) shows a partial hexadecimal dump of the
+	memory located in the address specified by VALUE. If only 'm' is
+	written the new dump continues where the previous one ended.
+	* 'p VALUE VALUE1 VALUE2 ...' (poke) writes the values VALUE1,
+	VALUE2, etc. on the consecutive memory addresses beginning from
+	VALUE.
+	* 'r VALUE' (run to) disables the debugger and resumes the
+	emulation until the emulated Z80 must run the instruction
+	located in the address specified by VALUE. In that case the
+	emulation will stop and the debugger will automatically enable
+	itself. If only 'r' (step over) is written the interruption will
+	happen on the instruction after the current one; notice that
+	this isn't equivalent to running just the current instruction if
+	this one performs a jump, because the instruction that runs
+	after the next one is no longer the one after it but the one in
+	the address specified by the jump.
+	* 's VALUE VALUE1 VALUE2 ...' (search) looks for the string of
+	values VALUE1, VALUE2, etc. in the memory addresses beginning
+	from VALUE. It lists the addresses containing said string; if
+	they're too many, it will show '...' and stop.
+	* 'h' (help) shows a short help.
+	* 'q' (quit) stops the debugger and resumes the emulation.
+
+Usage of upper and lower case is unimportant; the debugger isn't case
+sensitive. The values shown on screen and the command parameters use
+hexadecimal notation: for example, to write into the memory address
+32768 (and following) the values 83, 79 and 83 you must write 'p 8000 53
+4F 53' where 32768 = $8000, 83 = $53 and 79 = $4F. Finally, it's
+perfectly feasible to feed series of commands written in advance in a
+script by redirecting the standard input, i.e. "cpcec -d snapshot.sna
+< script.txt".
+
+ZXSEC
+---
+
+ZXSEC is an emulator of the Sinclair Spectrum family (48k, 128k,
++2/Plus2 and +3/Plus3) based on the components it shared with the
+Amstrad CPC family: the Z80 microprocessor, the PSG AY-3-8192 sound
+chip, the tape system and the NEC765 disc drive controller.
+
+It spans the files ZXSEC.EXE, SPECTRUM.ROM, SPEC128K.ROM, SPEC-P-2.ROM
+and SPEC-P-3.ROM, and otherwise runs the same as CPCEC, with several
+exceptions:
+
+	* option -mX chooses one out of four possible models: -m0
+	(48k), -m1 (128k), -m2 (+2) or -m3 (+3).
+	* option -K disables the PSG AY-3-8912 sound chip (enabled by
+	default) if the chosen model is Spectrum 48k;
+	* option -X disables the disc drives if the chosen model is
+	Spectrum +3, that thus becomes a +2A instead;
+	* Control+Shift+F8 starts (or stops) the cassette motor, because
+	the CPC hardware includes a built-in tape control, while the
+	Spectrum hardware lacks it.
+
+Emulation is less precise than CPCEC's. "Starion" and "Vectron"
+correctly show their raster effects in 48k mode, but the emulation of
+the Issue 2 ULA (with option -I) is extremely basic, and there isn't any
+memory contention yet.
+
+Acknowledgements
+---
+
+This emulator owes its existence to a series of people and societies
+that are listed as follows:
+
+	* The firmware files included in the package are Amstrad's
+	properties, who allows the emulation of their old computer
+	systems and supports the distribution of their firmwares as long
+	as their authorship and contents are respected, and whom I
+	wholeheartedly thank the creation of those magnificent computers
+	and the good will towards their emulation.
+	* This emulator was my final project for the Computer
+	Engineering postdegree at the Distance-Learning National
+	University (Universidad Nacional de Enseñanza a Distancia,
+	UNED), a project directed by professor José Manuel Díaz Martínez
+	and ultimately awarded a 100% and the right to a mention of
+	honour.
+	* The documentation about the system comes from cpcwiki.eu,
+	cpc-power.com, cpcrulez.fr and quasar.cpcscene.net.
+	* The alpha tests were handled by the faithful and loyal Denis
+	Lechevalier.
+
+Version log
+---
+
+	* 20190313 -- first public release.

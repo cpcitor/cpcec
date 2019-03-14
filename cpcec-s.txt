@@ -1,0 +1,316 @@
+ //  ####  ######    ####  #######   ####    ----------------------- //
+//  ##  ##  ##  ##  ##  ##  ##   #  ##  ##  CPCEC, plain text Amstrad //
+// ##       ##  ## ##       ## #   ##       CPC emulator written in C //
+// ##       #####  ##       ####   ##       as a postgraduate project //
+// ##       ##     ##       ## #   ##       by Cesar Nicolas-Gonzalez //
+//  ##  ##  ##      ##  ##  ##   #  ##  ##  since 2018-12-01 till now //
+ //  ####  ####      ####  #######   ####    ----------------------- //
+//- home page, news and updates - http://cngsoft.no-ip.org/cpcec.htm -//
+
+Introducción
+---
+
+CPCEC es un emulador de la familia de microordenadores domésticos
+Amstrad CPC (modelos 464, 664 y 6128) cuyo objetivo es ser fiel al
+hardware original y eficiente en sistemas modernos corrientes. Para ello
+ofrece una emulación fidedigna del microprocesador Z80 y reproduce el
+comportamiento de los chips de imagen CRTC 6845 y Gate Array, del chip
+de sonido PSG AY-3-8912, de los demás circuitos presentes en el hardware
+original, y de las unidades de cinta y disco que hacían posible la carga
+y ejecución del software existente.
+
+El código fuente y los binarios de CPCEC siguen la licencia GNU General
+Public License v3, descrita en el fichero GPL.TXT adjunto al paquete.
+
+Requisitos e instalación
+---
+
+CPCEC requiere un sistema operativo Microsoft Windows 2000 o posterior.
+El hardware mínimo es el propio de dichos sistemas operativos, y se
+recomienda que el microprocesador central funcione a 400 MHz por lo
+menos. La resolución de pantalla en píxeles debe ser 800x600 como
+mínimo. Una tarjeta de sonido es opcional. También es opcional emplear
+un joystick.
+
+El emulador se compone de varios ficheros: el ejecutable propiamente
+dicho CPCEC.EXE y los ficheros de firmware CPC464.ROM, CPC664.ROM,
+CPC6128.ROM y CPCADOS.ROM. Todos ellos deben ser copiados en un mismo
+directorio, idealmente creado para alojar el emulador.
+
+El binario puede ser compilado a partir de los ficheros fuente siguiendo
+las instrucciones incluidas en su interior. GCC 4.9.2 y TCC 0.9.27
+funcionan correctamente; GCC 4.7.1 comete fallos graves en la
+compilación y genera binarios inválidos.
+
+Configuración y ficheros
+---
+
+El funcionamiento de CPCEC se configura especificando parámetros
+opcionales en la línea de comandos. Se recomienda hacer que los
+parámetros preferidos por el usuario sean estables creando en el menú
+del sistema un enlace al emulador que contenga dichos parámetros. Las
+opciones pueden ser abreviadas al estilo Unix: por ejemplo '-C -d -J' se
+abrevia '-CdJ'. En caso de duda, el parámetro '-h' muestra una breve
+explicación de las opciones disponibles.
+
+	* -C : emular un monitor verde en lugar de (por defecto) uno a
+	todo color;
+	* -c0 : elegir el tipo de scanlines medio;
+	* -c1 : elegir el tipo de scanlines normal (por defecto);
+	* -c2 : elegir el tipo de scanlines entrelazado simple;
+	* -c3 : elegir el tipo de scanlines entrelazado doble;
+	* -d : iniciar la emulación con el debugger activo (por defecto
+	inactivo);
+	* -g0 : emular el tipo de CRTC 0 (por defecto);
+	* -g1, -g2, -g3, -g4 : ídem para los otros cuatro tipos de CRTC;
+	* -h : ayuda breve;
+	* -j : activar la emulación del joystick por teclado (cursores y
+	teclas Z y X);
+	* -J : deshabilitar el empleo de un joystick conectado al
+	sistema;
+	* -K : emular solamente 64k de RAM en lugar de (por defecto)
+	128k;
+	* -m0 : iniciar la emulación con el modelo CPC464;
+	* -m1 : iniciar la emulación con el modelo CPC664;
+	* -m2 : iniciar la emulación con el modelo CPC6128 (por
+	defecto);
+	* -R : deshabilitar emulación en tiempo real (por defecto
+	habilitada);
+	* -S : deshabilitar sonido (por defecto habilitado si hay una
+	tarjeta de sonido);
+	* -X : deshabilitar emulación de unidades de disco (por defecto
+	habilitada);
+	* -Y : deshabilitar el análisis de cinta (por defecto
+	habilitado; ver más adelante);
+	* -Z : deshabilitar la aceleración de cinta (por defecto
+	habilitada).
+
+También es posible añadir nombres de fichero a la línea de comandos: el
+emulador intentará cargar y ejecutar los ficheros especificados. Gracias
+a ello CPCEC puede ser vinculado a las extensiones de fichero CDT, CSW,
+DSK y SNA para cargar dichos ficheros automáticamente.
+
+Los tipos de fichero admitidos por el emulador se dividen en tres tipos:
+
+	* WAV, CSW y CDT: ficheros de cinta, es decir volcados digitales
+	de los contenidos de una cinta magnética utilizada para
+	almacenar y distribuir datos y software.
+	* DSK: ficheros de disco, representaciones virtuales de la
+	estructura y los contenidos de un disco flexible magnético capaz
+	de contener datos y software.
+	* SNA: instantáneas o "snapshots", copias integrales del estado
+	de un sistema emulado que hacen posible reanudar más tarde dicho
+	estado de emulación.
+
+La lectura de cintas emplea dos métodos (habilitados por defecto) para
+mejorar la experiencia de usuario abreviando un proceso que
+originalmente era muy lento: un programa típico en cinta tardaba cinco
+minutos en cargar. El primer método (aceleración de cinta) simplemente
+detecta si hay una cinta insertada y el motor del cassette está en
+funcionamiento: entonces el emulador se pone a funcionar a la máxima
+velocidad posible. El segundo método (análisis de cinta) examina el
+estado actual del Z80 y detecta si éste intenta leer la cinta de una
+forma conocida: entonces manipula su estado para generar
+instantáneamente los resultados de la lectura en lugar de esperar a que
+la cinta genere la siguiente señal.
+
+La ejecución automática de ficheros de disco intenta detectar por sí
+misma el método de arranque necesario. Dado que algunos discos tenían
+más de un arranque posible y el emulador corre el riesgo de elegir uno
+distinto al esperado, el usuario puede establecerlo a mano tecleando la
+orden RUN"NOMBRE (donde NOMBRE es el fichero de arranque, que suele
+venir especificado en las instrucciones del software, o ser simplemente
+DISC o DISK) en el sistema emulado y pulsando RETURN. En caso de duda,
+la orden CAT muestra la lista de ficheros contenidos en el disco.
+
+Teclas de función
+---
+
+Una vez en funcionamiento, CPCEC muestra la pantalla del sistema emulado
+y obedece a las órdenes del usuario, que además de las pertinentes a
+dicho sistema (pulsaciones de teclas alfanuméricas y de control,
+movimientos del joystick real o emulado mediante teclado) incluye una
+serie de teclas de función especiales. En caso de duda, la tecla F1
+muestra un breve índice de dichas teclas de función.
+
+	* F1: ayuda breve;
+	* F1+Control: autoría del emulador;
+	* F2: grabar el estado actual de la emulación en una
+	instantánea;
+	* F2+Control: volver a grabar la última instantánea
+	seleccionada;
+	* F3: cargar y ejecutar un fichero de cinta, de disco o una
+	instantánea;
+	* F3+Control: volver a cargar la última instantánea
+	seleccionada;
+	* F4: habilitar (o deshabilitar) la emulación de sonido;
+	* F4+Control: habilitar (o deshabilitar) el joystick por
+	teclado;
+	* F5: elegir el firmware del modelo de CPC emulado;
+	* F5+Control: reiniciar la emulación;
+	* F6: habilitar (o deshabilitar) la emulación en tiempo real;
+	* F6+Control: elevar la velocidad del Z80 emulado de 4 MHz a 8,
+	12 y 16 MHz;
+	* F6+Control+Mays: reducir su velocidad a 12, 8 y 4 MHz;
+	* F7: insertar un fichero de disco en la disquetera virtual A;
+	* F7+Mays: insertar un fichero de disco en la disquetera virtual
+	B;
+	* F7+Control: extraer el disco de la disquetera virtual A;
+	* F7+Control+Mays: extraer el disco de la disquetera virtual B;
+	* F8: insertar un fichero de cinta en el cassette virtual;
+	* F8+Mays: empezar a grabar un fichero de cinta nuevo;
+	* F8+Control: extraer la cinta del cassette virtual;
+	* F9: habilitar el debugger (ver más adelante);
+	* F9+Control: habilitar (o deshabilitar) la aceleración de
+	cinta;
+	* F9+Control+Mays: habilitar (o deshabilitar) el análisis de
+	cinta;
+	* F11: cambiar el modo de color entre verde y tres gamas de
+	color de claridad creciente;
+	* F11+Mays: ídem en sentido contrario, recorriendo las gamas por
+	orden decreciente;
+	* F11+Control: cambiar el tipo de scanlines, de medio a
+	entrelazado doble;
+	* F11+Control+Mays: ídem en sentido contrario, de entrelazado
+	doble a medio;
+	* F12: grabar el contenido de la pantalla en un fichero BMP;
+	* F12+Control: comenzar a grabar (o terminar) el sonido en un
+	fichero WAV;
+	* F12+Control+Mays: comenzar a grabar (o terminar) el sonido en
+	un fichero YM;
+	* Pausa: detener (o reanudar) la emulación;
+	* Alt+Return: maximizar (o restaurar) la ventana.
+
+Los ficheros BMP y WAV son los ficheros de imagen y sonido estándares
+homónimos. Los ficheros YM son volcados del estado del chip de sonido,
+que por haber sido usado en más plataformas además de Amstrad CPC
+(Spectrum 128, MSX, Atari ST...) pueden ser emulados y reproducidos
+independientemente en programas terceros tales como STSOUND y AY-EMUL.
+Nótese que el modo de scanlines (opción que simula varios tipos de
+monitor) se refleja en las grabaciones igual que en la pantalla, y que
+cada modo tiene un impacto distinto en la eficiencia del programa: el
+modo normal es el que más esfuerzo consume, y el entrelazado doble, el
+que menos.
+
+Las siguientes teclas ajustan el "frameskip" o salto de "frames": a
+mayor valor de este parámetro, menor consumo de potencia de proceso,
+pero también menor suavidad en la imagen. Idealmente debe mantenerse su
+valor a 0 a menos que 1.- el sistema no tenga potencia de proceso
+suficiente, o 2.- el usuario necesite acelerar la emulación durante un
+tiempo.
+
+	* Num.+ : incrementa el valor de "frameskip", hasta 50;
+	* Num.- : decrementa el valor de "frameskip", hasta 0;
+	* Num.* : establece el valor de "frameskip" al máximo, 50;
+	* Num./ : establece el valor de "frameskip" al mínimo, 0.
+
+Debugger
+---
+
+El debugger sirve para detener la emulación y examinar su estado
+interno. Para ello emplea un interfaz textual que muestra el estado
+técnico actual del sistema (valores de los registros del Z80 y de los
+dispositivos Gate Array, CRTC y PSG) y espera que el usuario teclee una
+orden. En caso de duda 'h' muestra una breve explicación de los
+comandos.
+
+	* la cadena vacía (pulsar RETURN sin escribir nada) ejecuta la
+	instrucción actual y pasa a la siguiente. En un debugger típico
+	esta operación se llamaría "step into".
+	* 'af VALOR' asigna el valor numérico VALOR al registro AF del
+	Z80. 'bc VALOR', 'de VALOR', 'hl VALOR', 'ir VALOR', 'ix VALOR',
+	'iy VALOR', 'sp VALOR' hacen lo mismo con los registros del Z80
+	BC, DE, HL, IR, IX, IY y SP.
+	* 'j VALOR' (jump) establece el valor numérico del registro PC
+	del Z80: equivale a que el Z80 "salte" a la dirección de VALOR.
+	* 'd VALOR' (disassembly) muestra un desensamblado parcial de la
+	memoria ubicada en la dirección especificada por VALOR. Si
+	solamente se escribe 'd' el nuevo desensamblado continúa donde
+	terminó el anterior.
+	* 'm VALOR' (memory) muestra un volcado hexadecimal parcial de
+	la memoria ubicada en la dirección especificada por VALOR. Si
+	solamente se escribe 'm' el nuevo volcado continúa donde terminó
+	el anterior.
+	* 'p VALOR VALOR1 VALOR2 ...' (poke) escribe los valores VALOR1,
+	VALOR2, etc. en las direcciones de memoria consecutivas a partir
+	de VALOR.
+	* 'r VALOR' (run to) desactiva el debugger y reanuda la
+	emulación hasta que el Z80 emulado deba ejecutar la instrucción
+	ubicada en la dirección especificada por VALOR. Entonces la
+	emulación se interrumpirá y el debugger se reactivará
+	automáticamente. Si solamente se escribe 'r' (step over) la
+	interrupción ocurrirá en la instrucción posterior a la actual;
+	nótese que esto no equivale a solamente ejecutar la instrucción
+	actual si ésta efectúa un salto, pues la instrucción que se
+	ejecuta tras la actual ya no es la posterior sino la que se
+	encuentre en la dirección del salto.
+	* 's VALOR VALOR1 VALOR2 ...' (search) busca la cadena de
+	valores VALOR1, VALOR2, etc. en las direcciones de memoria a
+	partir de VALOR. Enumera las direcciones que contengan dicha
+	cadena; si son demasiadas, muestra '...' y se detiene.
+	* 'h' (help) muestra una ayuda breve;
+	* 'q' (quit) sirve para abandonar el debugger y reanudar la
+	emulación.
+
+El uso de mayúsculas y minúsculas no es importante: el debugger no hace
+distinciones. Los valores mostrados en pantalla y los parámetros de las
+órdenes emplean notación hexadecimal: por ejemplo, para escribir en la
+dirección de memoria 32768 y consecutivas los valores 83, 79 y 83 hay
+que escribir 'p 8000 53 4F 53' donde 32768 = $8000, 83 = $53 y 79 = $4F.
+Finalmente, es perfectamente posible introducir secuencias de órdenes
+escritas de antemano en un "script" mediante la redirección de la
+entrada estándar, i.e. "cpcec -d instantanea.sna < script.txt".
+
+ZXSEC
+---
+
+ZXSEC es un emulador de la familia Sinclair Spectrum (48k, 128k,
++2/Plus2 y +3/Plus3) basado en los componentes compartidos con el
+Amstrad CPC: el microprocesador Z80, el chip de sonido PSG AY-3-8912, el
+sistema de cinta y la controladora de disco NEC765.
+
+Se compone de los ficheros ZXSEC.EXE, SPECTRUM.ROM, SPEC128K.ROM,
+SPEC-P-2.ROM y SPEC-P-3.ROM, y por lo demás funciona igual que CPCEC,
+con varias salvedades:
+
+	* la opción -mX elige uno de cuatro modelos posibles: -m0 (48k),
+	-m1 (128k), -m2 (+2) ó -m3 (+3);
+	* la opción -K deshabilita el chip de sonido PSG AY-3-8912
+	(habilitado por defecto) si el modelo elegido es Spectrum 48k;
+	* la opción -X deshabilita la unidad de disco si el modelo
+	elegido es Spectrum +3, que así se convierte en un +2A;
+	* Control+Mays+F8 sirve para poner en marcha (o detener) el
+	motor de cinta, dado que el hardware de CPC dispone de control
+	de cinta incorporado, mientras que el de Spectrum carece de él.
+
+La emulación es menos precisa que la de CPCEC. "Starion" y "Vectron"
+muestran correctamente sus efectos raster en modo 48k, pero la emulación
+de la ULA Issue 2 (con la opción -I) es extremadamente básica, y todavía
+no hay contención de memoria.
+
+Agradecimientos
+---
+
+Este emulador debe su existencia a una serie de personas y sociedades
+que enumero a continuación:
+
+	* Los ficheros de firmware incluidos en el paquete son propiedad
+	de Amstrad, que autoriza la emulación de sus antiguos sistemas
+	informáticos y permite la distribución de sus firmwares siempre
+	que se respete su autoría y su contenido, y a quien agradezco de
+	todo corazón la creación de aquellos magníficos ordenadores y la
+	buena voluntad hacia la emulación de los mismos.
+	* Este emulador fue mi proyecto de fin de máster en Ingeniería
+	Informática para la Universidad Nacional de Enseñanza a
+	Distancia (UNED), que estuvo dirigido por el profesor José
+	Manuel Díaz Martínez y resultó galardonado con un diez con
+	derecho a matrícula de honor.
+	* La documentación sobre el sistema procede de cpcwiki.eu,
+	cpc-power.com, cpcrulez.fr y quasar.cpcscene.net.
+	* Las pruebas alfa corrieron a cargo del fiel y leal Denis
+	Lechevalier.
+
+Historial de versiones
+---
+
+	* 20190313 -- primera versión pública.
