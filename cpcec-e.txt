@@ -293,4 +293,5 @@ that are listed as follows:
 Version log
 ---
 
-	* 20190313 -- first public release.
+	* 20190317 -- second public release. Fixed Win32 joystick bugs: JoyGetPos returns ZERO if OK, not if ERROR.
+	* 20190314 -- first public release.

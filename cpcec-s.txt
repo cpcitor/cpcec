@@ -313,4 +313,5 @@ que enumero a continuación:
 Historial de versiones
 ---
 
-	* 20190313 -- primera versión pública.
+	* 20190317 -- segunda versión pública. Corrige bugs de joystick en Win32: JoyGetPos devuelve CERO en EXITO, no en ERROR.
+	* 20190314 -- primera versión pública.
