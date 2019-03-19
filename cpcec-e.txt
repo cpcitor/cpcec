@@ -185,6 +185,10 @@ emulation up for a while.
 	* Num.- : decreases the value of frameskip, down to 0;
 	* Num.* : sets the value of frameskip to the maximum, 50;
 	* Num./ : sets the value of frameskip to the minimum, 0.
+	
+CPCEC supports drag-and-drop. Dropped files will be automatically loaded
+(as F3 does) unless the Shift key is down; in this case they will be
+inserted as F7 and F8 do.
 
 Debugger
 ---
@@ -293,5 +297,8 @@ that are listed as follows:
 Version log
 ---
 
-	* 20190317 -- second public release. Fixed Win32 joystick bugs: JoyGetPos returns ZERO if OK, not if ERROR.
+	* 20190318 -- third public release. By default the window shows
+	a menu; new option -+ hides it.
+	* 20190317 -- second public release. Fixed Win32 joystick bugs:
+	JoyGetPos returns ZERO on OK, not on ERROR.
 	* 20190314 -- first public release.

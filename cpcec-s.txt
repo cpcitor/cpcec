@@ -204,6 +204,10 @@ tiempo.
 	* Num.* : establece el valor de "frameskip" al máximo, 50;
 	* Num./ : establece el valor de "frameskip" al mínimo, 0.
 
+CPCEC permite arrastrar y soltar ficheros. Éstos serán automáticamente
+ejecutados (como con F3) a menos que la tecla Mays esté pulsada, en
+cuyo caso serán simplemente insertados como con F7 y F8.
+	
 Debugger
 ---
 
@@ -313,5 +317,8 @@ que enumero a continuación:
 Historial de versiones
 ---
 
-	* 20190317 -- segunda versión pública. Corrige bugs de joystick en Win32: JoyGetPos devuelve CERO en EXITO, no en ERROR.
+	* 20190318 -- tercera versión pública. Por defecto la ventana
+	muestra un menú; la nueva opción -+ lo oculta.
+	* 20190317 -- segunda versión pública. Corrige bugs de joystick
+	en Win32: JoyGetPos devuelve CERO en EXITO, no en ERROR.
 	* 20190314 -- primera versión pública.
