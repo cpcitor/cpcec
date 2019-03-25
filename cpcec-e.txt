@@ -1,10 +1,10 @@
- //  ####  ######    ####  #######   ####    ----------------------- //
+ //  ####  ######    ####  #######   ####  ------------------------- //
 //  ##  ##  ##  ##  ##  ##  ##   #  ##  ##  CPCEC, plain text Amstrad //
 // ##       ##  ## ##       ## #   ##       CPC emulator written in C //
 // ##       #####  ##       ####   ##       as a postgraduate project //
 // ##       ##     ##       ## #   ##       by Cesar Nicolas-Gonzalez //
 //  ##  ##  ##      ##  ##  ##   #  ##  ##  since 2018-12-01 till now //
- //  ####  ####      ####  #######   ####    ----------------------- //
+ //  ####  ####      ####  #######   ####  ------------------------- //
 //- home page, news and updates - http://cngsoft.no-ip.org/cpcec.htm -//
 
 Foreword
@@ -63,12 +63,13 @@ parameter '-h' shows a short help explaining the available options.
 	* -g1, -g2, -g3, -g4 : ditto for the other four types of CRTC;
 	* -h : short help;
 	* -j : enable emulation of joystick on keyboard (cursors and
-	keys Z and X);
+	keys Z, X and C);
 	* -J : disable the usage of a joystick plugged to the system;
 	* -K : emulate 64k RAM only instead of (by default) 128k;
 	* -m0 : start emulation with the model CPC464;
 	* -m1 : start emulation with the model CPC664;
 	* -m2 : start emulation with the model CPC6128 (by default);
+	* -O : hide onscreen indicators (by default shown);
 	* -R : disable real time emulation (by default enabled);
 	* -S : disable sound (by default enabled if there's a sound
 	card);
@@ -147,6 +148,7 @@ function keys.
 	* F8+Shift: start recording a new tape file;
 	* F8+Control: remove the tape from the virtual tape deck;
 	* F9: enable the debugger (see below);
+	* F9+Shift: show (or hide) the onscreen indicators;
 	* F9+Control: enable (or disable) tape acceleration;
 	* F9+Control+Shift: enable (or disable) tape analysis;
 	* F11: toggle the colour mode between green and three levels of
@@ -175,6 +177,9 @@ well as on the screen, and that each mode has a different impact on the
 programme performance: the normal mode consumes the most processing
 power, and the double interlace, the least.
 
+The onscreen indicators show the state of the disc drives (track number,
+busy or idle), the tape deck (busy or idle) and the joystick.
+
 The following keys adjust the frameskip: the higher this parameter, the
 lower the required processing power, but also the lower the visual
 smoothness. Ideally it should keep its value to 0 unless 1.- the system
@@ -185,7 +190,7 @@ emulation up for a while.
 	* Num.- : decreases the value of frameskip, down to 0;
 	* Num.* : sets the value of frameskip to the maximum, 50;
 	* Num./ : sets the value of frameskip to the minimum, 0.
-	
+
 CPCEC supports drag-and-drop. Dropped files will be automatically loaded
 (as F3 does) unless the Shift key is down; in this case they will be
 inserted as F7 and F8 do.
@@ -265,6 +270,8 @@ exceptions:
 	* Control+Shift+F8 starts (or stops) the cassette motor, because
 	the CPC hardware includes a built-in tape control, while the
 	Spectrum hardware lacks it.
+	* joystick options apply to the Kempson interface by default;
+	the menu allows choosing the type of joystick.
 
 Emulation is less precise than CPCEC's. "Starion" and "Vectron"
 correctly show their raster effects in 48k mode, but the emulation of
@@ -297,6 +304,10 @@ that are listed as follows:
 Version log
 ---
 
+	* 20190325 -- fourth public release. Onscreen indicators (hide
+	them with -O); fixed bugs in ZXSEC that slowed emulation down
+	when the frameskip wasn't zero, and another bug in audio
+	recording on WAV files.
 	* 20190318 -- third public release. By default the window shows
 	a menu; new option -+ hides it.
 	* 20190317 -- second public release. Fixed Win32 joystick bugs:

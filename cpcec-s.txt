@@ -1,10 +1,10 @@
- //  ####  ######    ####  #######   ####    ----------------------- //
+ //  ####  ######    ####  #######   ####  ------------------------- //
 //  ##  ##  ##  ##  ##  ##  ##   #  ##  ##  CPCEC, plain text Amstrad //
 // ##       ##  ## ##       ## #   ##       CPC emulator written in C //
 // ##       #####  ##       ####   ##       as a postgraduate project //
 // ##       ##     ##       ## #   ##       by Cesar Nicolas-Gonzalez //
 //  ##  ##  ##      ##  ##  ##   #  ##  ##  since 2018-12-01 till now //
- //  ####  ####      ####  #######   ####    ----------------------- //
+ //  ####  ####      ####  #######   ####  ------------------------- //
 //- home page, news and updates - http://cngsoft.no-ip.org/cpcec.htm -//
 
 Introducción
@@ -65,7 +65,7 @@ explicación de las opciones disponibles.
 	* -g1, -g2, -g3, -g4 : ídem para los otros cuatro tipos de CRTC;
 	* -h : ayuda breve;
 	* -j : activar la emulación del joystick por teclado (cursores y
-	teclas Z y X);
+	teclas Z, X y C);
 	* -J : deshabilitar el empleo de un joystick conectado al
 	sistema;
 	* -K : emular solamente 64k de RAM en lugar de (por defecto)
@@ -74,6 +74,7 @@ explicación de las opciones disponibles.
 	* -m1 : iniciar la emulación con el modelo CPC664;
 	* -m2 : iniciar la emulación con el modelo CPC6128 (por
 	defecto);
+	* -O : ocultar indicadores en pantalla (por defecto visibles);
 	* -R : deshabilitar emulación en tiempo real (por defecto
 	habilitada);
 	* -S : deshabilitar sonido (por defecto habilitado si hay una
@@ -161,6 +162,7 @@ muestra un breve índice de dichas teclas de función.
 	* F8+Mays: empezar a grabar un fichero de cinta nuevo;
 	* F8+Control: extraer la cinta del cassette virtual;
 	* F9: habilitar el debugger (ver más adelante);
+	* F9+Mays: mostrar (u ocultar) los indicadores en pantalla;
 	* F9+Control: habilitar (o deshabilitar) la aceleración de
 	cinta;
 	* F9+Control+Mays: habilitar (o deshabilitar) el análisis de
@@ -192,6 +194,9 @@ cada modo tiene un impacto distinto en la eficiencia del programa: el
 modo normal es el que más esfuerzo consume, y el entrelazado doble, el
 que menos.
 
+Los indicadores en pantalla muestran el estado de las unidades de disco
+(número de pista, actividad), la cinta (actividad) y el joystick.
+
 Las siguientes teclas ajustan el "frameskip" o salto de "frames": a
 mayor valor de este parámetro, menor consumo de potencia de proceso,
 pero también menor suavidad en la imagen. Idealmente debe mantenerse su
@@ -207,7 +212,7 @@ tiempo.
 CPCEC permite arrastrar y soltar ficheros. Éstos serán automáticamente
 ejecutados (como con F3) a menos que la tecla Mays esté pulsada, en
 cuyo caso serán simplemente insertados como con F7 y F8.
-	
+
 Debugger
 ---
 
@@ -286,6 +291,8 @@ con varias salvedades:
 	* Control+Mays+F8 sirve para poner en marcha (o detener) el
 	motor de cinta, dado que el hardware de CPC dispone de control
 	de cinta incorporado, mientras que el de Spectrum carece de él.
+	* las opciones de joystick se refieren al interfaz Kempston por
+	defecto; el menú permite elegir el tipo de joystick.
 
 La emulación es menos precisa que la de CPCEC. "Starion" y "Vectron"
 muestran correctamente sus efectos raster en modo 48k, pero la emulación
@@ -317,6 +324,10 @@ que enumero a continuación:
 Historial de versiones
 ---
 
+	* 20190325 -- cuarta versión pública. Indicadores en pantalla
+	(se ocultan con -O); corrige un bug en ZXSEC que ralentizaba la
+	emulación si el "frameskip" no era nulo, y otro en la grabación
+	de sonido en ficheros WAV.
 	* 20190318 -- tercera versión pública. Por defecto la ventana
 	muestra un menú; la nueva opción -+ lo oculta.
 	* 20190317 -- segunda versión pública. Corrige bugs de joystick
