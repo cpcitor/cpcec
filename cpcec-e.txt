@@ -304,6 +304,8 @@ that are listed as follows:
 Version log
 ---
 
+	* 20190331 -- fifth public release. Tapes can be browsed, either
+	by file position (WAV and CSW) or by block (CDT, TZX and TAP).
 	* 20190325 -- fourth public release. Onscreen indicators (hide
 	them with -O); fixed bugs in ZXSEC that slowed emulation down
 	when the frameskip wasn't zero, and another bug in audio

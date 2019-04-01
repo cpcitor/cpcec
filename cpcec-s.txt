@@ -324,6 +324,8 @@ que enumero a continuación:
 Historial de versiones
 ---
 
+	* 20190331 -- quinta versión pública. Se puede recorrer cintas
+	por posición (WAV y CSW) o por bloques (CDT, TZX y TAP).
 	* 20190325 -- cuarta versión pública. Indicadores en pantalla
 	(se ocultan con -O); corrige un bug en ZXSEC que ralentizaba la
 	emulación si el "frameskip" no era nulo, y otro en la grabación
