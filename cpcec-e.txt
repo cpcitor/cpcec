@@ -46,10 +46,11 @@ Configuration and files
 
 The behavior of CPCEC can be configured by specifying optional
 parameters in the command line. It's convenient to keep the user's
-preferred parameters by creating in the system menu a link to the
-emulator that includes said parameters. Options can be abridged in Unix
-style: for example '-C -d -J' becomes '-CdJ'. In case of doubt, the
-parameter '-h' shows a short help explaining the available options.
+preferred parameters by creating a link or shortcut to the emulator
+in the system menu and including said parameters within the link.
+Options can be abridged in Unix style: for example '-C -d -J' becomes
+'-CdJ'. In case of doubt, the parameter '-h' shows a short help
+explaining the available options.
 
 	* -C : emulate a green screen instead of (by default) full
 	colour;
@@ -68,7 +69,7 @@ parameter '-h' shows a short help explaining the available options.
 	* -K : emulate 64k RAM only instead of (by default) 128k;
 	* -m0 : start emulation with the model CPC464;
 	* -m1 : start emulation with the model CPC664;
-	* -m2 : start emulation with the model CPC6128 (by default);
+	* -m2 : start emulation with the model CPC6128, by default;
 	* -O : hide onscreen indicators (by default shown);
 	* -R : disable real time emulation (by default enabled);
 	* -S : disable sound (by default enabled if there's a sound
@@ -102,7 +103,7 @@ cassette motor is active: in that case the emulator starts running at
 its maximum possible speed. The second method (tape analysis) examines
 the current state of the Z80 and detects whether it's trying to read the
 tape in a known way: in that case it modifies its state to instantly
-generate the playback results instead of waiting  for the tape to raise
+generate the playback results instead of waiting for the tape to raise
 the next signal.
 
 Automatic loading of disc files tries detecting on its own the required
@@ -275,7 +276,7 @@ exceptions:
 
 Emulation is less precise than CPCEC's. "Starion" and "Vectron"
 correctly show their raster effects in 48k mode, but the emulation of
-the Issue 2 ULA (with option -I) is extremely basic, and there isn't any
+the Issue 2 ULA (the option -I) is extremely basic, and there isn't any
 memory contention yet.
 
 Acknowledgements
@@ -294,8 +295,7 @@ that are listed as follows:
 	Engineering postdegree at the Distance-Learning National
 	University (Universidad Nacional de Enseñanza a Distancia,
 	UNED), a project directed by professor José Manuel Díaz Martínez
-	and ultimately awarded a 100% and the right to a mention of
-	honour.
+	and finally awarded a 100% and the right to a honorable mention.
 	* The documentation about the system comes from cpcwiki.eu,
 	cpc-power.com, cpcrulez.fr and quasar.cpcscene.net.
 	* The alpha tests were handled by the faithful and loyal Denis
@@ -304,6 +304,9 @@ that are listed as follows:
 Version log
 ---
 
+	* 20190404 -- sixth public release. Fixed a Z80 emulation bug in
+	IRQ logic. Configuration (computer model and file paths) is kept
+	across sessions in a INI file.
 	* 20190331 -- fifth public release. Tapes can be browsed, either
 	by file position (WAV and CSW) or by block (CDT, TZX and TAP).
 	* 20190325 -- fourth public release. Onscreen indicators (hide
@@ -315,3 +318,147 @@ Version log
 	* 20190317 -- second public release. Fixed Win32 joystick bugs:
 	JoyGetPos returns ZERO on OK, not on ERROR.
 	* 20190314 -- first public release.
+	
+Appendix: test cases
+---
+
+The following list states the one hundred titles that made the bulk of
+the emulator tests during its development. Several titles span more than
+one test (for example "Donkey Kong" is both a protected tape and a
+middle case of multiple image modes at once); they're mentioned in the
+first type of test.
+
+Diagnostics:
+
+	* Z80 Instruction Exerciser ZEXALL (2004 public domain)
+	* PLUSTEST (2002 Richard Wilson)
+
+Simple cases:
+
+	* Sultan's Maze / Laberinto del Sultán (1984 Gem Software / Amsoft)
+	* Oh Mummy (1984 Gem Software / Amsoft)
+	* Roland on the Ropes / Fred (1984 Indescomp / Amsoft)
+	* Roland in the Caves / La Pulga (1984 Indescomp / Amsoft)
+
+Tape files:
+
+	* Unprotected:
+		* Roland in Time (1984 Gem Software / Amsoft)
+		* Manic Miner (1985 Software Projects / Amsoft)
+		* Jet Set Willy (1985 Software Projects / Amsoft)
+		* Knight Lore (1985 Ultimate)
+		* Alien 8 (1986 Ultimate)
+	* Simple protections:
+		* Technician Ted (1985 Hewson)
+		* Abu Simbel Profanation (1986 Dinamic)
+		* Deflektor (1987 Costa Panayi / Gremlin Graphics)
+		* Desperado (1987 Topo Soft)
+		* Humphrey (1988 Made in Spain / Zigurat)
+	* Middle protections:
+		* Donkey Kong (1986 Arcana / Ocean)
+		* Samurai Trilogy (1987 Gremlin Graphics)
+		* Operation Wolf (1988 Imagine)
+		* Rainbow Islands (1989 Graftgold / Ocean)
+	* Complex protections:
+		* Rasputin (1985 Paul Hibbard / Firebird)
+		* Spiky Harold (1985 A.Rogers / Firebird)
+		* Druid (1986 Firebird)
+		* Split Personalities (1986 Domark)
+		* Last Mission (1986 Opera Soft)
+		* Marmalade (1987 MBC Informatique)
+		* Gonzzálezz (1989 Opera Soft)
+		* Twinworld (1990 Ubi Soft)
+
+Strange cases:
+
+	* Z80:
+		* Sabre Wulf (1985 Ultimate)
+		* Bigfoot (1989 Codemasters)
+	* PIO:
+		* Nodes of Yesod (1986 Odin)
+		* Prehistorik (1991 Titus)
+		* Antiriad / Sacred Armour of Antiriad (1987 Palace Software)
+	* Puertos:
+		* Skweek (1989 Loriciels)
+		* Night Shift (1990 Lucasarts)
+		* Hero Quest (1991 Gremlin Graphics)
+
+Middle cases:
+
+	* Multiple image modes or colour palettes at once:
+		* Sorcery (1985 Gang of Five / Virgin Games)
+		* Kong Strikes Back (1985 Ocean)
+		* Crafton & Xunk (1986 Ere Software)
+		* Elite (1986 Bell and Braben / Firebird)
+		* Amaurote (1987 Binary Design / Mastertronic)
+		* Feud (1987 Binary Design / Mastertronic)
+		* Gauntlet (1987 Gremlin Graphics)
+		* Renegade (1987 Arcana / Imagine)
+	* Fast smooth hardware scroll:
+		* TLL / Tornado Low Level (1985 Vortex Software)
+		* Thing on a Spring (1986 Gremlin Graphics)
+		* Ghosts'n Goblins (1986 Elite)
+		* Prohibition (1987 Infogrames)
+	* Screen bigger than usual (overscan):
+		* Arkanoid (1987 Probe / Imagine)
+		* Arkanoid 2: Revenge of Doh (1988 Imagine)
+	* Hardware double buffer:
+		* Sol Negro (1988 Opera Soft)
+		* Mutan Zone (1988 Opera Soft)
+		* Rescate Atlántida (1989 Creep Soft / Dinamic)
+		* AMC / Astro Marine Corps (1989 Creep Soft / Dinamic)
+	* Sampled sound:
+		* Enigma de Aceps (1986 ACE Software)
+		* Dragon Ninja (1988 Imagine)
+		* Robocop (1988 Ocean)
+
+Disc files:
+
+	* CP/M 2.2 (1984 Digital Research / Amstrad)
+	* CP/M Plus (1985 Digital Research / Amstrad)
+	* Abadía del Crimen (1987 Opera Soft)
+	* Corsarios (1990 Opera Soft)
+	* Ghostbusters 2 (1989 Software Studios / Activision)
+	* SWIV (1991 Storm / Sales Curve)
+	* Addams Family / La familia Addams (1991 Ocean)
+	* 5KB Demo 3 (1999 varios autores)
+
+Advanced cases:
+
+	* Mission Genocide (1987 Paul Shirley / Firebird)
+	* Warhawk (1987 Proteus / Firebird)
+	* Dynamic Duo (1988 Probe / Firebird)
+	* Rastan (1988 Probe / Imagine)
+	* Skateball (1988 Ubi Soft)
+	* Turrican (1990 Probe / Rainbow Arts)
+
+Very advanced cases:
+
+	* Turrican 2 (1991 Enigma Variations / Rainbow Arts)
+	* Facehugger Megademo (1991 Face Hugger)
+	* Zap't'Balls (1992 Amstrad CPC International)
+	* Super Cauldron (1992 Titus)
+	* Prodatron Megademo (1992 Prodatron)
+	* Prehistorik 2 (1993 Titus)
+	* Voyage '93 (1993 varios autores)
+	* Overflow 5 Previews (1994 Overflow)
+	* Big'O Full'O Dem'O (1998 Arkos)
+	* Byte '98 (1999 Mortel & Overlanders)
+	* École Buissonière (2000 Overlanders)
+	* DTC (2006 Arkos)
+	* Orion Prime (2009 Cargosoft)
+	* Edge Grinder (2011 Cosine & Format War)
+	* Batman Returns (2011 Batman Group)
+	* Bloc Us (2011 Benediction)
+	* Super Edge Grinder (2012 Cosine & Format War)
+	* R-Type 128 (2012 Easter Egg)
+	* Still Rising (2013 Vanity)
+	* Yet Another Plasma! (2012 Logon System)
+	* Breaking Baud (2015 CRTC & 3LN)
+	* Megablasters: Escape from Castle in the Clouds (2015 Project Argon)
+	* Imperial Mahjong (2016 Cargosoft)
+	* Logon's Run (2017 Logon System)
+	* Wunderbar (2017 Arkos & Benediction)
+	* Isometrikum (2018 Vanity)
+	* Still Scrolling (2018 Music2Eye & Praline)
+	* PhX (2018 Condense)

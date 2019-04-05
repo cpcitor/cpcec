@@ -29,8 +29,7 @@ CPCEC requiere un sistema operativo Microsoft Windows 2000 o posterior.
 El hardware mínimo es el propio de dichos sistemas operativos, y se
 recomienda que el microprocesador central funcione a 400 MHz por lo
 menos. La resolución de pantalla en píxeles debe ser 800x600 como
-mínimo. Una tarjeta de sonido es opcional. También es opcional emplear
-un joystick.
+mínimo. Una tarjeta de sonido es opcional, así como emplear un joystick.
 
 El emulador se compone de varios ficheros: el ejecutable propiamente
 dicho CPCEC.EXE y los ficheros de firmware CPC464.ROM, CPC664.ROM,
@@ -46,12 +45,12 @@ Configuración y ficheros
 ---
 
 El funcionamiento de CPCEC se configura especificando parámetros
-opcionales en la línea de comandos. Se recomienda hacer que los
-parámetros preferidos por el usuario sean estables creando en el menú
-del sistema un enlace al emulador que contenga dichos parámetros. Las
-opciones pueden ser abreviadas al estilo Unix: por ejemplo '-C -d -J' se
-abrevia '-CdJ'. En caso de duda, el parámetro '-h' muestra una breve
-explicación de las opciones disponibles.
+opcionales en la línea de comandos. Para que los parámetros preferidos
+por el usuario sean estables se recomienda crear en el menú del sistema
+un enlace al emulador que contenga dichos parámetros. Las opciones
+pueden ser abreviadas al estilo Unix: por ejemplo '-C -d -J' se abrevia
+'-CdJ'. En caso de duda, el parámetro '-h' muestra una breve explicación
+de las opciones disponibles.
 
 	* -C : emular un monitor verde en lugar de (por defecto) uno a
 	todo color;
@@ -66,14 +65,11 @@ explicación de las opciones disponibles.
 	* -h : ayuda breve;
 	* -j : activar la emulación del joystick por teclado (cursores y
 	teclas Z, X y C);
-	* -J : deshabilitar el empleo de un joystick conectado al
-	sistema;
-	* -K : emular solamente 64k de RAM en lugar de (por defecto)
-	128k;
+	* -J : deshabilitar el uso de un joystick conectado al sistema;
+	* -K : emular solamente 64k de RAM en vez de (por defecto) 128k;
 	* -m0 : iniciar la emulación con el modelo CPC464;
 	* -m1 : iniciar la emulación con el modelo CPC664;
-	* -m2 : iniciar la emulación con el modelo CPC6128 (por
-	defecto);
+	* -m2 : iniciar la emulación con el modelo CPC6128, por defecto;
 	* -O : ocultar indicadores en pantalla (por defecto visibles);
 	* -R : deshabilitar emulación en tiempo real (por defecto
 	habilitada);
@@ -104,16 +100,15 @@ Los tipos de fichero admitidos por el emulador se dividen en tres tipos:
 	estado de emulación.
 
 La lectura de cintas emplea dos métodos (habilitados por defecto) para
-mejorar la experiencia de usuario abreviando un proceso que
-originalmente era muy lento: un programa típico en cinta tardaba cinco
-minutos en cargar. El primer método (aceleración de cinta) simplemente
-detecta si hay una cinta insertada y el motor del cassette está en
-funcionamiento: entonces el emulador se pone a funcionar a la máxima
-velocidad posible. El segundo método (análisis de cinta) examina el
-estado actual del Z80 y detecta si éste intenta leer la cinta de una
-forma conocida: entonces manipula su estado para generar
-instantáneamente los resultados de la lectura en lugar de esperar a que
-la cinta genere la siguiente señal.
+mejorar la experiencia de usuario abreviando un proceso que entonces
+era muy lento: un programa típico en cinta tardaba cinco minutos en
+cargar. El primer método (aceleración de cinta) simplemente detecta si
+hay una cinta insertada y el motor del cassette está en funcionamiento:
+entonces el emulador se pone a funcionar a la máxima velocidad posible.
+El segundo método (análisis de cinta) examina el estado actual del Z80 y
+detecta si éste intenta leer la cinta de una forma conocida: entonces
+manipula su estado para generar al instante los resultados de la lectura
+en lugar de esperar a que la cinta genere la siguiente señal.
 
 La ejecución automática de ficheros de disco intenta detectar por sí
 misma el método de arranque necesario. Dado que algunos discos tenían
@@ -190,19 +185,17 @@ que por haber sido usado en más plataformas además de Amstrad CPC
 independientemente en programas terceros tales como STSOUND y AY-EMUL.
 Nótese que el modo de scanlines (opción que simula varios tipos de
 monitor) se refleja en las grabaciones igual que en la pantalla, y que
-cada modo tiene un impacto distinto en la eficiencia del programa: el
-modo normal es el que más esfuerzo consume, y el entrelazado doble, el
-que menos.
+cada modo tiene un impacto distinto en el rendimiento del programa: el
+modo normal consume más esfuerzo, y el entrelazado doble, menos.
 
 Los indicadores en pantalla muestran el estado de las unidades de disco
 (número de pista, actividad), la cinta (actividad) y el joystick.
 
 Las siguientes teclas ajustan el "frameskip" o salto de "frames": a
 mayor valor de este parámetro, menor consumo de potencia de proceso,
-pero también menor suavidad en la imagen. Idealmente debe mantenerse su
-valor a 0 a menos que 1.- el sistema no tenga potencia de proceso
-suficiente, o 2.- el usuario necesite acelerar la emulación durante un
-tiempo.
+pero también menor suavidad visual. Idealmente debe mantenerse su valor
+a 0 a menos que 1.- el sistema no tenga potencia de proceso suficiente,
+o 2.- el usuario necesite acelerar la emulación durante un tiempo.
 
 	* Num.+ : incrementa el valor de "frameskip", hasta 50;
 	* Num.- : decrementa el valor de "frameskip", hasta 0;
@@ -220,8 +213,7 @@ El debugger sirve para detener la emulación y examinar su estado
 interno. Para ello emplea un interfaz textual que muestra el estado
 técnico actual del sistema (valores de los registros del Z80 y de los
 dispositivos Gate Array, CRTC y PSG) y espera que el usuario teclee una
-orden. En caso de duda 'h' muestra una breve explicación de los
-comandos.
+orden. En caso de duda 'h' muestra un breve resumen de los comandos.
 
 	* la cadena vacía (pulsar RETURN sin escribir nada) ejecuta la
 	instrucción actual y pasa a la siguiente. En un debugger típico
@@ -236,10 +228,9 @@ comandos.
 	memoria ubicada en la dirección especificada por VALOR. Si
 	solamente se escribe 'd' el nuevo desensamblado continúa donde
 	terminó el anterior.
-	* 'm VALOR' (memory) muestra un volcado hexadecimal parcial de
-	la memoria ubicada en la dirección especificada por VALOR. Si
-	solamente se escribe 'm' el nuevo volcado continúa donde terminó
-	el anterior.
+	* 'm VALOR' (memory) muestra un volcado hexadecimal de la
+	memoria a partir de la dirección especificada por VALOR. Si
+	solamente se escribe 'm' continúa donde terminó el anterior.
 	* 'p VALOR VALOR1 VALOR2 ...' (poke) escribe los valores VALOR1,
 	VALOR2, etc. en las direcciones de memoria consecutivas a partir
 	de VALOR.
@@ -258,8 +249,7 @@ comandos.
 	partir de VALOR. Enumera las direcciones que contengan dicha
 	cadena; si son demasiadas, muestra '...' y se detiene.
 	* 'h' (help) muestra una ayuda breve;
-	* 'q' (quit) sirve para abandonar el debugger y reanudar la
-	emulación.
+	* 'q' (quit) abandona el debugger y reanuda la emulación.
 
 El uso de mayúsculas y minúsculas no es importante: el debugger no hace
 distinciones. Los valores mostrados en pantalla y los parámetros de las
@@ -296,8 +286,8 @@ con varias salvedades:
 
 La emulación es menos precisa que la de CPCEC. "Starion" y "Vectron"
 muestran correctamente sus efectos raster en modo 48k, pero la emulación
-de la ULA Issue 2 (con la opción -I) es extremadamente básica, y todavía
-no hay contención de memoria.
+de la ULA Issue 2 (la opción -I) es extremadamente básica, y todavía no
+hay contención de memoria.
 
 Agradecimientos
 ---
@@ -324,6 +314,9 @@ que enumero a continuación:
 Historial de versiones
 ---
 
+	* 20190404 -- sexta versión pública. Corrige un bug del Z80 en
+	la lógica del IRQ. La configuración (modelo emulado y ubicación
+	de ficheros) se conserva entre sesiones en un fichero INI.
 	* 20190331 -- quinta versión pública. Se puede recorrer cintas
 	por posición (WAV y CSW) o por bloques (CDT, TZX y TAP).
 	* 20190325 -- cuarta versión pública. Indicadores en pantalla
@@ -335,3 +328,147 @@ Historial de versiones
 	* 20190317 -- segunda versión pública. Corrige bugs de joystick
 	en Win32: JoyGetPos devuelve CERO en EXITO, no en ERROR.
 	* 20190314 -- primera versión pública.
+
+Apéndice: casos de pruebas
+---
+
+A continuación se enumeran los cien títulos que sirvieron para hacer el
+grueso de las pruebas del emulador durante su desarrollo. Algunos
+abarcan varias pruebas (por ejemplo "Donkey Kong" es a la vez una cinta
+protegida y un caso medio de varios modos de imagen simultáneos); se les
+menciona solamente en la primera de ellas.
+
+Diagnósticos:
+
+	* Z80 Instruction Exerciser ZEXALL (2004 dominio público)
+	* PLUSTEST (2002 Richard Wilson)
+
+Casos simples:
+
+	* Sultan's Maze / Laberinto del Sultán (1984 Gem Software / Amsoft)
+	* Oh Mummy (1984 Gem Software / Amsoft)
+	* Roland on the Ropes / Fred (1984 Indescomp / Amsoft)
+	* Roland in the Caves / La Pulga (1984 Indescomp / Amsoft)
+
+Ficheros de cinta:
+
+	* Sin protección:
+		* Roland in Time (1984 Gem Software / Amsoft)
+		* Manic Miner (1985 Software Projects / Amsoft)
+		* Jet Set Willy (1985 Software Projects / Amsoft)
+		* Knight Lore (1985 Ultimate)
+		* Alien 8 (1986 Ultimate)
+	* Protecciones simples:
+		* Technician Ted (1985 Hewson)
+		* Abu Simbel Profanation (1986 Dinamic)
+		* Deflektor (1987 Costa Panayi / Gremlin Graphics)
+		* Desperado (1987 Topo Soft)
+		* Humphrey (1988 Made in Spain / Zigurat)
+	* Protecciones medias:
+		* Donkey Kong (1986 Arcana / Ocean)
+		* Samurai Trilogy (1987 Gremlin Graphics)
+		* Operation Wolf (1988 Imagine)
+		* Rainbow Islands (1989 Graftgold / Ocean)
+	* Protecciones complejas:
+		* Rasputin (1985 Paul Hibbard / Firebird)
+		* Spiky Harold (1985 A.Rogers / Firebird)
+		* Druid (1986 Firebird)
+		* Split Personalities (1986 Domark)
+		* Last Mission (1986 Opera Soft)
+		* Marmalade (1987 MBC Informatique)
+		* Gonzzálezz (1989 Opera Soft)
+		* Twinworld (1990 Ubi Soft)
+
+Casos extraños:
+
+	* Z80:
+		* Sabre Wulf (1985 Ultimate)
+		* Bigfoot (1989 Codemasters)
+	* PIO:
+		* Nodes of Yesod (1986 Odin)
+		* Prehistorik (1991 Titus)
+		* Antiriad / Sacred Armour of Antiriad (1987 Palace Software)
+	* Puertos:
+		* Skweek (1989 Loriciels)
+		* Night Shift (1990 Lucasarts)
+		* Hero Quest (1991 Gremlin Graphics)
+
+Casos medios:
+
+	* Varios modos de imagen o paletas de color a la vez:
+		* Sorcery (1985 Gang of Five / Virgin Games)
+		* Kong Strikes Back (1985 Ocean)
+		* Crafton & Xunk (1986 Ere Software)
+		* Elite (1986 Bell and Braben / Firebird)
+		* Amaurote (1987 Binary Design / Mastertronic)
+		* Feud (1987 Binary Design / Mastertronic)
+		* Gauntlet (1987 Gremlin Graphics)
+		* Renegade (1987 Arcana / Imagine)
+	* Scroll rápido y suave por hardware:
+		* TLL / Tornado Low Level (1985 Vortex Software)
+		* Thing on a Spring (1986 Gremlin Graphics)
+		* Ghosts'n Goblins (1986 Elite)
+		* Prohibition (1987 Infogrames)
+	* Pantalla de tamaño mayor ("overscan"):
+		* Arkanoid (1987 Probe / Imagine)
+		* Arkanoid 2: Revenge of Doh (1988 Imagine)
+	* Doble búfer por hardware:
+		* Sol Negro (1988 Opera Soft)
+		* Mutan Zone (1988 Opera Soft)
+		* Rescate Atlántida (1989 Creep Soft / Dinamic)
+		* AMC / Astro Marine Corps (1989 Creep Soft / Dinamic)
+	* Sonido digitalizado:
+		* Enigma de Aceps (1986 ACE Software)
+		* Dragon Ninja (1988 Imagine)
+		* Robocop (1988 Ocean)
+
+Ficheros de disco:
+
+	* CP/M 2.2 (1984 Digital Research / Amstrad)
+	* CP/M Plus (1985 Digital Research / Amstrad)
+	* Abadía del Crimen (1987 Opera Soft)
+	* Corsarios (1990 Opera Soft)
+	* Ghostbusters 2 (1989 Software Studios / Activision)
+	* SWIV (1991 Storm / Sales Curve)
+	* Addams Family / La familia Addams (1991 Ocean)
+	* 5KB Demo 3 (1999 varios autores)
+
+Casos avanzados:
+
+	* Mission Genocide (1987 Paul Shirley / Firebird)
+	* Warhawk (1987 Proteus / Firebird)
+	* Dynamic Duo (1988 Probe / Firebird)
+	* Rastan (1988 Probe / Imagine)
+	* Skateball (1988 Ubi Soft)
+	* Turrican (1990 Probe / Rainbow Arts)
+
+Casos muy avanzados:
+
+	* Turrican 2 (1991 Enigma Variations / Rainbow Arts)
+	* Facehugger Megademo (1991 Face Hugger)
+	* Zap't'Balls (1992 Amstrad CPC International)
+	* Super Cauldron (1992 Titus)
+	* Prodatron Megademo (1992 Prodatron)
+	* Prehistorik 2 (1993 Titus)
+	* Voyage '93 (1993 varios autores)
+	* Overflow 5 Previews (1994 Overflow)
+	* Big'O Full'O Dem'O (1998 Arkos)
+	* Byte '98 (1999 Mortel & Overlanders)
+	* École Buissonière (2000 Overlanders)
+	* DTC (2006 Arkos)
+	* Orion Prime (2009 Cargosoft)
+	* Edge Grinder (2011 Cosine & Format War)
+	* Batman Returns (2011 Batman Group)
+	* Bloc Us (2011 Benediction)
+	* Super Edge Grinder (2012 Cosine & Format War)
+	* R-Type 128 (2012 Easter Egg)
+	* Still Rising (2013 Vanity)
+	* Yet Another Plasma! (2012 Logon System)
+	* Breaking Baud (2015 CRTC & 3LN)
+	* Megablasters: Escape from Castle in the Clouds (2015 Project Argon)
+	* Imperial Mahjong (2016 Cargosoft)
+	* Logon's Run (2017 Logon System)
+	* Wunderbar (2017 Arkos & Benediction)
+	* Isometrikum (2018 Vanity)
+	* Still Scrolling (2018 Music2Eye & Praline)
+	* PhX (2018 Condense)
