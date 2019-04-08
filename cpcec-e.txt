@@ -304,6 +304,9 @@ that are listed as follows:
 Version log
 ---
 
+	* 20190408 -- seventh public release. Fixed a bug in the YM3
+	file recording, another one in the ZXSEC internal timings, and
+	one more in the debugger commands with optional parameters.
 	* 20190404 -- sixth public release. Fixed a Z80 emulation bug in
 	IRQ logic. Configuration (computer model and file paths) is kept
 	across sessions in a INI file.

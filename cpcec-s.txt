@@ -314,6 +314,9 @@ que enumero a continuación:
 Historial de versiones
 ---
 
+	* 20190408 -- séptima versión pública. Corrige un bug en la
+	grabación de ficheros YM3, otro en los tiempos internos de ZXSEC
+	y otro en los comandos del debugger con parámetros opcionales.
 	* 20190404 -- sexta versión pública. Corrige un bug del Z80 en
 	la lógica del IRQ. La configuración (modelo emulado y ubicación
 	de ficheros) se conserva entre sesiones en un fichero INI.
