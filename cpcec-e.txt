@@ -304,6 +304,14 @@ that are listed as follows:
 Version log
 ---
 
+	* 20190419 -- eighth public release. Added options for image and
+	sound interpolation; tape automatically rewinds itself when it
+	reaches the end (à la FUSE); fixed a bug in TZX files that store
+	0 instead of 8 in the "used bits" field, another bug in CUSTOM
+	INFO blocks in TZX files, and another one when ZXSEC loads a 48K
+	SNA file in Plus3 mode (users should manually switch to a safe
+	model beforehand anyway). INI files now remember the names of
+	the last used files.
 	* 20190408 -- seventh public release. Fixed a bug in the YM3
 	file recording, another one in the ZXSEC internal timings, and
 	one more in the debugger commands with optional parameters.
@@ -321,7 +329,7 @@ Version log
 	* 20190317 -- second public release. Fixed Win32 joystick bugs:
 	JoyGetPos returns ZERO on OK, not on ERROR.
 	* 20190314 -- first public release.
-	
+
 Appendix: test cases
 ---
 

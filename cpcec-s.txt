@@ -314,6 +314,14 @@ que enumero a continuación:
 Historial de versiones
 ---
 
+	* 20190419 -- octava versión pública. Añade opciones para
+	interpolar la imagen y el sonido; la cinta se rebobina al final
+	automáticamente (como en FUSE); corrige un bug en ficheros TZX
+	con 0 en lugar de 8 en el campo "bits usados", otro en bloques
+	CUSTOM INFO de TZX, y otro cuando ZXSEC carga un fichero SNA de
+	48K en modo Plus3 (de todas formas los usuarios deberían elegir
+	el modelo apropiado antes de cargar ficheros). Los ficheros INI
+	recuerdan los nombres de los últimos ficheros usados.
 	* 20190408 -- séptima versión pública. Corrige un bug en la
 	grabación de ficheros YM3, otro en los tiempos internos de ZXSEC
 	y otro en los comandos del debugger con parámetros opcionales.
