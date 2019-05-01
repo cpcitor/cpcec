@@ -284,10 +284,11 @@ con varias salvedades:
 	* las opciones de joystick se refieren al interfaz Kempston por
 	defecto; el menú permite elegir el tipo de joystick.
 
-La emulación es menos precisa que la de CPCEC. "Starion" y "Vectron"
-muestran correctamente sus efectos raster en modo 48k, pero la emulación
-de la ULA Issue 2 (la opción -I) es extremadamente básica, y todavía no
-hay contención de memoria.
+La emulación es menos precisa que la de CPCEC. Varios efectos especiales
+basados en la temporización funcionan bien (borde raster en "Starion" y
+"Vectron" para 48k, atributos raster en "Amaurote" y "Zub" para 128k)
+pero la emulación de la ULA Issue 2 (opción -I) es extremadamente básica
+y la contención de memoria es limitada.
 
 Agradecimientos
 ---
@@ -314,6 +315,10 @@ que enumero a continuación:
 Historial de versiones
 ---
 
+	* 20140430 -- novena versión pública. Suaviza el modo monocromo
+	para Spectrum; corrige un bug del FDC en los sectores con datos
+	GAP (de Loriciels); ZXSEC añade contención de memoria simple
+	("Amaurote", "Black Lamp", "Puzznic", "Sly Spy", "Zub"...).
 	* 20190419 -- octava versión pública. Añade opciones para
 	interpolar la imagen y el sonido; la cinta se rebobina al final
 	automáticamente (como en FUSE); corrige un bug en ficheros TZX

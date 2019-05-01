@@ -274,10 +274,11 @@ exceptions:
 	* joystick options apply to the Kempson interface by default;
 	the menu allows choosing the type of joystick.
 
-Emulation is less precise than CPCEC's. "Starion" and "Vectron"
-correctly show their raster effects in 48k mode, but the emulation of
-the Issue 2 ULA (the option -I) is extremely basic, and there isn't any
-memory contention yet.
+Emulation is less precise than CPCEC's. Several special effects based on
+timing work correctly (border raster effects in "Starion" and "Vectron"
+for 48k, attribute raster effects in "Amaurote" and "Zub" for 128k) but
+the emulation of the Issue 2 ULA (the option -I) is extremely basic, and
+contended memory emulation is limited.
 
 Acknowledgements
 ---
@@ -304,6 +305,10 @@ that are listed as follows:
 Version log
 ---
 
+	* 20190430 -- ninth public release. Softer B/W Spectrum palette;
+	fixed bug in FDC sector size calculation if GAP datas are stored
+	(Loriciels' discs); added simple memory contention to ZXSEC
+	("Amaurote", "Black Lamp", "Puzznic", "Sly Spy", "Zub"...).
 	* 20190419 -- eighth public release. Added options for image and
 	sound interpolation; tape automatically rewinds itself when it
 	reaches the end (à la FUSE); fixed a bug in TZX files that store
