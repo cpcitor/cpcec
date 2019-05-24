@@ -20,7 +20,7 @@ the tape deck and floppy disc drive that made possible loading and
 running software.
 
 The source code of CPCEC and its binaries follow the GNU General Public
-License v3, described in the file GPL.TXT within the package.
+License v3, as seen in the file GPL.TXT within the package.
 
 Requirements and setup
 ---
@@ -305,6 +305,13 @@ that are listed as follows:
 Version log
 ---
 
+	* 20190524 -- tenth public release. Added support for CDT/TZX
+	file blocks 0x24 and 0x25 (loop start and ending) (cfr.
+	BATMAN.TZX), fixed bugs in the handling of weak sectors in DSK
+	files (cfr. "Titus Classiques"), YM file recording is reentrant,
+	fixed a bug in INI files with empty fields and added the option
+	"autorewind <0|1>" to rewind (or remove) a tape when playback
+	reaches the end.
 	* 20190430 -- ninth public release. Softer B/W Spectrum palette;
 	fixed bug in FDC sector size calculation if GAP datas are stored
 	(Loriciels' discs); added simple memory contention to ZXSEC

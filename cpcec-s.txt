@@ -20,7 +20,7 @@ original, y de las unidades de cinta y disco que hacían posible la carga
 y ejecución del software existente.
 
 El código fuente y los binarios de CPCEC siguen la licencia GNU General
-Public License v3, descrita en el fichero GPL.TXT adjunto al paquete.
+Public License v3, como se ve en el fichero GPL.TXT adjunto al paquete.
 
 Requisitos e instalación
 ---
@@ -315,7 +315,14 @@ que enumero a continuación:
 Historial de versiones
 ---
 
-	* 20140430 -- novena versión pública. Suaviza el modo monocromo
+	* 20190524 -- décima versión pública. Añade lectura de bloques
+	0x24 y 0x25 (inicio y fin de ciclo) en ficheros CDT/TZX (cfr.
+	BATMAN.TZX), corrige errores en la lectura de sectores débiles
+	en ficheros DSK (cfr. "Titus Classiques"), la grabación de
+	ficheros YM es reentrante, los ficheros INI corrigen un problema
+	con campos vacíos y añaden la opción "autorewind <0|1>" para
+	rebobinar (o expulsar) una cinta al alcanzar su final.
+	* 20190430 -- novena versión pública. Suaviza el modo monocromo
 	para Spectrum; corrige un bug del FDC en los sectores con datos
 	GAP (de Loriciels); ZXSEC añade contención de memoria simple
 	("Amaurote", "Black Lamp", "Puzznic", "Sly Spy", "Zub"...).
