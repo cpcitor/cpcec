@@ -315,6 +315,8 @@ que enumero a continuación:
 Historial de versiones
 ---
 
+	* 20190526 -- parche menor para corregir un error del arranque
+	automático: abrir menús y cambiar ventanas anulaba el teclado.
 	* 20190524 -- décima versión pública. Añade lectura de bloques
 	0x24 y 0x25 (inicio y fin de ciclo) en ficheros CDT/TZX (cfr.
 	BATMAN.TZX), corrige errores en la lectura de sectores débiles

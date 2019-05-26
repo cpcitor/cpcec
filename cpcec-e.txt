@@ -305,6 +305,8 @@ that are listed as follows:
 Version log
 ---
 
+	* 20190526 -- minor patch fixing a bug in autorun mode: opening
+	menus and switching windows cancelled the automatic keyboard.
 	* 20190524 -- tenth public release. Added support for CDT/TZX
 	file blocks 0x24 and 0x25 (loop start and ending) (cfr.
 	BATMAN.TZX), fixed bugs in the handling of weak sectors in DSK
