@@ -1,499 +1,478 @@
- //  ####  ######    ####  #######   ####  ------------------------- //
-//  ##  ##  ##  ##  ##  ##  ##   #  ##  ##  CPCEC, plain text Amstrad //
-// ##       ##  ## ##       ## #   ##       CPC emulator written in C //
-// ##       #####  ##       ####   ##       as a postgraduate project //
-// ##       ##     ##       ## #   ##       by Cesar Nicolas-Gonzalez //
-//  ##  ##  ##      ##  ##  ##   #  ##  ##  since 2018-12-01 till now //
- //  ####  ####      ####  #######   ####  ------------------------- //
-//- home page, news and updates - http://cngsoft.no-ip.org/cpcec.htm -//
+Ôªø# CPCEC -- http://cngsoft.no-ip.org/cpcec.htm --
 
-IntroducciÛn
----
+	  ####  ######    ####  #######   ####   -------------------------
+	 ##  ##  ##  ##  ##  ##  ##   #  ##  ##  CPCEC, economical Amstrad
+	##       ##  ## ##       ## #   ##       CPC emulator written in C
+	##       #####  ##       ####   ##       as a postgraduate project
+	##       ##     ##       ## #   ##       by Cesar Nicolas-Gonzalez
+	 ##  ##  ##      ##  ##  ##   #  ##  ##  since 2018-12-01 till now
+	  ####  ####      ####  #######   ####   -------------------------
 
-CPCEC es un emulador de la familia de microordenadores domÈsticos
-Amstrad CPC (modelos 464, 664 y 6128) cuyo objetivo es ser fiel al
-hardware original y eficiente en sistemas modernos corrientes. Para ello
-ofrece una emulaciÛn fidedigna del microprocesador Z80 y reproduce el
-comportamiento de los chips de imagen CRTC 6845 y Gate Array, del chip
-de sonido PSG AY-3-8912, de los dem·s circuitos presentes en el hardware
-original, y de las unidades de cinta y disco que hacÌan posible la carga
-y ejecuciÛn del software existente.
+## Introducci√≥n
 
-El cÛdigo fuente y los binarios de CPCEC siguen la licencia GNU General
-Public License v3, como se ve en el fichero GPL.TXT adjunto al paquete.
+CPCEC es un emulador de la familia de microordenadores dom√©sticos Amstrad CPC
+(modelos 464, 664 y 6128) cuyo objetivo es ser fiel al hardware original y
+eficiente en sistemas modernos corrientes. Para ello ofrece una emulaci√≥n
+fidedigna del microprocesador Z80 y reproduce el comportamiento de los chips de
+imagen CRTC 6845 y Gate Array, del chip de sonido PSG AY-3-8912, de los dem√°s
+circuitos presentes en el hardware original, y de las unidades de cinta y disco
+que hac√≠an posible la carga y ejecuci√≥n del software existente.
 
-Requisitos e instalaciÛn
----
+El software y la documentaci√≥n se proporcionan "tal cual" sin garant√≠a alguna.
+El c√≥digo fuente y los binarios de CPCEC siguen la licencia GNU General Public
+License v3, como se ve en el fichero GPL.TXT adjunto al paquete.
 
-CPCEC requiere un sistema operativo Microsoft Windows 2000 o posterior.
-El hardware mÌnimo es el propio de dichos sistemas operativos, y se
-recomienda que el microprocesador central funcione a 400 MHz por lo
-menos. La resoluciÛn de pantalla en pÌxeles debe ser 800x600 como
-mÌnimo. Una tarjeta de sonido es opcional, asÌ como emplear un joystick.
+## Requisitos e instalaci√≥n
 
-El emulador se compone de varios ficheros: el ejecutable propiamente
-dicho CPCEC.EXE y los ficheros de firmware CPC464.ROM, CPC664.ROM,
-CPC6128.ROM y CPCADOS.ROM. Todos ellos deben ser copiados en un mismo
-directorio, idealmente creado para alojar el emulador.
+CPCEC requiere un sistema operativo Microsoft Windows 2000 o posterior. El
+hardware m√≠nimo es el propio de dichos sistemas operativos, y se recomienda que
+el microprocesador central funcione a 400 MHz por lo menos. La resoluci√≥n de
+pantalla en p√≠xeles debe ser 800x600 como m√≠nimo. Una tarjeta de sonido es
+opcional, as√≠ como emplear un joystick.
 
-El binario puede ser compilado a partir de los ficheros fuente siguiendo
-las instrucciones incluidas en su interior. GCC 4.9.2 y TCC 0.9.27
-funcionan correctamente; GCC 4.7.1 comete fallos graves en la
-compilaciÛn y genera binarios inv·lidos.
+El emulador se compone de varios ficheros: el ejecutable propiamente dicho
+CPCEC.EXE y los ficheros de firmware CPC464.ROM, CPC664.ROM, CPC6128.ROM y
+CPCADOS.ROM. Todos ellos deben ser copiados en un mismo directorio, idealmente
+creado para alojar el emulador.
 
-ConfiguraciÛn y ficheros
----
+El binario puede ser compilado a partir de los ficheros fuente siguiendo las
+instrucciones incluidas en su interior. GCC 4.9.2, GCC 5.1.0 y TCC 0.9.27
+funcionan correctamente; GCC 4.7.1 comete fallos graves en la compilaci√≥n y
+genera binarios inv√°lidos.
 
-El funcionamiento de CPCEC se configura especificando par·metros
-opcionales en la lÌnea de comandos. Para que los par·metros preferidos
-por el usuario sean estables se recomienda crear en el men˙ del sistema
-un enlace al emulador que contenga dichos par·metros. Las opciones
-pueden ser abreviadas al estilo Unix: por ejemplo '-C -d -J' se abrevia
-'-CdJ'. En caso de duda, el par·metro '-h' muestra una breve explicaciÛn
-de las opciones disponibles.
+## Configuraci√≥n y ficheros
 
-	* -C : emular un monitor verde en lugar de (por defecto) uno a
-	todo color;
-	* -c0 : elegir el tipo de scanlines medio;
-	* -c1 : elegir el tipo de scanlines normal (por defecto);
-	* -c2 : elegir el tipo de scanlines entrelazado simple;
-	* -c3 : elegir el tipo de scanlines entrelazado doble;
-	* -d : iniciar la emulaciÛn con el debugger activo (por defecto
-	inactivo);
-	* -g0 : emular el tipo de CRTC 0 (por defecto);
-	* -g1, -g2, -g3, -g4 : Ìdem para los otros cuatro tipos de CRTC;
-	* -h : ayuda breve;
-	* -j : activar la emulaciÛn del joystick por teclado (cursores y
-	teclas Z, X y C);
-	* -J : deshabilitar el uso de un joystick conectado al sistema;
-	* -K : emular solamente 64k de RAM en vez de (por defecto) 128k;
-	* -m0 : iniciar la emulaciÛn con el modelo CPC464;
-	* -m1 : iniciar la emulaciÛn con el modelo CPC664;
-	* -m2 : iniciar la emulaciÛn con el modelo CPC6128, por defecto;
-	* -O : ocultar indicadores en pantalla (por defecto visibles);
-	* -R : deshabilitar emulaciÛn en tiempo real (por defecto
-	habilitada);
-	* -S : deshabilitar sonido (por defecto habilitado si hay una
-	tarjeta de sonido);
-	* -X : deshabilitar emulaciÛn de unidades de disco (por defecto
-	habilitada);
-	* -Y : deshabilitar el an·lisis de cinta (por defecto
-	habilitado; ver m·s adelante);
-	* -Z : deshabilitar la aceleraciÛn de cinta (por defecto
-	habilitada).
+El funcionamiento de CPCEC se configura especificando par√°metros opcionales en
+la l√≠nea de comandos. Para que los par√°metros preferidos por el usuario sean
+estables se recomienda crear en el men√∫ del sistema un enlace al emulador que
+contenga dichos par√°metros. Las opciones pueden ser abreviadas al estilo Unix:
+por ejemplo `-C -d -J` se abrevia `-CdJ`. En caso de duda, el par√°metro `-h`
+muestra una breve explicaci√≥n de las opciones disponibles.
 
-TambiÈn es posible aÒadir nombres de fichero a la lÌnea de comandos: el
-emulador intentar· cargar y ejecutar los ficheros especificados. Gracias
-a ello CPCEC puede ser vinculado a las extensiones de fichero CDT, CSW,
-DSK y SNA para cargar dichos ficheros autom·ticamente.
+* -C : emular un monitor verde en lugar de (por defecto) uno a todo color;
+* -c0 : elegir el tipo de scanlines medio;
+* -c1 : elegir el tipo de scanlines normal (por defecto);
+* -c2 : elegir el tipo de scanlines entrelazado simple;
+* -c3 : elegir el tipo de scanlines entrelazado doble;
+* -d : iniciar la emulaci√≥n con el debugger activo (por defecto inactivo);
+* -g0 : emular el tipo de CRTC 0 (por defecto);
+* -g1, -g2, -g3, -g4 : √≠dem para los otros cuatro tipos de CRTC;
+* -h : ayuda breve;
+* -j : activar la emulaci√≥n del joystick por teclado (cursores y teclas Z, X y
+C);
+* -J : deshabilitar el uso de un joystick conectado al sistema;
+* -K : emular solamente 64k de RAM en vez de (por defecto) 128k;
+* -m0 : iniciar la emulaci√≥n con el modelo CPC464;
+* -m1 : iniciar la emulaci√≥n con el modelo CPC664;
+* -m2 : iniciar la emulaci√≥n con el modelo CPC6128, por defecto;
+* -O : ocultar indicadores en pantalla (por defecto visibles);
+* -R : deshabilitar emulaci√≥n en tiempo real (por defecto habilitada);
+* -S : deshabilitar sonido (por defecto habilitado si hay una tarjeta de
+sonido);
+* -X : deshabilitar emulaci√≥n de unidades de disco (por defecto habilitada);
+* -Y : deshabilitar el an√°lisis de cinta (por defecto habilitado; ver m√°s
+adelante);
+* -Z : deshabilitar la aceleraci√≥n de cinta (por defecto habilitada).
+
+Tambi√©n es posible a√±adir nombres de fichero a la l√≠nea de comandos: el emulador
+intentar√° cargar y ejecutar los ficheros especificados. Gracias a ello CPCEC
+puede ser vinculado a las extensiones de fichero CDT, CSW, DSK y SNA para cargar
+dichos ficheros autom√°ticamente.
 
 Los tipos de fichero admitidos por el emulador se dividen en tres tipos:
 
-	* WAV, CSW y CDT: ficheros de cinta, es decir volcados digitales
-	de los contenidos de una cinta magnÈtica utilizada para
-	almacenar y distribuir datos y software.
-	* DSK: ficheros de disco, representaciones virtuales de la
-	estructura y los contenidos de un disco flexible magnÈtico capaz
-	de contener datos y software.
-	* SNA: instant·neas o "snapshots", copias integrales del estado
-	de un sistema emulado que hacen posible reanudar m·s tarde dicho
-	estado de emulaciÛn.
+* WAV, CSW y CDT: ficheros de cinta, es decir volcados digitales de los
+contenidos de una cinta magn√©tica utilizada para almacenar y distribuir datos y
+software.
+* DSK: ficheros de disco, representaciones virtuales de la estructura y los
+contenidos de un disco flexible magn√©tico capaz de contener datos y software.
+* SNA: instant√°neas o "snapshots", copias integrales del estado de un sistema
+emulado que hacen posible reanudar m√°s tarde dicho estado de emulaci√≥n.
 
-La lectura de cintas emplea dos mÈtodos (habilitados por defecto) para
-mejorar la experiencia de usuario abreviando un proceso que entonces
-era muy lento: un programa tÌpico en cinta tardaba cinco minutos en
-cargar. El primer mÈtodo (aceleraciÛn de cinta) simplemente detecta si
-hay una cinta insertada y el motor del cassette est· en funcionamiento:
-entonces el emulador se pone a funcionar a la m·xima velocidad posible.
-El segundo mÈtodo (an·lisis de cinta) examina el estado actual del Z80 y
-detecta si Èste intenta leer la cinta de una forma conocida: entonces
-manipula su estado para generar al instante los resultados de la lectura
-en lugar de esperar a que la cinta genere la siguiente seÒal.
+La lectura de cintas emplea dos m√©todos (habilitados por defecto) para mejorar
+la experiencia de usuario abreviando un proceso que entonces era muy lento: un
+programa t√≠pico en cinta tardaba cinco minutos en cargar. El primer m√©todo
+(aceleraci√≥n de cinta) simplemente detecta si hay una cinta insertada y el motor
+del cassette est√° en funcionamiento: entonces el emulador se pone a funcionar a
+la m√°xima velocidad posible. El segundo m√©todo (an√°lisis de cinta) examina el
+estado actual del Z80 y detecta si √©ste intenta leer la cinta de una forma
+conocida: entonces manipula su estado para generar al instante los resultados de
+la lectura en lugar de esperar a que la cinta genere la siguiente se√±al.
 
-La ejecuciÛn autom·tica de ficheros de disco intenta detectar por sÌ
-misma el mÈtodo de arranque necesario. Dado que algunos discos tenÌan
-m·s de un arranque posible y el emulador corre el riesgo de elegir uno
-distinto al esperado, el usuario puede establecerlo a mano tecleando la
-orden RUN"NOMBRE (donde NOMBRE es el fichero de arranque, que suele
-venir especificado en las instrucciones del software, o ser simplemente
-DISC o DISK) en el sistema emulado y pulsando RETURN. En caso de duda,
-la orden CAT muestra la lista de ficheros contenidos en el disco.
+La ejecuci√≥n autom√°tica de ficheros de disco intenta detectar por s√≠ misma el
+m√©todo de arranque necesario. Dado que algunos discos ten√≠an m√°s de un arranque
+posible y el emulador corre el riesgo de elegir uno distinto al esperado, el
+usuario puede establecerlo a mano tecleando la orden `RUN"NOMBRE` (donde NOMBRE
+es el fichero de arranque, que suele venir especificado en las instrucciones del
+software, o ser simplemente DISC o DISK) en el sistema emulado y pulsando
+RETURN. En caso de duda, la orden CAT muestra la lista de ficheros contenidos en
+el disco.
 
-Teclas de funciÛn
----
+## Teclas de funci√≥n
 
-Una vez en funcionamiento, CPCEC muestra la pantalla del sistema emulado
-y obedece a las Ûrdenes del usuario, que adem·s de las pertinentes a
-dicho sistema (pulsaciones de teclas alfanumÈricas y de control,
-movimientos del joystick real o emulado mediante teclado) incluye una
-serie de teclas de funciÛn especiales. En caso de duda, la tecla F1
-muestra un breve Ìndice de dichas teclas de funciÛn.
+Una vez en funcionamiento, CPCEC muestra la pantalla del sistema emulado y
+obedece a las √≥rdenes del usuario, que adem√°s de las pertinentes a dicho sistema
+(pulsaciones de teclas alfanum√©ricas y de control, movimientos del joystick real
+o emulado mediante teclado) incluye una serie de teclas de funci√≥n especiales.
+En caso de duda, la tecla F1 muestra un breve √≠ndice de dichas teclas de
+funci√≥n.
 
-	* F1: ayuda breve;
-	* F1+Control: autorÌa del emulador;
-	* F2: grabar el estado actual de la emulaciÛn en una
-	instant·nea;
-	* F2+Control: volver a grabar la ˙ltima instant·nea
-	seleccionada;
-	* F3: cargar y ejecutar un fichero de cinta, de disco o una
-	instant·nea;
-	* F3+Control: volver a cargar la ˙ltima instant·nea
-	seleccionada;
-	* F4: habilitar (o deshabilitar) la emulaciÛn de sonido;
-	* F4+Control: habilitar (o deshabilitar) el joystick por
-	teclado;
-	* F5: elegir el firmware del modelo de CPC emulado;
-	* F5+Control: reiniciar la emulaciÛn;
-	* F6: habilitar (o deshabilitar) la emulaciÛn en tiempo real;
-	* F6+Control: elevar la velocidad del Z80 emulado de 4 MHz a 8,
-	12 y 16 MHz;
-	* F6+Control+Mays: reducir su velocidad a 12, 8 y 4 MHz;
-	* F7: insertar un fichero de disco en la disquetera virtual A;
-	* F7+Mays: insertar un fichero de disco en la disquetera virtual
-	B;
-	* F7+Control: extraer el disco de la disquetera virtual A;
-	* F7+Control+Mays: extraer el disco de la disquetera virtual B;
-	* F8: insertar un fichero de cinta en el cassette virtual;
-	* F8+Mays: empezar a grabar un fichero de cinta nuevo;
-	* F8+Control: extraer la cinta del cassette virtual;
-	* F9: habilitar el debugger (ver m·s adelante);
-	* F9+Mays: mostrar (u ocultar) los indicadores en pantalla;
-	* F9+Control: habilitar (o deshabilitar) la aceleraciÛn de
-	cinta;
-	* F9+Control+Mays: habilitar (o deshabilitar) el an·lisis de
-	cinta;
-	* F11: cambiar el modo de color entre verde y tres gamas de
-	color de claridad creciente;
-	* F11+Mays: Ìdem en sentido contrario, recorriendo las gamas por
-	orden decreciente;
-	* F11+Control: cambiar el tipo de scanlines, de medio a
-	entrelazado doble;
-	* F11+Control+Mays: Ìdem en sentido contrario, de entrelazado
-	doble a medio;
-	* F12: grabar el contenido de la pantalla en un fichero BMP;
-	* F12+Control: comenzar a grabar (o terminar) el sonido en un
-	fichero WAV;
-	* F12+Control+Mays: comenzar a grabar (o terminar) el sonido en
-	un fichero YM;
-	* Pausa: detener (o reanudar) la emulaciÛn;
-	* Alt+Return: maximizar (o restaurar) la ventana.
+* F1: ayuda breve;
+* F1+Control: autor√≠a del emulador;
+* F2: grabar el estado actual de la emulaci√≥n en una instant√°nea;
+* F2+Control: volver a grabar la √∫ltima instant√°nea seleccionada;
+* F3: cargar y ejecutar un fichero de cinta, de disco o una instant√°nea;
+* F3+Control: volver a cargar la √∫ltima instant√°nea seleccionada;
+* F4: habilitar (o deshabilitar) la emulaci√≥n de sonido;
+* F4+Control: habilitar (o deshabilitar) el joystick por teclado;
+* F5: elegir el firmware del modelo de CPC emulado;
+* F5+Control: reiniciar la emulaci√≥n;
+* F6: habilitar (o deshabilitar) la emulaci√≥n en tiempo real;
+* F6+Control: elevar la velocidad del Z80 emulado de 4 MHz a 8, 12 y 16 MHz;
+* F6+Control+Mays: reducir su velocidad a 12, 8 y 4 MHz;
+* F7: insertar un fichero de disco en la disquetera virtual A;
+* F7+Mays: insertar un fichero de disco en la disquetera virtual B;
+* F7+Control: extraer el disco de la disquetera virtual A;
+* F7+Control+Mays: extraer el disco de la disquetera virtual B;
+* F8: insertar un fichero de cinta en el cassette virtual;
+* F8+Mays: empezar a grabar un fichero de cinta nuevo;
+* F8+Control: extraer la cinta del cassette virtual;
+* F9: habilitar el debugger (ver m√°s adelante);
+* F9+Mays: mostrar (u ocultar) los indicadores en pantalla;
+* F9+Control: habilitar (o deshabilitar) la aceleraci√≥n de cinta;
+* F9+Control+Mays: habilitar (o deshabilitar) el an√°lisis de cinta;
+* F11: cambiar el modo de color entre verde y tres gamas de color de claridad
+creciente;
+* F11+Mays: √≠dem en sentido contrario, recorriendo las gamas por orden
+decreciente;
+* F11+Control: cambiar el tipo de scanlines, de medio a entrelazado doble;
+* F11+Control+Mays: √≠dem en sentido contrario, de entrelazado doble a medio;
+* F12: grabar el contenido de la pantalla en un fichero BMP;
+* F12+Control: comenzar a grabar (o terminar) el sonido en un fichero WAV;
+* F12+Control+Mays: comenzar a grabar (o terminar) el sonido en un fichero YM;
+* Pausa: detener (o reanudar) la emulaci√≥n;
+* Alt+Return: maximizar (o restaurar) la ventana.
 
-Los ficheros BMP y WAV son los ficheros de imagen y sonido est·ndares
-homÛnimos. Los ficheros YM son volcados del estado del chip de sonido,
-que por haber sido usado en m·s plataformas adem·s de Amstrad CPC
-(Spectrum 128, MSX, Atari ST...) pueden ser emulados y reproducidos
-independientemente en programas terceros tales como STSOUND y AY-EMUL.
-NÛtese que el modo de scanlines (opciÛn que simula varios tipos de
-monitor) se refleja en las grabaciones igual que en la pantalla, y que
-cada modo tiene un impacto distinto en el rendimiento del programa: el
-modo normal consume m·s esfuerzo, y el entrelazado doble, menos.
+Los ficheros BMP y WAV son los ficheros de imagen y sonido est√°ndares hom√≥nimos.
+Los ficheros YM son volcados del estado del chip de sonido, que por haber sido
+usado en m√°s plataformas adem√°s de Amstrad CPC (Spectrum 128, MSX, Atari ST...)
+pueden ser emulados y reproducidos independientemente en programas terceros
+tales como STSOUND y AY-EMUL. N√≥tese que el modo de scanlines (opci√≥n que simula
+varios tipos de monitor) se refleja en las grabaciones igual que en la pantalla,
+y que cada modo tiene un impacto distinto en el rendimiento del programa: el
+modo normal consume m√°s esfuerzo, y el entrelazado doble, menos.
 
-Los indicadores en pantalla muestran el estado de las unidades de disco
-(n˙mero de pista, actividad), la cinta (actividad) y el joystick.
+Los indicadores en pantalla muestran el estado de las unidades de disco (n√∫mero
+de pista, actividad), la cinta (actividad) y el joystick.
 
-Las siguientes teclas ajustan el "frameskip" o salto de "frames": a
-mayor valor de este par·metro, menor consumo de potencia de proceso,
-pero tambiÈn menor suavidad visual. Idealmente debe mantenerse su valor
-a 0 a menos que 1.- el sistema no tenga potencia de proceso suficiente,
-o 2.- el usuario necesite acelerar la emulaciÛn durante un tiempo.
+Las siguientes teclas ajustan el "frameskip" o salto de "frames": a mayor valor
+de este par√°metro, menor consumo de potencia de proceso, pero tambi√©n menor
+suavidad visual. Idealmente debe mantenerse su valor a 0 a menos que 1.- el
+sistema no tenga potencia de proceso suficiente, o 2.- el usuario necesite
+acelerar la emulaci√≥n durante un tiempo.
 
-	* Num.+ : incrementa el valor de "frameskip", hasta 50;
-	* Num.- : decrementa el valor de "frameskip", hasta 0;
-	* Num.* : establece el valor de "frameskip" al m·ximo, 50;
-	* Num./ : establece el valor de "frameskip" al mÌnimo, 0.
+* Num.+ : incrementa el valor de "frameskip", hasta 50;
+* Num.- : decrementa el valor de "frameskip", hasta 0;
+* Num.* : establece el valor de "frameskip" al m√°ximo, 50;
+* Num./ : establece el valor de "frameskip" al m√≠nimo, 0.
 
-CPCEC permite arrastrar y soltar ficheros. …stos ser·n autom·ticamente
-ejecutados (como con F3) a menos que la tecla Mays estÈ pulsada, en
-cuyo caso ser·n simplemente insertados como con F7 y F8.
+CPCEC permite arrastrar y soltar ficheros. √âstos ser√°n autom√°ticamente
+ejecutados (como con F3) a menos que la tecla Mays est√© pulsada, en cuyo caso
+ser√°n simplemente insertados como con F7 y F8.
 
-Debugger
----
+Los archivos ZIP est√°n parcialmente cubiertos: sus contenidos pueden ser le√≠dos
+(de haber m√°s de un fichero en su interior se mostrar√° una lista para que el
+usuario elija el fichero necesario), pero no pueden ser modificados.
 
-El debugger sirve para detener la emulaciÛn y examinar su estado
-interno. Para ello emplea un interfaz textual que muestra el estado
-tÈcnico actual del sistema (valores de los registros del Z80 y de los
-dispositivos Gate Array, CRTC y PSG) y espera que el usuario teclee una
-orden. En caso de duda 'h' muestra un breve resumen de los comandos.
+## Debugger
 
-	* la cadena vacÌa (pulsar RETURN sin escribir nada) ejecuta la
-	instrucciÛn actual y pasa a la siguiente. En un debugger tÌpico
-	esta operaciÛn se llamarÌa "step into".
-	* 'af VALOR' asigna el valor numÈrico VALOR al registro AF del
-	Z80. 'bc VALOR', 'de VALOR', 'hl VALOR', 'ir VALOR', 'ix VALOR',
-	'iy VALOR', 'sp VALOR' hacen lo mismo con los registros del Z80
-	BC, DE, HL, IR, IX, IY y SP.
-	* 'j VALOR' (jump) establece el valor numÈrico del registro PC
-	del Z80: equivale a que el Z80 "salte" a la direcciÛn de VALOR.
-	* 'd VALOR' (disassembly) muestra un desensamblado parcial de la
-	memoria ubicada en la direcciÛn especificada por VALOR. Si
-	solamente se escribe 'd' el nuevo desensamblado contin˙a donde
-	terminÛ el anterior.
-	* 'm VALOR' (memory) muestra un volcado hexadecimal de la
-	memoria a partir de la direcciÛn especificada por VALOR. Si
-	solamente se escribe 'm' contin˙a donde terminÛ el anterior.
-	* 'p VALOR VALOR1 VALOR2 ...' (poke) escribe los valores VALOR1,
-	VALOR2, etc. en las direcciones de memoria consecutivas a partir
-	de VALOR.
-	* 'r VALOR' (run to) desactiva el debugger y reanuda la
-	emulaciÛn hasta que el Z80 emulado deba ejecutar la instrucciÛn
-	ubicada en la direcciÛn especificada por VALOR. Entonces la
-	emulaciÛn se interrumpir· y el debugger se reactivar·
-	autom·ticamente. Si solamente se escribe 'r' (step over) la
-	interrupciÛn ocurrir· en la instrucciÛn posterior a la actual;
-	nÛtese que esto no equivale a solamente ejecutar la instrucciÛn
-	actual si Èsta efect˙a un salto, pues la instrucciÛn que se
-	ejecuta tras la actual ya no es la posterior sino la que se
-	encuentre en la direcciÛn del salto.
-	* 's VALOR VALOR1 VALOR2 ...' (search) busca la cadena de
-	valores VALOR1, VALOR2, etc. en las direcciones de memoria a
-	partir de VALOR. Enumera las direcciones que contengan dicha
-	cadena; si son demasiadas, muestra '...' y se detiene.
-	* 'h' (help) muestra una ayuda breve;
-	* 'q' (quit) abandona el debugger y reanuda la emulaciÛn.
+El debugger sirve para detener la emulaci√≥n y examinar su estado interno. Al
+principio empleaba un interfaz de l√≠nea de comandos; ahora se basa en un
+interfaz de usuario controlado mediante cursores dividido en cuatro paneles:
+desensamblado (arriba izquierda), registros (arriba derecha), volcado de memoria
+(abajo izquierda) y pila (abajo derecha). Los valores mostrados en la pantalla y
+los par√°metros de las √≥rdenes emplean notaci√≥n hexadecimal.
 
-El uso de may˙sculas y min˙sculas no es importante: el debugger no hace
-distinciones. Los valores mostrados en pantalla y los par·metros de las
-Ûrdenes emplean notaciÛn hexadecimal: por ejemplo, para escribir en la
-direcciÛn de memoria 32768 y consecutivas los valores 83, 79 y 83 hay
-que escribir 'p 8000 53 4F 53' donde 32768 = $8000, 83 = $53 y 79 = $4F.
-Finalmente, es perfectamente posible introducir secuencias de Ûrdenes
-escritas de antemano en un "script" mediante la redirecciÛn de la
-entrada est·ndar, i.e. "cpcec -d instantanea.sna < script.txt".
+* Los cursors, Re.P√°g. y Av.P√°g. mueven el cursor dentro del panel actual;
+* Tab (o Mays+Tab) mueve el cursor al panel siguiente (o anterior);
+* D√≠gitos del 0 al 9 y letras de la A a la F modifican el valor bajo el cursor;
+* G ("go to") solicita una direcci√≥n (en hexadecimal) y env√≠a el cursor a su
+lugar correspondiente en el desensamblado o el volcado de memoria;
+* H muestra una ayuda breve;
+* I ("input") solicita un nombre de fichero y carga su contenido en memoria a
+partir de la direcci√≥n actual del cursor;
+* J ("jump to") asigna la direcci√≥n actual del cursor al registro PC del Z80:
+equivale a que el Z80 "salte" a dicha direcci√≥n.
+* L ("log") solicita un registro de 8 bits (B, C, D, E, H, L, F o A) y crea un
+breakpoint especial en la instrucci√≥n actualmente bajo el cursor; a partir de
+entonces, cuando esta instrucci√≥n tenga lugar, el valor del registro de 8 bits
+ser√° enviado a un fichero de grabaci√≥n elegido por el usuario;
+	+ K cierra el fichero de grabaci√≥n;
+* O ("output") solicita una longitud en bytes y un nombre de fichero, y crea un
+fichero con un volcado de memoria que comienza en la direcci√≥n actual del
+cursor;
+* P ("print") solicita una longitud en bytes y un nombre de fichero, y crea un
+fichero con un desensamblado que comienza en la direcci√≥n actual del cursor;
+* R ("run to") ejecuta la emulaci√≥n hasta alcanzar la operaci√≥n actualmente bajo
+el cursor en el desensamblado;
+* S ("search") solicita una cadena bien ASCII (sin importar las may√∫sculas),
+bien hexadecimal con un prefijo (por ejemplo `SOS` se convierte en `$534F53`) y
+la busca en la memoria a partir de la direcci√≥n actual hasta la √∫ltima direcci√≥n
+v√°lida. Si encuentra la cadena ubica el cursor en ella en el desensamblado o el
+volcado de memoria;
+	+ N ("next") vuelve a buscar la misma cadena;
+* T ("toggle") crea o destruye un breakpoint en la posici√≥n actual del cursor en
+el desensamblado;
+* U ("return") reanuda la emulaci√≥n hasta alcanzar la direcci√≥n de regreso de la
+llamada en curso;
+* V cambia la apariencia del debugger, cambiando los colores blanco y negro y
+los caracteres finos y gruesos;
+* Z elimina todos los breakpoints;
+* Espacio ("step into") ejecuta exactamente una instrucci√≥n y se detiene en la
+siguiente.
+* Return ("step over") reanuda la emulaci√≥n hasta alcanzar la operaci√≥n
+siguiente a la actual. Se comporta de una forma distinta a Espacio si la
+instrucci√≥n actual es una llamada;
+* Escape abandona el debugger y reanuda la emulaci√≥n.
 
-ZXSEC
----
+El uso de may√∫sculas y min√∫sculas no es importante: el debugger no hace
+distinciones.
 
-ZXSEC es un emulador de la familia Sinclair Spectrum (48k, 128k,
-+2/Plus2 y +3/Plus3) basado en los componentes compartidos con el
-Amstrad CPC: el microprocesador Z80, el chip de sonido PSG AY-3-8912, el
-sistema de cinta y la controladora de disco NEC765.
+## ZXSEC
 
-Se compone de los ficheros ZXSEC.EXE, SPECTRUM.ROM, SPEC128K.ROM,
-SPEC-P-2.ROM y SPEC-P-3.ROM, y por lo dem·s funciona igual que CPCEC,
-con varias salvedades:
+ZXSEC es un emulador de la familia Sinclair Spectrum (48k, 128k, +2/Plus2 y
++3/Plus3) basado en los componentes compartidos con el Amstrad CPC: el
+microprocesador Z80, el chip de sonido PSG AY-3-8912, el sistema de cinta y la
+controladora de disco NEC765.
 
-	* la opciÛn -mX elige uno de cuatro modelos posibles: -m0 (48k),
-	-m1 (128k), -m2 (+2) Û -m3 (+3);
-	* la opciÛn -K deshabilita el chip de sonido PSG AY-3-8912
-	(habilitado por defecto) si el modelo elegido es Spectrum 48k;
-	* la opciÛn -X deshabilita la unidad de disco si el modelo
-	elegido es Spectrum +3, que asÌ se convierte en un +2A;
-	* Control+Mays+F8 sirve para poner en marcha (o detener) el
-	motor de cinta, dado que el hardware de CPC dispone de control
-	de cinta incorporado, mientras que el de Spectrum carece de Èl.
-	* las opciones de joystick se refieren al interfaz Kempston por
-	defecto; el men˙ permite elegir el tipo de joystick.
+Se compone de los ficheros ZXSEC.EXE, SPECTRUM.ROM, SPEC128K.ROM, SPEC-P-2.ROM y
+SPEC-P-3.ROM, y por lo dem√°s funciona igual que CPCEC, con varias salvedades:
 
-La emulaciÛn es menos precisa que la de CPCEC. Varios efectos especiales
-basados en la temporizaciÛn funcionan bien (borde raster en "Starion" y
-"Vectron" para 48k, atributos raster en "Amaurote" y "Zub" para 128k)
-pero la emulaciÛn de la ULA Issue 2 (opciÛn -I) es extremadamente b·sica
-y la contenciÛn de memoria es limitada.
+* la opci√≥n -mX elige uno de cuatro modelos posibles: -m0 (48k), -m1 (128k), -m2
+(+2) √≥ -m3 (+3);
+* la opci√≥n -K deshabilita el chip de sonido PSG AY-3-8912 (habilitado por
+defecto) si el modelo elegido es Spectrum 48k;
+* la opci√≥n -X deshabilita la unidad de disco si el modelo elegido es Spectrum
++3, que as√≠ se convierte en un +2A;
+* Control+Mays+F8 sirve para poner en marcha (o detener) el motor de cinta, dado
+que el hardware de CPC dispone de control de cinta incorporado, mientras que el
+de Spectrum carece de √©l.
+* las opciones de joystick se refieren al interfaz Kempston por defecto; el men√∫
+permite elegir el tipo de joystick.
 
-Agradecimientos
----
+La emulaci√≥n es menos precisa que la de CPCEC. Varios efectos especiales basados
+en la temporizaci√≥n funcionan bien (borde raster en "Starion" y "Vectron" para
+48k, atributos raster en "Amaurote" y "Zub" para 128k) pero la emulaci√≥n de la
+ULA Issue 2 (opci√≥n -I) es extremadamente b√°sica y la contenci√≥n de memoria es
+limitada.
 
-Este emulador debe su existencia a una serie de personas y sociedades
-que enumero a continuaciÛn:
+## Agradecimientos
 
-	* Los ficheros de firmware incluidos en el paquete son propiedad
-	de Amstrad, que autoriza la emulaciÛn de sus antiguos sistemas
-	inform·ticos y permite la distribuciÛn de sus firmwares siempre
-	que se respete su autorÌa y su contenido, y a quien agradezco de
-	todo corazÛn la creaciÛn de aquellos magnÌficos ordenadores y la
-	buena voluntad hacia la emulaciÛn de los mismos.
-	* Este emulador fue mi proyecto de fin de m·ster en IngenierÌa
-	Inform·tica para la Universidad Nacional de EnseÒanza a
-	Distancia (UNED), que estuvo dirigido por el profesor JosÈ
-	Manuel DÌaz MartÌnez y resultÛ galardonado con un diez con
-	derecho a matrÌcula de honor.
-	* La documentaciÛn sobre el sistema procede de cpcwiki.eu,
-	cpc-power.com, cpcrulez.fr y quasar.cpcscene.net.
-	* Las pruebas alfa corrieron a cargo del fiel y leal Denis
-	Lechevalier.
+Este emulador debe su existencia a una serie de personas y sociedades que
+enumero a continuaci√≥n:
 
-Historial de versiones
----
+* Los ficheros de firmware incluidos en el paquete son propiedad de Amstrad, que
+autoriza la emulaci√≥n de sus antiguos sistemas inform√°ticos y permite la
+distribuci√≥n de sus firmwares siempre que se respete su autor√≠a y su contenido,
+y a quien agradezco de todo coraz√≥n la creaci√≥n de aquellos magn√≠ficos
+ordenadores y la buena voluntad hacia la emulaci√≥n de los mismos.
+* Este emulador fue mi proyecto de fin de m√°ster en Ingenier√≠a Inform√°tica para
+la Universidad Nacional de Ense√±anza a Distancia (UNED), que estuvo dirigido por
+el profesor Jos√© Manuel D√≠az Mart√≠nez y result√≥ galardonado con un diez con
+derecho a matr√≠cula de honor.
+* La documentaci√≥n sobre el sistema procede de cpcwiki.eu, cpc-power.com,
+cpcrulez.fr y quasar.cpcscene.net.
+* Las pruebas alfa corrieron a cargo del fiel y leal Denis Lechevalier.
 
-	* 20190526 -- parche menor para corregir un error del arranque
-	autom·tico: abrir men˙s y cambiar ventanas anulaba el teclado.
-	* 20190524 -- dÈcima versiÛn p˙blica. AÒade lectura de bloques
-	0x24 y 0x25 (inicio y fin de ciclo) en ficheros CDT/TZX (cfr.
-	BATMAN.TZX), corrige errores en la lectura de sectores dÈbiles
-	en ficheros DSK (cfr. "Titus Classiques"), la grabaciÛn de
-	ficheros YM es reentrante, los ficheros INI corrigen un problema
-	con campos vacÌos y aÒaden la opciÛn "autorewind <0|1>" para
-	rebobinar (o expulsar) una cinta al alcanzar su final.
-	* 20190430 -- novena versiÛn p˙blica. Suaviza el modo monocromo
-	para Spectrum; corrige un bug del FDC en los sectores con datos
-	GAP (de Loriciels); ZXSEC aÒade contenciÛn de memoria simple
-	("Amaurote", "Black Lamp", "Puzznic", "Sly Spy", "Zub"...).
-	* 20190419 -- octava versiÛn p˙blica. AÒade opciones para
-	interpolar la imagen y el sonido; la cinta se rebobina al final
-	autom·ticamente (como en FUSE); corrige un bug en ficheros TZX
-	con 0 en lugar de 8 en el campo "bits usados", otro en bloques
-	CUSTOM INFO de TZX, y otro cuando ZXSEC carga un fichero SNA de
-	48K en modo Plus3 (de todas formas los usuarios deberÌan elegir
-	el modelo apropiado antes de cargar ficheros). Los ficheros INI
-	recuerdan los nombres de los ˙ltimos ficheros usados.
-	* 20190408 -- sÈptima versiÛn p˙blica. Corrige un bug en la
-	grabaciÛn de ficheros YM3, otro en los tiempos internos de ZXSEC
-	y otro en los comandos del debugger con par·metros opcionales.
-	* 20190404 -- sexta versiÛn p˙blica. Corrige un bug del Z80 en
-	la lÛgica del IRQ. La configuraciÛn (modelo emulado y ubicaciÛn
-	de ficheros) se conserva entre sesiones en un fichero INI.
-	* 20190331 -- quinta versiÛn p˙blica. Se puede recorrer cintas
-	por posiciÛn (WAV y CSW) o por bloques (CDT, TZX y TAP).
-	* 20190325 -- cuarta versiÛn p˙blica. Indicadores en pantalla
-	(se ocultan con -O); corrige un bug en ZXSEC que ralentizaba la
-	emulaciÛn si el "frameskip" no era nulo, y otro en la grabaciÛn
-	de sonido en ficheros WAV.
-	* 20190318 -- tercera versiÛn p˙blica. Por defecto la ventana
-	muestra un men˙; la nueva opciÛn -+ lo oculta.
-	* 20190317 -- segunda versiÛn p˙blica. Corrige bugs de joystick
-	en Win32: JoyGetPos devuelve CERO en EXITO, no en ERROR.
-	* 20190314 -- primera versiÛn p˙blica.
+## Ap√©ndice: casos de pruebas
 
-ApÈndice: casos de pruebas
----
+A continuaci√≥n se enumeran los cien t√≠tulos que sirvieron para hacer el grueso
+de las pruebas del emulador durante su desarrollo. Algunos abarcan varias
+pruebas (por ejemplo "Donkey Kong" es a la vez una cinta protegida y un caso
+medio de varios modos de imagen simult√°neos); se les menciona solamente en la
+primera de ellas.
 
-A continuaciÛn se enumeran los cien tÌtulos que sirvieron para hacer el
-grueso de las pruebas del emulador durante su desarrollo. Algunos
-abarcan varias pruebas (por ejemplo "Donkey Kong" es a la vez una cinta
-protegida y un caso medio de varios modos de imagen simult·neos); se les
-menciona solamente en la primera de ellas.
+Diagn√≥sticos:
 
-DiagnÛsticos:
-
-	* Z80 Instruction Exerciser ZEXALL (2004 dominio p˙blico)
-	* PLUSTEST (2002 Richard Wilson)
+* Z80 Instruction Exerciser ZEXALL (2004 dominio p√∫blico)
+* PLUSTEST (2002 Richard Wilson)
 
 Casos simples:
 
-	* Sultan's Maze / Laberinto del Sult·n (1984 Gem Software / Amsoft)
-	* Oh Mummy (1984 Gem Software / Amsoft)
-	* Roland on the Ropes / Fred (1984 Indescomp / Amsoft)
-	* Roland in the Caves / La Pulga (1984 Indescomp / Amsoft)
+* Sultan's Maze / Laberinto del Sult√°n (1984 Gem Software / Amsoft)
+* Oh Mummy (1984 Gem Software / Amsoft)
+* Roland on the Ropes / Fred (1984 Indescomp / Amsoft)
+* Roland in the Caves / La Pulga (1984 Indescomp / Amsoft)
 
 Ficheros de cinta:
 
-	* Sin protecciÛn:
-		* Roland in Time (1984 Gem Software / Amsoft)
-		* Manic Miner (1985 Software Projects / Amsoft)
-		* Jet Set Willy (1985 Software Projects / Amsoft)
-		* Knight Lore (1985 Ultimate)
-		* Alien 8 (1986 Ultimate)
-	* Protecciones simples:
-		* Technician Ted (1985 Hewson)
-		* Abu Simbel Profanation (1986 Dinamic)
-		* Deflektor (1987 Costa Panayi / Gremlin Graphics)
-		* Desperado (1987 Topo Soft)
-		* Humphrey (1988 Made in Spain / Zigurat)
-	* Protecciones medias:
-		* Donkey Kong (1986 Arcana / Ocean)
-		* Samurai Trilogy (1987 Gremlin Graphics)
-		* Operation Wolf (1988 Imagine)
-		* Rainbow Islands (1989 Graftgold / Ocean)
-	* Protecciones complejas:
-		* Rasputin (1985 Paul Hibbard / Firebird)
-		* Spiky Harold (1985 A.Rogers / Firebird)
-		* Druid (1986 Firebird)
-		* Split Personalities (1986 Domark)
-		* Last Mission (1986 Opera Soft)
-		* Marmalade (1987 MBC Informatique)
-		* Gonzz·lezz (1989 Opera Soft)
-		* Twinworld (1990 Ubi Soft)
+* Sin protecci√≥n:
+	+ Roland in Time (1984 Gem Software / Amsoft)
+	+ Manic Miner (1985 Software Projects / Amsoft)
+	+ Jet Set Willy (1985 Software Projects / Amsoft)
+	+ Knight Lore (1985 Ultimate)
+	+ Alien 8 (1986 Ultimate)
+* Protecciones simples:
+	+ Technician Ted (1985 Hewson)
+	+ Abu Simbel Profanation (1986 Dinamic)
+	+ Deflektor (1987 Costa Panayi / Gremlin Graphics)
+	+ Desperado (1987 Topo Soft)
+	+ Humphrey (1988 Made in Spain / Zigurat)
+* Protecciones medias:
+	+ Donkey Kong (1986 Arcana / Ocean)
+	+ Samurai Trilogy (1987 Gremlin Graphics)
+	+ Operation Wolf (1988 Imagine)
+	+ Rainbow Islands (1989 Graftgold / Ocean)
+* Protecciones complejas:
+	+ Rasputin (1985 Paul Hibbard / Firebird)
+	+ Spiky Harold (1985 A.Rogers / Firebird)
+	+ Druid (1986 Firebird)
+	+ Split Personalities (1986 Domark)
+	+ Last Mission (1986 Opera Soft)
+	+ Marmalade (1987 MBC Informatique)
+	+ Gonzz√°lezz (1989 Opera Soft)
+	+ Twinworld (1990 Ubi Soft)
 
-Casos extraÒos:
+Casos extra√±os:
 
-	* Z80:
-		* Sabre Wulf (1985 Ultimate)
-		* Bigfoot (1989 Codemasters)
-	* PIO:
-		* Nodes of Yesod (1986 Odin)
-		* Prehistorik (1991 Titus)
-		* Antiriad / Sacred Armour of Antiriad (1987 Palace Software)
-	* Puertos:
-		* Skweek (1989 Loriciels)
-		* Night Shift (1990 Lucasarts)
-		* Hero Quest (1991 Gremlin Graphics)
+* Z80:
+	+ Sabre Wulf (1985 Ultimate)
+	+ Bigfoot (1989 Codemasters)
+* PIO:
+	+ Nodes of Yesod (1986 Odin)
+	+ Prehistorik (1991 Titus)
+	+ Antiriad / Sacred Armour of Antiriad (1987 Palace Software)
+* Puertos:
+	+ Skweek (1989 Loriciels)
+	+ Night Shift (1990 Lucasarts)
+	+ Hero Quest (1991 Gremlin Graphics)
 
 Casos medios:
 
-	* Varios modos de imagen o paletas de color a la vez:
-		* Sorcery (1985 Gang of Five / Virgin Games)
-		* Kong Strikes Back (1985 Ocean)
-		* Crafton & Xunk (1986 Ere Software)
-		* Elite (1986 Bell and Braben / Firebird)
-		* Amaurote (1987 Binary Design / Mastertronic)
-		* Feud (1987 Binary Design / Mastertronic)
-		* Gauntlet (1987 Gremlin Graphics)
-		* Renegade (1987 Arcana / Imagine)
-	* Scroll r·pido y suave por hardware:
-		* TLL / Tornado Low Level (1985 Vortex Software)
-		* Thing on a Spring (1986 Gremlin Graphics)
-		* Ghosts'n Goblins (1986 Elite)
-		* Prohibition (1987 Infogrames)
-	* Pantalla de tamaÒo mayor ("overscan"):
-		* Arkanoid (1987 Probe / Imagine)
-		* Arkanoid 2: Revenge of Doh (1988 Imagine)
-	* Doble b˙fer por hardware:
-		* Sol Negro (1988 Opera Soft)
-		* Mutan Zone (1988 Opera Soft)
-		* Rescate Atl·ntida (1989 Creep Soft / Dinamic)
-		* AMC / Astro Marine Corps (1989 Creep Soft / Dinamic)
-	* Sonido digitalizado:
-		* Enigma de Aceps (1986 ACE Software)
-		* Dragon Ninja (1988 Imagine)
-		* Robocop (1988 Ocean)
+* Varios modos de imagen o paletas de color a la vez:
+	+ Sorcery (1985 Gang of Five / Virgin Games)
+	+ Kong Strikes Back (1985 Ocean)
+	+ Crafton & Xunk (1986 Ere Software)
+	+ Elite (1986 Bell and Braben / Firebird)
+	+ Amaurote (1987 Binary Design / Mastertronic)
+	+ Feud (1987 Binary Design / Mastertronic)
+	+ Gauntlet (1987 Gremlin Graphics)
+	+ Renegade (1987 Arcana / Imagine)
+* Scroll r√°pido y suave por hardware:
+	+ TLL / Tornado Low Level (1985 Vortex Software)
+	+ Thing on a Spring (1986 Gremlin Graphics)
+	+ Ghosts'n Goblins (1986 Elite)
+	+ Prohibition (1987 Infogrames)
+* Pantalla de tama√±o mayor ("overscan"):
+	+ Arkanoid (1987 Probe / Imagine)
+	+ Arkanoid 2: Revenge of Doh (1988 Imagine)
+* Doble b√∫fer por hardware:
+	+ Sol Negro (1988 Opera Soft)
+	+ Mutan Zone (1988 Opera Soft)
+	+ Rescate Atl√°ntida (1989 Creep Soft / Dinamic)
+	+ AMC / Astro Marine Corps (1989 Creep Soft / Dinamic)
+* Sonido digitalizado:
+	+ Enigma de Aceps (1986 ACE Software)
+	+ Dragon Ninja (1988 Imagine)
+	+ Robocop (1988 Ocean)
 
 Ficheros de disco:
 
-	* CP/M 2.2 (1984 Digital Research / Amstrad)
-	* CP/M Plus (1985 Digital Research / Amstrad)
-	* AbadÌa del Crimen (1987 Opera Soft)
-	* Corsarios (1990 Opera Soft)
-	* Ghostbusters 2 (1989 Software Studios / Activision)
-	* SWIV (1991 Storm / Sales Curve)
-	* Addams Family / La familia Addams (1991 Ocean)
-	* 5KB Demo 3 (1999 varios autores)
+* CP/M 2.2 (1984 Digital Research / Amstrad)
+* CP/M Plus (1985 Digital Research / Amstrad)
+* Abad√≠a del Crimen (1987 Opera Soft)
+* Corsarios (1990 Opera Soft)
+* Ghostbusters 2 (1989 Software Studios / Activision)
+* SWIV (1991 Storm / Sales Curve)
+* Addams Family / La familia Addams (1991 Ocean)
+* 5KB Demo 3 (1999 Duncan + LBB)
 
 Casos avanzados:
 
-	* Mission Genocide (1987 Paul Shirley / Firebird)
-	* Warhawk (1987 Proteus / Firebird)
-	* Dynamic Duo (1988 Probe / Firebird)
-	* Rastan (1988 Probe / Imagine)
-	* Skateball (1988 Ubi Soft)
-	* Turrican (1990 Probe / Rainbow Arts)
+* Mission Genocide (1987 Paul Shirley / Firebird)
+* Warhawk (1987 Proteus / Firebird)
+* Dynamic Duo (1988 Probe / Firebird)
+* Rastan (1988 Probe / Imagine)
+* Skateball (1988 Ubi Soft)
+* Turrican (1990 Probe / Rainbow Arts)
 
 Casos muy avanzados:
 
-	* Turrican 2 (1991 Enigma Variations / Rainbow Arts)
-	* Facehugger Megademo (1991 Face Hugger)
-	* Zap't'Balls (1992 Amstrad CPC International)
-	* Super Cauldron (1992 Titus)
-	* Prodatron Megademo (1992 Prodatron)
-	* Prehistorik 2 (1993 Titus)
-	* Voyage '93 (1993 varios autores)
-	* Overflow 5 Previews (1994 Overflow)
-	* Big'O Full'O Dem'O (1998 Arkos)
-	* Byte '98 (1999 Mortel & Overlanders)
-	* …cole BuissoniËre (2000 Overlanders)
-	* DTC (2006 Arkos)
-	* Orion Prime (2009 Cargosoft)
-	* Edge Grinder (2011 Cosine & Format War)
-	* Batman Returns (2011 Batman Group)
-	* Bloc Us (2011 Benediction)
-	* Super Edge Grinder (2012 Cosine & Format War)
-	* R-Type 128 (2012 Easter Egg)
-	* Still Rising (2013 Vanity)
-	* Yet Another Plasma! (2012 Logon System)
-	* Breaking Baud (2015 CRTC & 3LN)
-	* Megablasters: Escape from Castle in the Clouds (2015 Project Argon)
-	* Imperial Mahjong (2016 Cargosoft)
-	* Logon's Run (2017 Logon System)
-	* Wunderbar (2017 Arkos & Benediction)
-	* Isometrikum (2018 Vanity)
-	* Still Scrolling (2018 Music2Eye & Praline)
-	* PhX (2018 Condense)
+* Turrican 2 (1991 Enigma Variations / Rainbow Arts)
+* Facehugger Megademo (1991 Face Hugger)
+* Zap't'Balls (1992 Amstrad CPC International)
+* Super Cauldron (1992 Titus)
+* Prodatron Megademo (1992 Prodatron)
+* Prehistorik 2 (1993 Titus)
+* Voyage '93 (1993 BENG)
+* Overflow 5 Previews (1994 Overflow)
+* Big'O Full'O Dem'O (1998 Arkos)
+* Byte '98 (1999 Mortel & Overlanders)
+* √âcole Buissoni√®re (2000 Overlanders)
+* DTC (2006 Arkos)
+* Orion Prime (2009 Cargosoft)
+* Edge Grinder (2011 Cosine & Format War)
+* Batman Returns (2011 Batman Group)
+* Bloc Us (2011 Benediction)
+* Super Edge Grinder (2012 Cosine & Format War)
+* R-Type 128 (2012 Easter Egg)
+* Still Rising (2013 Vanity)
+* Yet Another Plasma! (2012 Logon System)
+* Breaking Baud (2015 CRTC & 3LN)
+* Megablasters: Escape from Castle in the Clouds (2015 Project Argon)
+* Imperial Mahjong (2016 Cargosoft)
+* Logon's Run (2017 Logon System)
+* Wunderbar (2017 Arkos & Benediction)
+* Isometrikum (2018 Vanity)
+* Still Scrolling (2018 Music2Eye & Praline)
+* PhX (2018 Condense)
+
+## Historia de versiones
+
+- 20190314 -- primera versi√≥n p√∫blica.
+- 20190317 -- segunda versi√≥n p√∫blica. Corrige bugs de joystick en Win32:
+JoyGetPos devuelve CERO en EXITO, no en ERROR.
+- 20190318 -- tercera versi√≥n p√∫blica. Por defecto la ventana muestra un men√∫;
+la nueva opci√≥n -+ lo oculta.
+- 20190325 -- cuarta versi√≥n p√∫blica. Indicadores en pantalla (se ocultan con
+-O); corrige un bug en ZXSEC que ralentizaba la emulaci√≥n si el "frameskip" no
+era nulo, y otro en la grabaci√≥n de sonido en ficheros WAV.
+- 20190331 -- quinta versi√≥n p√∫blica. Se puede recorrer cintas por posici√≥n (WAV
+y CSW) o por bloques (CDT, TZX y TAP).
+- 20190404 -- sexta versi√≥n p√∫blica. Corrige un bug del Z80 en la l√≥gica del
+IRQ. La configuraci√≥n (modelo emulado y ubicaci√≥n de ficheros) se conserva entre
+sesiones en un fichero INI.
+- 20190408 -- s√©ptima versi√≥n p√∫blica. Corrige un bug en la grabaci√≥n de
+ficheros YM3, otro en los tiempos internos de ZXSEC y otro en los comandos del
+debugger con par√°metros opcionales.
+- 20190419 -- octava versi√≥n p√∫blica. A√±ade opciones para interpolar la imagen y
+el sonido; la cinta se rebobina al final autom√°ticamente (como en FUSE); corrige
+un bug en ficheros TZX con 0 en lugar de 8 en el campo "bits usados", otro en
+bloques CUSTOM INFO de TZX, y otro cuando ZXSEC carga un fichero SNA de 48K en
+modo Plus3 (de todas formas los usuarios deber√≠an elegir el modelo apropiado
+antes de cargar ficheros). Los ficheros INI recuerdan los nombres de los √∫ltimos
+ficheros usados.
+- 20190430 -- novena versi√≥n p√∫blica. Suaviza el modo monocromo para Spectrum;
+corrige un bug del FDC en los sectores con datos GAP (de Loriciels); ZXSEC a√±ade
+contenci√≥n de memoria simple ("Amaurote", "Black Lamp", "Puzznic", "Sly Spy",
+"Zub"...).
+- 20190524 -- d√©cima versi√≥n p√∫blica. A√±ade lectura de bloques 0x24 y 0x25
+(inicio y fin de ciclo) en ficheros CDT/TZX (cfr. BATMAN.TZX), corrige errores
+en la lectura de sectores d√©biles en ficheros DSK (cfr. "Titus Classiques"), la
+grabaci√≥n de ficheros YM es reentrante, los ficheros INI corrigen un problema
+con campos vac√≠os y a√±aden la opci√≥n `autorewind <0|1>` para rebobinar (o
+expulsar) una cinta al alcanzar su final.
+- 20190526 -- parche menor para corregir un error del arranque autom√°tico: abrir
+men√∫s y cambiar ventanas anulaba el teclado.
+- 20190731 -- und√©cima versi√≥n p√∫blica. A√±ade un debugger con interfaz gr√°fico
+de usuario (se acab√≥ teclear √≥rdenes en la consola) y la capacidad de leer
+ficheros contenidos en archivos ZIP basada en PUFF.C del proyecto ZLIB,
+actualiza GCC a 5.1.0 y elimina todas las etiquetas `inline` (hac√≠an m√°s
+perjuicio que beneficio), y en general todos los elementos internos de la
+emulaci√≥n ya son independientes del sistema operativo. Tambi√©n se mejoran
+algunos detalles: el interfaz de selecci√≥n de ficheros corrige un error en
+Win10, el di√°logo para recorrer cintas muestra el nombre de la cinta, Spectrum
++3 se convierte en +2A al cargar cintas, "auto rewind" aparece en el men√∫ Edit y
+ya no comete errores con ficheros CSW, y la emulaci√≥n del sonido ha mejorado,
+por ejemplo "Terminus" para CPC interpreta efectos sonoros y "Agent X II" para
+Spectrum ya no tiene ruido.

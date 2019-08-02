@@ -1,489 +1,459 @@
- //  ####  ######    ####  #######   ####  ------------------------- //
-//  ##  ##  ##  ##  ##  ##  ##   #  ##  ##  CPCEC, plain text Amstrad //
-// ##       ##  ## ##       ## #   ##       CPC emulator written in C //
-// ##       #####  ##       ####   ##       as a postgraduate project //
-// ##       ##     ##       ## #   ##       by Cesar Nicolas-Gonzalez //
-//  ##  ##  ##      ##  ##  ##   #  ##  ##  since 2018-12-01 till now //
- //  ####  ####      ####  #######   ####  ------------------------- //
-//- home page, news and updates - http://cngsoft.no-ip.org/cpcec.htm -//
+Ôªø# CPCEC -- http://cngsoft.no-ip.org/cpcec.htm --
 
-Foreword
----
+	  ####  ######    ####  #######   ####   -------------------------
+	 ##  ##  ##  ##  ##  ##  ##   #  ##  ##  CPCEC, economical Amstrad
+	##       ##  ## ##       ## #   ##       CPC emulator written in C
+	##       #####  ##       ####   ##       as a postgraduate project
+	##       ##     ##       ## #   ##       by Cesar Nicolas-Gonzalez
+	 ##  ##  ##      ##  ##  ##   #  ##  ##  since 2018-12-01 till now
+	  ####  ####      ####  #######   ####   -------------------------
 
-CPCEC is an emulator of the family of home microcomputers Amstrad CPC
-(models 464, 664 and 6128) whose goal is to be loyal to the original
-hardware and efficient in standard modern systems. Thus it brings a
-faithful emulation of the Z80 microprocessor and it replicates the
-behavior of the CRTC 6845 and Gate Array video chips, the PSG AY-3-8912
-sound chip, the remaining circuits found in the original hardware, and
-the tape deck and floppy disc drive that made possible loading and
-running software.
+## Foreword
 
-The source code of CPCEC and its binaries follow the GNU General Public
-License v3, as seen in the file GPL.TXT within the package.
+CPCEC is an emulator of the family of home microcomputers Amstrad CPC (models
+464, 664 and 6128) whose goal is to be loyal to the original hardware and
+efficient in standard modern systems. Thus it brings a faithful emulation of the
+Z80 microprocessor and it replicates the behavior of the CRTC 6845 and Gate
+Array video chips, the PSG AY-3-8912 sound chip, the remaining circuits found in
+the original hardware, and the tape deck and floppy disc drive that made
+possible loading and running software.
 
-Requirements and setup
----
+Software and documentation are provided "as is" with no warranty. The source
+code of CPCEC and its binaries follow the GNU General Public License v3, as seen
+in the file GPL.TXT within the package.
 
-CPCEC requires a Microsoft Windows 2000 operating system or later. The
-minimal hardware requirements are those fitting the operating system,
-and it's advised that the main microprocessor runs at 400 MHz at least.
-Screen resolution in pixels must be 800x600 at least. A sound card is
-optional. Using a joystick is optional, too.
+## Requirements and setup
 
-The emulator spans several files: the runnable binary proper CPCEC.EXE
-and the firmware files CPC464.ROM, CPC664.ROM, CPC6128.ROM and
-CPCADOS.ROM. All these files must be copied in a single directory,
-ideally created to host the emulator.
+CPCEC requires a Microsoft Windows 2000 operating system or later. The minimal
+hardware requirements are those fitting the operating system, and it's advised
+that the main microprocessor runs at 400 MHz at least. Screen resolution in
+pixels must be 800x600 at least. A sound card is optional. Using a joystick is
+optional, too.
 
-The binary can be compiled from the source files by following the
-instructions stated inside them. GCC 4.9.2 and TCC 0.9.27 work
-correctly; GCC 4.7.1 makes severe mistakes in compilation and generates
-invalid binaries.
+The emulator spans several files: the runnable binary proper CPCEC.EXE and the
+firmware files CPC464.ROM, CPC664.ROM, CPC6128.ROM and CPCADOS.ROM. All these
+files must be copied in a single directory, ideally created to host the
+emulator.
 
-Configuration and files
----
+The binary can be compiled from the source files by following the instructions
+included within them. GCC 4.9.2, GCC 5.1.0 and TCC 0.9.27 work correctly; GCC
+4.7.1 makes severe mistakes in compilation and generates invalid binaries.
 
-The behavior of CPCEC can be configured by specifying optional
-parameters in the command line. It's convenient to keep the user's
-preferred parameters by creating a link or shortcut to the emulator
-in the system menu and including said parameters within the link.
-Options can be abridged in Unix style: for example '-C -d -J' becomes
-'-CdJ'. In case of doubt, the parameter '-h' shows a short help
-explaining the available options.
+## Configuration and files
 
-	* -C : emulate a green screen instead of (by default) full
-	colour;
-	* -c0 : set the scanline type to medium;
-	* -c1 : set the scanline type to normal (by default);
-	* -c2 : set the scanline type to simple interlace;
-	* -c3 : set the scanline type to double interlace;
-	* -d : start the emulation with the debugger on (by default
-	off);
-	* -g0 : emulate the CRTC type 0 (by default);
-	* -g1, -g2, -g3, -g4 : ditto for the other four types of CRTC;
-	* -h : short help;
-	* -j : enable emulation of joystick on keyboard (cursors and
-	keys Z, X and C);
-	* -J : disable the usage of a joystick plugged to the system;
-	* -K : emulate 64k RAM only instead of (by default) 128k;
-	* -m0 : start emulation with the model CPC464;
-	* -m1 : start emulation with the model CPC664;
-	* -m2 : start emulation with the model CPC6128, by default;
-	* -O : hide onscreen indicators (by default shown);
-	* -R : disable real time emulation (by default enabled);
-	* -S : disable sound (by default enabled if there's a sound
-	card);
-	* -X : disable emulation of disc drives (by default enabled);
-	* -Y : disable tape analysis (by default enabled; see below);
-	* -Z : disable tape acceleration (by default enabled).
+The behavior of CPCEC can be configured by specifying optional parameters in the
+command line. It's convenient to keep the user's preferred parameters by
+creating a link or shortcut to the emulator in the system menu and including
+said parameters within the link. Options can be abridged in Unix style: for
+example `-C -d -J` becomes `-CdJ`. In case of doubt, the parameter `-h` shows a
+short help explaining the available options.
 
-It's also possible to add file names to the command line: the emulator
-will try opening and running the specified files. Thanks to it CPCEC can
-be linked to the file extensions CDT, CSW, DSK and SNA to automatically
-load said files.
+* -C : emulate a green screen instead of (by default) full colour;
+* -c0 : set the scanline type to medium;
+* -c1 : set the scanline type to normal (by default);
+* -c2 : set the scanline type to simple interlace;
+* -c3 : set the scanline type to double interlace;
+* -d : start the emulation with the debugger on (by default off);
+* -g0 : emulate the CRTC type 0 (by default);
+* -g1, -g2, -g3, -g4 : ditto for the other four types of CRTC;
+* -h : short help;
+* -j : enable emulation of joystick on keyboard (cursors and keys Z, X and C);
+* -J : disable the usage of a joystick plugged to the system;
+* -K : emulate 64k RAM only instead of (by default) 128k;
+* -m0 : start emulation with the model CPC464;
+* -m1 : start emulation with the model CPC664;
+* -m2 : start emulation with the model CPC6128, by default;
+* -O : hide onscreen indicators (by default shown);
+* -R : disable real time emulation (by default enabled);
+* -S : disable sound (by default enabled if there's a sound card);
+* -X : disable emulation of disc drives (by default enabled);
+* -Y : disable tape analysis (by default enabled; see below);
+* -Z : disable tape acceleration (by default enabled).
+
+It's also possible to add file names to the command line: the emulator will try
+opening and running the specified files. Thanks to it CPCEC can be linked to the
+file extensions CDT, CSW, DSK and SNA to automatically load said files.
 
 The file types supported by the emulator are divided in three types:
 
-	* WAV, CSW and CDT: tape files, or more properly digital dumps
-	of the contents of a magnetic tape used to store and distribute
-	data and software.
-	* DSK: disc files, virtual translations of the structure and
-	contents of a magnetic floppy disc able to contain data and
-	software.
-	* SNA: "snapshots", integral copies of the state of an emulated
-	system that make possible resuming in a later time said state of
-	emulation.
+* WAV, CSW and CDT: tape files, or more properly digital dumps of the contents
+of a magnetic tape used to store and distribute data and software.
+* DSK: disc files, virtual translations of the structure and contents of a
+magnetic floppy disc able to contain data and software.
+* SNA: "snapshots", integral copies of the state of an emulated system that make
+possible resuming in a later time said state of emulation.
 
-Tape playback relies on two methods (enabled by default) to improve the
-user experience by shortening a procedure that was originally very slow:
-a typical programme on tape took five minutes to load. The first method
-(tape acceleration) simply detects whether there's a tape in and the
-cassette motor is active: in that case the emulator starts running at
-its maximum possible speed. The second method (tape analysis) examines
-the current state of the Z80 and detects whether it's trying to read the
-tape in a known way: in that case it modifies its state to instantly
-generate the playback results instead of waiting for the tape to raise
-the next signal.
+Tape playback relies on two methods (enabled by default) to improve the user
+experience by shortening a procedure that was originally very slow: a typical
+programme on tape took five minutes to load. The first method (tape
+acceleration) simply detects whether there's a tape in and the cassette motor is
+active: in that case the emulator starts running at its maximum possible speed.
+The second method (tape analysis) examines the current state of the Z80 and
+detects whether it's trying to read the tape in a known way: in that case it
+modifies its state to instantly generate the playback results instead of waiting
+for the tape to raise the next signal.
 
-Automatic loading of disc files tries detecting on its own the required
-booting method. Because some discs had more than one possible booting
-point and the emulator is in risk of choosing an unwanted one, the user
-can choose it on his own by typing the command RUN"FILENAME (where
-FILENAME is the booting file, that is often specified in the software
-instructions, or be simply DISC or DISK) in the emulated system and
-pressing RETURN. In case of doubt, the command CAT shows the list of
-files stored inside the disc.
+Automatic loading of disc files tries detecting on its own the required booting
+method. Because some discs had more than one possible booting point and the
+emulator is in risk of choosing an unwanted one, the user can choose it on his
+own by typing the command `RUN"FILENAME` (where FILENAME is the booting file,
+that is often specified in the software instructions, or be simply DISC or DISK)
+in the emulated system and pressing RETURN. In case of doubt, the command CAT
+shows the list of files stored inside the disc.
 
-Function keys
----
+## Function keys
 
-Once it's running, CPCEC shows the screen of the emulated system and
-obeys the user's commands, that besides those belonging to said system
-(control and alphanumeric keypresses, motions of the joystick, either
-real or emulated through the keyboard) include a series of special
-function keys. In case of doubt, key F1 shows a short index of these
-function keys.
+Once it's running, CPCEC shows the screen of the emulated system and obeys the
+user's commands, that besides those belonging to said system (control and
+alphanumeric keypresses, motions of the joystick, either real or emulated
+through the keyboard) include a series of special function keys. In case of
+doubt, key F1 shows a short index of these function keys.
 
-	* F1: short help;
-	* F1+Control: emulator authorship;
-	* F2: record the emulation's current state into a snapshot;
-	* F2+Control: record again the last selected snapshot;
-	* F3: load and run a tape file, disc file or snapshot;
-	* F3+Control: load again the last selected snapshot;
-	* F4: enable (or disable) sound emulation;
-	* F4+Control: enable (or disable) the keyboard-emulated
-	joystick;
-	* F5: choose the emulated CPC firmware model;
-	* F5+Control: reset the emulation;
-	* F6: enable (or disable) realtime emulation;
-	* F6+Control: raise the speed of the emulated Z80 from 4 MHz to
-	8, 12 and 16 MHz;
-	* F6+Control+Shift: lower its speed to 12, 8 and 4 MHz;
-	* F7: insert a disc file into the virtual disc drive A;
-	* F7+Shift: insert a disc file into the virtual disc drive B;
-	* F7+Control: remove the disc from the virtual disc drive A;
-	* F7+Control+Shift: remove the disc from the virtual disc drive
-	B;
-	* F8: insert a tape file in the virtual tape deck;
-	* F8+Shift: start recording a new tape file;
-	* F8+Control: remove the tape from the virtual tape deck;
-	* F9: enable the debugger (see below);
-	* F9+Shift: show (or hide) the onscreen indicators;
-	* F9+Control: enable (or disable) tape acceleration;
-	* F9+Control+Shift: enable (or disable) tape analysis;
-	* F11: toggle the colour mode between green and three levels of
-	colour of increasing brightness;
-	* F11+Shift: ditto in reverse, moving through decreasing
-	brightness colour levels;
-	* F11+Control: change the type of scanlines, from medium to
-	double interlace;
-	* F11+Control+Shift: ditto in reverse, from double interlace to
-	medium;
-	* F12: record the content of the screen into a BMP file;
-	* F12+Control: start recording (or stop) the sound into a WAV
-	file;
-	* F12+Control+Shift: start recording (or stop) the sound into a
-	YM file;
-	* Pause: stop (or resume) emulation;
-	* Alt+Return: maximize (or restore) the window.
+* F1: short help;
+* F1+Control: emulator authorship;
+* F2: record the emulation's current state into a snapshot;
+* F2+Control: record again the last selected snapshot;
+* F3: load and run a tape file, disc file or snapshot;
+* F3+Control: load again the last selected snapshot;
+* F4: enable (or disable) sound emulation;
+* F4+Control: enable (or disable) the keyboard-emulated joystick;
+* F5: choose the emulated CPC firmware model;
+* F5+Control: reset the emulation;
+* F6: enable (or disable) realtime emulation;
+* F6+Control: raise the speed of the emulated Z80 from 4 MHz to 8, 12 and 16
+MHz;
+* F6+Control+Shift: lower its speed to 12, 8 and 4 MHz;
+* F7: insert a disc file into the virtual disc drive A;
+* F7+Shift: insert a disc file into the virtual disc drive B;
+* F7+Control: remove the disc from the virtual disc drive A;
+* F7+Control+Shift: remove the disc from the virtual disc drive B;
+* F8: insert a tape file in the virtual tape deck;
+* F8+Shift: start recording a new tape file;
+* F8+Control: remove the tape from the virtual tape deck;
+* F9: enable the debugger (see below);
+* F9+Shift: show (or hide) the onscreen indicators;
+* F9+Control: enable (or disable) tape acceleration;
+* F9+Control+Shift: enable (or disable) tape analysis;
+* F11: toggle the colour mode between green and three levels of colour of
+increasing brightness;
+* F11+Shift: ditto in reverse, moving through decreasing brightness colour
+levels;
+* F11+Control: change the type of scanlines, from medium to double interlace;
+* F11+Control+Shift: ditto in reverse, from double interlace to medium;
+* F12: record the content of the screen into a BMP file;
+* F12+Control: start recording (or stop) the sound into a WAV file;
+* F12+Control+Shift: start recording (or stop) the sound into a YM file;
+* Pause: stop (or resume) emulation;
+* Alt+Return: maximize (or restore) the window.
 
-Files BMP and WAV are the namesake standard files of image and sound. YM
-files are dumps of the sound chip states, that because of their usage in
-other platforms besides the Amstrad CPC (Spectrum 128, MSX, Atari ST...)
-can be emulated and played back independently in third party programmes
-such as STSOUND and AY-EMUL. Notice that the scanline mode (option that
-simulates several types of screen) mirrors itself on the recordings as
-well as on the screen, and that each mode has a different impact on the
-programme performance: the normal mode consumes the most processing
-power, and the double interlace, the least.
+Files BMP and WAV are the namesake standard files of image and sound. YM files
+are dumps of the sound chip states, that because of their usage in other
+platforms besides the Amstrad CPC (Spectrum 128, MSX, Atari ST...) can be
+emulated and played back independently in third party programmes such as STSOUND
+and AY-EMUL. Notice that the scanline mode (option that simulates several types
+of screen) mirrors itself on the recordings as well as on the screen, and that
+each mode has a different impact on the programme performance: the normal mode
+consumes the most processing power, and the double interlace, the least.
 
-The onscreen indicators show the state of the disc drives (track number,
-busy or idle), the tape deck (busy or idle) and the joystick.
+The onscreen indicators show the state of the disc drives (track number, busy or
+idle), the tape deck (busy or idle) and the joystick.
 
-The following keys adjust the frameskip: the higher this parameter, the
-lower the required processing power, but also the lower the visual
-smoothness. Ideally it should keep its value to 0 unless 1.- the system
-lacks enough processing power, or 2.- the user needs to speed the
-emulation up for a while.
+The following keys adjust the frameskip: the higher this parameter, the lower
+the required processing power, but also the lower the visual smoothness. Ideally
+it should keep its value to 0 unless 1.- the system lacks enough processing
+power, or 2.- the user needs to speed the emulation up for a while.
 
-	* Num.+ : increases the value of frameskip, up to 50;
-	* Num.- : decreases the value of frameskip, down to 0;
-	* Num.* : sets the value of frameskip to the maximum, 50;
-	* Num./ : sets the value of frameskip to the minimum, 0.
+* Num.+ : increases the value of frameskip, up to 50;
+* Num.- : decreases the value of frameskip, down to 0;
+* Num.* : sets the value of frameskip to the maximum, 50;
+* Num./ : sets the value of frameskip to the minimum, 0.
 
-CPCEC supports drag-and-drop. Dropped files will be automatically loaded
-(as F3 does) unless the Shift key is down; in this case they will be
-inserted as F7 and F8 do.
+CPCEC supports drag-and-drop. Dropped files will be automatically loaded (as F3
+does) unless the Shift key is down; in this case they will be inserted as F7 and
+F8 do.
 
-Debugger
----
+ZIP archives are partially supported: their contents can be read (if there are
+more than one file inside, a list will be shown so the user can choose the
+required file), but they cannot be modified.
 
-The debugger is used to stop the emulation and examine its internal
-state. It's based on a command line interface that shows the current
-technical state of the system (values of the Z80 registers and of the
-Gate Array, CRTC and PSG devices) and waits for the user to type a
-command. In case of doubt 'h' shows a short command help.
+## Debugger
 
-	* the empty string (press RETURN without writing anything) runs
-	the current instruction and goes to the next one. In a typical
-	debugger this operation is called "step into".
-	* 'af VALUE' assigns the numeric value VALUE to the Z80 register
-	AF. 'bc VALUE', 'de VALUE', 'hl VALUE', 'ir VALUE', 'ix VALUE',
-	'iy VALUE', 'sp VALUE' do the same with the Z80 registers BC,
-	DE, HL, IR, IX, IY and SP.
-	* 'j VALUE' (jump) sets the value of the Z80 PC register: it's
-	equivalent to the Z80 "jumping" to the address VALUE.
-	* 'd VALUE' (disassembly) shows a partial disassembly of the
-	memory located in the address specified by VALUE. If only 'd' is
-	written the new disassembly continues where the previous one
-	ended.
-	* 'm VALUE' (memory) shows a partial hexadecimal dump of the
-	memory located in the address specified by VALUE. If only 'm' is
-	written the new dump continues where the previous one ended.
-	* 'p VALUE VALUE1 VALUE2 ...' (poke) writes the values VALUE1,
-	VALUE2, etc. on the consecutive memory addresses beginning from
-	VALUE.
-	* 'r VALUE' (run to) disables the debugger and resumes the
-	emulation until the emulated Z80 must run the instruction
-	located in the address specified by VALUE. In that case the
-	emulation will stop and the debugger will automatically enable
-	itself. If only 'r' (step over) is written the interruption will
-	happen on the instruction after the current one; notice that
-	this isn't equivalent to running just the current instruction if
-	this one performs a jump, because the instruction that runs
-	after the next one is no longer the one after it but the one in
-	the address specified by the jump.
-	* 's VALUE VALUE1 VALUE2 ...' (search) looks for the string of
-	values VALUE1, VALUE2, etc. in the memory addresses beginning
-	from VALUE. It lists the addresses containing said string; if
-	they're too many, it will show '...' and stop.
-	* 'h' (help) shows a short help.
-	* 'q' (quit) stops the debugger and resumes the emulation.
+The debugger is used to stop the emulation and examine its internal state. It
+was originally based on a command line interface; it has since been updated into
+a cursor-driven user interface divided into four panels: disassembly (top left),
+registers (top right), memory dump (bottom left) and stack (bottom right). The
+values shown on screen and the command parameters use hexadecimal notation.
 
-Usage of upper and lower case is unimportant; the debugger isn't case
-sensitive. The values shown on screen and the command parameters use
-hexadecimal notation: for example, to write into the memory address
-32768 (and following) the values 83, 79 and 83 you must write 'p 8000 53
-4F 53' where 32768 = $8000, 83 = $53 and 79 = $4F. Finally, it's
-perfectly feasible to feed series of commands written in advance in a
-script by redirecting the standard input, i.e. "cpcec -d snapshot.sna
-< script.txt".
+* Cursors, Page Up and Page Down move the cursor within the current panel;
+* Tab (or Shift+Tab) move the cursor to the next (or previous) panel;
+* Digits from 0 to 9 and letters from A to F modify the value under the cursor;
+* G ("go to") requests an address (in hexadecimal) and moves the cursor to its
+location in the disassembly or the memory dump;
+* H shows a short help;
+* I ("input") requests a filename and loads its contents onto memory starting
+from the current location of the cursor;
+* J ("jump to") sets the PC to the location under the cursor in the disassembly;
+* L ("log") requests an 8-bit register (B, C, D, E, H, L, F or A) and sets a
+special breakpoint in the current instruction under the cursor; from then on,
+whenever that instruction takes place, the value of the 8-bit register will be
+sent to a log file first chosen by the user;
+	+ K closes the log file;
+* O ("output") requests a length in bytes and a filename, and creates a file
+with a memory dump starting from the current location of the cursor;
+* P ("print") requests a length in bytes and a filename, and creates a file with
+a disassembly starting from the current location of the cursor;
+* R ("run to") runs the emulation until reaching the operation under the cursor
+in the disassembly;
+* S ("search") requests either an ASCII string (case insensitive) or a
+hexadecimal string with a prefix (for example `SOS` becomes `$534F53`) and
+searches the memory for it since the current location until the last valid
+address. If it finds the string it moves the cursor next to it in either the
+disassembly or the memory dump;
+	+ N ("next") searches again the memory for the same string;
+* T ("toggle") creates or deletes a breakpoint in the current cursor location in
+the disassembly;
+* U ("return") resumes the emulation until reaching the current call's return
+address;
+* V changes the debugger appearance, toggling black or white colours and thin or
+bold characters;
+* Z deletes all breakpoints;
+* Space ("step into") runs exactly one operation and stops on the next
+operation;
+* Return ("step over") resumes the emulation until reaching the next operation.
+It behaves differently from SPACE if the current instruction performs a call;
+* Escape stops the debugger and resumes the emulation.
 
-ZXSEC
----
+Usage of upper and lower case is unimportant; the debugger isn't case sensitive.
 
-ZXSEC is an emulator of the Sinclair Spectrum family (48k, 128k,
-+2/Plus2 and +3/Plus3) based on the components it shared with the
-Amstrad CPC family: the Z80 microprocessor, the PSG AY-3-8192 sound
-chip, the tape system and the NEC765 disc drive controller.
+## ZXSEC
 
-It spans the files ZXSEC.EXE, SPECTRUM.ROM, SPEC128K.ROM, SPEC-P-2.ROM
-and SPEC-P-3.ROM, and otherwise runs the same as CPCEC, with several
-exceptions:
+ZXSEC is an emulator of the Sinclair Spectrum family (48k, 128k, +2/Plus2 and
++3/Plus3) based on the components it shared with the Amstrad CPC family: the Z80
+microprocessor, the PSG AY-3-8192 sound chip, the tape system and the NEC765
+disc drive controller.
 
-	* option -mX chooses one out of four possible models: -m0
-	(48k), -m1 (128k), -m2 (+2) or -m3 (+3).
-	* option -K disables the PSG AY-3-8912 sound chip (enabled by
-	default) if the chosen model is Spectrum 48k;
-	* option -X disables the disc drives if the chosen model is
-	Spectrum +3, that thus becomes a +2A instead;
-	* Control+Shift+F8 starts (or stops) the cassette motor, because
-	the CPC hardware includes a built-in tape control, while the
-	Spectrum hardware lacks it.
-	* joystick options apply to the Kempson interface by default;
-	the menu allows choosing the type of joystick.
+It spans the files ZXSEC.EXE, SPECTRUM.ROM, SPEC128K.ROM, SPEC-P-2.ROM and
+SPEC-P-3.ROM, and otherwise runs the same as CPCEC, with several exceptions:
 
-Emulation is less precise than CPCEC's. Several special effects based on
-timing work correctly (border raster effects in "Starion" and "Vectron"
-for 48k, attribute raster effects in "Amaurote" and "Zub" for 128k) but
-the emulation of the Issue 2 ULA (the option -I) is extremely basic, and
-contended memory emulation is limited.
+* option -mX chooses one out of four possible models: -m0 (48k), -m1 (128k), -m2
+(+2) or -m3 (+3).
+* option -K disables the PSG AY-3-8912 sound chip (enabled by default) if the
+chosen model is Spectrum 48k;
+* option -X disables the disc drives if the chosen model is Spectrum +3, that
+thus becomes a +2A instead;
+* Control+Shift+F8 starts (or stops) the cassette motor, because the CPC
+hardware includes a built-in tape control, while the Spectrum hardware lacks it.
+* joystick options apply to the Kempson interface by default; the menu allows
+choosing the type of joystick.
 
-Acknowledgements
----
+Emulation is less precise than CPCEC's. Several special effects based on timing
+work correctly (border raster effects in "Starion" and "Vectron" for 48k,
+attribute raster effects in "Amaurote" and "Zub" for 128k) but the emulation of
+the Issue 2 ULA (the option -I) is extremely basic, and contended memory
+emulation is limited.
 
-This emulator owes its existence to a series of people and societies
-that are listed as follows:
+## Acknowledgements
 
-	* The firmware files included in the package are Amstrad's
-	properties, who allows the emulation of their old computer
-	systems and supports the distribution of their firmwares as long
-	as their authorship and contents are respected, and whom I
-	wholeheartedly thank the creation of those magnificent computers
-	and the good will towards their emulation.
-	* This emulator was my final project for the Computer
-	Engineering postdegree at the Distance-Learning National
-	University (Universidad Nacional de EnseÒanza a Distancia,
-	UNED), a project directed by professor JosÈ Manuel DÌaz MartÌnez
-	and finally awarded a 100% and the right to a honorable mention.
-	* The documentation about the system comes from cpcwiki.eu,
-	cpc-power.com, cpcrulez.fr and quasar.cpcscene.net.
-	* The alpha tests were handled by the faithful and loyal Denis
-	Lechevalier.
+This emulator owes its existence to a series of people and societies that are
+listed as follows:
 
-Version log
----
+* The firmware files included in the package are Amstrad's properties, who
+allows the emulation of their old computer systems and supports the distribution
+of their firmwares as long as their authorship and contents are respected, and
+whom I wholeheartedly thank for the creation of those magnificent computers and
+the good will towards their emulation.
+* This emulator was my final project for the Computer Engineering postdegree at
+the Distance-Learning National University (Universidad Nacional de Ense√±anza a
+Distancia, UNED), a project directed by professor Jos√© Manuel D√≠az Mart√≠nez and
+ultimately awarded a 100% and the right to a honorable mention.
+* The documentation about the system comes from cpcwiki.eu, cpc-power.com,
+cpcrulez.fr and quasar.cpcscene.net.
+* The alpha tests were handled by the faithful and loyal Denis Lechevalier.
 
-	* 20190526 -- minor patch fixing a bug in autorun mode: opening
-	menus and switching windows cancelled the automatic keyboard.
-	* 20190524 -- tenth public release. Added support for CDT/TZX
-	file blocks 0x24 and 0x25 (loop start and ending) (cfr.
-	BATMAN.TZX), fixed bugs in the handling of weak sectors in DSK
-	files (cfr. "Titus Classiques"), YM file recording is reentrant,
-	fixed a bug in INI files with empty fields and added the option
-	"autorewind <0|1>" to rewind (or remove) a tape when playback
-	reaches the end.
-	* 20190430 -- ninth public release. Softer B/W Spectrum palette;
-	fixed bug in FDC sector size calculation if GAP datas are stored
-	(Loriciels' discs); added simple memory contention to ZXSEC
-	("Amaurote", "Black Lamp", "Puzznic", "Sly Spy", "Zub"...).
-	* 20190419 -- eighth public release. Added options for image and
-	sound interpolation; tape automatically rewinds itself when it
-	reaches the end (‡ la FUSE); fixed a bug in TZX files that store
-	0 instead of 8 in the "used bits" field, another bug in CUSTOM
-	INFO blocks in TZX files, and another one when ZXSEC loads a 48K
-	SNA file in Plus3 mode (users should manually switch to a safe
-	model beforehand anyway). INI files now remember the names of
-	the last used files.
-	* 20190408 -- seventh public release. Fixed a bug in the YM3
-	file recording, another one in the ZXSEC internal timings, and
-	one more in the debugger commands with optional parameters.
-	* 20190404 -- sixth public release. Fixed a Z80 emulation bug in
-	IRQ logic. Configuration (computer model and file paths) is kept
-	across sessions in a INI file.
-	* 20190331 -- fifth public release. Tapes can be browsed, either
-	by file position (WAV and CSW) or by block (CDT, TZX and TAP).
-	* 20190325 -- fourth public release. Onscreen indicators (hide
-	them with -O); fixed bugs in ZXSEC that slowed emulation down
-	when the frameskip wasn't zero, and another bug in audio
-	recording on WAV files.
-	* 20190318 -- third public release. By default the window shows
-	a menu; new option -+ hides it.
-	* 20190317 -- second public release. Fixed Win32 joystick bugs:
-	JoyGetPos returns ZERO on OK, not on ERROR.
-	* 20190314 -- first public release.
+## Appendix: test cases
 
-Appendix: test cases
----
-
-The following list states the one hundred titles that made the bulk of
-the emulator tests during its development. Several titles span more than
-one test (for example "Donkey Kong" is both a protected tape and a
-middle case of multiple image modes at once); they're mentioned in the
-first type of test.
+The following list states the one hundred titles that made the bulk of the
+emulator tests during its development. Several titles span more than one test
+(for example "Donkey Kong" is both a protected tape and a middle case of
+multiple image modes at once); they're mentioned in the first type of test.
 
 Diagnostics:
 
-	* Z80 Instruction Exerciser ZEXALL (2004 public domain)
-	* PLUSTEST (2002 Richard Wilson)
+* Z80 Instruction Exerciser ZEXALL (2004 public domain)
+* PLUSTEST (2002 Richard Wilson)
 
 Simple cases:
 
-	* Sultan's Maze / Laberinto del Sult·n (1984 Gem Software / Amsoft)
-	* Oh Mummy (1984 Gem Software / Amsoft)
-	* Roland on the Ropes / Fred (1984 Indescomp / Amsoft)
-	* Roland in the Caves / La Pulga (1984 Indescomp / Amsoft)
+* Sultan's Maze / Laberinto del Sult√°n (1984 Gem Software / Amsoft)
+* Oh Mummy (1984 Gem Software / Amsoft)
+* Roland on the Ropes / Fred (1984 Indescomp / Amsoft)
+* Roland in the Caves / La Pulga (1984 Indescomp / Amsoft)
 
 Tape files:
 
-	* Unprotected:
-		* Roland in Time (1984 Gem Software / Amsoft)
-		* Manic Miner (1985 Software Projects / Amsoft)
-		* Jet Set Willy (1985 Software Projects / Amsoft)
-		* Knight Lore (1985 Ultimate)
-		* Alien 8 (1986 Ultimate)
-	* Simple protections:
-		* Technician Ted (1985 Hewson)
-		* Abu Simbel Profanation (1986 Dinamic)
-		* Deflektor (1987 Costa Panayi / Gremlin Graphics)
-		* Desperado (1987 Topo Soft)
-		* Humphrey (1988 Made in Spain / Zigurat)
-	* Middle protections:
-		* Donkey Kong (1986 Arcana / Ocean)
-		* Samurai Trilogy (1987 Gremlin Graphics)
-		* Operation Wolf (1988 Imagine)
-		* Rainbow Islands (1989 Graftgold / Ocean)
-	* Complex protections:
-		* Rasputin (1985 Paul Hibbard / Firebird)
-		* Spiky Harold (1985 A.Rogers / Firebird)
-		* Druid (1986 Firebird)
-		* Split Personalities (1986 Domark)
-		* Last Mission (1986 Opera Soft)
-		* Marmalade (1987 MBC Informatique)
-		* Gonzz·lezz (1989 Opera Soft)
-		* Twinworld (1990 Ubi Soft)
+* Unprotected:
+	+ Roland in Time (1984 Gem Software / Amsoft)
+	+ Manic Miner (1985 Software Projects / Amsoft)
+	+ Jet Set Willy (1985 Software Projects / Amsoft)
+	+ Knight Lore (1985 Ultimate)
+	+ Alien 8 (1986 Ultimate)
+* Simple protections:
+	+ Technician Ted (1985 Hewson)
+	+ Abu Simbel Profanation (1986 Dinamic)
+	+ Deflektor (1987 Costa Panayi / Gremlin Graphics)
+	+ Desperado (1987 Topo Soft)
+	+ Humphrey (1988 Made in Spain / Zigurat)
+* Middle protections:
+	+ Donkey Kong (1986 Arcana / Ocean)
+	+ Samurai Trilogy (1987 Gremlin Graphics)
+	+ Operation Wolf (1988 Imagine)
+	+ Rainbow Islands (1989 Graftgold / Ocean)
+* Complex protections:
+	+ Rasputin (1985 Paul Hibbard / Firebird)
+	+ Spiky Harold (1985 A.Rogers / Firebird)
+	+ Druid (1986 Firebird)
+	+ Split Personalities (1986 Domark)
+	+ Last Mission (1986 Opera Soft)
+	+ Marmalade (1987 MBC Informatique)
+	+ Gonzz√°lezz (1989 Opera Soft)
+	+ Twinworld (1990 Ubi Soft)
 
 Strange cases:
 
-	* Z80:
-		* Sabre Wulf (1985 Ultimate)
-		* Bigfoot (1989 Codemasters)
-	* PIO:
-		* Nodes of Yesod (1986 Odin)
-		* Prehistorik (1991 Titus)
-		* Antiriad / Sacred Armour of Antiriad (1987 Palace Software)
-	* Puertos:
-		* Skweek (1989 Loriciels)
-		* Night Shift (1990 Lucasarts)
-		* Hero Quest (1991 Gremlin Graphics)
+* Z80:
+	+ Sabre Wulf (1985 Ultimate)
+	+ Bigfoot (1989 Codemasters)
+* PIO:
+	+ Nodes of Yesod (1986 Odin)
+	+ Prehistorik (1991 Titus)
+	+ Antiriad / Sacred Armour of Antiriad (1987 Palace Software)
+* Ports:
+	+ Skweek (1989 Loriciels)
+	+ Night Shift (1990 Lucasarts)
+	+ Hero Quest (1991 Gremlin Graphics)
 
 Middle cases:
 
-	* Multiple image modes or colour palettes at once:
-		* Sorcery (1985 Gang of Five / Virgin Games)
-		* Kong Strikes Back (1985 Ocean)
-		* Crafton & Xunk (1986 Ere Software)
-		* Elite (1986 Bell and Braben / Firebird)
-		* Amaurote (1987 Binary Design / Mastertronic)
-		* Feud (1987 Binary Design / Mastertronic)
-		* Gauntlet (1987 Gremlin Graphics)
-		* Renegade (1987 Arcana / Imagine)
-	* Fast smooth hardware scroll:
-		* TLL / Tornado Low Level (1985 Vortex Software)
-		* Thing on a Spring (1986 Gremlin Graphics)
-		* Ghosts'n Goblins (1986 Elite)
-		* Prohibition (1987 Infogrames)
-	* Screen bigger than usual (overscan):
-		* Arkanoid (1987 Probe / Imagine)
-		* Arkanoid 2: Revenge of Doh (1988 Imagine)
-	* Hardware double buffer:
-		* Sol Negro (1988 Opera Soft)
-		* Mutan Zone (1988 Opera Soft)
-		* Rescate Atl·ntida (1989 Creep Soft / Dinamic)
-		* AMC / Astro Marine Corps (1989 Creep Soft / Dinamic)
-	* Sampled sound:
-		* Enigma de Aceps (1986 ACE Software)
-		* Dragon Ninja (1988 Imagine)
-		* Robocop (1988 Ocean)
+* Multiple image modes or colour palettes at once:
+	+ Sorcery (1985 Gang of Five / Virgin Games)
+	+ Kong Strikes Back (1985 Ocean)
+	+ Crafton & Xunk (1986 Ere Software)
+	+ Elite (1986 Bell and Braben / Firebird)
+	+ Amaurote (1987 Binary Design / Mastertronic)
+	+ Feud (1987 Binary Design / Mastertronic)
+	+ Gauntlet (1987 Gremlin Graphics)
+	+ Renegade (1987 Arcana / Imagine)
+* Fast smooth hardware scroll:
+	+ TLL / Tornado Low Level (1985 Vortex Software)
+	+ Thing on a Spring (1986 Gremlin Graphics)
+	+ Ghosts'n Goblins (1986 Elite)
+	+ Prohibition (1987 Infogrames)
+* Screen bigger than usual (overscan):
+	+ Arkanoid (1987 Probe / Imagine)
+	+ Arkanoid 2: Revenge of Doh (1988 Imagine)
+* Hardware double buffer:
+	+ Sol Negro (1988 Opera Soft)
+	+ Mutan Zone (1988 Opera Soft)
+	+ Rescate Atl√°ntida (1989 Creep Soft / Dinamic)
+	+ AMC / Astro Marine Corps (1989 Creep Soft / Dinamic)
+* Sampled sound:
+	+ Enigma de Aceps (1986 ACE Software)
+	+ Dragon Ninja (1988 Imagine)
+	+ Robocop (1988 Ocean)
 
 Disc files:
 
-	* CP/M 2.2 (1984 Digital Research / Amstrad)
-	* CP/M Plus (1985 Digital Research / Amstrad)
-	* AbadÌa del Crimen (1987 Opera Soft)
-	* Corsarios (1990 Opera Soft)
-	* Ghostbusters 2 (1989 Software Studios / Activision)
-	* SWIV (1991 Storm / Sales Curve)
-	* Addams Family / La familia Addams (1991 Ocean)
-	* 5KB Demo 3 (1999 varios autores)
+* CP/M 2.2 (1984 Digital Research / Amstrad)
+* CP/M Plus (1985 Digital Research / Amstrad)
+* Abad√≠a del Crimen (1987 Opera Soft)
+* Corsarios (1990 Opera Soft)
+* Ghostbusters 2 (1989 Software Studios / Activision)
+* SWIV (1991 Storm / Sales Curve)
+* Addams Family / La familia Addams (1991 Ocean)
+* 5KB Demo 3 (1999 Duncan + LBB)
 
 Advanced cases:
 
-	* Mission Genocide (1987 Paul Shirley / Firebird)
-	* Warhawk (1987 Proteus / Firebird)
-	* Dynamic Duo (1988 Probe / Firebird)
-	* Rastan (1988 Probe / Imagine)
-	* Skateball (1988 Ubi Soft)
-	* Turrican (1990 Probe / Rainbow Arts)
+* Mission Genocide (1987 Paul Shirley / Firebird)
+* Warhawk (1987 Proteus / Firebird)
+* Dynamic Duo (1988 Probe / Firebird)
+* Rastan (1988 Probe / Imagine)
+* Skateball (1988 Ubi Soft)
+* Turrican (1990 Probe / Rainbow Arts)
 
 Very advanced cases:
 
-	* Turrican 2 (1991 Enigma Variations / Rainbow Arts)
-	* Facehugger Megademo (1991 Face Hugger)
-	* Zap't'Balls (1992 Amstrad CPC International)
-	* Super Cauldron (1992 Titus)
-	* Prodatron Megademo (1992 Prodatron)
-	* Prehistorik 2 (1993 Titus)
-	* Voyage '93 (1993 varios autores)
-	* Overflow 5 Previews (1994 Overflow)
-	* Big'O Full'O Dem'O (1998 Arkos)
-	* Byte '98 (1999 Mortel & Overlanders)
-	* …cole BuissoniËre (2000 Overlanders)
-	* DTC (2006 Arkos)
-	* Orion Prime (2009 Cargosoft)
-	* Edge Grinder (2011 Cosine & Format War)
-	* Batman Returns (2011 Batman Group)
-	* Bloc Us (2011 Benediction)
-	* Super Edge Grinder (2012 Cosine & Format War)
-	* R-Type 128 (2012 Easter Egg)
-	* Still Rising (2013 Vanity)
-	* Yet Another Plasma! (2012 Logon System)
-	* Breaking Baud (2015 CRTC & 3LN)
-	* Megablasters: Escape from Castle in the Clouds (2015 Project Argon)
-	* Imperial Mahjong (2016 Cargosoft)
-	* Logon's Run (2017 Logon System)
-	* Wunderbar (2017 Arkos & Benediction)
-	* Isometrikum (2018 Vanity)
-	* Still Scrolling (2018 Music2Eye & Praline)
-	* PhX (2018 Condense)
+* Turrican 2 (1991 Enigma Variations / Rainbow Arts)
+* Facehugger Megademo (1991 Face Hugger)
+* Zap't'Balls (1992 Amstrad CPC International)
+* Super Cauldron (1992 Titus)
+* Prodatron Megademo (1992 Prodatron)
+* Prehistorik 2 (1993 Titus)
+* Voyage '93 (1993 BENG)
+* Overflow 5 Previews (1994 Overflow)
+* Big'O Full'O Dem'O (1998 Arkos)
+* Byte '98 (1999 Mortel & Overlanders)
+* √âcole Buissoni√®re (2000 Overlanders)
+* DTC (2006 Arkos)
+* Orion Prime (2009 Cargosoft)
+* Edge Grinder (2011 Cosine & Format War)
+* Batman Returns (2011 Batman Group)
+* Bloc Us (2011 Benediction)
+* Super Edge Grinder (2012 Cosine & Format War)
+* R-Type 128 (2012 Easter Egg)
+* Still Rising (2013 Vanity)
+* Yet Another Plasma! (2012 Logon System)
+* Breaking Baud (2015 CRTC & 3LN)
+* Megablasters: Escape from Castle in the Clouds (2015 Project Argon)
+* Imperial Mahjong (2016 Cargosoft)
+* Logon's Run (2017 Logon System)
+* Wunderbar (2017 Arkos & Benediction)
+* Isometrikum (2018 Vanity)
+* Still Scrolling (2018 Music2Eye & Praline)
+* PhX (2018 Condense)
+
+## Version log
+
+- 20190314 -- first public release.
+- 20190317 -- second public release. Fixed Win32 joystick bugs: JoyGetPos
+returns ZERO on OK, not on ERROR.
+- 20190318 -- third public release. By default the window shows a menu; new
+option -+ hides it.
+- 20190325 -- fourth public release. Onscreen indicators (hide them with -O);
+fixed bugs in ZXSEC that slowed emulation down when the frameskip wasn't zero,
+and another bug in audio recording on WAV files.
+- 20190331 -- fifth public release. Tapes can be browsed, either by file
+position (WAV and CSW) or by block (CDT, TZX and TAP).
+- 20190404 -- sixth public release. Fixed a Z80 emulation bug in IRQ logic.
+Configuration (computer model and file paths) is kept across sessions in a INI
+file.
+- 20190408 -- seventh public release. Fixed a bug in the YM3 file recording,
+another one in the ZXSEC internal timings, and one more in the debugger commands
+with optional parameters.
+- 20190419 -- eighth public release. Added options for image and sound
+interpolation; tape automatically rewinds itself when it reaches the end (√† la
+FUSE); fixed a bug in TZX files that store 0 instead of 8 in the "used bits"
+field, another bug in CUSTOM INFO blocks in TZX files, and another one when
+ZXSEC loads a 48K SNA file in Plus3 mode (users should manually switch to a safe
+model beforehand anyway). INI files now remember the names of the last used
+files.
+- 20190430 -- ninth public release. Softer B/W Spectrum palette; fixed bug in
+FDC sector size calculation if GAP datas are stored (Loriciels' discs); added
+simple memory contention to ZXSEC ("Amaurote", "Black Lamp", "Puzznic", "Sly
+Spy", "Zub"...).
+- 20190524 -- tenth public release. Added support for CDT/TZX file blocks 0x24
+and 0x25 (loop start and ending) (cfr. BATMAN.TZX), fixed bugs in the handling
+of weak sectors in DSK files (cfr. "Titus Classiques"), YM file recording is
+reentrant, fixed a bug in INI files with empty fields and added the option
+`autorewind <0|1>` to rewind (or remove) a tape when playback reaches the end.
+- 20190526 -- minor patch fixing a bug in autorun mode: opening menus and
+switching windows cancelled the automatic keyboard.
+- 20190731 -- eleventh public release. Added a new UI-based debugger (typing
+commands is no longer needed) and support for ZIP archive reading based on
+PUFF.C from the ZLIB project, upgrades GCC to 5.1.0 and removes all `inline`
+tags (they did more harm than good), and generally reworks all internals to make
+them OS-independent. Several details improved as well: the file selector fixes a
+bug in Win10, "browse tape" dialog shows the file name, Spectrum +3
+automatically becomes +2A to load tapes, `auto rewind` shows up in Edit menu and
+fixes bugs in CSW files, and sound emulation has improved, for example
+"Terminus" on CPC plays sound and "Agent X II" on Spectrum is no longer noisy.
