@@ -470,9 +470,12 @@ ficheros contenidos en archivos ZIP basada en PUFF.C del proyecto ZLIB,
 actualiza GCC a 5.1.0 y elimina todas las etiquetas `inline` (hacían más
 perjuicio que beneficio), y en general todos los elementos internos de la
 emulación ya son independientes del sistema operativo. También se mejoran
-algunos detalles: el interfaz de selección de ficheros corrige un error en
-Win10, el diálogo para recorrer cintas muestra el nombre de la cinta, Spectrum
-+3 se convierte en +2A al cargar cintas, "auto rewind" aparece en el menú Edit y
-ya no comete errores con ficheros CSW, y la emulación del sonido ha mejorado,
-por ejemplo "Terminus" para CPC interpreta efectos sonoros y "Agent X II" para
-Spectrum ya no tiene ruido.
+algunos detalles: el interfaz de selección de ficheros corrige un error en Win10
+(y en ciertos casos en Win7), el diálogo para recorrer cintas muestra el nombre
+de la cinta, Spectrum +3 se convierte en +2A al cargar cintas, "auto rewind"
+aparece en el menú Edit y ya no comete errores con ficheros CSW, y la emulación
+del sonido ha mejorado, por ejemplo "Terminus" para CPC interpreta efectos
+sonoros y "Agent X II" para Spectrum ya no tiene ruido.
+- 20190809 -- parche menor para rechazar "silenciosamente" (i.e. sin códigos de
+error) las operaciones de escritura en discos de sólo-lectura y para permitir el
+autoarranque de discos con formato IBM.

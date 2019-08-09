@@ -450,10 +450,14 @@ reentrant, fixed a bug in INI files with empty fields and added the option
 switching windows cancelled the automatic keyboard.
 - 20190731 -- eleventh public release. Added a new UI-based debugger (typing
 commands is no longer needed) and support for ZIP archive reading based on
-PUFF.C from the ZLIB project, upgrades GCC to 5.1.0 and removes all `inline`
-tags (they did more harm than good), and generally reworks all internals to make
-them OS-independent. Several details improved as well: the file selector fixes a
-bug in Win10, "browse tape" dialog shows the file name, Spectrum +3
-automatically becomes +2A to load tapes, `auto rewind` shows up in Edit menu and
-fixes bugs in CSW files, and sound emulation has improved, for example
-"Terminus" on CPC plays sound and "Agent X II" on Spectrum is no longer noisy.
+PUFF.C from the ZLIB project, upgraded GCC to 5.1.0 and removed all `inline`
+tags (they did more harm than good), and generally reworked all internals to
+make them OS-independent. Several details improved as well: the file selector
+fixes a bug in Win10 (and in some cases in Win7), "browse tape" dialog shows the
+file name, Spectrum +3 automatically becomes +2A to load tapes, `auto rewind`
+shows up in Edit menu and fixes bugs in CSW files, and sound emulation has
+improved, for example "Terminus" on CPC plays sound and "Agent X II" on Spectrum
+is no longer noisy.
+- 20190809 -- minor patch restoring the "silent" discarding (i.e. without error
+codes) of write operations in read-only discs and allowing the automatic booting
+of IBM-formatted discs.
