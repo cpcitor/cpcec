@@ -461,3 +461,5 @@ is no longer noisy.
 - 20190809 -- minor patch restoring the "silent" discarding (i.e. without error
 codes) of write operations in read-only discs and allowing the automatic booting
 of IBM-formatted discs.
+- 20190817 -- minor patch fixing a crash when booting tapes right when the
+automatic frameskip kicks in.

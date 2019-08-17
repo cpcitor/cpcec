@@ -479,3 +479,5 @@ sonoros y "Agent X II" para Spectrum ya no tiene ruido.
 - 20190809 -- parche menor para rechazar "silenciosamente" (i.e. sin códigos de
 error) las operaciones de escritura en discos de sólo-lectura y para permitir el
 autoarranque de discos con formato IBM.
+- 20190817 -- parche menor para arreglar un "crash" al abrir cintas precisamente
+cuando se activa el "frameskip" automático.
