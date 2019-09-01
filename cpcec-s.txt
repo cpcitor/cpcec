@@ -50,10 +50,10 @@ por ejemplo `-C -d -J` se abrevia `-CdJ`. En caso de duda, el parámetro `-h`
 muestra una breve explicación de las opciones disponibles.
 
 * -C : emular un monitor verde en lugar de (por defecto) uno a todo color;
-* -c0 : elegir el tipo de scanlines medio;
-* -c1 : elegir el tipo de scanlines normal (por defecto);
-* -c2 : elegir el tipo de scanlines entrelazado simple;
-* -c3 : elegir el tipo de scanlines entrelazado doble;
+* -c0 : elegir el modo de scanlines medios;
+* -c1 : elegir el modo de scanlines normales (por defecto);
+* -c2 : elegir el modo de entrelazado simple;
+* -c3 : elegir el modo de entrelazado doble;
 * -d : iniciar la emulación con el debugger activo (por defecto inactivo);
 * -g0 : emular el tipo de CRTC 0 (por defecto);
 * -g1, -g2, -g3, -g4 : ídem para los otros cuatro tipos de CRTC;
@@ -61,7 +61,11 @@ muestra una breve explicación de las opciones disponibles.
 * -j : activar la emulación del joystick por teclado (cursores y teclas Z, X y
 C);
 * -J : deshabilitar el uso de un joystick conectado al sistema;
-* -K : emular solamente 64k de RAM en vez de (por defecto) 128k;
+* -K, -k0 : emular solamente 64k de RAM;
+* -k1 : emular 128k de RAM (por defecto);
+* -k2 : emular 192k de RAM;
+* -k3 : emular 320k de RAM;
+* -k4 : emular 576k de RAM;
 * -m0 : iniciar la emulación con el modelo CPC464;
 * -m1 : iniciar la emulación con el modelo CPC664;
 * -m2 : iniciar la emulación con el modelo CPC6128, por defecto;
@@ -72,7 +76,8 @@ sonido);
 * -X : deshabilitar emulación de unidades de disco (por defecto habilitada);
 * -Y : deshabilitar el análisis de cinta (por defecto habilitado; ver más
 adelante);
-* -Z : deshabilitar la aceleración de cinta (por defecto habilitada).
+* -Z : deshabilitar la aceleración de cinta (por defecto habilitada);
+* -! : ocultar el menú y controlar la emulación exclusivamente por teclado.
 
 También es posible añadir nombres de fichero a la línea de comandos: el emulador
 intentará cargar y ejecutar los ficheros especificados. Gracias a ello CPCEC
@@ -145,13 +150,16 @@ función.
 creciente;
 * F11+Mays: ídem en sentido contrario, recorriendo las gamas por orden
 decreciente;
-* F11+Control: cambiar el tipo de scanlines, de medio a entrelazado doble;
-* F11+Control+Mays: ídem en sentido contrario, de entrelazado doble a medio;
+* F11+Control: cambiar el tipo de scanlines, de scanlines medios a entrelazado
+doble;
+* F11+Control+Mays: ídem en sentido contrario, de entrelazado doble a scanlines
+medios;
 * F12: grabar el contenido de la pantalla en un fichero BMP;
 * F12+Control: comenzar a grabar (o terminar) el sonido en un fichero WAV;
 * F12+Control+Mays: comenzar a grabar (o terminar) el sonido en un fichero YM;
 * Pausa: detener (o reanudar) la emulación;
-* Alt+Return: maximizar (o restaurar) la ventana.
+* Alt+Return: maximizar (o restaurar) la ventana. El menú se oculta al maximizar
+la ventana mediante estas teclas.
 
 Los ficheros BMP y WAV son los ficheros de imagen y sonido estándares homónimos.
 Los ficheros YM son volcados del estado del chip de sonido, que por haber sido
@@ -481,3 +489,11 @@ error) las operaciones de escritura en discos de sólo-lectura y para permitir e
 autoarranque de discos con formato IBM.
 - 20190817 -- parche menor para arreglar un "crash" al abrir cintas precisamente
 cuando se activa el "frameskip" automático.
+- 20190831 -- parche menor para corregir varios errores (arrancar discos de dos
+caras con la opción FLIP SIDE habilitada, grabar "snapshots" o cintas después de
+extraer un snapshot o cinta de un archivo ZIP), mejorar varios detalles (cargar
+snapshots con compresión de memoria, emular hasta 576 kB de RAM) y redefinir los
+menús (Edit se divide en Edit y Settings, Image y Sound se convierten en Video y
+Audio, opciones nuevas de filtrado de vídeo...) y la línea de comandos: "-+"
+ahora limita el zoom a valores enteros; "-!" hereda la opción de no mostrar el
+menú.

@@ -49,17 +49,21 @@ example `-C -d -J` becomes `-CdJ`. In case of doubt, the parameter `-h` shows a
 short help explaining the available options.
 
 * -C : emulate a green screen instead of (by default) full colour;
-* -c0 : set the scanline type to medium;
-* -c1 : set the scanline type to normal (by default);
-* -c2 : set the scanline type to simple interlace;
-* -c3 : set the scanline type to double interlace;
+* -c0 : set the scanline mode to half;
+* -c1 : set the scanline mode to whole (by default);
+* -c2 : set the interlace mode to simple;
+* -c3 : set the interlace mode to double;
 * -d : start the emulation with the debugger on (by default off);
 * -g0 : emulate the CRTC type 0 (by default);
 * -g1, -g2, -g3, -g4 : ditto for the other four types of CRTC;
 * -h : short help;
 * -j : enable emulation of joystick on keyboard (cursors and keys Z, X and C);
 * -J : disable the usage of a joystick plugged to the system;
-* -K : emulate 64k RAM only instead of (by default) 128k;
+* -K, -k0 : emulate 64k RAM only
+* -k1 : emulate 128k RAM (by default);
+* -k2 : emulate 192k RAM;
+* -k3 : emulate 320k RAM;
+* -k4 : emulate 576k RAM;
 * -m0 : start emulation with the model CPC464;
 * -m1 : start emulation with the model CPC664;
 * -m2 : start emulation with the model CPC6128, by default;
@@ -68,7 +72,8 @@ short help explaining the available options.
 * -S : disable sound (by default enabled if there's a sound card);
 * -X : disable emulation of disc drives (by default enabled);
 * -Y : disable tape analysis (by default enabled; see below);
-* -Z : disable tape acceleration (by default enabled).
+* -Z : disable tape acceleration (by default enabled);
+* -! : hide menu and make the emulation fully keyboard-driven.
 
 It's also possible to add file names to the command line: the emulator will try
 opening and running the specified files. Thanks to it CPCEC can be linked to the
@@ -138,13 +143,15 @@ MHz;
 increasing brightness;
 * F11+Shift: ditto in reverse, moving through decreasing brightness colour
 levels;
-* F11+Control: change the type of scanlines, from medium to double interlace;
-* F11+Control+Shift: ditto in reverse, from double interlace to medium;
+* F11+Control: change the type of scanlines, from half scanlines to double
+interlace;
+* F11+Control+Shift: ditto in reverse, from double interlace to half scanlines;
 * F12: record the content of the screen into a BMP file;
 * F12+Control: start recording (or stop) the sound into a WAV file;
 * F12+Control+Shift: start recording (or stop) the sound into a YM file;
 * Pause: stop (or resume) emulation;
-* Alt+Return: maximize (or restore) the window.
+* Alt+Return: maximize (or restore) the window. The menu becomes hidden when
+maximizing the window with these keys.
 
 Files BMP and WAV are the namesake standard files of image and sound. YM files
 are dumps of the sound chip states, that because of their usage in other
@@ -463,3 +470,10 @@ codes) of write operations in read-only discs and allowing the automatic booting
 of IBM-formatted discs.
 - 20190817 -- minor patch fixing a crash when booting tapes right when the
 automatic frameskip kicks in.
+- 20190831 -- minor patch fixing several bugs (booting two-sided discs with FLIP
+SIDE option on, recording snapshots or tapes after loading a snapshot or tape
+from a ZIP archive), improving several details (loading snapshots with memory
+compression, emulating up to 576 kB RAM) and redefining the menus (Edit is
+divided into Edit and Settings, Image and Sound become Video and Audio, new
+video filter functions...) and the command line: "-+" now limits the zoom to
+integer values; "-!" inherits the option of hiding the menu.
