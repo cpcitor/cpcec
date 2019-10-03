@@ -1,4 +1,4 @@
-﻿# CPCEC -- http://cngsoft.no-ip.org/cpcec.htm --
+﻿# CPCEC -- http://cngsoft.no-ip.org/cpcec.htm #
 
 	  ####  ######    ####  #######   ####   -------------------------
 	 ##  ##  ##  ##  ##  ##  ##   #  ##  ##  CPCEC, economical Amstrad
@@ -8,7 +8,7 @@
 	 ##  ##  ##      ##  ##  ##   #  ##  ##  since 2018-12-01 till now
 	  ####  ####      ####  #######   ####   -------------------------
 
-## Introducción
+## Introducción ##
 
 CPCEC es un emulador de la familia de microordenadores domésticos Amstrad CPC
 (modelos 464, 664 y 6128) cuyo objetivo es ser fiel al hardware original y
@@ -22,7 +22,7 @@ El software y la documentación se proporcionan "tal cual" sin garantía alguna.
 El código fuente y los binarios de CPCEC siguen la licencia GNU General Public
 License v3, como se ve en el fichero GPL.TXT adjunto al paquete.
 
-## Requisitos e instalación
+## Requisitos e instalación ##
 
 CPCEC requiere un sistema operativo Microsoft Windows 2000 o posterior. El
 hardware mínimo es el propio de dichos sistemas operativos, y se recomienda que
@@ -40,7 +40,7 @@ instrucciones incluidas en su interior. GCC 4.9.2, GCC 5.1.0 y TCC 0.9.27
 funcionan correctamente; GCC 4.7.1 comete fallos graves en la compilación y
 genera binarios inválidos.
 
-## Configuración y ficheros
+## Configuración y ficheros ##
 
 El funcionamiento de CPCEC se configura especificando parámetros opcionales en
 la línea de comandos. Para que los parámetros preferidos por el usuario sean
@@ -113,7 +113,7 @@ software, o ser simplemente DISC o DISK) en el sistema emulado y pulsando
 RETURN. En caso de duda, la orden CAT muestra la lista de ficheros contenidos en
 el disco.
 
-## Teclas de función
+## Teclas de función ##
 
 Una vez en funcionamiento, CPCEC muestra la pantalla del sistema emulado y
 obedece a las órdenes del usuario, que además de las pertinentes a dicho sistema
@@ -190,16 +190,16 @@ serán simplemente insertados como con F7 y F8.
 
 Los archivos ZIP están parcialmente cubiertos: sus contenidos pueden ser leídos
 (de haber más de un fichero en su interior se mostrará una lista para que el
-usuario elija el fichero necesario), pero no pueden ser modificados.
+usuario elija el fichero necesario) pero no pueden ser modificados.
 
-## Debugger
+## Debugger ##
 
-El debugger sirve para detener la emulación y examinar su estado interno. Al
-principio empleaba un interfaz de línea de comandos; ahora se basa en un
-interfaz de usuario controlado mediante cursores dividido en cuatro paneles:
-desensamblado (arriba izquierda), registros (arriba derecha), volcado de memoria
-(abajo izquierda) y pila (abajo derecha). Los valores mostrados en la pantalla y
-los parámetros de las órdenes emplean notación hexadecimal.
+El depurador o "debugger" sirve para detener la emulación y examinar su estado
+interno. Al principio empleaba un interfaz de línea de comandos; ahora se basa
+en un interfaz de usuario controlado mediante cursores dividido en cuatro
+paneles: desensamblado (arriba izquierda), registros (arriba derecha), volcado
+de memoria (abajo izquierda) y pila (abajo derecha). Los valores mostrados en la
+pantalla y los parámetros de las órdenes emplean notación hexadecimal.
 
 * Los cursors, Re.Pág. y Av.Pág. mueven el cursor dentro del panel actual;
 * Tab (o Mays+Tab) mueve el cursor al panel siguiente (o anterior);
@@ -216,6 +216,8 @@ breakpoint especial en la instrucción actualmente bajo el cursor; a partir de
 entonces, cuando esta instrucción tenga lugar, el valor del registro de 8 bits
 será enviado a un fichero de grabación elegido por el usuario;
 	+ K cierra el fichero de grabación;
+* M conmuta el contenido del volcado de memoria entre lo que el Z80 puede leer
+(RAM o ROM) y lo que puede escribir (solamente RAM);
 * O ("output") solicita una longitud en bytes y un nombre de fichero, y crea un
 fichero con un volcado de memoria que comienza en la dirección actual del
 cursor;
@@ -246,7 +248,7 @@ instrucción actual es una llamada;
 El uso de mayúsculas y minúsculas no es importante: el debugger no hace
 distinciones.
 
-## ZXSEC
+## ZXSEC ##
 
 ZXSEC es un emulador de la familia Sinclair Spectrum (48k, 128k, +2/Plus2 y
 +3/Plus3) basado en los componentes compartidos con el Amstrad CPC: el
@@ -274,7 +276,7 @@ en la temporización funcionan bien (borde raster en "Starion" y "Vectron" para
 ULA Issue 2 (opción -I) es extremadamente básica y la contención de memoria es
 limitada.
 
-## Agradecimientos
+## Agradecimientos ##
 
 Este emulador debe su existencia a una serie de personas y sociedades que
 enumero a continuación:
@@ -292,7 +294,7 @@ derecho a matrícula de honor.
 cpcrulez.fr y quasar.cpcscene.net.
 * Las pruebas alfa corrieron a cargo del fiel y leal Denis Lechevalier.
 
-## Apéndice: casos de pruebas
+## Apéndice: casos de pruebas ##
 
 A continuación se enumeran los cien títulos que sirvieron para hacer el grueso
 de las pruebas del emulador durante su desarrollo. Algunos abarcan varias
@@ -435,7 +437,7 @@ Casos muy avanzados:
 * Still Scrolling (2018 Music2Eye & Praline)
 * PhX (2018 Condense)
 
-## Historia de versiones
+## Historia de versiones ##
 
 - 20190314 -- primera versión pública.
 - 20190317 -- segunda versión pública. Corrige bugs de joystick en Win32:
@@ -497,3 +499,15 @@ menús (Edit se divide en Edit y Settings, Image y Sound se convierten en Video 
 Audio, opciones nuevas de filtrado de vídeo...) y la línea de comandos: "-+"
 ahora limita el zoom a valores enteros; "-!" hereda la opción de no mostrar el
 menú.
+- 20191003 -- duodécima versión pública. Contención de memoria y ruido de ULA
+("nieve") precisos (aunque aún no perfectos): "48K Timing Tests" supera todas
+las pruebas menos 36 y 37, y "128K Timing Tests" falla en solamente seis. "Mask
+3: Venom Strikes Back" dibuja los efectos de atributos y borde en sus momentos
+exactos en todas las plataformas (48K, 128K/Plus2, Plus3) y "Black Lamp", "LED
+Storm" y "Sly Spy" de Software Creations se comportan bien en las máquinas de
+128K. Mejoras en el debugger: corregido el emplazamiento erróneo del cursor en
+el panel de desensamblado, añadida opción de caracteres altos, evitado el
+conflicto entre debug y pausa, la nueva tecla M conmuta el volcado de memoria
+entre modos de ROM+RAM y RAM sola. Mejoras en el uso de archivos ZIP (los
+archivos no se quedan bloqueados, los ficheros en su interior se filtran por
+extensión) y retoques en el interfaz de usuario.

@@ -1,4 +1,4 @@
-﻿# CPCEC -- http://cngsoft.no-ip.org/cpcec.htm --
+﻿# CPCEC -- http://cngsoft.no-ip.org/cpcec.htm #
 
 	  ####  ######    ####  #######   ####   -------------------------
 	 ##  ##  ##  ##  ##  ##  ##   #  ##  ##  CPCEC, economical Amstrad
@@ -8,7 +8,7 @@
 	 ##  ##  ##      ##  ##  ##   #  ##  ##  since 2018-12-01 till now
 	  ####  ####      ####  #######   ####   -------------------------
 
-## Foreword
+## Foreword ##
 
 CPCEC is an emulator of the family of home microcomputers Amstrad CPC (models
 464, 664 and 6128) whose goal is to be loyal to the original hardware and
@@ -22,7 +22,7 @@ Software and documentation are provided "as is" with no warranty. The source
 code of CPCEC and its binaries follow the GNU General Public License v3, as seen
 in the file GPL.TXT within the package.
 
-## Requirements and setup
+## Requirements and setup ##
 
 CPCEC requires a Microsoft Windows 2000 operating system or later. The minimal
 hardware requirements are those fitting the operating system, and it's advised
@@ -39,7 +39,7 @@ The binary can be compiled from the source files by following the instructions
 included within them. GCC 4.9.2, GCC 5.1.0 and TCC 0.9.27 work correctly; GCC
 4.7.1 makes severe mistakes in compilation and generates invalid binaries.
 
-## Configuration and files
+## Configuration and files ##
 
 The behavior of CPCEC can be configured by specifying optional parameters in the
 command line. It's convenient to keep the user's preferred parameters by
@@ -106,7 +106,7 @@ that is often specified in the software instructions, or be simply DISC or DISK)
 in the emulated system and pressing RETURN. In case of doubt, the command CAT
 shows the list of files stored inside the disc.
 
-## Function keys
+## Function keys ##
 
 Once it's running, CPCEC shows the screen of the emulated system and obeys the
 user's commands, that besides those belonging to said system (control and
@@ -181,9 +181,9 @@ F8 do.
 
 ZIP archives are partially supported: their contents can be read (if there are
 more than one file inside, a list will be shown so the user can choose the
-required file), but they cannot be modified.
+required file) but they cannot be modified.
 
-## Debugger
+## Debugger ##
 
 The debugger is used to stop the emulation and examine its internal state. It
 was originally based on a command line interface; it has since been updated into
@@ -205,6 +205,8 @@ special breakpoint in the current instruction under the cursor; from then on,
 whenever that instruction takes place, the value of the 8-bit register will be
 sent to a log file first chosen by the user;
 	+ K closes the log file;
+* M toggles the contents of the memory dump between what the Z80 can read (RAM
+or ROM) and what it can write (RAM only);
 * O ("output") requests a length in bytes and a filename, and creates a file
 with a memory dump starting from the current location of the cursor;
 * P ("print") requests a length in bytes and a filename, and creates a file with
@@ -232,7 +234,7 @@ It behaves differently from SPACE if the current instruction performs a call;
 
 Usage of upper and lower case is unimportant; the debugger isn't case sensitive.
 
-## ZXSEC
+## ZXSEC ##
 
 ZXSEC is an emulator of the Sinclair Spectrum family (48k, 128k, +2/Plus2 and
 +3/Plus3) based on the components it shared with the Amstrad CPC family: the Z80
@@ -259,7 +261,7 @@ attribute raster effects in "Amaurote" and "Zub" for 128k) but the emulation of
 the Issue 2 ULA (the option -I) is extremely basic, and contended memory
 emulation is limited.
 
-## Acknowledgements
+## Acknowledgements ##
 
 This emulator owes its existence to a series of people and societies that are
 listed as follows:
@@ -277,7 +279,7 @@ ultimately awarded a 100% and the right to a honorable mention.
 cpcrulez.fr and quasar.cpcscene.net.
 * The alpha tests were handled by the faithful and loyal Denis Lechevalier.
 
-## Appendix: test cases
+## Appendix: test cases ##
 
 The following list states the one hundred titles that made the bulk of the
 emulator tests during its development. Several titles span more than one test
@@ -419,7 +421,7 @@ Very advanced cases:
 * Still Scrolling (2018 Music2Eye & Praline)
 * PhX (2018 Condense)
 
-## Version log
+## Version log ##
 
 - 20190314 -- first public release.
 - 20190317 -- second public release. Fixed Win32 joystick bugs: JoyGetPos
@@ -477,3 +479,14 @@ compression, emulating up to 576 kB RAM) and redefining the menus (Edit is
 divided into Edit and Settings, Image and Sound become Video and Audio, new
 video filter functions...) and the command line: "-+" now limits the zoom to
 integer values; "-!" inherits the option of hiding the menu.
+- 20191003 -- twelfth public release. Precise (albeit not perfect yet) memory
+contention and ULA noise ("snow") on Spectrum: "48K Timing Tests" passes all
+tests but 36 and 37, and "128K Timing Tests" fails on just six tests. "Mask 3:
+Venom Strikes Back" draws the attribute and border effects on their precise
+locations on all platforms (48K, 128K/Plus2, Plus3) and Software Creations'
+"Black Lamp", "LED Storm" and "Sly Spy" behave well on 128K machines.
+Improvements in the debugger: fixed disassembly panel invalid cursor locations,
+added optional tall characters, avoided debug+pause clashing, new key M toggles
+memory dump ROM+RAM and RAM-only modes. Improved ZIP handling (ZIP archives are
+no longer locked, files within archives are filtered by extension), user
+interface fixes.
