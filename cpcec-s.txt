@@ -217,7 +217,8 @@ entonces, cuando esta instrucción tenga lugar, el valor del registro de 8 bits
 será enviado a un fichero de grabación elegido por el usuario;
 	+ K cierra el fichero de grabación;
 * M conmuta el contenido del volcado de memoria entre lo que el Z80 puede leer
-(RAM o ROM) y lo que puede escribir (solamente RAM);
+(RAM o ROM; el separador entre el campo hexadecimal y el ASCII es `/`) y lo que
+puede escribir (solamente RAM; el separador es `\`);
 * O ("output") solicita una longitud en bytes y un nombre de fichero, y crea un
 fichero con un volcado de memoria que comienza en la dirección actual del
 cursor;
@@ -511,3 +512,5 @@ conflicto entre debug y pausa, la nueva tecla M conmuta el volcado de memoria
 entre modos de ROM+RAM y RAM sola. Mejoras en el uso de archivos ZIP (los
 archivos no se quedan bloqueados, los ficheros en su interior se filtran por
 extensión) y retoques en el interfaz de usuario.
+- 20191004 -- parche menor para hacer que las opciones de V y M del debugger
+perduren de una sesión a otra.

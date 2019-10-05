@@ -206,7 +206,8 @@ whenever that instruction takes place, the value of the 8-bit register will be
 sent to a log file first chosen by the user;
 	+ K closes the log file;
 * M toggles the contents of the memory dump between what the Z80 can read (RAM
-or ROM) and what it can write (RAM only);
+or ROM; the separator between hexadecimal and ASCII fields is `/`) and what it
+can write (RAM only; the separator is `\`);
 * O ("output") requests a length in bytes and a filename, and creates a file
 with a memory dump starting from the current location of the cursor;
 * P ("print") requests a length in bytes and a filename, and creates a file with
@@ -490,3 +491,5 @@ added optional tall characters, avoided debug+pause clashing, new key M toggles
 memory dump ROM+RAM and RAM-only modes. Improved ZIP handling (ZIP archives are
 no longer locked, files within archives are filtered by extension), user
 interface fixes.
+- 20191004 -- minor patch making the debugger options set with V and M stick
+between sessions.
