@@ -54,8 +54,7 @@ short help explaining the available options.
 * -c2 : set the interlace mode to simple;
 * -c3 : set the interlace mode to double;
 * -d : start the emulation with the debugger on (by default off);
-* -g0 : emulate the CRTC type 0 (by default);
-* -g1, -g2, -g3, -g4 : ditto for the other four types of CRTC;
+* -g0, -g1, -g2, -g3, -g4 : set the CRTC type (by default 1);
 * -h : short help;
 * -j : enable emulation of joystick on keyboard (cursors and keys Z, X and C);
 * -J : disable the usage of a joystick plugged to the system;
@@ -175,6 +174,9 @@ power, or 2.- the user needs to speed the emulation up for a while.
 * Num.* : sets the value of frameskip to the maximum, 50;
 * Num./ : sets the value of frameskip to the minimum, 0.
 
+The menu also includes several additional options (for example CRTC type) as
+well as actions such as browsing the contents of the current tape.
+
 CPCEC supports drag-and-drop. Dropped files will be automatically loaded (as F3
 does) unless the Shift key is down; in this case they will be inserted as F7 and
 F8 do.
@@ -243,7 +245,7 @@ microprocessor, the PSG AY-3-8192 sound chip, the tape system and the NEC765
 disc drive controller.
 
 It spans the files ZXSEC.EXE, SPECTRUM.ROM, SPEC128K.ROM, SPEC-P-2.ROM and
-SPEC-P-3.ROM, and otherwise runs the same as CPCEC, with several exceptions:
+SPEC-P-3.ROM, and otherwise runs the same as CPCEC, with several differences:
 
 * option -mX chooses one out of four possible models: -m0 (48k), -m1 (128k), -m2
 (+2) or -m3 (+3).
@@ -253,14 +255,11 @@ chosen model is Spectrum 48k;
 thus becomes a +2A instead;
 * Control+Shift+F8 starts (or stops) the cassette motor, because the CPC
 hardware includes a built-in tape control, while the Spectrum hardware lacks it.
-* joystick options apply to the Kempson interface by default; the menu allows
+* joystick options apply to the Sinclair 2 interface by default; the menu allows
 choosing the type of joystick.
 
-Emulation is less precise than CPCEC's. Several special effects based on timing
-work correctly (border raster effects in "Starion" and "Vectron" for 48k,
-attribute raster effects in "Amaurote" and "Zub" for 128k) but the emulation of
-the Issue 2 ULA (the option -I) is extremely basic, and contended memory
-emulation is limited.
+ZXSEC can show Gigascreen effects (for example the demo "Mescaline Synesthesia"
+2009 DeMarche) by enabling an interlace mode.
 
 ## Acknowledgements ##
 
@@ -493,3 +492,13 @@ no longer locked, files within archives are filtered by extension), user
 interface fixes.
 - 20191004 -- minor patch making the debugger options set with V and M stick
 between sessions.
+- 20191117 -- thirteenth public release. More precise emulation of type 1 CRTC
+(by default instead of 0) in CPCEC ("From Scratch", "Pinball Dreams"...) and 48K
+memory contention in ZXSEC ("Starion", "Black Lamp"...). CPCEC also allows
+choosing the length of the V-hold signal (for example "Thunder Blade" needs a
+short signal) and whether horizontal sync must be flexible ("Batman Returns",
+"Pinball Dreams"...) or not ("CPC 30th Anniversary Megademo", "PhX").
+Unfortunately, some demos that worked well in past versions now suffer problems
+that cannot be solved by selecting another CRTC. Removed third joystick button
+in CPCEC, no real joystick ever includd it. The ZXSEC joystick is Sinclair 2 by
+default.

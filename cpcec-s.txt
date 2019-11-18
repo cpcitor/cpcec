@@ -55,8 +55,8 @@ muestra una breve explicación de las opciones disponibles.
 * -c2 : elegir el modo de entrelazado simple;
 * -c3 : elegir el modo de entrelazado doble;
 * -d : iniciar la emulación con el debugger activo (por defecto inactivo);
-* -g0 : emular el tipo de CRTC 0 (por defecto);
-* -g1, -g2, -g3, -g4 : ídem para los otros cuatro tipos de CRTC;
+* -g0, -g1, -g2, -g3, -g4 : elegir el tipo de CRTC de 0 a 4 (tipo 1 por
+defecto);
 * -h : ayuda breve;
 * -j : activar la emulación del joystick por teclado (cursores y teclas Z, X y
 C);
@@ -184,6 +184,9 @@ acelerar la emulación durante un tiempo.
 * Num.* : establece el valor de "frameskip" al máximo, 50;
 * Num./ : establece el valor de "frameskip" al mínimo, 0.
 
+El menú también incluye algunas opciones adicionales (por ejemplo el tipo de
+CRTC) además de acciones tales como recorrer los contenidos de la cinta actual.
+
 CPCEC permite arrastrar y soltar ficheros. Éstos serán automáticamente
 ejecutados (como con F3) a menos que la tecla Mays esté pulsada, en cuyo caso
 serán simplemente insertados como con F7 y F8.
@@ -268,14 +271,11 @@ defecto) si el modelo elegido es Spectrum 48k;
 * Control+Mays+F8 sirve para poner en marcha (o detener) el motor de cinta, dado
 que el hardware de CPC dispone de control de cinta incorporado, mientras que el
 de Spectrum carece de él.
-* las opciones de joystick se refieren al interfaz Kempston por defecto; el menú
-permite elegir el tipo de joystick.
+* las opciones de joystick se refieren al interfaz Sinclair 2 por defecto; el
+menú permite elegir el tipo de joystick.
 
-La emulación es menos precisa que la de CPCEC. Varios efectos especiales basados
-en la temporización funcionan bien (borde raster en "Starion" y "Vectron" para
-48k, atributos raster en "Amaurote" y "Zub" para 128k) pero la emulación de la
-ULA Issue 2 (opción -I) es extremadamente básica y la contención de memoria es
-limitada.
+ZXSEC puede mostrar efectos Gigascreen (por ejemplo la demo "Mescaline
+Synesthesia" 2009 DeMarche) tras activar un modo entrelazado.
 
 ## Agradecimientos ##
 
@@ -514,3 +514,13 @@ archivos no se quedan bloqueados, los ficheros en su interior se filtran por
 extensión) y retoques en el interfaz de usuario.
 - 20191004 -- parche menor para hacer que las opciones de V y M del debugger
 perduren de una sesión a otra.
+- 20191117 -- decimotercera versión pública. Emulación más precisa del CRTC tipo
+1 (por defecto en lugar de 0) en CPCEC ("From Scratch", "Pinball Dreams"...) y
+la contención de memoria de 48K en ZXSEC ("Starion", "Black Lamp"...). CPCEC
+también permite elegir la duración de la señal V-Hold (por ejemplo "Thunder
+Blade" necesita la señal corta) y si la sincronización horizontal (H-Sync) debe
+ser flexible ("Batman Returns", "Pinball Dreams"...) o no ("CPC 30th Anniversary
+Megademo", "PhX"). Por desgracia, algunas de las demos que antes funcionaban
+bien ahora sufren problemas que no se resuelven eligiendo otro CRTC. Eliminado
+el tercer botón de joystick de CPCEC, ningún joystick real  lo incluyó. El
+joystick de ZXSEC es Sinclair 2 por defecto.
