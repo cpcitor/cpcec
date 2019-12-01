@@ -275,7 +275,8 @@ de Spectrum carece de él.
 menú permite elegir el tipo de joystick.
 
 ZXSEC puede mostrar efectos Gigascreen (por ejemplo la demo "Mescaline
-Synesthesia" 2009 DeMarche) tras activar un modo entrelazado.
+Synesthesia" 2009 DeMarche) tras activar las opciones de entrelazado en el menú
+Video.
 
 ## Agradecimientos ##
 
@@ -522,5 +523,13 @@ Blade" necesita la señal corta) y si la sincronización horizontal (H-Sync) deb
 ser flexible ("Batman Returns", "Pinball Dreams"...) o no ("CPC 30th Anniversary
 Megademo", "PhX"). Por desgracia, algunas de las demos que antes funcionaban
 bien ahora sufren problemas que no se resuelven eligiendo otro CRTC. Eliminado
-el tercer botón de joystick de CPCEC, ningún joystick real  lo incluyó. El
+el tercer botón de joystick de CPCEC, ningún joystick real lo incluyó. El
 joystick de ZXSEC es Sinclair 2 por defecto.
+- 20191130 -- parche menor para corregir un bug al ejecutar CPCEC y ZXSEC en una
+pantalla de menos de 600 px de altura, otro al grabar un fichero WAV, y otro más
+en la lógica de puertos de CPCEC ("Knight Rider": OUT &0088,&88 no debe alcanzar
+el Gate Array, pero "Hero Quest", OUT &00C0,&C0 sí debe). Los tipos CRTC 0 y 2
+han mejorado ("Face Hugger Ultimate Megademo": "Tantrum", "5KB Megademo 3",
+"Power System Megademo": "Glooms"...) pero todavía son incompatibles con
+"Pinball Dreams", a diferencia de CRTC 3 y 4, que junto a CRTC 1 ya pueden con
+este juego.

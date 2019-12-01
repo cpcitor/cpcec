@@ -259,7 +259,7 @@ hardware includes a built-in tape control, while the Spectrum hardware lacks it.
 choosing the type of joystick.
 
 ZXSEC can show Gigascreen effects (for example the demo "Mescaline Synesthesia"
-2009 DeMarche) by enabling an interlace mode.
+2009 DeMarche) if the user enables the interlace options in the Video menu.
 
 ## Acknowledgements ##
 
@@ -500,5 +500,12 @@ short signal) and whether horizontal sync must be flexible ("Batman Returns",
 "Pinball Dreams"...) or not ("CPC 30th Anniversary Megademo", "PhX").
 Unfortunately, some demos that worked well in past versions now suffer problems
 that cannot be solved by selecting another CRTC. Removed third joystick button
-in CPCEC, no real joystick ever includd it. The ZXSEC joystick is Sinclair 2 by
+in CPCEC, no real joystick ever included it. The ZXSEC joystick is Sinclair 2 by
 default.
+- 20191130 -- minor patch fixing a bug when running CPCEC and ZXSEC on a screen
+shorter than 600 px, another one when recording a WAV file, and another one in
+the port logic of CPCEC ("Knight Rider", OUT &0088,&88 must not reach the Gate
+Array, but "Hero Quest", OUT &00C0,&C0 must reach it). The CRTC types 0 and 2
+have improved ("Face Hugger Ultimate Megademo": "Tantrum", "5KB Megademo 3",
+"Power System Megademo": "Glooms"...) but cannot handle "Pinball Dreams" yet,
+unlike CRTC 3 and 4, that together with CRTC 1 support this game now.
