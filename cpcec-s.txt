@@ -439,7 +439,7 @@ Casos muy avanzados:
 * Still Scrolling (2018 Music2Eye & Praline)
 * PhX (2018 Condense)
 
-## Historia de versiones ##
+## Historial de versiones ##
 
 - 20190314 -- primera versión pública.
 - 20190317 -- segunda versión pública. Corrige bugs de joystick en Win32:
@@ -533,3 +533,13 @@ han mejorado ("Face Hugger Ultimate Megademo": "Tantrum", "5KB Megademo 3",
 "Power System Megademo": "Glooms"...) pero todavía son incompatibles con
 "Pinball Dreams", a diferencia de CRTC 3 y 4, que junto a CRTC 1 ya pueden con
 este juego.
+- 20191227 -- decimocuarta versión pública. Mejoras visuales: la paleta de
+fósforo verde es más cercana al original, los filtros verticales ("Y-Masking")
+son compatiles con los modos entrelazados, combinar X-Masking con Y-Masking
+genera un patrón cuadriculado. Mejoras internas: la nuevas propiedades de los
+registros 3 y 9 del CRTC y los retrasos del Gate Array respecto del Z80 y el
+CRTC por fin permiten emular "Pinball Dreams" por completo para todos los tipos
+de CRTC y resuelven los problemas de varias demos ("Scroll Factory", "Still
+Rising", partes de "The Demo"...) y juegos ("Action Fighter", "Storm Warrior",
+"Usagi Yojimbo"...), pero algunos títulos todavía necesitan CRTCs concretos
+("PhX" CRTC0, "Onescreen Colonies" CRTC1, etc.) para funcionar bien.
