@@ -506,16 +506,20 @@ default.
 shorter than 600 px, another one when recording a WAV file, and another one in
 the port logic of CPCEC ("Knight Rider", OUT &0088,&88 must not reach the Gate
 Array, but "Hero Quest", OUT &00C0,&C0 must reach it). The CRTC types 0 and 2
-have improved ("Face Hugger Ultimate Megademo": "Tantrum", "5KB Megademo 3",
-"Power System Megademo": "Glooms"...) but cannot handle "Pinball Dreams" yet,
+have improved ("Face Hugger Ultimate Megademo: Tantrum", "5KB Megademo 3",
+"Power System Megademo: Glooms"...) but cannot handle "Pinball Dreams" yet,
 unlike CRTC 3 and 4, that together with CRTC 1 support this game now.
 - 20191227 -- fourteenth public release. Visual improvements: the green screen
 palette is closer to the original, the vertical filters ("Y-Masking") are
 compatible with the interlaced modes, mixing X-Masking and Y-Masking together
-shows a checkered patter. Internal improvements: the new traits of the CRTC
+shows a checkered pattern. Internal improvements: the new traits of the CRTC
 registers 3 and 9 and the delays between the Gate Array, the Z80 and the CRTC
 finally can emulate "Pinball Dreams" as a whole for all the CRTC types and solve
 the problems in several demos ("Scroll Factory", "Still Rising", parts of "The
 Demo"...) and games ("Action Fighter", "Storm Warrior", "Usagi Yojimbo"),
 although some titles still need particular CRTCs ("PhX" CRTC0, "Onescreen
 Colonies" CRTC1, etc.) to work correctly.
+- 20191231 -- minor patch fixing a bug in the FDC (bit 6 of SENSE DRIVE STATUS
+must react when the user changes discs: "Fugitif") and a regression in CRTC0
+(detect REG6<REG4 rather than REG6<=REG4: "5KB Megademo 3: Nayad"). Happy new
+year 2020!

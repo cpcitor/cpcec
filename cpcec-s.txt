@@ -529,10 +529,10 @@ joystick de ZXSEC es Sinclair 2 por defecto.
 pantalla de menos de 600 px de altura, otro al grabar un fichero WAV, y otro más
 en la lógica de puertos de CPCEC ("Knight Rider": OUT &0088,&88 no debe alcanzar
 el Gate Array, pero "Hero Quest", OUT &00C0,&C0 sí debe). Los tipos CRTC 0 y 2
-han mejorado ("Face Hugger Ultimate Megademo": "Tantrum", "5KB Megademo 3",
-"Power System Megademo": "Glooms"...) pero todavía son incompatibles con
-"Pinball Dreams", a diferencia de CRTC 3 y 4, que junto a CRTC 1 ya pueden con
-este juego.
+han mejorado ("Face Hugger Ultimate Megademo: Tantrum", "5KB Megademo 3", "Power
+System Megademo: Glooms"...) pero todavía son incompatibles con "Pinball
+Dreams", a diferencia de CRTC 3 y 4, que junto a CRTC 1 ya pueden con este
+juego.
 - 20191227 -- decimocuarta versión pública. Mejoras visuales: la paleta de
 fósforo verde es más cercana al original, los filtros verticales ("Y-Masking")
 son compatiles con los modos entrelazados, combinar X-Masking con Y-Masking
@@ -543,3 +543,7 @@ de CRTC y resuelven los problemas de varias demos ("Scroll Factory", "Still
 Rising", partes de "The Demo"...) y juegos ("Action Fighter", "Storm Warrior",
 "Usagi Yojimbo"...), pero algunos títulos todavía necesitan CRTCs concretos
 ("PhX" CRTC0, "Onescreen Colonies" CRTC1, etc.) para funcionar bien.
+- 20191231 -- parche menor para corregir un bug en el FDC (el bit 6 de SENSE
+DRIVE STATUS debe reaccionar cuando el usuario cambia discos: "Fugitif") y una
+regresión en CRTC0 (detectar REG6<REG4 en lugar de REG6<=REG4: "5KB Megademo 3:
+Nayad"). ¡Feliz año nuevo 2020!
