@@ -547,3 +547,6 @@ Rising", partes de "The Demo"...) y juegos ("Action Fighter", "Storm Warrior",
 DRIVE STATUS debe reaccionar cuando el usuario cambia discos: "Fugitif") y una
 regresión en CRTC0 (detectar REG6<REG4 en lugar de REG6<=REG4: "5KB Megademo 3:
 Nayad"). ¡Feliz año nuevo 2020!
+- 20200101 -- parche menor para corregir una regresión en CRTC0 provocada por el
+parche anterior ("Scroll Factory", intro de "Pinball Dreams", "Overflow Preview:
+Part 1") y mejorar sus heurísticas ("Overflow Preview: Part 3").

@@ -523,3 +523,6 @@ Colonies" CRTC1, etc.) to work correctly.
 must react when the user changes discs: "Fugitif") and a regression in CRTC0
 (detect REG6<REG4 rather than REG6<=REG4: "5KB Megademo 3: Nayad"). Happy new
 year 2020!
+- 20200101 -- minor patch fixing a regression in CRTC0 caused by the previous
+patch ("Scroll Factory", intro of "Pinball Dreams", "Overflow Preview: Part 1")
+and improving its heuristics ("Overflow Preview: Part 3").
