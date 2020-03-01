@@ -1,7 +1,7 @@
 ﻿# CPCEC -- http://cngsoft.no-ip.org/cpcec.htm #
 
 	  ####  ######    ####  #######   ####   -------------------------
-	 ##  ##  ##  ##  ##  ##  ##   #  ##  ##  CPCEC, economical Amstrad
+	 ##  ##  ##  ##  ##  ##  ##   #  ##  ##  CPCEC, plain text Amstrad
 	##       ##  ## ##       ## #   ##       CPC emulator written in C
 	##       #####  ##       ####   ##       as a postgraduate project
 	##       ##     ##       ## #   ##       by Cesar Nicolas-Gonzalez
@@ -35,9 +35,28 @@ firmware files CPC464.ROM, CPC664.ROM, CPC6128.ROM and CPCADOS.ROM. All these
 files must be copied in a single directory, ideally created to host the
 emulator.
 
-The binary can be compiled from the source files by following the instructions
-included within them. GCC 4.9.2, GCC 5.1.0 and TCC 0.9.27 work correctly; GCC
-4.7.1 makes severe mistakes in compilation and generates invalid binaries.
+The binaries can be compiled from the source files by following the instructions
+in the next paragraphs. GCC 4.9.2, GCC 5.1.0, Pelles 4.50.113 and TCC 0.9.27
+work correctly; GCC 4.7.1 makes severe mistakes in compilation and generates
+invalid binaries.
+
+The Windows binaries can be compiled from GCC (or compatible) through the
+following commands:
+
+	windres cpcec.rc -Ocoff -ocpcec.res
+	gcc -m32 -mwindows -O2 cpcec.res -xc cpcec.c -luser32 -lgdi32 -lwinmm
+-lcomdlg32 -lshell32 -ocpcec.exe
+
+	windres zxsec.rc -Ocoff -ozxsec.res
+	gcc -m32 -mwindows -O2 zxsec.res -xc zxsec.c -luser32 -lgdi32 -lwinmm
+-lcomdlg32 -lshell32 -ozxsec.exe
+
+Pelles C and other visual compilers can define the whole project from the source
+files CPCEC.C and ZXSEC.C and the resource files CPCEC.RC and ZXSEC.RC, and
+guess the additional files on their own (icons and header files) while the
+libraries required for the compiling procedure (if the compiler doesn't
+recognize them on its own) are USER32, GDI32, WINMM, COMDLG32 and SHELL32, all
+them from the Win32 SDK.
 
 ## Configuration and files ##
 
@@ -48,7 +67,7 @@ said parameters within the link. Options can be abridged in Unix style: for
 example `-C -d -J` becomes `-CdJ`. In case of doubt, the parameter `-h` shows a
 short help explaining the available options.
 
-* -C : emulate a green screen instead of (by default) full colour;
+* -C : emulate a monochrome screen instead of (by default) full colour;
 * -c0 : set the scanline mode to half;
 * -c1 : set the scanline mode to whole (by default);
 * -c2 : set the interlace mode to simple;
@@ -63,9 +82,10 @@ short help explaining the available options.
 * -k2 : emulate 192k RAM;
 * -k3 : emulate 320k RAM;
 * -k4 : emulate 576k RAM;
-* -m0 : start emulation with the model CPC464;
-* -m1 : start emulation with the model CPC664;
-* -m2 : start emulation with the model CPC6128, by default;
+* -m0 : start emulation as an Amstrad CPC 464;
+* -m1 : start emulation as an Amstrad CPC 664;
+* -m2 : start emulation as an Amstrad CPC 6128, by default;
+* -m3 : start emulation as an Amstrad Plus;
 * -O : hide onscreen indicators (by default shown);
 * -R : disable real time emulation (by default enabled);
 * -S : disable sound (by default enabled if there's a sound card);
@@ -76,7 +96,7 @@ short help explaining the available options.
 
 It's also possible to add file names to the command line: the emulator will try
 opening and running the specified files. Thanks to it CPCEC can be linked to the
-file extensions CDT, CSW, DSK and SNA to automatically load said files.
+file extensions CDT, CPR, CSW, DSK and SNA to automatically load said files.
 
 The file types supported by the emulator are divided in three types:
 
@@ -117,11 +137,12 @@ doubt, key F1 shows a short index of these function keys.
 * F1+Control: emulator authorship;
 * F2: record the emulation's current state into a snapshot;
 * F2+Control: record again the last selected snapshot;
-* F3: load and run a tape file, disc file or snapshot;
+* F3: load and run a tape file, disc file, snapshot or cartridge;
 * F3+Control: load again the last selected snapshot;
 * F4: enable (or disable) sound emulation;
 * F4+Control: enable (or disable) the keyboard-emulated joystick;
-* F5: choose the emulated CPC firmware model;
+* F5: choose the emulated CPC firmware, either as a ROM file or as a
+CPR-formatted cartridge;
 * F5+Control: reset the emulation;
 * F6: enable (or disable) realtime emulation;
 * F6+Control: raise the speed of the emulated Z80 from 4 MHz to 8, 12 and 16
@@ -138,8 +159,8 @@ MHz;
 * F9+Shift: show (or hide) the onscreen indicators;
 * F9+Control: enable (or disable) tape acceleration;
 * F9+Control+Shift: enable (or disable) tape analysis;
-* F11: toggle the colour mode between green and three levels of colour of
-increasing brightness;
+* F11: toggle the colour mode between monochrome, green and three levels of
+colour of increasing brightness;
 * F11+Shift: ditto in reverse, moving through decreasing brightness colour
 levels;
 * F11+Control: change the type of scanlines, from half scanlines to double
@@ -169,9 +190,9 @@ the required processing power, but also the lower the visual smoothness. Ideally
 it should keep its value to 0 unless 1.- the system lacks enough processing
 power, or 2.- the user needs to speed the emulation up for a while.
 
-* Num.+ : increases the value of frameskip, up to 50;
+* Num.+ : increases the value of frameskip, up to 25;
 * Num.- : decreases the value of frameskip, down to 0;
-* Num.* : sets the value of frameskip to the maximum, 50;
+* Num.* : sets the value of frameskip to the maximum, 25;
 * Num./ : sets the value of frameskip to the minimum, 0.
 
 The menu also includes several additional options (for example CRTC type) as
@@ -181,9 +202,9 @@ CPCEC supports drag-and-drop. Dropped files will be automatically loaded (as F3
 does) unless the Shift key is down; in this case they will be inserted as F7 and
 F8 do.
 
-ZIP archives are partially supported: their contents can be read (if there are
-more than one file inside, a list will be shown so the user can choose the
-required file) but they cannot be modified.
+ZIP archives can be read by CPCEC (if there are more than one file inside, a
+list will be shown so the user can choose the required file) but their contents
+cannot be modified.
 
 ## Debugger ##
 
@@ -191,7 +212,10 @@ The debugger is used to stop the emulation and examine its internal state. It
 was originally based on a command line interface; it has since been updated into
 a cursor-driven user interface divided into four panels: disassembly (top left),
 registers (top right), memory dump (bottom left) and stack (bottom right). The
-values shown on screen and the command parameters use hexadecimal notation.
+left half (read only) of the registers panel shows the hardware registers (Gate
+Array, CRTC, etc.) while the right half (read-write) shows the Z80 registers
+proper. The values shown on screen and the command parameters use hexadecimal
+notation.
 
 * Cursors, Page Up and Page Down move the cursor within the current panel;
 * Tab (or Shift+Tab) move the cursor to the next (or previous) panel;
@@ -228,6 +252,7 @@ the disassembly;
 address;
 * V changes the debugger appearance, toggling black or white colours and thin or
 bold characters;
+* X toggles the classic/Plus hardware information panel;
 * Z deletes all breakpoints;
 * Space ("step into") runs exactly one operation and stops on the next
 operation;
@@ -314,7 +339,7 @@ Tape files:
 	+ Humphrey (1988 Made in Spain / Zigurat)
 * Middle protections:
 	+ Donkey Kong (1986 Arcana / Ocean)
-	+ Samurai Trilogy (1987 Gremlin Graphics)
+	+ MASK (1987 Gremlin Graphics)
 	+ Operation Wolf (1988 Imagine)
 	+ Rainbow Islands (1989 Graftgold / Ocean)
 * Complex protections:
@@ -526,3 +551,21 @@ year 2020!
 - 20200101 -- minor patch fixing a regression in CRTC0 caused by the previous
 patch ("Scroll Factory", intro of "Pinball Dreams", "Overflow Preview: Part 1")
 and improving its heuristics ("Overflow Preview: Part 3").
+- 20200229 -- fifteenth public release. Added support for Amstrad Plus hardware:
+extended colours, soft scrolling, hardware sprites, programmable raster
+interruptions, DMA channels, ROM cartridges, etc. Added fifty more tape schemes
+to speed up the reading of bytes and even whole blocks. Improvements in the disc
+drive emulation: new discs (by default the DATA format shared by CPC and
+Spectrum +3) can be created on the fly, emulation of protected games from Design
+Design ("2112 AD"), The Edge ("Palitron"), Titus ("Prehistorik" and
+"Moktar/Titus the Fox"), bugfixes (READ ID: "5KB Demo 3", "Daley Thompson's
+Olympic Challenge" and "Turbo Copy III"; FORMAT TRACK converts old-style MV -
+CPC discs into new-style EXTENDED ones, and cleans up useless data at the end of
+the disc). CPCEC honours the RAM size (up to 576k) and CRTC type stated by a
+snapshot ("Postscript" demo) and so does ZXSEC, that can read Z80 snapshots now
+and allows 48K SNA files to be either strict (the original format) or relaxed:
+128K headers on 48K data. Control-F2 avoids accidental recording of snapshots
+after a reset. Fixed a bug that happened when combining Y-Masking and Half
+Scanlines. Extended ZIP archive support to handle pipeline-generated (i.e. the
+final headers are the right ones) archives. Sources are distributed together
+with the binaries instead of being delivered upon demand.

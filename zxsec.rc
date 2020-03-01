@@ -1,0 +1,3 @@
+#include "cpcec-os.rc"
+
+34002 ICON "zxsec.ico"

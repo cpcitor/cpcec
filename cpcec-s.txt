@@ -1,7 +1,7 @@
 ﻿# CPCEC -- http://cngsoft.no-ip.org/cpcec.htm #
 
 	  ####  ######    ####  #######   ####   -------------------------
-	 ##  ##  ##  ##  ##  ##  ##   #  ##  ##  CPCEC, economical Amstrad
+	 ##  ##  ##  ##  ##  ##  ##   #  ##  ##  CPCEC, plain text Amstrad
 	##       ##  ## ##       ## #   ##       CPC emulator written in C
 	##       #####  ##       ####   ##       as a postgraduate project
 	##       ##     ##       ## #   ##       by Cesar Nicolas-Gonzalez
@@ -35,10 +35,28 @@ CPCEC.EXE y los ficheros de firmware CPC464.ROM, CPC664.ROM, CPC6128.ROM y
 CPCADOS.ROM. Todos ellos deben ser copiados en un mismo directorio, idealmente
 creado para alojar el emulador.
 
-El binario puede ser compilado a partir de los ficheros fuente siguiendo las
-instrucciones incluidas en su interior. GCC 4.9.2, GCC 5.1.0 y TCC 0.9.27
-funcionan correctamente; GCC 4.7.1 comete fallos graves en la compilación y
-genera binarios inválidos.
+Los binarios pueden ser compilados a partir de los ficheros fuente siguiendo las
+instrucciones incluidas a continuación. GCC 4.9.2, GCC 5.1.0, Pelles 4.50.113 y
+TCC 0.9.27 funcionan correctamente; GCC 4.7.1 comete fallos graves en la
+compilación y genera binarios inválidos.
+
+Los binarios para Windows pueden ser compilados desde GCC (o compatibles)
+mediante los siguientes comandos:
+
+	windres cpcec.rc -Ocoff -ocpcec.res
+	gcc -m32 -mwindows cpcec.res -xc cpcec.c -luser32 -lgdi32 -lwinmm
+-lcomdlg32 -lshell32 -ocpcec.exe
+
+	windres zxsec.rc -Ocoff -ozxsec.res
+	gcc -m32 -mwindows zxsec.res -xc zxsec.c -luser32 -lgdi32 -lwinmm
+-lcomdlg32 -lshell32 -ozxsec.exe
+
+Pelles C y otros compiladores visuales pueden definir el proyecto entero a
+partir de los ficheros fuente CPCEC.C y ZXSEC.C y los ficheros de recursos
+CPCEC.RC y ZXSEC.RC, y deducir los ficheros adicionales por sí mismos (iconos y
+ficheros de cabecera) mientras que las librerías necesarias para compilarlo (de
+no reconocerlas automáticamente el compilador) son USER32, GDI32, WINMM,
+COMDLG32 y SHELL32, todas ellas del SDK de Win32.
 
 ## Configuración y ficheros ##
 
@@ -66,9 +84,10 @@ C);
 * -k2 : emular 192k de RAM;
 * -k3 : emular 320k de RAM;
 * -k4 : emular 576k de RAM;
-* -m0 : iniciar la emulación con el modelo CPC464;
-* -m1 : iniciar la emulación con el modelo CPC664;
-* -m2 : iniciar la emulación con el modelo CPC6128, por defecto;
+* -m0 : iniciar la emulación como un Amstrad CPC 464;
+* -m1 : iniciar la emulación como un Amstrad CPC 664;
+* -m2 : iniciar la emulación como un Amstrad CPC 6128, por defecto;
+* -m3 : iniciar la emulación como un Amstrad Plus;
 * -O : ocultar indicadores en pantalla (por defecto visibles);
 * -R : deshabilitar emulación en tiempo real (por defecto habilitada);
 * -S : deshabilitar sonido (por defecto habilitado si hay una tarjeta de
@@ -81,8 +100,8 @@ adelante);
 
 También es posible añadir nombres de fichero a la línea de comandos: el emulador
 intentará cargar y ejecutar los ficheros especificados. Gracias a ello CPCEC
-puede ser vinculado a las extensiones de fichero CDT, CSW, DSK y SNA para cargar
-dichos ficheros automáticamente.
+puede ser vinculado a las extensiones de fichero CDT, CPR, CSW, DSK y SNA para
+cargar dichos ficheros automáticamente.
 
 Los tipos de fichero admitidos por el emulador se dividen en tres tipos:
 
@@ -126,11 +145,13 @@ función.
 * F1+Control: autoría del emulador;
 * F2: grabar el estado actual de la emulación en una instantánea;
 * F2+Control: volver a grabar la última instantánea seleccionada;
-* F3: cargar y ejecutar un fichero de cinta, de disco o una instantánea;
+* F3: cargar y ejecutar un fichero de cinta, de disco, una instantánea o un
+cartucho;
 * F3+Control: volver a cargar la última instantánea seleccionada;
 * F4: habilitar (o deshabilitar) la emulación de sonido;
 * F4+Control: habilitar (o deshabilitar) el joystick por teclado;
-* F5: elegir el firmware del modelo de CPC emulado;
+* F5: elegir el firmware del CPC emulado, tanto como un fichero ROM como un
+cartucho de formato CPR;
 * F5+Control: reiniciar la emulación;
 * F6: habilitar (o deshabilitar) la emulación en tiempo real;
 * F6+Control: elevar la velocidad del Z80 emulado de 4 MHz a 8, 12 y 16 MHz;
@@ -179,9 +200,9 @@ suavidad visual. Idealmente debe mantenerse su valor a 0 a menos que 1.- el
 sistema no tenga potencia de proceso suficiente, o 2.- el usuario necesite
 acelerar la emulación durante un tiempo.
 
-* Num.+ : incrementa el valor de "frameskip", hasta 50;
+* Num.+ : incrementa el valor de "frameskip", hasta 25;
 * Num.- : decrementa el valor de "frameskip", hasta 0;
-* Num.* : establece el valor de "frameskip" al máximo, 50;
+* Num.* : establece el valor de "frameskip" al máximo, 25;
 * Num./ : establece el valor de "frameskip" al mínimo, 0.
 
 El menú también incluye algunas opciones adicionales (por ejemplo el tipo de
@@ -191,9 +212,9 @@ CPCEC permite arrastrar y soltar ficheros. Éstos serán automáticamente
 ejecutados (como con F3) a menos que la tecla Mays esté pulsada, en cuyo caso
 serán simplemente insertados como con F7 y F8.
 
-Los archivos ZIP están parcialmente cubiertos: sus contenidos pueden ser leídos
-(de haber más de un fichero en su interior se mostrará una lista para que el
-usuario elija el fichero necesario) pero no pueden ser modificados.
+Los archivos ZIP pueden ser leídos por CPCEC (de haber más de un fichero en su
+interior se mostrará una lista para que el usuario elija el fichero necesario)
+pero sus contenidos no pueden ser modificados.
 
 ## Debugger ##
 
@@ -201,8 +222,11 @@ El depurador o "debugger" sirve para detener la emulación y examinar su estado
 interno. Al principio empleaba un interfaz de línea de comandos; ahora se basa
 en un interfaz de usuario controlado mediante cursores dividido en cuatro
 paneles: desensamblado (arriba izquierda), registros (arriba derecha), volcado
-de memoria (abajo izquierda) y pila (abajo derecha). Los valores mostrados en la
-pantalla y los parámetros de las órdenes emplean notación hexadecimal.
+de memoria (abajo izquierda) y pila (abajo derecha). La mitad izquierda del
+panel de registros (sólo lectura) muestra los registros del hardware (Gate
+Array, CRTC, etc.) mientras que la mitad derecha (lectura y escritura) muestra
+los registros propiamente dichos del Z80. Los valores mostrados en la pantalla y
+los parámetros de las órdenes emplean notación hexadecimal.
 
 * Los cursors, Re.Pág. y Av.Pág. mueven el cursor dentro del panel actual;
 * Tab (o Mays+Tab) mueve el cursor al panel siguiente (o anterior);
@@ -241,6 +265,7 @@ el desensamblado;
 llamada en curso;
 * V cambia la apariencia del debugger, cambiando los colores blanco y negro y
 los caracteres finos y gruesos;
+* X conmuta el panel de información de hardware clásico/Plus;
 * Z elimina todos los breakpoints;
 * Espacio ("step into") ejecuta exactamente una instrucción y se detiene en la
 siguiente.
@@ -332,7 +357,7 @@ Ficheros de cinta:
 	+ Humphrey (1988 Made in Spain / Zigurat)
 * Protecciones medias:
 	+ Donkey Kong (1986 Arcana / Ocean)
-	+ Samurai Trilogy (1987 Gremlin Graphics)
+	+ MASK (1987 Gremlin Graphics)
 	+ Operation Wolf (1988 Imagine)
 	+ Rainbow Islands (1989 Graftgold / Ocean)
 * Protecciones complejas:
@@ -550,3 +575,23 @@ Nayad"). ¡Feliz año nuevo 2020!
 - 20200101 -- parche menor para corregir una regresión en CRTC0 provocada por el
 parche anterior ("Scroll Factory", intro de "Pinball Dreams", "Overflow Preview:
 Part 1") y mejorar sus heurísticas ("Overflow Preview: Part 3").
+- 20200229 -- decimoquinta versión pública. Añade hardware de Amstrad Plus:
+colores extendidos, scroll suave, sprites por hardware, interrupciones de
+barrido programables, canales DMA, cartuchos ROM, etc. Cincuenta nuevos esquemas
+de cinta para acelerar la lectura de bytes e incluso bloques enteros. Mejoras en
+la emulación de la unidad de disco: discos nuevos (formato DATA por defecto
+común a CPC y Spectrum +3) que pueden ser creados al instante, emulación de
+juegos protegidos de Design Design ("2112 AD"), The Edge ("Palitron"), Titus
+("Prehistorik" y "Moktar/Titus the Fox") y errores corregidos (READ ID: "5KB
+Demo 3", "Daley Thompson's Olympic Challenge" y "Turbo Copy III"; FORMAT TRACK
+convierte discos del estilo antiguo MV - CPC al estilo nuevo EXTENDED, y limpia
+el final del disco de datos inútiles).  CPCEC respeta el tamaño de RAM (hasta
+576k) y el tipo de CRTC al leer un snapshot (demo "Postscript") y lo mismo hace
+ZXSEC, que puede leer instantáneas Z80 y cambia de PLUS3 a PLUS2 si el usuario
+pide cargar una cinta y además permite elegir entre snapshots estrictos de 48K o
+relajados. Control-F2 evita accidentes: no graba snapshots que hayan sido
+cargados antes del último reset. Corrige un error que ocurría al combinar las
+opciones "Y-Masking" y "Half Scanlines". Los archivos ZIP generados mediante
+tuberías (i.e. las cabeceras finales son las correctas) ahora también pueden ser
+leídos. Las fuentes se distribuyen junto a los binarios en lugar de entregarse
+bajo demanda.
