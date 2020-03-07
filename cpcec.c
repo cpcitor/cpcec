@@ -1,13 +1,13 @@
- //  ####  ######    ####  #######   ####  ------------------------- //
+ //  ####  ######    ####  #######   ####    ----------------------- //
 //  ##  ##  ##  ##  ##  ##  ##   #  ##  ##  CPCEC, plain text Amstrad //
 // ##       ##  ## ##       ## #   ##       CPC emulator written in C //
 // ##       #####  ##       ####   ##       as a postgraduate project //
 // ##       ##     ##       ## #   ##       by Cesar Nicolas-Gonzalez //
 //  ##  ##  ##      ##  ##  ##   #  ##  ##  since 2018-12-01 till now //
- //  ####  ####      ####  #######   ####  ------------------------- //
+ //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "CPCEC"
-#define MY_VERSION "20200229"//"2525"
+#define MY_VERSION "20200307"//"1125"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -122,7 +122,6 @@ const int video_asic_table[32]= // same 0GRB format used in ASIC PLUS
 	0x006,0xF06,0xF00,0xF0F,0x000,0x00F,0x600,0x60F,
 	0x066,0xF66,0xF60,0xF6F,0x060,0x06F,0x660,0x66F,
 };
-
 const VIDEO_DATATYPE video_table[][80]= // colour table, 0xRRGGBB style: the 32 original colours, followed by 16 levels of G, 16 of R and 16 of B
 {
 	// monochrome - black and white
@@ -258,6 +257,7 @@ int audio_table[17]={0,85,121,171,241,341,483,683,965,1365,1931,2731,3862,5461,7
 // using simple binary divisors to adjust the devices' timings,
 // mainly defined by the simultaneous operation of the video output
 // (32 horizontal thin pixels) and the Z80 behavior (4 cycles)
+// (the clock is technically 16 MHz but we mean atomic steps here)
 
 // HARDWARE DEFINITIONS ============================================= //
 
@@ -278,12 +278,10 @@ VIDEO_DATATYPE video_clut[32]; // precalculated colour palette, 16 bitmap inks, 
 
 BYTE plus_gate_lock[]={0000,0x00,0xFF,0x77,0xB3,0x51,0xA8,0xD4,0x62,0x39,0x9C,0x46,0x2B,0x15,0x8A}; // dummy first byte
 BYTE plus_gate_counter; // step in the plus lock sequence, starting from 0 (waiting for 0x00) until its length
-BYTE plus_gate_lastkey; // redundant, but snapshots require it
 BYTE plus_gate_enabled; // locked/unlocked state: UNLOCKED if byte after SEQUENCE is $CD, LOCKED otherwise!
 BYTE plus_gate_mcr; // RMR2 register, that modifies the behavior of the original MRER (gate_mcr)
 WORD plus_dma_regs[3][4]; // loop counter,loop address,pause counter,pause scaler
-BYTE plus_dma_count,plus_dma_delay; // DMA handler timings
-BYTE plus_bus; // IM2 low-byte
+BYTE plus_dma_count,plus_dma_delay,plus_bus; // DMA+IRQ handler timings
 //BYTE plus_dirtysprite; // tag sprite as "dirty"
 
 // the following block is a hacky way to implement the entire Plus configuration RAM page:
@@ -306,9 +304,9 @@ void plus_reset(void)
 {
 	MEMZERO(plus_bank);
 	MEMZERO(plus_dma_regs);
-	plus_dma_count=plus_dma_delay=plus_gate_mcr=plus_gate_enabled=plus_gate_counter=plus_analog[5]=plus_analog[7]=0; // default configuration values
+	plus_bus=3; plus_dma_delay=plus_gate_mcr=plus_gate_enabled=plus_gate_counter=0; // default configuration values
 	plus_analog[0]=plus_analog[1]=plus_analog[2]=plus_analog[3]=plus_analog[4]=plus_analog[6]=0x3F; // default analog values; WinAPE lets them stay ZERO
-	plus_gate_lastkey=plus_bus=-1; plus_ivr=0x71; // docs: "Interrupt Vector (Bit 0 set to 1 on reset)"; WinAPE uses 0x51 as the default state
+	plus_ivr=0x71; // docs: "Interrupt Vector (Bit 0 set to 1 on reset)"; WinAPE uses 0x51 as the default state
 }
 
 // 0xBC00-0xBF00: CRTC 6845 ----------------------------------------- //
@@ -339,7 +337,10 @@ int crtc_limit_r2,crtc_prior_r2,crtc_giga,crtc_giga_count; // HSYNC Gigascreen m
 #define crtc_set_line() crtc_line=(crtc_count_r9&7)+(crtc_count_r4&63)*8 // Plus scanline counter
 #define crtc_r4x_update() (crtc_limit_r4=crtc_table[4],crtc_limit_r5=crtc_table[5],crtc_limit_r9=crtc_table[9])
 // CRTC0,CRTC3,CRTC4: R8.b5b4=11b will display all border and no paper; CRTC1: R6=1 is immediate
-#define crtc_r6x_update() (crtc_hi_decoding=((crtc_type==1)?!crtc_table[6]:((crtc_table[8]&0x30)==0x30))?(crtc_hi_decoding|16):(crtc_hi_decoding&~16))
+void crtc_r6x_update(void)
+{
+	crtc_hi_decoding=((crtc_type==1)?!crtc_table[6]:((crtc_table[8]&0x30)==0x30))?(crtc_hi_decoding|16):(crtc_hi_decoding&~16);
+}
 void crtc_r3x_update(void)
 {
 	// VSYNC duration depends on the CRTC type!
@@ -373,7 +374,7 @@ INLINE void crtc_table_send(BYTE i)
 	{
 		case 2:
 			if (!crtc_giga)
-				crtc_limit_r2=i;
+				crtc_prior_r2=crtc_limit_r2=i;
 			break;
 		case 3:
 			crtc_r3x_update();
@@ -753,7 +754,7 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 		}
 		else
 			video_target+=16,video_clut[video_clut_index]=video_clut_value; // slow update
-		video_pos_x+=16; // slowest update
+		video_pos_x+=16;
 		//plus_dirtysprite=-1;
 
 		// Gate Array delays rendering
@@ -801,7 +802,7 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 										if (plus_dma_regs[plus_dma_count][0])
 											--plus_dma_regs[plus_dma_count][0],i=plus_dma_regs[plus_dma_count][1];
 									if (n&16)
-										z80_irq=plus_dcsr|=(64>>plus_dma_count),plus_bus=(plus_ivr&-8)+plus_dma_count*2;
+										z80_irq=plus_dcsr|=(64>>plus_dma_count),plus_bus=plus_dma_count;
 									if (n&32)
 										plus_dcsr&=~(1<<plus_dma_count);
 									break;
@@ -810,6 +811,8 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 						}
 						if (++plus_dma_count<3)
 							plus_dma_delay=1;
+						else
+							plus_bus=3; // non-DMA RASTER interruptions
 						break;
 					}
 				while (++plus_dma_count<3);
@@ -824,7 +827,7 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 				if ((irq_delay&&++irq_delay>2)||irq_timer>=52)
 				{
 					if (irq_timer>=32&&!plus_pri)
-						z80_irq=plus_dcsr|=128,plus_bus=(plus_ivr&-8)+6; // PLUS ASIC: DEFAULT TIMER
+						z80_irq=plus_dcsr|=128,plus_bus=3; // PLUS ASIC: DEFAULT TIMER
 					irq_delay=irq_timer=0;
 				}
 			}
@@ -920,8 +923,8 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 				crtc_lo_decoding|=4;
 			plus_dma_count=0,plus_dma_delay=plus_enabled?(plus_dcsr&1)+(plus_dcsr&2)/2+(plus_dcsr&4)/4+2:0,
 				crtc_count_r3x=0,crtc_status|=CRTC_STATUS_HSYNC; // HSYNC ON!
-			if (/*plus_enabled&&*/plus_pri==crtc_line&&plus_pri/*&&crtc_count_r9<8*/)//&&!(crtc_status&CRTC_STATUS_VSYNC)
-				z80_irq=plus_dcsr|=128,plus_bus=(plus_ivr&-8)+6; // PLUS ASIC: PROGRAMMABLE RASTER INTERRUPT
+			if (/*plus_enabled&&*/plus_pri==crtc_line&&plus_pri/*&&crtc_count_r9<8*/)
+				z80_irq=plus_dcsr|=128; // PLUS ASIC: PROGRAMMABLE RASTER INTERRUPT
 		}
 
 		// physical SYNC behavior
@@ -1035,7 +1038,7 @@ BYTE z80_r7; // low 7 bits of R, required by several `IN X,(Y)` operations
 int z80_turbo=0,z80_multi=1; // overclocking options
 
 // the CPC hands the Z80 a data bus value that is NOT constant on the PLUS ASIC
-#define z80_bus() ((plus_enabled)?plus_bus:0xFF)
+#define z80_bus (plus_enabled?(plus_ivr&-8)+plus_bus*2:0xFF)
 // the CPC lacks special cases where RETI and RETN matter
 #define z80_retn()
 // the CPC obeys the Z80 IRQ ACK signal unless the PLUS ASIC IVR bit 0 is off
@@ -1126,11 +1129,11 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 							plus_gate_counter=!b; // first byte must be nonzero
 						else
 						{
-							if ((plus_gate_lastkey=b)!=plus_gate_lock[plus_gate_counter]) // ignore repetitions (SWITCHBLADE)
+							if (b!=plus_gate_lock[plus_gate_counter]) // ignore repetitions (SWITCHBLADE)
 							{
 								if (++plus_gate_counter>=length(plus_gate_lock))
 									plus_gate_counter=0,plus_gate_enabled=b==0xCD;
-								else if ((plus_gate_lastkey=b)!=plus_gate_lock[plus_gate_counter])
+								else if (b!=plus_gate_lock[plus_gate_counter])
 									plus_gate_counter=!b; // detect nonzero case (DICK TRACY)
 							}
 						}
@@ -2055,7 +2058,6 @@ int z80_ack_delay=0; // making it local adds overhead :-(
 #define Z80_POKE0 Z80_POKE
 #define Z80_POKE1(x,a) do{ --z80_t; int z80_aux=x>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO,z80_trap(x,a),z80_t=0; else mmu_ram[z80_aux][x]=a; }while(0) // 1st twin write
 #define Z80_POKE2(x,a) do{ ++z80_t; int z80_aux=x>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO,z80_trap(x,a),z80_t=0; else mmu_ram[z80_aux][x]=a; }while(0) // 2nd twin write
-//#define Z80_POKE(x,a) POKE(x)=a
 #define Z80_WAIT(t)
 #define Z80_BEWARE
 #define Z80_REWIND
@@ -2196,7 +2198,7 @@ int bdos_path_load(char *s) // load AMSDOS ROM. `s` path; 0 OK, !0 ERROR
 // snapshot file handling operations -------------------------------- //
 
 char snap_path[STRMAX]="";
-const char snap_magic8[]="MV - SNA";
+char snap_magic8[]="MV - SNA";
 
 #define SNAP_SAVE_Z80W(x,r) header[x]=r.b.l,header[x+1]=r.b.h
 int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ERROR
@@ -2259,6 +2261,8 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 	header[0xB2]=irq_delay;
 	header[0xB3]=irq_timer;
 	header[0xB4]=!!z80_irq;
+	header[0xB5]=plus_dcsr; // equivalent here to ICSR
+	header[0xB6]=header[0xB7]=plus_enabled;
 	strcpy(&header[0xE0],caption_version);
 	fwrite1(header,256,f);
 	fwrite1(mem_ram,gate_ram_dirty<<10,f);
@@ -2274,7 +2278,7 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 		MEMNCPY(&session_scratch[0x880],plus_palette, 64); // 0x6400-0x643F => 0x880-0x8BF
 		memset(&session_scratch[0x8C0],0,0x20);
 		MEMNCPY(&session_scratch[0x8C0],&plus_bank[0x2800], 6); // 0x6800-0x6805 => 0x8C0-0x8C5
-		session_scratch[0x8C6]=plus_gate_mcr|160; // Winape keeps here the RMR2!
+		session_scratch[0x8F5]=session_scratch[0x8C6]=plus_gate_mcr|160; // Winape uses 0x8C6!? ACE uses 0x8F5!?
 		MEMNCPY(&session_scratch[0x8D0],&plus_bank[0x2C00],16); // 0x6C00-0x6C0F => 0x8D0-0x8DF
 		for (i=0;i<3;++i)
 		{
@@ -2283,7 +2287,6 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 			mputii(&session_scratch[0x8E0+i*7+4],plus_dma_regs[i][2]);
 			session_scratch[0x8E0+i*7+6]=plus_dma_regs[i][3];
 		}
-		session_scratch[0x8F5]=plus_gate_lastkey;
 		session_scratch[0x8F6]=plus_gate_enabled;
 		session_scratch[0x8F7]=plus_gate_counter;
 		fwrite1(session_scratch,0x8F8,f);
@@ -2329,8 +2332,9 @@ void snap_load_plus(FILE *f,int i)
 			plus_dma_regs[i][2]=mgetii(&session_scratch[0x8E0+i*7+4]);
 			plus_dma_regs[i][3]=session_scratch[0x8E0+i*7+6];
 		}
-		plus_gate_mcr=session_scratch[0x8C6]&31; // Winape keeps here the RMR2!
-		plus_gate_lastkey=session_scratch[0x8F5];
+		if  (!((plus_gate_mcr=session_scratch[0x8C6])>=0xA0&&plus_gate_mcr<0xC0)) // Winape uses 0x8C6!?
+			plus_gate_mcr=session_scratch[0x8F5]; // ACE uses 0x8F5!?
+		plus_gate_mcr&=31;
 		plus_gate_enabled=!!session_scratch[0x8F6];
 		plus_gate_counter=session_scratch[0x8F7];
 	}
@@ -2450,7 +2454,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 		else if (k==0x4350432B) // PLUS ASIC "CPC+"
 			q=1,snap_load_plus(f,l);
 		else
-			fseek(f,l,SEEK_CUR);
+			fseek(f,l,SEEK_CUR); // skip unknown block
 	}
 	if (!q)
 		plus_reset(); // reset PLUS hardware if the snapshot is OLD style!
@@ -2997,8 +3001,8 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 			else if (session_closewave()) // toggles recording
 				session_createwave();
 			break;
-		case 0x8A00: // ^F10
-		case 0x0A00: // F10
+		//case 0x8A00: // ^F10
+		//case 0x0A00: // F10
 		case 0x8F00: // ^PAUSE
 		case 0x0F00: // PAUSE
 			if (!(session_signal&SESSION_SIGNAL_DEBUG))

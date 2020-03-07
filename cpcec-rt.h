@@ -87,8 +87,8 @@ int globbing(char *w,char *t,int q) // wildcard pattern *w against string *t; q 
 		}
 		else
 			++t;
-	while (*w=='*') // skip additional wildcards
-		++ww;
+	while (*w=='*') // skip additional wildcards, if any
+		++w;
 	return !*w; // succeed on end of pattern
 }
 #define multiglob session_substr //char multiglob[STRMAX];
@@ -301,6 +301,19 @@ INLINE void audio_playframe(int q,AUDIO_DATATYPE *ao) // call between frames by 
 				//*ao++=(aa+az*7+(aa>az)*4)/8,az=aa; // soft filter
 			break;
 	}
+}
+
+INLINE void session_update(void) // render video+audio thru OS and handle realtime logic (self-adjusting delays, automatic frameskip, etc.)
+{
+	session_render();
+	session_signal&=~SESSION_SIGNAL_FRAME;
+	audio_target=audio_frame;
+	if (video_scanline==3)
+		video_interlaced|=1;
+	else
+		video_interlaced&=~1;
+	if (++video_framecount>video_framelimit)
+		video_framecount=0;
 }
 
 // multimedia file output ------------------------------------------- //
@@ -716,7 +729,7 @@ void puff_byebye(void)
 }
 
 // ZIP-aware user interfaces
-static char puff_pattern[]="*.zip";
+char puff_pattern[]="*.zip";
 char *puff_session_filedialog(char *r,char *s,char *t,int q,int f) // ZIP archive wrapper for session_getfile
 {
 	unsigned char rr[STRMAX],ss[STRMAX],*z,*zz;

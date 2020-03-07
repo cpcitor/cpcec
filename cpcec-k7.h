@@ -464,7 +464,6 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 			}
 			break;
 		case -1: // recording to CSW
-
 			if (tape_record!=tape_output)
 				tape_flush();
 			tape_count+=p;

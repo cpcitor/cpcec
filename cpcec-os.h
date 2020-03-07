@@ -236,9 +236,9 @@ BYTE kbd_bit[16]; // up to 128 keys in 16 rows of 8 bits
 #define	KBCODE_X_DIV	0xB5
 
 const BYTE kbd_k2j[]= // these keys can simulate a joystick
-	{ 0xC8,0xD0,0xCB,0xCD,0x2C,0x2D,0x2E,0x2F }; // CURSORS + Z + X + C + V (QWERTY)
+	{ KBCODE_UP, KBCODE_DOWN, KBCODE_LEFT, KBCODE_RIGHT, KBCODE_Z, KBCODE_X, KBCODE_C, KBCODE_V };
 
-unsigned char kbd_map[256]; // key-to-key translation map
+unsigned char kbd_map[224]; // key-to-key translation map
 
 // general engine functions and procedures -------------------------- //
 
@@ -256,7 +256,7 @@ void session_please(void) // stop activity for a short while
 		if (session_audio)
 			waveOutPause(session_wo);
 		session_wait=1;
-		if (!video_framecount)
+		//if (!video_framecount)
 			video_framecount=-1;
 	}
 }
@@ -506,7 +506,7 @@ INLINE int session_create(char *s) // create video+audio devices and set menu; 0
 	wc.hCursor=LoadCursor(NULL,IDC_ARROW);
 	wc.hbrBackground=(HBRUSH)(1+COLOR_WINDOWTEXT);//(COLOR_WINDOW+2);//0;//
 	wc.lpszMenuName=NULL;
-	wc.lpszClassName="WIN32";
+	wc.lpszClassName=MY_CAPTION;
 	RegisterClass(&wc);
 	session_ideal.left=session_ideal.top=0; // calculate ideal size
 	session_ideal.right=VIDEO_PIXELS_X;
@@ -627,7 +627,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 
 FILE *session_wavefile=NULL; // audio recording is done on each session update
 INLINE void session_writewave(AUDIO_DATATYPE *t); // save the current sample frame. Must be defined later on!
-INLINE void session_update(void) // update video+audio and handle realtime logic (self-adjusting delays, automatic frameskip, etc.)
+INLINE void session_render(void) // update video, audio and timers
 {
 	int i,j,k;
 	static int performance_t=0,performance_f=0,performance_b=0; ++performance_f;
@@ -697,8 +697,8 @@ INLINE void session_update(void) // update video+audio and handle realtime logic
 			if (i=(1000*i/j)) // avoid zero, it has a special value in Windows!
 				Sleep(i>1000/VIDEO_PLAYBACK?1+1000/VIDEO_PLAYBACK:i);
 		}
-		else
-			if (!video_framecount) video_framecount=-1;
+		else if (!video_framecount)
+			video_framecount=-1;
 		audio_session=(audio_session+1)%AUDIO_N_FRAMES;
 	}
 	if (session_wait) // resume activity after a pause
@@ -718,15 +718,8 @@ INLINE void session_update(void) // update video+audio and handle realtime logic
 		}
 		performance_t=i,performance_f=performance_b=session_paused=0;
 	}
-	session_signal&=~SESSION_SIGNAL_FRAME;
-	audio_target=audio_frame;
-	if (video_scanline==3)
-		video_interlaced|=1;
-	else
-		video_interlaced&=~1;
-	if (++video_framecount>video_framelimit)
-		video_framecount=0;
 }
+
 INLINE void session_byebye(void) // delete video+audio devices
 {
 	if (session_wo)

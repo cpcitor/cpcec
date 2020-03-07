@@ -595,3 +595,7 @@ opciones "Y-Masking" y "Half Scanlines". Los archivos ZIP generados mediante
 tuberías (i.e. las cabeceras finales son las correctas) ahora también pueden ser
 leídos. Las fuentes se distribuyen junto a los binarios en lugar de entregarse
 bajo demanda.
+- 20200307 -- parche menor para evitar un cuelgue en globbing(), mejorar la
+compatibilidad de los snapshots (WinAPE y ACE emplean bloques CPC+ ligeramente
+distintos) y eliminar algunos detalles superfluos. Los paquetes de firmware
+opcionales ahora incluyen los cartuchos correspondientes.

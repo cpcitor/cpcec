@@ -1659,8 +1659,9 @@ WORD z80_debug_dump(char *t,WORD m)
 	for (i=0;i<16;++i)
 		t+=sprintf(t,"%02X ",PEEK(m)),++m; // hexadecimal values
 	m-=i;
-	while (i--)
-		t+=sprintf(t,"%c",((b=PEEK(m))>=' '&&b<128)?b:'.'),++m; // printable ASCII characters
+	for (i=0;i<16;++i)
+		b=PEEK(m),*t++=(b>=32&&b<127)?b:'.',++m; // printable ASCII characters
+	*t=0;
 	return m;
 }
 #endif
@@ -1797,17 +1798,17 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 								break;
 							default: // QUICK HELP
 								puts(
-									"\nthis help\n\th"
-									"\nstep into\n\t<empty>"
-									"\nset register\n\tAF/BC/DE/HL/IR/IX/IY/SP <word>"
-									"\ndisassemble [from address]\n\td [addr]\t"
-									"\njump to address\n\tj <addr>"
-									"\ndump memory [from address]\n\tm [addr]"
-									"\npoke byte[s] into address\n\tp <addr> <byte..>"
-									"\nsearch byte[s] from address\n\ts <addr> <byte..>"
-									"\nrun [to address]\n\tr [addr]"
-									"\nreturn from call\n\tu"
-									"\nquit debugger\n\tq"
+									"\nHelp..\n\th"
+									"\nStep into\n\t<empty>"
+									"\nSet register\n\tAF/BC/DE/HL/IR/IX/IY/SP <word>"
+									"\nDisassemble [from address]\n\td [addr]\t"
+									"\nJump to address\n\tj <addr>"
+									"\nDump memory [from address]\n\tm [addr]"
+									"\nPoke byte[s] into address\n\tp <addr> <byte..>"
+									"\nSearch byte[s] from address\n\ts <addr> <byte..>"
+									"\nRun [to address]\n\tr [addr]"
+									"\nReturn from call\n\tu"
+									"\nQuit debugger\n\tq"
 								);
 								break;
 						}
@@ -1915,7 +1916,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 			if (z80_imd&2)
 			{
 				Z80_WAIT(7); Z80_STRIDE_X(0xE3); // IM 2 timing equals EX HL,(SP) : 19 T / 6 NOP
-				z80_wz=(z80_ir.b.h<<8)+z80_bus(); // the address is built according to I and the bus
+				z80_wz=(z80_ir.b.h<<8)+z80_bus; // the address is built according to I and the bus
 				z80_iff.b.l=Z80_PEEK(z80_wz);
 				++z80_wz;
 				z80_iff.b.h=Z80_PEEK(z80_wz);
@@ -1924,7 +1925,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 			else
 			{
 				Z80_WAIT(7); Z80_STRIDE_X(0x3A); // IM 0 and IM 1 timing equals LD A,($NNNN) : 13 T / 4 NOP (RST N is actually 11 T!)
-				z80_wz=(z80_imd&1)?0x38:(z80_bus()&0x38); // IM 0 reads the address from the bus, `RST x` style; any opcode but a RST crashes anyway.
+				z80_wz=(z80_imd&1)?0x38:(z80_bus&0x38); // IM 0 reads the address from the bus, `RST x` style; any opcode but a RST crashes anyway.
 			}
 			Z80_CALL2;
 			z80_halted=z80_iff.w=z80_iff0=0;
@@ -3830,14 +3831,12 @@ void z80_debug_show(void) // redraw debug screen
 		debug_printi("%04X:",m);
 		for (x=0;x<16;++x)
 		{
-			BYTE c=z80_debug_peek(z80_debug_peekpoke,m);
+			BYTE b=z80_debug_peek(z80_debug_peekpoke,m);
 			debug_locate(5+x*2,y);
-			debug_printi("%02X",c);
+			debug_printi("%02X",b);
 			if (z80_debug_panel==2&&m==z80_debug_pnl2_w)
 				debug_output[z80_debug_pnl2_x?-1:-2]^=128;
-			if ((c&128)||(c<32))
-				c='.';
-			debug_output[32-1-x]=c;
+			debug_output[32-1-x]=(b>=32&&b<127)?b:'.';
 			++m;
 		}
 		*debug_output=z80_debug_peekpoke?'\\':'/';
@@ -4070,7 +4069,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 				"Tab\tNext panel (shift: previous)\n"
 				"0-9,A-F\tEdit hexadecimal value\n"
 				"G\tGo to ADDRESS\n"
-				"H\tThis help\n"
+				"H\tHelp..\n"
 				"I\tInput all bytes from FILE\n"
 				"J\tJump to..\n"
 				"K\tClose log file\n"

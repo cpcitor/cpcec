@@ -1,13 +1,13 @@
- // ######  #    #   ####   ######   ####  ------------------------- //
+ // ######  #    #   ####   ######   ####    ----------------------- //
 //  """"#"  "#  #"  #""""   #"""""  #""""#  ZXSEC, barebones Sinclair //
 //     #"    "##"   "####   #####   #    "  Spectrum emulator written //
 //    #"      ##     """"#  #""""   #       on top of CPCEC's modules //
 //   #"      #""#   #    #  #       #    #  by Cesar Nicolas-Gonzalez //
 //  ######  #"  "#  "####"  ######  "####"  since 2019-02-24 till now //
- // """"""  "    "   """"   """"""   """"  ------------------------- //
+ // """"""  "    "   """"   """"""   """"    ----------------------- //
 
 #define MY_CAPTION "ZXSEC"
-#define MY_VERSION "20200229"//"2055"
+#define MY_VERSION "20200307"//"1125"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 // The goal of this emulator isn't to provide a precise emulation of
@@ -137,6 +137,7 @@ int TICKS_PER_SECOND;// (TICKS_PER_FRAME*VIDEO_PLAYBACK);
 // using simple binary divisors to adjust the devices' timings;
 // the "3.5 MHz" isn't neither exact or the same on each machine:
 // 50*312*224= 3494400 Hz on 48K, 50*311*228= 3545400 Hz on 128K.
+// (and even the 50Hz screen framerate isn't the exact PAL value!)
 
 // HARDWARE DEFINITIONS ============================================= //
 
@@ -485,7 +486,7 @@ BYTE z80_r7; // low 7 bits of R, required by several `IN X,(Y)` operations
 int z80_turbo=0,z80_multi=1; // overclocking options
 
 // the Spectrum hands the Z80 a mainly empty data bus value
-#define z80_bus() 0xFF
+#define z80_bus 0xFF
 // the Spectrum lacks special cases where RETI and RETN matter
 #define z80_retn()
 // the Spectrum doesn't obey the Z80 IRQ ACK signal
@@ -1641,8 +1642,8 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 			else if (session_closewave()) // toggles recording
 				session_createwave();
 			break;
-		case 0x8A00: // ^F10
-		case 0x0A00: // F10
+		//case 0x8A00: // ^F10
+		//case 0x0A00: // F10
 		case 0x8F00: // ^PAUSE
 		case 0x0F00: // PAUSE
 			if (!(session_signal&SESSION_SIGNAL_DEBUG))

@@ -569,3 +569,7 @@ after a reset. Fixed a bug that happened when combining Y-Masking and Half
 Scanlines. Extended ZIP archive support to handle pipeline-generated (i.e. the
 final headers are the right ones) archives. Sources are distributed together
 with the binaries instead of being delivered upon demand.
+- 20200307 -- minor patch avoiding a hang in globbing(), improving snapshot
+compatibility (WinAPE and ACE employ slightly different CPC+ blocks) and
+removing several useless details. The optional firmware packages now include the
+corresponding cartridges.
