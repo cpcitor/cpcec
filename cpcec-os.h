@@ -270,7 +270,6 @@ void session_kbdsetup(const unsigned char *s,char l) // maps a series of virtual
 		kbd_map[k]=*s++;
 	}
 }
-
 int session_key_n_joy(int k) // handle some keys as joystick motions
 {
 	if (session_key2joy)
@@ -395,7 +394,7 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 						case VK_END: session_event=29; break;
 						case VK_NEXT: session_event=30; break;
 						case VK_PRIOR: session_event=31; break;
-						case VK_SPACE: session_event=' '; break;
+						case VK_SPACE: session_event=session_shift?160:' '; break;
 						case VK_BACK: session_event=session_shift?9:8; break;
 						case VK_TAB: session_event=session_shift?7:12; break;
 						default: session_event=0; break;

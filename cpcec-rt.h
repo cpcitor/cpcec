@@ -37,7 +37,7 @@ char *session_configread(char *t) // reads configuration file; s points to the p
 	s=t;
 	while (*s>' ') ++s; *s++=0; // divide name and data
 	while (*s==' ') ++s; // skip spaces between both
-	if (*s) // handle common parameters, if valid
+	//if (*s) // handle common parameters, if valid
 	{
 		if (!strcmp(session_parmtr,"scanlines")) return video_scanline=*s&3,NULL;
 		if (!strcmp(session_parmtr,"softaudio")) return audio_filter=*s&3,NULL;
@@ -476,7 +476,7 @@ int puff_expand(struct puff_huff *puff_lcode,struct puff_huff *puff_ocode) // ex
 		if (a<256) // literal?
 		{
 			if (puff_tgto>=puff_tgtl)
-				return 1; // target overrun!
+				return -1; // target overrun!
 			puff_tgt[puff_tgto++]=a; // copy literal
 		}
 		else if (a>256) // length:offset pair?
@@ -484,7 +484,7 @@ int puff_expand(struct puff_huff *puff_lcode,struct puff_huff *puff_ocode) // ex
 			if ((a-=257)>=29)
 				return -1; // invalid value!
 			if (puff_tgto+(l=lcode[0][a]+puff_read(lcode[1][a]))>puff_tgtl)
-				return 1; // target overrun!
+				return -1; // target overrun!
 			if ((a=puff_decode(puff_ocode))<0)
 				return a; // invalid value!
 			if ((o=puff_tgto-ocode[0][a]-puff_read(ocode[1][a]))<0)
@@ -499,7 +499,7 @@ int puff_expand(struct puff_huff *puff_lcode,struct puff_huff *puff_ocode) // ex
 INLINE int puff_stored(void) // copies raw uncompressed byte block from source to target; !0 ERROR
 {
 	if (puff_srco+4>puff_srcl)
-		return 1; // source overrun!
+		return -1; // source overrun!
 	puff_buff=puff_bits=0; // ignore remaining bits
 	int l=puff_src[puff_srco++];
 	l+=puff_src[puff_srco++]<<8;
@@ -508,7 +508,7 @@ INLINE int puff_stored(void) // copies raw uncompressed byte block from source t
 	if (!l||l+k!=0xFFFF)
 		return -1; // invalid value!
 	if (puff_srco+l>puff_srcl||puff_tgto+l>puff_tgtl)
-		return 1; // source/target overrun!
+		return -1; // source/target overrun!
 	while (l--)
 		puff_tgt[puff_tgto++]=puff_src[puff_srco++]; // copy source to target and update pointers
 	return 0;

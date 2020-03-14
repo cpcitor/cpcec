@@ -7,7 +7,7 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "CPCEC"
-#define MY_VERSION "20200307"//"1125"
+#define MY_VERSION "20200314"//"1955"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -334,7 +334,7 @@ BYTE crtc_limit_r3x,crtc_limit_r3y; // limits of `r3x` and `r3y`
 int video_vsync_min,video_vsync_max,crtc_hold=0; // VHOLD modifiers
 int crtc_limit_r2,crtc_prior_r2,crtc_giga,crtc_giga_count; // HSYNC Gigascreen modifiers
 
-#define crtc_set_line() crtc_line=(crtc_count_r9&7)+(crtc_count_r4&63)*8 // Plus scanline counter
+#define crtc_set_line() plus_line=(crtc_count_r9&7)+(crtc_count_r4&63)*8 // Plus scanline counter
 #define crtc_r4x_update() (crtc_limit_r4=crtc_table[4],crtc_limit_r5=crtc_table[5],crtc_limit_r9=crtc_table[9])
 // CRTC0,CRTC3,CRTC4: R8.b5b4=11b will display all border and no paper; CRTC1: R6=1 is immediate
 void crtc_r6x_update(void)
@@ -592,10 +592,79 @@ char DISC_NEW_SECTOR_IDS[]={0xC1,0xC6,0xC2,0xC7,0xC3,0xC8,0xC4,0xC9,0xC5};
 
 // CPU-HARDWARE-VIDEO-AUDIO INTERFACE =============================== //
 
-int crtc_32kb,crtc_zz_char,crtc_line,plus_hardminx,plus_hardmaxx;
-BYTE crtc_zz_decoding,plus_overlays,plus_soft;
-WORD crtc_char,crtc_past,crtc_bank;
-VIDEO_DATATYPE plus_fill;
+int crtc_32kb,crtc_zz_char,plus_line,plus_hardbase,plus_seesprites;
+BYTE crtc_zz_decoding,plus_soft,plus_fix_init,plus_fix_exit,plus_fix_last;
+WORD crtc_char,crtc_past,crtc_bank; VIDEO_DATATYPE plus_fill;
+
+INLINE void video_main1sprites(void) // PLUS ASIC: Hardware Sprites relative to current plus_hardbase, video_target and video_pos_x
+{
+	int plus_span=video_pos_x-(plus_hardbase>video_pos_x?0:plus_hardbase);
+	VIDEO_DATATYPE *video_source=&video_target[16-plus_span];
+	for (int i=15;i>=0;--i) // sprites follow a priority: #0 highest, #15 lowest
+	{
+		int zoomy,zoomx;
+		if (/*plus_dirtysprite!=i&&*/(zoomy=plus_sprite_xyz[i*8+4]&3)&&(zoomx=plus_sprite_xyz[i*8+4]&12))
+		{
+			int basey=(plus_line-(plus_sprite_xyz[i*8+2]+((signed char)plus_sprite_xyz[i*8+3])*256))>>--zoomy;
+			if (basey>=0&&basey<16)
+			{
+				int basex=(plus_sprite_xyz[i*8+0]+((signed char)plus_sprite_xyz[i*8+1])*256)-plus_soft;
+				if (basex<plus_span&&(basex+(16<<(zoomx=zoomx/4-1)))>0)
+				{
+					VIDEO_DATATYPE z,*tgt=video_source;
+					BYTE *src=&plus_sprite_bmp[i*256+basey*16];
+					if (basex<0) // is the sprite clipped to the left?
+					{
+						// handle partial pixels, if any!
+						int x=basex;
+						zoomy=16+(basex>>=zoomx),src-=basex;
+						if (x&=(1<<zoomx)-1)
+						{
+							if (z=src[-1])
+							{
+								z=video_clut[16+z];
+								do
+									*tgt++=z;
+								while (--x);
+							}
+							else
+								tgt+=x;
+						}
+					}
+					else
+						zoomy=16,tgt+=basex;
+					if (zoomy>0) // recycling 'zoomy' as the pixel counter :-)
+						switch (zoomx)
+						{
+							case 0:
+								do
+									if (z=*src++) *tgt++=video_clut[16+z];
+									else ++tgt;
+								while (--zoomy);
+								break;
+							case 1:
+								do
+									if (z=*src++) z=video_clut[16+z],*tgt++=z,*tgt++=z;
+									else tgt+=2;
+								while (--zoomy);
+								break;
+							case 2:
+								do
+									if (z=*src++) z=video_clut[16+z],*tgt++=z,*tgt++=z,*tgt++=z,*tgt++=z;
+									else tgt+=4;
+								while (--zoomy);
+								break;
+						}
+				}
+			}
+		}
+	}
+	if (plus_sscr&128)
+		for (int z=plus_soft;z<16;++z)
+			*video_source++=plus_fill;
+	plus_seesprites=0;
+}
+
 #define crtc_delay_r3x 6 // IMPERIAL MAHJONG (INGAME): 1,2,3: fail; 4,5: glitch; 6 good; SCROLL FACTORY (TITLE): 1,2,3,4: glitch; 5,6 good
 INLINE void video_main1(int t) // render video output for `t` clock ticks
 {
@@ -603,10 +672,24 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 	{
 		// actual pixel rendering
 
-		if (!video_framecount&&(video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y)&&(video_pos_x>VIDEO_OFFSET_X-16))
+		if (!video_framecount&&(video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y))
 		{
-			if (video_pos_x<VIDEO_OFFSET_X+VIDEO_PIXELS_X)
+			if (plus_fix_last)
 			{
+				if (plus_seesprites)
+					video_main1sprites();
+				video_pos_x-=plus_soft,video_target-=plus_soft,plus_fix_last=0;
+			}
+			plus_fix_last=plus_fix_exit,plus_fix_exit=0;
+			if (video_pos_x>VIDEO_OFFSET_X-16&&video_pos_x<VIDEO_OFFSET_X+VIDEO_PIXELS_X)
+			{
+				if (plus_fix_init)
+				{
+					video_pos_x+=plus_fix_init;
+					do
+						*video_target++=video_clut[16];
+					while (--plus_fix_init);
+				}
 				#define VIDEO_NEXT *video_target++ // "VIDEO_NEXT = VIDEO_NEXT = ..." generates invalid code on VS13 and slower code on TCC
 				switch (crtc_zz_decoding+crtc_lo_decoding)
 				{
@@ -672,84 +755,9 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 				}
 			}
 			else
-				video_target+=16,video_clut[video_clut_index]=video_clut_value; // slow update
-			if (plus_hardminx&&(plus_hardmaxx||video_pos_x>VIDEO_LENGTH_X-32))
 			{
-				if (plus_hardmaxx<video_pos_x) // catch PREHISTORIK 2 PLUS!
-					plus_hardmaxx=video_pos_x;
-				int plus_span=plus_hardmaxx-plus_hardminx;
-				VIDEO_DATATYPE *plus_base=&video_target[-plus_span];
-				// PLUS ASIC: Hardware Sprites
-				for (int i=15;i>=0;--i) // sprites follow a priority: #0 highest, #15 lowest
-				{
-					int zoomy,zoomx;
-					if (/*plus_dirtysprite!=i&&*/(zoomy=plus_sprite_xyz[i*8+4]&3)&&(zoomx=plus_sprite_xyz[i*8+4]&12))
-					{
-						int basey=(crtc_line-(plus_sprite_xyz[i*8+2]+((signed char)plus_sprite_xyz[i*8+3])*256))>>--zoomy;
-						if (basey>=0&&basey<16)
-						{
-							int basex=(plus_sprite_xyz[i*8+0]+((signed char)plus_sprite_xyz[i*8+1])*256)-plus_soft;
-							if (basex<plus_span&&(basex+(16<<(zoomx=zoomx/4-1)))>0)
-							{
-								VIDEO_DATATYPE z,*tgt=plus_base;
-								BYTE *src=&plus_sprite_bmp[i*256+basey*16];
-								if (basex<0) // is the sprite clipped to the left?
-								{
-									// handle partial pixels, if any!
-									int x=basex;
-									zoomy=16+(basex>>=zoomx),src-=basex;
-									if (x&=(1<<zoomx)-1)
-									{
-										if (z=src[-1])
-										{
-											z=video_clut[16+z];
-											do
-												*tgt++=z;
-											while (--x);
-										}
-										else
-											tgt+=x;
-									}
-								}
-								else
-									zoomy=16,tgt+=basex;
-								if (zoomy>0) // recycling 'zoomy' as the pixel counter :-)
-									switch (zoomx)
-									{
-										case 0:
-											do
-												if (z=*src++) *tgt++=video_clut[16+z];
-												else ++tgt;
-											while (--zoomy);
-											break;
-										case 1:
-											do
-												if (z=*src++) z=video_clut[16+z],*tgt++=z,*tgt++=z;
-												else tgt+=2;
-											while (--zoomy);
-											break;
-										case 2:
-											do
-												if (z=*src++) z=video_clut[16+z],*tgt++=z,*tgt++=z,*tgt++=z,*tgt++=z;
-												else tgt+=4;
-											while (--zoomy);
-											break;
-									}
-							}
-						}
-					}
-				}
-				if (plus_sscr&128) // left border (PLUS ASIC: Soft Scroll Borders)
-				{
-					VIDEO_DATATYPE *t=video_target-plus_span-plus_soft+16;
-					for (int z=plus_soft;z<16;++z) *--t=plus_fill; // fill one char minus the displaced pixels
-				}
-				if (plus_sscr&128||plus_hardminx&15) // right border
-				{
-					VIDEO_DATATYPE *t=video_target-plus_soft;
-					for (int z=0;z<plus_soft;++z) *t++=video_clut[16]; // fill the displaced pixels
-				}
-				plus_hardminx=plus_hardmaxx=0;
+				video_pos_x+=plus_fix_init-plus_fix_last,video_target+=plus_fix_init-plus_fix_last,plus_fix_init=plus_fix_last=0;
+				video_target+=16,video_clut[video_clut_index]=video_clut_value; // slow update
 			}
 		}
 		else
@@ -871,6 +879,8 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 			//else
 				crtc_count_r5=(crtc_count_r5+1)&31;
 
+			crtc_bank=(crtc_count_r9<<11)+(plus_sscr<<7)&0x3800;
+
 			if (!crtc_count_r4&&(crtc_type==1||!crtc_count_r9))
 				crtc_32kb=((~crtc_table[12])&0x0C)?0:0x4000,crtc_past=((crtc_table[12]&0x30)<<10)+(((crtc_table[12]&0x03)*256+crtc_table[13])<<1);
 
@@ -880,16 +890,21 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 					crtc_hi_decoding|=4; // VDISP OFF
 				if (crtc_count_r4==crtc_table[7])
 					irq_delay=1,crtc_count_r3y=0,crtc_status|=CRTC_STATUS_VSYNC; // VSYNC ON!
-				crtc_bank=(plus_sscr&0x70)<<7;
 			}
-			else
-				crtc_bank=(crtc_bank+0x0800)&0x3800;
 			crtc_r4x_update();
-			plus_hardmaxx=crtc_count_r0=0;
+			crtc_count_r0=0;
 			crtc_char=crtc_past;
 			crtc_hi_decoding&=~8; // HDISP ON!
-			plus_hardminx=(plus_enabled&&!crtc_hi_decoding&&crtc_table[1])?video_pos_x:0,plus_fill=video_clut[16]; // remember for later usage
-			crtc_set_line();
+			if (plus_enabled)
+			{
+				plus_seesprites=crtc_table[1]&&!(crtc_hi_decoding&4)&&
+				!(video_framecount)&&(video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y);
+				//if (!crtc_hi_decoding&&crtc_table[1])
+					plus_hardbase=video_pos_x+(plus_fix_init=plus_soft=(plus_sscr&15)),plus_fill=video_clut[16]; // remember for later usage
+				crtc_set_line();
+				if (plus_pri==plus_line&&plus_pri&&crtc_status&CRTC_STATUS_HSYNC)
+					z80_irq=plus_dcsr|=128; // PLUS ASIC: PROGRAMMABLE RASTER INTERRUPT
+			}
 		}
 		else
 		{
@@ -902,7 +917,7 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 			crtc_hi_decoding-=32; // Gate Array slowdown
 		if (crtc_count_r0==crtc_table[1])
 		{
-			if (crtc_count_r9+((plus_sscr&0x70)>>4)==crtc_limit_r9)
+			if (((crtc_count_r9+((plus_sscr&0x70)>>4))&0x1F)==crtc_limit_r9)
 			{
 				if ((crtc_past^crtc_char)&0xC000)
 					crtc_32kb=-crtc_32kb;
@@ -910,12 +925,12 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 			}
 			if (plus_enabled)
 			{
-				plus_hardmaxx=video_pos_x;
-				if (plus_sssl==(BYTE)crtc_line&&plus_sssl/*&&crtc_count_r9<8*/) // PLUS ASIC: Split Screen (notice the BYTE)
+				plus_fix_exit=1;
+				if (plus_sssl==(BYTE)plus_line&&plus_sssl/*&&crtc_count_r9<8*/) // PLUS ASIC: Split Screen (notice the BYTE)
 					crtc_32kb=0, // the SSSL doesn't support 32kb mode!
 					crtc_char=crtc_past=((plus_ssss[0]&0x30)<<10)+(((plus_ssss[0]&0x3)*256+plus_ssss[1])<<1);
 			}
-			crtc_hi_decoding|=crtc_limit_r3x<3?(64+8):8;
+			crtc_hi_decoding|=crtc_limit_r3x<3?(64+8):8; // 64 : Gate Array slowdown
 		}
 		if (crtc_count_r0==crtc_limit_r2)
 		{
@@ -923,7 +938,7 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 				crtc_lo_decoding|=4;
 			plus_dma_count=0,plus_dma_delay=plus_enabled?(plus_dcsr&1)+(plus_dcsr&2)/2+(plus_dcsr&4)/4+2:0,
 				crtc_count_r3x=0,crtc_status|=CRTC_STATUS_HSYNC; // HSYNC ON!
-			if (/*plus_enabled&&*/plus_pri==crtc_line&&plus_pri/*&&crtc_count_r9<8*/)
+			if (plus_pri==plus_line&&plus_pri/*&&crtc_count_r9<8*/)
 				z80_irq=plus_dcsr|=128; // PLUS ASIC: PROGRAMMABLE RASTER INTERRUPT
 		}
 
@@ -931,11 +946,14 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 
 		if (((crtc_status&CRTC_STATUS_HSYNC)&&video_pos_x>=VIDEO_HSYNC_LO)||video_pos_x>=VIDEO_HSYNC_HI) // H.REFRESH?
 		{
+			if (plus_seesprites)
+				video_main1sprites();
+			plus_fix_exit=0; // restore soft scroll even if it's misaligned (Prehistorik 2)
 			if (!video_framecount)
 				video_drawscanline();
 			video_pos_y+=2,video_target+=VIDEO_LENGTH_X*2-video_pos_x;
 			// see below the horrible trick to tell apart "PREHISTORIK 2" (6-r), "CAMEMBERT MEETING 4" (6-r) and "SCROLL FACTORY" (2-r)
-			video_target+=video_pos_x=((crtc_limit_r3x>2&&crtc_limit_r3x<6)?6-crtc_limit_r3x:0)*8+(plus_soft=(plus_sscr&15));
+			video_target+=video_pos_x=((crtc_limit_r3x>2&&crtc_limit_r3x<6)?6-crtc_limit_r3x:0)*8;
 		}
 		if (((crtc_status&CRTC_STATUS_VSYNC)&&(video_pos_y>=video_vsync_min))||video_pos_y>=video_vsync_max) // V.REFRESH?
 		{
@@ -1127,15 +1145,12 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 					{
 						if (!plus_gate_counter)
 							plus_gate_counter=!b; // first byte must be nonzero
-						else
+						else if (b!=plus_gate_lock[plus_gate_counter]) // ignore repetitions (SWITCHBLADE)
 						{
-							if (b!=plus_gate_lock[plus_gate_counter]) // ignore repetitions (SWITCHBLADE)
-							{
-								if (++plus_gate_counter>=length(plus_gate_lock))
-									plus_gate_counter=0,plus_gate_enabled=b==0xCD;
-								else if (b!=plus_gate_lock[plus_gate_counter])
-									plus_gate_counter=!b; // detect nonzero case (DICK TRACY)
-							}
+							if (++plus_gate_counter>=length(plus_gate_lock))
+								plus_gate_counter=0,plus_gate_enabled=b==0xCD;
+							else if (b!=plus_gate_lock[plus_gate_counter])
+								plus_gate_counter=!b; // detect nonzero case (DICK TRACY)
 						}
 					}
 				crtc_table_select(b); // 0xBC00: SELECT CRTC REGISTER
@@ -1156,14 +1171,12 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 		{
 			case 0x0000: // 0xF400, PIO PORT A
 				pio_port_a=b;
-				switch (pio_port_c&0xC0)
+				if (pio_port_c&0x80)
 				{
-					case 0x80: // WRITE PSG REGISTER
-						psg_table_send(b);
-						break;
-					case 0xC0: // SELECT PSG REGISTER
-						psg_table_select(b);
-						break;
+					if (pio_port_c&0x40) // SELECT PSG REGISTER
+						psg_table_select(pio_port_a);
+					else // WRITE PSG REGISTER
+						psg_table_send(pio_port_a);
 				}
 				break;
 			case 0x0100: // 0xF500, PIO PORT B
@@ -1171,14 +1184,12 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 				break;
 			case 0x0200: // 0xF600, PIO PORT C
 				pio_port_c=b;
-				switch (b&0xC0)
+				if (pio_port_c&0x80)
 				{
-					case 0x80: // WRITE PSG REGISTER
-						psg_table_send(pio_port_a);
-						break;
-					case 0xC0: // SELECT PSG REGISTER
+					if (pio_port_c&0x40) // SELECT PSG REGISTER
 						psg_table_select(pio_port_a);
-						break;
+					else // WRITE PSG REGISTER
+						psg_table_send(pio_port_a);
 				}
 				break;
 			case 0x0300: // 0xF700, PIO CONTROL
@@ -1188,13 +1199,10 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 					if (!plus_enabled) // CRTC3 has a PIO bug! CRTC0-2,CRTC4 have a good PIO
 						pio_port_a=pio_port_b=pio_port_c=0; // reset all ports!
 				}
+				else if (b&1)
+					pio_port_c|=(1<<((b>>1)&7)); // SET BIT
 				else
-				{
-					if (b&1)
-						pio_port_c|=(1<<((b>>1)&7)); // SET BIT
-					else
-						pio_port_c&=~(1<<((b>>1)&7)); // RESET BIT
-				}
+					pio_port_c&=~(1<<((b>>1)&7)); // RESET BIT
 				break;
 		}
 		tape_output=(pio_port_c>>5)&1; // tape record signal
@@ -1768,9 +1776,11 @@ void z80_trap(WORD p,BYTE b)
 			// colour palette
 			if (p<0x6440)
 			{
-				plus_bank[p-0x4000]=b&((p&1)?15:255);
-				p&=62;
-				video_clut_sloww=video_clut_value=video_table[video_type][32+(plus_palette[p+1]&15)]+video_table[video_type][48+((plus_palette[p]>>4)&15)]+video_table[video_type][64+(plus_palette[p]&15)];
+				if (p&1)
+					b&=15;
+				plus_bank[p-0x4000]=b;
+				p&=64-2; // select ink
+				video_clut_sloww=video_clut_value=video_table[video_type][32+plus_palette[p+1]]+video_table[video_type][48+(plus_palette[p]>>4)]+video_table[video_type][64+(plus_palette[p]&15)];
 				video_clut_index=p>>1; // keep ASIC and Gate Array from clashing
 				if (video_pos_x&8)//(plus_sscr&8)
 					video_clut[video_clut_index]=video_clut_value; // fast update
@@ -1782,14 +1792,12 @@ void z80_trap(WORD p,BYTE b)
 			{
 				if (p==0x6800) // plus_pri, PROGRAMMABLE RASTER INTERRUPT
 				{
-					if (crtc_line==b) // FIRE N FORGET 2 needs this!
+					if (plus_line==b) // FIRE N FORGET 2 needs this!
 						z80_irq=plus_dcsr|=128; // SET!
 					else if (b) // PREHISTORIK 2 PLUS needs this!
 						if (!((plus_dcsr&=~128)&0x70)) // RESET!
 							z80_irq=0;
 				}
-				else if (p==0x6804) // plus_sscr, SOFT SCROLL CONTROL REGISTER
-					crtc_bank=((b+crtc_count_r9)&7)<<11; // hides "NAVY SEALS" glitch between panels
 				plus_bank[p-0x4000]=b;
 			}
 			break;
@@ -1834,7 +1842,7 @@ void z80_info(void) // prints a short hardware dump from the debugger
 	printf("%s\nMCR $%02X / RAM $%02X / ROM $%02X\n",s,gate_mcr,gate_ram,gate_rom);
 }
 #else
-int z80_debug_hard1(char *t)
+int z80_debug_hard_tab(char *t)
 {
 	return sprintf(t,"    ");
 }
@@ -1844,7 +1852,7 @@ void z80_debug_hard(int q,int x,int y)
 	if (q&1&&plus_enabled)
 	{
 		t=s+sprintf(s,"PLUS: MCR:%02X DCSR:%02X",plus_gate_mcr,plus_dcsr);
-		t+=sprintf(t,"    SSSL:%02X SCAN:%03X",plus_sssl,crtc_line);
+		t+=sprintf(t,"    SSSL:%02X SCAN:%03X",plus_sssl,plus_line);
 		t+=sprintf(t,"    SSSS:%04X PRI:%02X",(WORD)mgetii(plus_ssss),plus_pri);
 		t+=sprintf(t,"    SSCR:%02X IVR:%02X %c",plus_sscr,plus_ivr,plus_gate_enabled?'+':'@'+plus_gate_counter);
 		//t+=sprintf(t,"DMAS:               ");
@@ -1871,14 +1879,14 @@ void z80_debug_hard(int q,int x,int y)
 		t=s+sprintf(s,"GATE:               ""%02X: ",gate_index);
 		for (i=0;i<8;++i)
 			t+=sprintf(t,"%02X",gate_table[i]);
-		t+=z80_debug_hard1(t);
+		t+=z80_debug_hard_tab(t);
 		for (;i<16;++i)
 			t+=sprintf(t,"%02X",gate_table[i]);
 		t+=sprintf(t,"    %02X %cBPP %02X:%02X:%02X",gate_table[16],(crtc_lo_decoding&3)?(crtc_lo_decoding&1)?'2':'1':'4',0x80+gate_mcr,0xC0+gate_ram,gate_rom);
 		t+=sprintf(t,"CRTC:               ""%02X: ",crtc_index);
 		for (i=0;i<8;++i)
 			t+=sprintf(t,"%02X",crtc_table[i]);
-		t+=z80_debug_hard1(t);
+		t+=z80_debug_hard_tab(t);
 		for (;i<16;++i)
 			t+=sprintf(t,"%02X",crtc_table[i]);
 		t+=sprintf(t,
@@ -1890,7 +1898,7 @@ void z80_debug_hard(int q,int x,int y)
 		t+=sprintf(t,"PSG:                ""%02X: ",psg_index);
 		for (i=0;i<8;++i)
 			t+=sprintf(t,"%02X",psg_table[i]);
-		t+=z80_debug_hard1(t);
+		t+=z80_debug_hard_tab(t);
 		for (;i<16;++i)
 			t+=sprintf(t,"%02X",psg_table[i]);
 		t+=sprintf(t,"    PIO: %02X:%02X:%02X:%02X",pio_port_a,pio_port_b,pio_port_c,pio_control);
@@ -2072,6 +2080,7 @@ int z80_ack_delay=0; // making it local adds overhead :-(
 #define Z80_DEBUG_LEN 16 // height of disassemblies, dumps and searches
 #define Z80_DEBUG_MMU 1 // allow ROM/RAM toggling, it's useful on CPC!
 #define Z80_DEBUG_EXT 1 // allow EXTRA hardware debugging info pages
+#define Z80_DEBUG_SCAN 64 // amount of ticks per scanline
 #define z80_out0() 0 // hardware sets whether OUT (C) sends 0 or 255
 
 #include "cpcec-z8.h"
@@ -2262,7 +2271,7 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 	header[0xB3]=irq_timer;
 	header[0xB4]=!!z80_irq;
 	header[0xB5]=plus_dcsr; // equivalent here to ICSR
-	header[0xB6]=header[0xB7]=plus_enabled;
+	header[0xB6]=!(header[0xB7]=plus_enabled);
 	strcpy(&header[0xE0],caption_version);
 	fwrite1(header,256,f);
 	fwrite1(mem_ram,gate_ram_dirty<<10,f);
@@ -2471,7 +2480,6 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 	crtc_r3x_update();
 	crtc_r4x_update();
 	crtc_r6x_update();
-	plus_soft=plus_sscr&15;
 	crtc_set_line();
 	crtc_prior_r2=crtc_limit_r2=crtc_table[2]; // delay Gigascreen
 	disc_track_update();
@@ -2585,103 +2593,103 @@ char snap_pattern[]="*.sna";
 
 char session_menudata[]=
 	"File\n"
-	"0x8300-Open any file..\tF3\n"
-	"0xC300-Load snapshot..\tShift+F3\n"
-	"0x0300-Load last snapshot\tCtrl+F3\n"
-	"0x8200-Save snapshot..\tF2\n"
-	"0x0200-Save last snapshot\tCtrl+F2\n"
+	"0x8300 Open any file..\tF3\n"
+	"0xC300 Load snapshot..\tShift+F3\n"
+	"0x0300 Load last snapshot\tCtrl+F3\n"
+	"0x8200 Save snapshot..\tF2\n"
+	"0x0200 Save last snapshot\tCtrl+F2\n"
 	"=\n"
-	"0x8700-Insert disc into A:..\tF7\n"
-	"0x8701-Create disc in A:..\n"
-	"0x0700-Remove disc from A:\tCtrl+F7\n"
-	"0x0701-Flip disc sides in A:\n"
-	"0xC700-Insert disc into B:..\tShift+F7\n"
-	"0xC701-Create disc in B:..\n"
-	"0x4700-Remove disc from B:\tCtrl+Shift+F7\n"
-	"0x4701-Flip disc sides in B:\n"
+	"0x8700 Insert disc into A:..\tF7\n"
+	"0x8701 Create disc in A:..\n"
+	"0x0700 Remove disc from A:\tCtrl+F7\n"
+	"0x0701 Flip disc sides in A:\n"
+	"0xC700 Insert disc into B:..\tShift+F7\n"
+	"0xC701 Create disc in B:..\n"
+	"0x4700 Remove disc from B:\tCtrl+Shift+F7\n"
+	"0x4701 Flip disc sides in B:\n"
 	"=\n"
-	"0x8800-Insert tape..\tF8\n"
-	"0xC800-Record tape..\tShift+F8\n"
-	"0x0800-Remove tape\tCtrl+F8\n"
-	"0x8801-Browse tape..\n"
-	//"0x48-Play tape\tCtrl+Shift+F8\n"
+	"0x8800 Insert tape..\tF8\n"
+	"0xC800 Record tape..\tShift+F8\n"
+	"0x0800 Remove tape\tCtrl+F8\n"
+	"0x8801 Browse tape..\n"
+	//"0x4800 Play tape\tCtrl+Shift+F8\n"
 	"=\n"
-	"0x7F00-E_xit\n"
+	"0x7F00 E_xit\n"
 	"Edit\n"
-	"0x8500-Select firmware..\tF5\n"
-	"0x0500-Reset emulation\tCtrl+F5\n"
-	"0x8F00-Pause\tPause\n"
-	"0x8900-Debug\tF9\n"
+	"0x8500 Select firmware..\tF5\n"
+	"0x0500 Reset emulation\tCtrl+F5\n"
+	"0x8F00 Pause\tPause\n"
+	"0x8900 Debug\tF9\n"
 	"=\n"
-	"0x8600-Realtime\tF6\n"
-	"0x0601<100% CPU speed\n"
-	"0x0602=200% CPU speed\n"
-	"0x0603=300% CPU speed\n"
-	"0x0604>400% CPU speed\n"
-	//"0x06-Raise Z80 speed\tCtrl+F6\n"
-	//"0x46-Lower Z80 speed\tCtrl+Shift+F6\n"
+	"0x8600 Realtime\tF6\n"
+	"0x0601 100% CPU speed\n"
+	"0x0602 200% CPU speed\n"
+	"0x0603 300% CPU speed\n"
+	"0x0604 400% CPU speed\n"
+	//"0x0600 Raise Z80 speed\tCtrl+F6\n"
+	//"0x4600 Lower Z80 speed\tCtrl+Shift+F6\n"
 	"=\n"
-	"0x0900-Tape speed-up\tCtrl+F9\n"
-	"0x4900-Tape analysis\tCtrl+Shift+F9\n"
-	"0x0901-Tape auto-rewind\n"
-	"0x0400-Virtual joystick\tCtrl+F4\n"
+	"0x0900 Tape speed-up\tCtrl+F9\n"
+	"0x4900 Tape analysis\tCtrl+Shift+F9\n"
+	"0x0901 Tape auto-rewind\n"
+	"0x0400 Virtual joystick\tCtrl+F4\n"
 	"Settings\n"
-	"0x8501<CRTC type 0\n"
-	"0x8502=CRTC type 1\n"
-	"0x8503=CRTC type 2\n"
-	"0x8504=CRTC type 3\n"
-	"0x8505>CRTC type 4\n"
+	"0x8501 CRTC type 0\n"
+	"0x8502 CRTC type 1\n"
+	"0x8503 CRTC type 2\n"
+	"0x8504 CRTC type 3\n"
+	"0x8505 CRTC type 4\n"
 	//"=\n"
-	"0x8509<Short V-Hold\n"
-	"0x850A=Middle V-Hold\n"
-	"0x850B>Long V-Hold\n"
+	"0x8509 Short V-Hold\n"
+	"0x850A Middle V-Hold\n"
+	"0x850B Long V-Hold\n"
 	"=\n"
-	"0x8511<64k RAM\n"
-	"0x8512=128k RAM\n"
-	"0x8513=192k RAM\n"
-	"0x8514=320k RAM\n"
-	"0x8515>576k RAM\n"
+	"0x8511 64k RAM\n"
+	"0x8512 128k RAM\n"
+	"0x8513 192k RAM\n"
+	"0x8514 320k RAM\n"
+	"0x8515 576k RAM\n"
 	"=\n"
-	"0x8510-Disc controller\n"
+	"0x8510 Disc controller\n"
 	"Video\n"
-	"0x8901-Onscreen status\tShift+F9\n"
-	"0x8904-Interpolation\n"
-	"0x8903-X-Masking\n"
-	"0x8902-Y-Masking\n"
+	"0x8901 Onscreen status\tShift+F9\n"
+	"0x8904 Interpolation\n"
+	"0x8903 X-Masking\n"
+	"0x8902 Y-Masking\n"
 	"=\n"
-	"0x8B01<Monochrome\n"
-	"0x8B02=Dark palette\n"
-	"0x8B03=Normal palette\n"
-	"0x8B04=Bright palette\n"
-	"0x8B05>Green screen\n"
-	//"0x8B00-Next palette\tF11\n"
-	//"0xCB00-Prev. palette\tShift+F11\n"
+	"0x8B01 Monochrome\n"
+	"0x8B02 Dark palette\n"
+	"0x8B03 Normal palette\n"
+	"0x8B04 Bright palette\n"
+	"0x8B05 Green screen\n"
+	//"0x8B00 Next palette\tF11\n"
+	//"0xCB00 Prev. palette\tShift+F11\n"
 	"=\n"
-	//"0x0B00-Next scanline\tCtrl+F11\n"
-	//"0x4B00-Prev. scanline\tCtrl+Shift+F11\n"
-	"0x0B01<All scanlines\n"
-	"0x0B02=Half scanlines\n"
-	"0x0B03=Simple interlace\n"
-	"0x0B04>Double interlace\n"
+	//"0x0B00 Next scanline\tCtrl+F11\n"
+	//"0x4B00 Prev. scanline\tCtrl+Shift+F11\n"
+	"0x0B01 All scanlines\n"
+	"0x0B02 Half scanlines\n"
+	"0x0B03 Simple interlace\n"
+	"0x0B04 Double interlace\n"
 	"=\n"
-	"0x9100-Raise frameskip\tNum.+\n"
-	"0x9200-Lower frameskip\tNum.-\n"
-	"0x9300-Full frameskip\tNum.*\n"
-	"0x9400-No frameskip\tNum./\n"
+	"0x9100 Raise frameskip\tNum.+\n"
+	"0x9200 Lower frameskip\tNum.-\n"
+	"0x9300 Full frameskip\tNum.*\n"
+	"0x9400 No frameskip\tNum./\n"
 	"=\n"
-	"0x8C00-Save screenshot\tF12\n"
+	"0x8C00 Save screenshot\tF12\n"
 	"Audio\n"
-	"0x8400-Sound\tF4\n"
-	"0x8401-No interpolation\n"
-	"0x8402-Light interpolation\n"
-	"0x8403-Middle interpolation\n"
-	"0x8404-Heavy interpolation\n"
+	"0x8400 Sound\tF4\n"
+	"0x8401 No interpolation\n"
+	"0x8402 Light interpolation\n"
+	"0x8403 Middle interpolation\n"
+	"0x8404 Heavy interpolation\n"
 	"=\n"
-	"0x0C00-Record WAV file\tCtrl+F12\n"
-	"0x4C00-Record YM file\tCtrl+Shift+F12\n"
+	"0x0C00 Record WAV file\tCtrl+F12\n"
+	"0x4C00 Record YM file\tCtrl+Shift+F12\n"
 	"Help\n"
-	"0x8100-Help..\tF1\n"
-	"0x0100-About..\tCtrl+F1\n"
+	"0x8100 Help..\tF1\n"
+	"0x0100 About..\tCtrl+F1\n"
 	"";
 
 void session_menuinfo(void)

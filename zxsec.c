@@ -7,7 +7,7 @@
  // """"""  "    "   """"   """"""   """"    ----------------------- //
 
 #define MY_CAPTION "ZXSEC"
-#define MY_VERSION "20200307"//"1125"
+#define MY_VERSION "20200314"//"1955"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 // The goal of this emulator isn't to provide a precise emulation of
@@ -212,7 +212,7 @@ void mmu_update(void) // update the MMU tables with all the new offsets
 	{
 		ula_clash_mreq[4]=ula_clash[type_id<2?type_id+1:type_id]; // turn TYPE_ID (0, 1+2, 3) into ULA V (1, 2, 3)
 		ula_clash_mreq[0]=ula_clash_mreq[2]=(type_id==3&&(ula_v3&7)==1)?ula_clash_mreq[4]:ula_clash[0];
-		ula_clash_mreq[1]=(type_id!=3||(ula_v3&7)!=1)?ula_clash_mreq[4]:ula_clash[0];
+		ula_clash_mreq[1]=(type_id<3||(ula_v3&7)!=1)?ula_clash_mreq[4]:ula_clash[0];
 		ula_clash_mreq[3]=((type_id==3&&(ula_v3&7)==3)||(type_id&&(ula_v2&1)))?ula_clash_mreq[4]:ula_clash[0];
 		if (type_id==3)
 			ula_clash_iorq[0]=ula_clash_iorq[1]=ula_clash_iorq[2]=ula_clash_iorq[3]=ula_clash_iorq[4]=ula_clash[0]; // IORQ doesn't clash at all on PLUS3 and PLUS2A!
@@ -773,7 +773,7 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 					b=psg_table_recv();
 				break;
 		}
-	else if ((p&255)==255&&type_id!=3) // NON-PLUS3: FLOATING BUS
+	else if ((p&255)==255&&type_id<3) // NON-PLUS3: FLOATING BUS
 		b=ula_temp; // not completely equivalent to z80_bus()
 	//else logprintf("%04X! ",p);
 	return b;
@@ -782,6 +782,10 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 #ifdef DEBUG
 #define z80_info(q) printf("\n%ULAs: 48k $%02X / 128k $%02X / PLUS3 $%02X\n",ula_v1,ula_v2,ula_v3) // prints a short hardware dump from the debugger
 #else
+int z80_debug_hard_tab(char *t)
+{
+	return sprintf(t,"    ");
+}
 int z80_debug_hard1(char *t,int q,BYTE i)
 {
 	return q?sprintf(t,":%02X",i):sprintf(t,":--");
@@ -799,7 +803,7 @@ void z80_debug_hard(int q,int x,int y)
 	t+=sprintf(t,"PSG:                ""%02X: ",psg_index);
 	for (i=0;i<8;++i)
 		t+=sprintf(t,"%02X",psg_table[i]);
-	t+=sprintf(t,"    ");
+	t+=z80_debug_hard_tab(t);
 	for (;i<16;++i)
 		t+=sprintf(t,"%02X",psg_table[i]);
 	t+=sprintf(t,"FDC:  %02X - %04X:%04X""    %c ",disc_parmtr[0],(WORD)disc_offset,(WORD)disc_length,48+disc_phase);
@@ -830,9 +834,9 @@ void z80_debug_hard(int q,int x,int y)
 // fine timings
 #define Z80_AUXILIARY int z80_aux1,z80_aux2 // making it local performs better :-)
 #define Z80_MREQ(t,w) Z80_MREQ_PAGE(t,z80_aux1=((w)>>14))
-#define Z80_MREQ_1X(t,w) do{ if (type_id!=3) { z80_aux1=(w)>>14; for (int z80_auxx=0;z80_auxx<t;++z80_auxx) Z80_MREQ_PAGE(1,z80_aux1); } else Z80_MREQ(t,w); }while(0)
+#define Z80_MREQ_1X(t,w) do{ if (type_id<3) { z80_aux1=(w)>>14; for (int z80_auxx=0;z80_auxx<t;++z80_auxx) Z80_MREQ_PAGE(1,z80_aux1); } else Z80_MREQ(t,w); }while(0)
 #define Z80_MREQ_NEXT(t) Z80_MREQ_PAGE(t,z80_aux1) // when the very last z80_aux1 is the same as the current one
-#define Z80_MREQ_1X_NEXT(t) do{ if (type_id!=3) for (int z80_auxx=0;z80_auxx<t;++z80_auxx) Z80_MREQ_PAGE(1,z80_aux1); else Z80_MREQ_NEXT(t); }while(0)
+#define Z80_MREQ_1X_NEXT(t) do{ if (type_id<3) for (int z80_auxx=0;z80_auxx<t;++z80_auxx) Z80_MREQ_PAGE(1,z80_aux1); else Z80_MREQ_NEXT(t); }while(0)
 #define Z80_IORQ(t,w) Z80_IORQ_PAGE(t,z80_aux1=((w)>>14))
 #define Z80_IORQ_1X(t,w) do{ z80_aux1=(w)>>14; for (int z80_auxx=0;z80_auxx<t;++z80_auxx) Z80_IORQ_PAGE(1,z80_aux1); }while(0) // Z80_IORQ is always ZERO on type_id==3
 #define Z80_IORQ_NEXT(t) Z80_IORQ_PAGE(t,z80_aux1) // when the very last z80_aux1 is the same as the current one
@@ -857,6 +861,7 @@ void z80_debug_hard(int q,int x,int y)
 #define Z80_DEBUG_LEN 16 // height of disassemblies, dumps and searches
 #define Z80_DEBUG_MMU 0 // forbid ROM/RAM toggling, it's useless on Spectrum
 #define Z80_DEBUG_EXT 0 // forbid EXTRA hardware debugging info pages
+#define Z80_DEBUG_SCAN (ula_limit_x*4) // amount of ticks per scanline
 #define z80_out0() 0 // hardware sets whether OUT (C) sends 0 or 255
 
 #include "cpcec-z8.h"
@@ -881,7 +886,7 @@ void all_reset(void) // reset everything!
 {
 	MEMZERO(autorun_kbd);
 	ula_reset();
-	if (type_id!=3)
+	if (type_id<3)
 		ula_v3_send(4); // disable PLUS3!
 	if (!type_id)
 		ula_v2_send(48); // enable 48K!
@@ -1235,96 +1240,96 @@ char snap_pattern[]="*.sna";
 
 char session_menudata[]=
 	"File\n"
-	"0x8300-Open any file..\tF3\n"
-	"0xC300-Load snapshot..\tShift+F3\n"
-	"0x0300-Load last snapshot\tCtrl+F3\n"
-	"0x8200-Save snapshot..\tF2\n"
-	"0x0200-Save last snapshot\tCtrl+F2\n"
+	"0x8300 Open any file..\tF3\n"
+	"0xC300 Load snapshot..\tShift+F3\n"
+	"0x0300 Load last snapshot\tCtrl+F3\n"
+	"0x8200 Save snapshot..\tF2\n"
+	"0x0200 Save last snapshot\tCtrl+F2\n"
 	"=\n"
-	"0x8700-Insert disc into A:..\tF7\n"
-	"0x8701-Create disc in A:..\n"
-	"0x0700-Remove disc from A:\tCtrl+F7\n"
-	"0x0701-Flip disc sides in A:\n"
-	"0xC700-Insert disc into B:..\tShift+F7\n"
-	"0xC701-Create disc in B:..\n"
-	"0x4700-Remove disc from B:\tCtrl+Shift+F7\n"
-	"0x4701-Flip disc sides in B:\n"
+	"0x8700 Insert disc into A:..\tF7\n"
+	"0x8701 Create disc in A:..\n"
+	"0x0700 Remove disc from A:\tCtrl+F7\n"
+	"0x0701 Flip disc sides in A:\n"
+	"0xC700 Insert disc into B:..\tShift+F7\n"
+	"0xC701 Create disc in B:..\n"
+	"0x4700 Remove disc from B:\tCtrl+Shift+F7\n"
+	"0x4701 Flip disc sides in B:\n"
 	"=\n"
-	"0x8800-Insert tape..\tF8\n"
-	"0xC800-Record tape..\tShift+F8\n"
-	"0x0800-Remove tape\tCtrl+F8\n"
-	"0x8801-Browse tape..\n"
-	"0x4800-Play tape\tCtrl+Shift+F8\n"
+	"0x8800 Insert tape..\tF8\n"
+	"0xC800 Record tape..\tShift+F8\n"
+	"0x0800 Remove tape\tCtrl+F8\n"
+	"0x8801 Browse tape..\n"
+	"0x4800 Play tape\tCtrl+Shift+F8\n"
 	"=\n"
-	"0x7F00-E_xit\n"
+	"0x7F00 E_xit\n"
 	"Edit\n"
-	"0x8500-Select firmware..\tF5\n"
-	"0x0500-Reset emulation\tCtrl+F5\n"
-	"0x8F00-Pause\tPause\n"
-	"0x8900-Debug\tF9\n"
+	"0x8500 Select firmware..\tF5\n"
+	"0x0500 Reset emulation\tCtrl+F5\n"
+	"0x8F00 Pause\tPause\n"
+	"0x8900 Debug\tF9\n"
 	"=\n"
-	"0x8600-Realtime\tF6\n"
-	"0x0601<100% CPU speed\n"
-	"0x0602=200% CPU speed\n"
-	"0x0603=300% CPU speed\n"
-	"0x0604>400% CPU speed\n"
-	//"0x0600-Raise Z80 speed\tCtrl+F6\n"
-	//"0x4600-Lower Z80 speed\tCtrl+Shift+F6\n"
+	"0x8600 Realtime\tF6\n"
+	"0x0601 100% CPU speed\n"
+	"0x0602 200% CPU speed\n"
+	"0x0603 300% CPU speed\n"
+	"0x0604 400% CPU speed\n"
+	//"0x0600 Raise Z80 speed\tCtrl+F6\n"
+	//"0x4600 Lower Z80 speed\tCtrl+Shift+F6\n"
 	"=\n"
-	"0x0900-Tape speed-up\tCtrl+F9\n"
-	"0x4900-Tape analysis\tCtrl+Shift+F9\n"
-	"0x0901-Tape auto-rewind\n"
-	"0x0400-Virtual joystick\tCtrl+F4\n"
+	"0x0900 Tape speed-up\tCtrl+F9\n"
+	"0x4900 Tape analysis\tCtrl+Shift+F9\n"
+	"0x0901 Tape auto-rewind\n"
+	"0x0400 Virtual joystick\tCtrl+F4\n"
 	"Settings\n"
-	"0x8501<Kempston joystick\n"
-	"0x8502=Sinclair 1 joystick\n"
-	"0x8503=Sinclair 2 joystick\n"
-	"0x8504=Cursor joystick\n"
-	"0x8505>QAOP+Space joystick\n"
+	"0x8501 Kempston joystick\n"
+	"0x8502 Sinclair 1 joystick\n"
+	"0x8503 Sinclair 2 joystick\n"
+	"0x8504 Cursor joystick\n"
+	"0x8505 QAOP+Space joystick\n"
 	"=\n"
-	"0x8510-Disc controller\n"
-	"0x8511-Memory contention\n"
-	"0x8512-ULA video noise\n"
-	"0x8513-Strict SNA files\n"
+	"0x8510 Disc controller\n"
+	"0x8511 Memory contention\n"
+	"0x8512 ULA video noise\n"
+	"0x8513 Strict SNA files\n"
 	"Video\n"
-	"0x8901-Onscreen status\tShift+F9\n"
-	"0x8904-Interpolation\n"
-	"0x8903-X-Masking\n"
-	"0x8902-Y-Masking\n"
+	"0x8901 Onscreen status\tShift+F9\n"
+	"0x8904 Interpolation\n"
+	"0x8903 X-Masking\n"
+	"0x8902 Y-Masking\n"
 	"=\n"
-	"0x8B01<Monochrome\n"
-	"0x8B02=Dark palette\n"
-	"0x8B03=Normal palette\n"
-	"0x8B04=Bright palette\n"
-	"0x8B05>Green screen\n"
-	//"0x8B00-Next palette\tF11\n"
-	//"0xCB00-Prev. palette\tShift+F11\n"
+	"0x8B01 Monochrome\n"
+	"0x8B02 Dark palette\n"
+	"0x8B03 Normal palette\n"
+	"0x8B04 Bright palette\n"
+	"0x8B05 Green screen\n"
+	//"0x8B00 Next palette\tF11\n"
+	//"0xCB00 Prev. palette\tShift+F11\n"
 	"=\n"
-	//"0x0B00-Next scanline\tCtrl+F11\n"
-	//"0x4B00-Prev. scanline\tCtrl+Shift+F11\n"
-	"0x0B01<All scanlines\n"
-	"0x0B02=Half scanlines\n"
-	"0x0B03=Simple interlace\n"
-	"0x0B04>Double interlace\n"
+	//"0x0B00 Next scanline\tCtrl+F11\n"
+	//"0x4B00 Prev. scanline\tCtrl+Shift+F11\n"
+	"0x0B01 All scanlines\n"
+	"0x0B02 Half scanlines\n"
+	"0x0B03 Simple interlace\n"
+	"0x0B04 Double interlace\n"
 	"=\n"
-	"0x9100-Raise frameskip\tNum.+\n"
-	"0x9200-Lower frameskip\tNum.-\n"
-	"0x9300-Full frameskip\tNum.*\n"
-	"0x9400-No frameskip\tNum./\n"
+	"0x9100 Raise frameskip\tNum.+\n"
+	"0x9200 Lower frameskip\tNum.-\n"
+	"0x9300 Full frameskip\tNum.*\n"
+	"0x9400 No frameskip\tNum./\n"
 	"=\n"
-	"0x8C00-Save screenshot\tF12\n"
+	"0x8C00 Save screenshot\tF12\n"
 	"Audio\n"
-	"0x8400-Sound\tF4\n"
-	"0x8401-No interpolation\n"
-	"0x8402-Light interpolation\n"
-	"0x8403-Middle interpolation\n"
-	"0x8404-Heavy interpolation\n"
+	"0x8400 Sound\tF4\n"
+	"0x8401 No interpolation\n"
+	"0x8402 Light interpolation\n"
+	"0x8403 Middle interpolation\n"
+	"0x8404 Heavy interpolation\n"
 	"=\n"
-	"0x0C00-Record WAV file\tCtrl+F12\n"
-	"0x4C00-Record YM file\tCtrl+Shift+F12\n"
+	"0x0C00 Record WAV file\tCtrl+F12\n"
+	"0x4C00 Record YM file\tCtrl+Shift+F12\n"
 	"Help\n"
-	"0x8100-Help..\tF1\n"
-	"0x0100-About..\tCtrl+F1\n"
+	"0x8100 Help..\tF1\n"
+	"0x0100 About..\tCtrl+F1\n"
 	"";
 
 void session_menuinfo(void)
@@ -1862,7 +1867,7 @@ int main(int argc,char *argv[])
 		{
 			if (!video_framecount&&onscreen_flag)
 			{
-				if (type_id!=3||disc_disabled)
+				if (type_id<3||disc_disabled)
 					onscreen_text(+1, -3, "--\t--", 0);
 				else
 				{

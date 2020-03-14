@@ -11,12 +11,12 @@
 ## Introducción ##
 
 CPCEC es un emulador de la familia de microordenadores domésticos Amstrad CPC
-(modelos 464, 664 y 6128) cuyo objetivo es ser fiel al hardware original y
-eficiente en sistemas modernos corrientes. Para ello ofrece una emulación
-fidedigna del microprocesador Z80 y reproduce el comportamiento de los chips de
-imagen CRTC 6845 y Gate Array, del chip de sonido PSG AY-3-8912, de los demás
-circuitos presentes en el hardware original, y de las unidades de cinta y disco
-que hacían posible la carga y ejecución del software existente.
+(modelos 464, 664, 6128, Plus y GX4000) cuyo objetivo es ser fiel al hardware
+original y eficiente en sistemas modernos corrientes. Para ello ofrece una
+emulación fidedigna del microprocesador Z80 y reproduce el comportamiento de los
+chips de imagen CRTC 6845 y Gate Array, del chip de sonido PSG AY-3-8912, de los
+demás circuitos presentes en el hardware original, y de las unidades de cinta y
+disco que hacían posible la carga y ejecución del software existente.
 
 El software y la documentación se proporcionan "tal cual" sin garantía alguna.
 El código fuente y los binarios de CPCEC siguen la licencia GNU General Public
@@ -87,7 +87,9 @@ C);
 * -m0 : iniciar la emulación como un Amstrad CPC 464;
 * -m1 : iniciar la emulación como un Amstrad CPC 664;
 * -m2 : iniciar la emulación como un Amstrad CPC 6128, por defecto;
-* -m3 : iniciar la emulación como un Amstrad Plus;
+* -m3 : iniciar la emulación como un Amstrad Plus (Plus 464, Plus 6128 y GX4000
+solamente se distinguen en la cantidad de RAM, el controlador de disco y el
+teclado);
 * -O : ocultar indicadores en pantalla (por defecto visibles);
 * -R : deshabilitar emulación en tiempo real (por defecto habilitada);
 * -S : deshabilitar sonido (por defecto habilitado si hay una tarjeta de
@@ -433,6 +435,21 @@ Casos avanzados:
 * Skateball (1988 Ubi Soft)
 * Turrican (1990 Probe / Rainbow Arts)
 
+Amstrad Plus:
+
+* Arnold 5 Diagnostic Rom Version 1.3 (1990 Amstrad)
+* Burnin' Rubber (1990 Ocean)
+* Navy Seals (1990 Ocean)
+* Copter 271 (1991 Loriciel)
+* Fire 'n Forget 2 (1990 Titus)
+* Dick Tracy (1991 Titus)
+* No Exit (1990 Coktel Vision)
+* Robocop 2 (1990 Ocean)
+* Switchblade (1990 Gremlin Graphics)
+* World of Sports (1990 Epyx)
+* 1st Plus Demo (1991 GPA)
+* Eerie Forest (2017 Logon System)
+
 Casos muy avanzados:
 
 * Turrican 2 (1991 Enigma Variations / Rainbow Arts)
@@ -599,3 +616,5 @@ bajo demanda.
 compatibilidad de los snapshots (WinAPE y ACE emplean bloques CPC+ ligeramente
 distintos) y eliminar algunos detalles superfluos. Los paquetes de firmware
 opcionales ahora incluyen los cartuchos correspondientes.
+- 20200314 -- ¡primer aniversario! parche menor para resolver problemas de las
+demos "CRTC3" y "Eerie Forest" para Amstrad Plus.

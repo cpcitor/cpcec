@@ -3983,6 +3983,9 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 			++onscreen_debug_mask; break;
 		case ' ': // SPACE: STEP INTO
 			z80_main(1),z80_debug_reset(); break;
+		case 160: // SHIFT+SPACE: STEP INTO (scanline)
+			session_signal&=~SESSION_SIGNAL_DEBUG,z80_main(Z80_DEBUG_SCAN),
+			session_signal|=SESSION_SIGNAL_DEBUG;z80_debug_reset(); break;
 		case 7: // SHIFT+TAB
 			z80_debug_panel=(z80_debug_panel-1)&3; break;
 		case 12: // TAB
@@ -4077,24 +4080,24 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 				#if Z80_DEBUG_MMU
 				"M\tToggle memory dump R/W map\n"
 				#else
-				"M\t-\n"
+				//"M\t-\n"
 				#endif
 				"N\tNext search\n"
 				"O\tOutput LENGTH bytes into FILE\n"
 				"P\tPrint disassembly of LENGTH bytes into FILE\n"
-				"Q\t-\n"
+				//"Q\t-\n"
 				"R\tRun to..\n"
 				"S\tSearch for STRING ($+string: hexadecimal)\n"
 				"T\tToggle breakpoint\n"
 				"U\tReturn from..\n"
 				"V\tToggle debugger appearance\n"
-				"W\t-\n"
+				//"W\t-\n"
 				#if Z80_DEBUG_EXT
 				"X\tShow more hardware info\n"
 				#else
-				"X\t-\n"
+				//"X\t-\n"
 				#endif
-				"Y\t-\n"
+				//"Y\t-\n"
 				"Z\tDelete all breakpoints\n"
 				"Space\tStep into..\n"
 				"Return\tStep over..\n"
