@@ -7,7 +7,7 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "CPCEC"
-#define MY_VERSION "20200314"//"1955"
+#define MY_VERSION "20200331"//"2255"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -281,7 +281,7 @@ BYTE plus_gate_counter; // step in the plus lock sequence, starting from 0 (wait
 BYTE plus_gate_enabled; // locked/unlocked state: UNLOCKED if byte after SEQUENCE is $CD, LOCKED otherwise!
 BYTE plus_gate_mcr; // RMR2 register, that modifies the behavior of the original MRER (gate_mcr)
 WORD plus_dma_regs[3][4]; // loop counter,loop address,pause counter,pause scaler
-BYTE plus_dma_count,plus_dma_delay,plus_bus; // DMA+IRQ handler timings
+BYTE plus_dma_count,plus_dma_delay; // DMA channel channel + timing
 //BYTE plus_dirtysprite; // tag sprite as "dirty"
 
 // the following block is a hacky way to implement the entire Plus configuration RAM page:
@@ -297,6 +297,7 @@ BYTE plus_bank[1<<14];
 #define plus_analog (&plus_bank[0x2808]) // 0x6808: analog joystick channels, effectively unused :-(
 #define plus_dmas (&plus_bank[0x2C00]) // 0x6C00: DMA channels' pointers and prescalers (WORD address,BYTE scaler,BYTE dummy)
 #define plus_dcsr plus_bank[0x2C0F] // 0x6C0F: DMA control/status register
+//#define plus_icsr z80_irq // ICSR is more than one bit, but Z80_IRQ is true on nonzero, so they can overlap
 
 #define plus_setup()
 
@@ -304,9 +305,9 @@ void plus_reset(void)
 {
 	MEMZERO(plus_bank);
 	MEMZERO(plus_dma_regs);
-	plus_bus=3; plus_dma_delay=plus_gate_mcr=plus_gate_enabled=plus_gate_counter=0; // default configuration values
+	plus_dma_delay=plus_gate_mcr=plus_gate_enabled=plus_gate_counter=0; // default configuration values
 	plus_analog[0]=plus_analog[1]=plus_analog[2]=plus_analog[3]=plus_analog[4]=plus_analog[6]=0x3F; // default analog values; WinAPE lets them stay ZERO
-	plus_ivr=0x71; // docs: "Interrupt Vector (Bit 0 set to 1 on reset)"; WinAPE uses 0x51 as the default state
+	plus_ivr=1; // docs: "Interrupt Vector (Bit 0 set to 1 on reset)"; WinAPE uses 0x51 as the default state
 }
 
 // 0xBC00-0xBF00: CRTC 6845 ----------------------------------------- //
@@ -334,7 +335,7 @@ BYTE crtc_limit_r3x,crtc_limit_r3y; // limits of `r3x` and `r3y`
 int video_vsync_min,video_vsync_max,crtc_hold=0; // VHOLD modifiers
 int crtc_limit_r2,crtc_prior_r2,crtc_giga,crtc_giga_count; // HSYNC Gigascreen modifiers
 
-#define crtc_set_line() plus_line=(crtc_count_r9&7)+(crtc_count_r4&63)*8 // Plus scanline counter
+#define crtc_line_set() crtc_line=(crtc_count_r9&7)+(crtc_count_r4&63)*8 // Plus scanline counter
 #define crtc_r4x_update() (crtc_limit_r4=crtc_table[4],crtc_limit_r5=crtc_table[5],crtc_limit_r9=crtc_table[9])
 // CRTC0,CRTC3,CRTC4: R8.b5b4=11b will display all border and no paper; CRTC1: R6=1 is immediate
 void crtc_r6x_update(void)
@@ -393,7 +394,7 @@ INLINE void crtc_table_send(BYTE i)
 			crtc_r6x_update();
 			break;
 		case 9:
-			if (crtc_type&5||crtc_count_r9==i||crtc_table[6]<crtc_table[4]||crtc_table[4]==crtc_table[7]+1)
+			if (crtc_type&5||crtc_count_r9==i||crtc_table[6]<crtc_table[4])
 			// kludges (?): "PINBALL DREAMS" (ingame) needs crtc_count_r9==i; "PINBALL DREAMS" (scroll) needs crtc_table[4]==crtc_table[7]+1; things such as !crtc_count_r3y break "OVERFLOW PREVIEW 3"!
 			// "ZAP'T'BALLS ADVANCED EDITION" (menu) needs crtc_table[6]<crtc_table[4]; REG6<REG4 ensures that both this title and "5KB3: NAYAD" work rather than just the former (<=) or the later (==)!
 				crtc_limit_r9=i;
@@ -493,16 +494,15 @@ INLINE void gate_table_send(BYTE i)
 	gate_table[video_clut_index=gate_index]=(i&=31);
 	if (!plus_enabled)
 	{
-		video_clut_sloww=video_clut_value=video_table[video_type][i];
-		if (video_pos_x&8)//(crtc_limit_r3x==3||crtc_limit_r3x==5)
+		video_clut_value=video_clut_sloww=video_table[video_type][i];
+		if (video_pos_x&8)
 			video_clut[video_clut_index]=video_clut_value; // fast update
 	}
 	else
 	{
 		int j=video_asic_table[i]; // set both colour and the PLUS ASIC palette
 		video_clut_sloww=(video_table[video_type][32+((j>>8)&15)]+video_table[video_type][48+((j>>4)&15)]+video_table[video_type][64+(j&15)]);
-		video_clut_value=(video_pos_x&8)//(crtc_limit_r3x==3||crtc_limit_r3x==5)
-			?video_clut_sloww:video_clut[video_clut_index]; // to avoid accidents
+		video_clut_value=(video_pos_x&8)?video_clut_sloww:video_clut[video_clut_index]; // to avoid accidents
 		plus_palette[gate_index*2+0]=j;
 		plus_palette[gate_index*2+1]=j>>8;
 	}
@@ -515,7 +515,7 @@ void gate_table_update(void) // precalculate palette following `video_type`
 	else
 		for (int i=0;i<32;++i)
 			video_clut[i]=video_table[video_type][32+(plus_palette[i*2+1]&15)]+video_table[video_type][48+(plus_palette[i*2+0]>>4)]+video_table[video_type][64+(plus_palette[i*2+0]&15)];
-	video_clut_sloww=video_clut_value=video_clut[video_clut_index=16];
+	video_clut_value=video_clut_sloww=video_clut[video_clut_index=gate_index];
 }
 
 BYTE gate_mode0[2][256],gate_mode1[4][256]; // lookup table for byte->pixel conversion
@@ -534,7 +534,7 @@ void gate_setup(void) // setup the Gate Array
 
 BYTE irq_delay; // 0 = INACTIVE, 1 = LINE 1, 2 = LINE 2
 BYTE irq_timer; // Winape: R52. Rises from 0 to 52 (IRQ!)
-BYTE z80_irq; // Winape: ICSR.B7
+BYTE z80_irq; // Winape: ICSR. B7 Raster (Gate Array / PRI), B6 DMA0, B5 DMA1, B4 DMA2 (top -- PRI DMA2 DMA1 DMA0 -- bottom)
 
 void gate_reset(void) // reset the Gate Array
 {
@@ -592,8 +592,8 @@ char DISC_NEW_SECTOR_IDS[]={0xC1,0xC6,0xC2,0xC7,0xC3,0xC8,0xC4,0xC9,0xC5};
 
 // CPU-HARDWARE-VIDEO-AUDIO INTERFACE =============================== //
 
-int crtc_32kb,crtc_zz_char,plus_line,plus_hardbase,plus_seesprites;
-BYTE crtc_zz_decoding,plus_soft,plus_fix_init,plus_fix_exit,plus_fix_last;
+int crtc_32kb,crtc_zz_char,crtc_line,gate_char,plus_hardbase;
+BYTE crtc_zz_decoding,plus_soft,plus_fix_init,plus_fix_last,plus_fix_exit;
 WORD crtc_char,crtc_past,crtc_bank; VIDEO_DATATYPE plus_fill;
 
 INLINE void video_main1sprites(void) // PLUS ASIC: Hardware Sprites relative to current plus_hardbase, video_target and video_pos_x
@@ -605,7 +605,7 @@ INLINE void video_main1sprites(void) // PLUS ASIC: Hardware Sprites relative to 
 		int zoomy,zoomx;
 		if (/*plus_dirtysprite!=i&&*/(zoomy=plus_sprite_xyz[i*8+4]&3)&&(zoomx=plus_sprite_xyz[i*8+4]&12))
 		{
-			int basey=(plus_line-(plus_sprite_xyz[i*8+2]+((signed char)plus_sprite_xyz[i*8+3])*256))>>--zoomy;
+			int basey=(crtc_line-(plus_sprite_xyz[i*8+2]+((signed char)plus_sprite_xyz[i*8+3])*256))>>--zoomy;
 			if (basey>=0&&basey<16)
 			{
 				int basex=(plus_sprite_xyz[i*8+0]+((signed char)plus_sprite_xyz[i*8+1])*256)-plus_soft;
@@ -662,10 +662,10 @@ INLINE void video_main1sprites(void) // PLUS ASIC: Hardware Sprites relative to 
 	if (plus_sscr&128)
 		for (int z=plus_soft;z<16;++z)
 			*video_source++=plus_fill;
-	plus_seesprites=0;
+	plus_hardbase=-1;
 }
 
-#define crtc_delay_r3x 6 // IMPERIAL MAHJONG (INGAME): 1,2,3: fail; 4,5: glitch; 6 good; SCROLL FACTORY (TITLE): 1,2,3,4: glitch; 5,6 good
+#define gate_limit_r3x 6 // IMPERIAL MAHJONG (INGAME): 1,2,3: fail; 4,5: glitch; 6 good; SCROLL FACTORY (TITLE): 1,2,3,4: glitch; 5,6 good
 INLINE void video_main1(int t) // render video output for `t` clock ticks
 {
 	while (t--)
@@ -674,22 +674,16 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 
 		if (!video_framecount&&(video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y))
 		{
-			if (plus_fix_last)
+			if (plus_fix_exit)
 			{
-				if (plus_seesprites)
+				video_pos_x-=plus_soft,video_target-=plus_soft,plus_fix_exit=0;
+				if (plus_hardbase>=0)
 					video_main1sprites();
-				video_pos_x-=plus_soft,video_target-=plus_soft,plus_fix_last=0;
 			}
-			plus_fix_last=plus_fix_exit,plus_fix_exit=0;
-			if (video_pos_x>VIDEO_OFFSET_X-16&&video_pos_x<VIDEO_OFFSET_X+VIDEO_PIXELS_X)
+			int x=video_pos_x+plus_fix_init;
+			if (x>VIDEO_OFFSET_X-16&&x<VIDEO_OFFSET_X+VIDEO_PIXELS_X)
 			{
-				if (plus_fix_init)
-				{
-					video_pos_x+=plus_fix_init;
-					do
-						*video_target++=video_clut[16];
-					while (--plus_fix_init);
-				}
+				video_pos_x+=16;
 				#define VIDEO_NEXT *video_target++ // "VIDEO_NEXT = VIDEO_NEXT = ..." generates invalid code on VS13 and slower code on TCC
 				switch (crtc_zz_decoding+crtc_lo_decoding)
 				{
@@ -749,20 +743,25 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 					{
 						VIDEO_DATATYPE p=video_clut[16];
 						VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
-						video_clut[video_clut_index]=video_clut_value; // slow update
 						VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
+						video_pos_x+=plus_fix_init;
+						while (plus_fix_init)
+							VIDEO_NEXT=p,--plus_fix_init;
+						video_clut[video_clut_index]=video_clut_value; // slow update
+						//p=video_clut[16];
 					} break;
 				}
 			}
 			else
 			{
-				video_pos_x+=plus_fix_init-plus_fix_last,video_target+=plus_fix_init-plus_fix_last,plus_fix_init=plus_fix_last=0;
-				video_target+=16,video_clut[video_clut_index]=video_clut_value; // slow update
+				video_pos_x+=16+plus_fix_init-(plus_fix_last?plus_soft:0),video_target+=16+plus_fix_init-(plus_fix_last?plus_soft:0),plus_fix_init=plus_fix_last=0;
+				video_clut[video_clut_index]=video_clut_value; // slow update
 			}
+			plus_fix_exit=plus_fix_last,plus_fix_last=0;
 		}
 		else
-			video_target+=16,video_clut[video_clut_index]=video_clut_value; // slow update
-		video_pos_x+=16;
+			video_pos_x+=16,video_target+=16,
+			video_clut[video_clut_index]=video_clut_value; // slow update
 		//plus_dirtysprite=-1;
 
 		// Gate Array delays rendering
@@ -770,64 +769,64 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 		crtc_zz_char=crtc_bank+crtc_char;
 		crtc_zz_decoding=crtc_hi_decoding;
 
-		// logical CRTC behavior
+		// logical CRTC+ASIC behavior
 
-		if (crtc_status&CRTC_STATUS_HSYNC)
-		{
-			crtc_count_r3x=(crtc_count_r3x+1)&15;
-			if (crtc_count_r3x==crtc_delay_r3x)
-				crtc_lo_decoding=gate_mcr&3; // SET BIT DEPTH (1/2)
-			else if (plus_dma_delay&&!--plus_dma_delay) // DMA CHANNELS
-				do
-					if (plus_dcsr&(1<<plus_dma_count))
+		if (!--plus_dma_delay) // DMA CHANNELS
+			do
+				if (plus_dcsr&(1<<plus_dma_count))
+				{
+					if (plus_dma_regs[plus_dma_count][2])
+					if (plus_dma_regs[plus_dma_count][3])
+						--plus_dma_regs[plus_dma_count][3]; // handle multiplier
+					else
 					{
-						if (plus_dma_regs[plus_dma_count][2])
-						if (plus_dma_regs[plus_dma_count][3])
-							--plus_dma_regs[plus_dma_count][3]; // handle multiplier
-						else
-						{
-							plus_dma_regs[plus_dma_count][3]=plus_dmas[4*plus_dma_count+2]; // reload multiplier
-							--plus_dma_regs[plus_dma_count][2]; // handle pause
-						}
-						if (!plus_dma_regs[plus_dma_count][2])
-						{
-							int i=plus_dmas[4*plus_dma_count+0]+(plus_dmas[4*plus_dma_count+1]<<8); // restore pointer
-							int n=mem_ram[i++]; n+=mem_ram[i++]<<8; // fetch command
-							switch(n>>12)
-							{
-								case 0: // 0RDD = LOAD R,DD
-									psg_table_sendto(n>>8,n&255); // load register
-									break;
-								case 1: // 1NNN = PAUSE NNN (0=no pause)
-									plus_dma_regs[plus_dma_count][2]=n&4095; // reload pause
-									break;
-								case 2: // 2NNN = REPEAT NNN (0=no repeat)
-									plus_dma_regs[plus_dma_count][0]=n&4095;
-									plus_dma_regs[plus_dma_count][1]=i;
-									break;
-								case 4: // 40NN = CONTROL BIT MASK: +01 = LOOP, +10 = INT, +20 = STOP
-									if (n&1)
-										if (plus_dma_regs[plus_dma_count][0])
-											--plus_dma_regs[plus_dma_count][0],i=plus_dma_regs[plus_dma_count][1];
-									if (n&16)
-										z80_irq=plus_dcsr|=(64>>plus_dma_count),plus_bus=plus_dma_count;
-									if (n&32)
-										plus_dcsr&=~(1<<plus_dma_count);
-									break;
-							}
-							plus_dmas[4*plus_dma_count+0]=i; plus_dmas[4*plus_dma_count+1]=i>>8; // store pointer
-						}
-						if (++plus_dma_count<3)
-							plus_dma_delay=1;
-						else
-							plus_bus=3; // non-DMA RASTER interruptions
-						break;
+						plus_dma_regs[plus_dma_count][3]=plus_dmas[4*plus_dma_count+2]; // reload multiplier
+						--plus_dma_regs[plus_dma_count][2]; // handle pause
 					}
-				while (++plus_dma_count<3);
+					if (!plus_dma_regs[plus_dma_count][2])
+					{
+						int i=plus_dmas[4*plus_dma_count+0]+(plus_dmas[4*plus_dma_count+1]<<8); // restore pointer
+						int n=mem_ram[i++]; n+=mem_ram[i++]<<8; // fetch command
+						switch(n>>12)
+						{
+							case 0: // 0RDD = LOAD R,DD
+								psg_table_sendto(n>>8,n&255); // load register
+								break;
+							case 1: // 1NNN = PAUSE NNN (0=no pause)
+								plus_dma_regs[plus_dma_count][2]=n&4095; // reload pause
+								break;
+							case 2: // 2NNN = REPEAT NNN (0=no repeat)
+								plus_dma_regs[plus_dma_count][0]=n&4095;
+								plus_dma_regs[plus_dma_count][1]=i;
+								break;
+							case 4: // 40NN = CONTROL BIT MASK: +01 = LOOP, +10 = INT, +20 = STOP
+								if (n&1)
+									if (plus_dma_regs[plus_dma_count][0])
+										--plus_dma_regs[plus_dma_count][0],i=plus_dma_regs[plus_dma_count][1];
+								if (n&16)
+									z80_irq|=(64>>plus_dma_count);
+								if (n&32)
+									plus_dcsr&=~(1<<plus_dma_count);
+								break;
+						}
+						plus_dmas[4*plus_dma_count+0]=i; plus_dmas[4*plus_dma_count+1]=i>>8; // store pointer
+					}
+					if (++plus_dma_count<3)
+						plus_dma_delay=1; // non-DMA RASTER interruptions
+					break;
+				}
+			while (++plus_dma_count<3);
+
+		BYTE crtc_zz_hsync; // must stick for a short while
+		if (crtc_zz_hsync=(crtc_status&CRTC_STATUS_HSYNC))
+		{
+			++crtc_count_r3x;
+			if (crtc_count_r3x==gate_limit_r3x)
+				crtc_lo_decoding=gate_mcr&3; // SET BIT DEPTH (1/2)
 			if (crtc_count_r3x==crtc_limit_r3x)
 			{
 				crtc_lo_decoding&=~4; // CFR. INFRA, "CAMEMBERT MEETING 4"
-				if (crtc_count_r3x<crtc_delay_r3x)
+				if (crtc_count_r3x<gate_limit_r3x)
 					crtc_lo_decoding=gate_mcr&3; // SET BIT DEPTH (2/2)
 				crtc_status&=~CRTC_STATUS_HSYNC; // HSYNC OFF
 				// event: GATE ARRAY updates TIMER on HSYNC fall
@@ -835,7 +834,7 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 				if ((irq_delay&&++irq_delay>2)||irq_timer>=52)
 				{
 					if (irq_timer>=32&&!plus_pri)
-						z80_irq=plus_dcsr|=128,plus_bus=3; // PLUS ASIC: DEFAULT TIMER
+						z80_irq|=128; // PLUS ASIC: DEFAULT TIMER INTERRUPT
 					irq_delay=irq_timer=0;
 				}
 			}
@@ -856,7 +855,7 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 			if (crtc_count_r9==crtc_limit_r9) // new line?
 			{
 				if (!(crtc_status&CRTC_STATUS_V_T_A))
-					crtc_count_r5=0;
+					crtc_count_r5=0; // reset!
 				if (crtc_count_r4==crtc_limit_r4) // new screen?
 					crtc_status|=CRTC_STATUS_V_T_A; // V_T_A ON!
 				if (crtc_hi_decoding&8)
@@ -865,21 +864,17 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 				crtc_count_r9=0;
 			}
 			else
-				crtc_count_r9=(crtc_count_r9+1)&31;
+				crtc_count_r9=(crtc_count_r9+1)&31; // increase!
 
-			if (crtc_count_r5==crtc_limit_r5)
+			if (crtc_count_r5==crtc_limit_r5&&crtc_status&CRTC_STATUS_V_T_A)
 			{
-				if (crtc_status&CRTC_STATUS_V_T_A)
-				{
-					crtc_status&=~CRTC_STATUS_V_T_A; // V_T_A OFF
-					crtc_hi_decoding&=~4; // VDISP ON!
-					crtc_count_r4=crtc_count_r5=crtc_count_r9=0;
-				}
+				crtc_status&=~CRTC_STATUS_V_T_A; // V_T_A OFF
+				crtc_hi_decoding&=~4; // VDISP ON!
+				crtc_count_r4=crtc_count_r5=crtc_count_r9=0; // reset!
 			}
-			//else
-				crtc_count_r5=(crtc_count_r5+1)&31;
+			crtc_count_r5=(crtc_count_r5+1)&31; // counter increases anyway!?
 
-			crtc_bank=(crtc_count_r9<<11)+(plus_sscr<<7)&0x3800;
+			crtc_bank=(crtc_count_r9<<11)+(plus_sscr<<7)&0x3800; // next scanline
 
 			if (!crtc_count_r4&&(crtc_type==1||!crtc_count_r9))
 				crtc_32kb=((~crtc_table[12])&0x0C)?0:0x4000,crtc_past=((crtc_table[12]&0x30)<<10)+(((crtc_table[12]&0x03)*256+crtc_table[13])<<1);
@@ -889,21 +884,22 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 				if (crtc_count_r4==crtc_table[6])
 					crtc_hi_decoding|=4; // VDISP OFF
 				if (crtc_count_r4==crtc_table[7])
+					(irq_timer=(crtc_count_r4==crtc_limit_r4&&!crtc_type)?0:irq_timer), // kludge for ONESCREEN COLONIES LEVEL 1 (CRTC 0)
 					irq_delay=1,crtc_count_r3y=0,crtc_status|=CRTC_STATUS_VSYNC; // VSYNC ON!
 			}
 			crtc_r4x_update();
 			crtc_count_r0=0;
 			crtc_char=crtc_past;
 			crtc_hi_decoding&=~8; // HDISP ON!
+			crtc_line_set();
+			if (plus_pri==crtc_line&&plus_pri*crtc_zz_hsync) // not crtc_status&CRTC_STATUS_HSYNC!
+				z80_irq|=128; // PLUS ASIC: PROGRAMMABLE RASTER INTERRUPT (late)
 			if (plus_enabled)
 			{
-				plus_seesprites=crtc_table[1]&&!(crtc_hi_decoding&4)&&
-				!(video_framecount)&&(video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y);
-				//if (!crtc_hi_decoding&&crtc_table[1])
-					plus_hardbase=video_pos_x+(plus_fix_init=plus_soft=(plus_sscr&15)),plus_fill=video_clut[16]; // remember for later usage
-				crtc_set_line();
-				if (plus_pri==plus_line&&plus_pri&&crtc_status&CRTC_STATUS_HSYNC)
-					z80_irq=plus_dcsr|=128; // PLUS ASIC: PROGRAMMABLE RASTER INTERRUPT
+				plus_hardbase=(crtc_table[1]&&!(crtc_hi_decoding&4)&&
+					!(video_framecount)&&(video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y))
+					?plus_fill=video_clut[16],video_pos_x+(plus_fix_init=plus_soft=(plus_sscr&15)) // remember for later usage
+					:-1;
 			}
 		}
 		else
@@ -925,8 +921,8 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 			}
 			if (plus_enabled)
 			{
-				plus_fix_exit=1;
-				if (plus_sssl==(BYTE)plus_line&&plus_sssl/*&&crtc_count_r9<8*/) // PLUS ASIC: Split Screen (notice the BYTE)
+				plus_fix_last=1;
+				if (plus_sssl==(BYTE)crtc_line&&plus_sssl/*&&crtc_count_r9<8*/) // PLUS ASIC: Split Screen (notice the BYTE)
 					crtc_32kb=0, // the SSSL doesn't support 32kb mode!
 					crtc_char=crtc_past=((plus_ssss[0]&0x30)<<10)+(((plus_ssss[0]&0x3)*256+plus_ssss[1])<<1);
 			}
@@ -936,19 +932,19 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 		{
 			if (crtc_table[0]<crtc_table[1]) // "CAMEMBERT MEETING 4": HIDE VERTICAL STRIPES!
 				crtc_lo_decoding|=4;
-			plus_dma_count=0,plus_dma_delay=plus_enabled?(plus_dcsr&1)+(plus_dcsr&2)/2+(plus_dcsr&4)/4+2:0,
-				crtc_count_r3x=0,crtc_status|=CRTC_STATUS_HSYNC; // HSYNC ON!
-			if (plus_pri==plus_line&&plus_pri/*&&crtc_count_r9<8*/)
-				z80_irq=plus_dcsr|=128; // PLUS ASIC: PROGRAMMABLE RASTER INTERRUPT
+			plus_dma_count=0,plus_dma_delay=plus_enabled?"\000\004\004\005\004\005\005\006"[plus_dcsr&7]-(crtc_limit_r3x&1):0;
+			crtc_count_r3x=0,crtc_status|=CRTC_STATUS_HSYNC; // HSYNC ON!
+			if (plus_pri==crtc_line&&plus_pri)
+				z80_irq|=128; // PLUS ASIC: PROGRAMMABLE RASTER INTERRUPT (early)
 		}
 
 		// physical SYNC behavior
 
 		if (((crtc_status&CRTC_STATUS_HSYNC)&&video_pos_x>=VIDEO_HSYNC_LO)||video_pos_x>=VIDEO_HSYNC_HI) // H.REFRESH?
 		{
-			if (plus_seesprites)
+			if (plus_hardbase>=0)
 				video_main1sprites();
-			plus_fix_exit=0; // restore soft scroll even if it's misaligned (Prehistorik 2)
+			plus_fix_last=0; // restore soft scroll even if it's misaligned (Prehistorik 2)
 			if (!video_framecount)
 				video_drawscanline();
 			video_pos_y+=2,video_target+=VIDEO_LENGTH_X*2-video_pos_x;
@@ -966,17 +962,15 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 	}
 }
 
-void video_main(int t) // render video output for `t` clock ticks AND handle one-step events
+void video_main(int t) // render video output for `t` clock ticks AND handle one-step events; t is always nonzero!
 {
-	if (t)
-	{
-		video_main1(1);
-		video_clut_value=video_clut_sloww; // slowest update
-		video_main1(--t);
-	}
+	video_main1(1);
+	video_clut[video_clut_index]=video_clut_value=video_clut_sloww; // slowest update
+	if (--t)
+		video_main1(t);
 }
 
-void audio_main(int t) // render audio output for `t` clock ticks
+void audio_main(int t) // render audio output for `t` clock ticks; t is always nonzero!
 {
 	AUDIO_DATATYPE *z=audio_target;
 	psg_main(t);
@@ -1056,11 +1050,38 @@ BYTE z80_r7; // low 7 bits of R, required by several `IN X,(Y)` operations
 int z80_turbo=0,z80_multi=1; // overclocking options
 
 // the CPC hands the Z80 a data bus value that is NOT constant on the PLUS ASIC
-#define z80_bus (plus_enabled?(plus_ivr&-8)+plus_bus*2:0xFF)
+#define z80_irq_bus (plus_enabled?(plus_ivr&-8)+(z80_irq&128?6:z80_irq&16?0:z80_irq&32?2:4):0xFF) // 6 = PRI, 0 = DMA2, 2 = DMA1, 4 = DMA0.
 // the CPC lacks special cases where RETI and RETN matter
 #define z80_retn()
-// the CPC obeys the Z80 IRQ ACK signal unless the PLUS ASIC IVR bit 0 is off
-#define z80_irq_ok() do{ /*if (!plus_enabled||plus_ivr&1)*/ z80_irq=0,irq_timer&=~32; }while(0) // ROBOCOP2 seems to expect that IRQs are always OK!
+// the CPC obeys the Z80 IRQ ACK signal unless the PLUS ASIC IVR bit 0 is off (?)
+void z80_irq_ack(void)
+{
+	if (z80_irq&128)
+		plus_dcsr|=128,z80_irq&=64+32+16;
+	else
+	{
+		plus_dcsr&=~128;
+		if (z80_irq&16) // DMA2?
+		{
+			plus_dcsr|=16;
+			if ((plus_ivr&1))
+				z80_irq&=64+32;
+		}
+		else if (z80_irq&32) // DMA1?
+		{
+			plus_dcsr|=32;
+			if ((plus_ivr&1))
+				z80_irq&=64;
+		}
+		else // DMA0!
+		{
+			plus_dcsr|=64;
+			if ((plus_ivr&1))
+				z80_irq=0;
+		}
+	}
+	irq_timer&=~32; // ROBOCOP2 seems to expect that IRQs are always OK!?
+}
 
 void z80_sync(int t) // the Z80 asks the hardware/video/audio to catch up
 {
@@ -1127,7 +1148,7 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 				{
 					gate_mcr=b&15; // 0x80-0xBF: MULTICONFIGURATION REGISTER
 					if (b&16)
-						z80_irq=irq_timer=0;
+						z80_irq&=~128,irq_timer=0;
 				}
 			}
 			else
@@ -1780,10 +1801,9 @@ void z80_trap(WORD p,BYTE b)
 					b&=15;
 				plus_bank[p-0x4000]=b;
 				p&=64-2; // select ink
-				video_clut_sloww=video_clut_value=video_table[video_type][32+plus_palette[p+1]]+video_table[video_type][48+(plus_palette[p]>>4)]+video_table[video_type][64+(plus_palette[p]&15)];
 				video_clut_index=p>>1; // keep ASIC and Gate Array from clashing
-				if (video_pos_x&8)//(plus_sscr&8)
-					video_clut[video_clut_index]=video_clut_value; // fast update
+				video_clut_sloww=video_table[video_type][32+plus_palette[p+1]]+video_table[video_type][48+(plus_palette[p]>>4)]+video_table[video_type][64+(plus_palette[p]&15)];
+				video_clut_value=(video_pos_x&8)?video_clut_sloww:video_clut[video_clut_index]; // fast update
 			}
 			break;
 		case 0x68:
@@ -1792,12 +1812,16 @@ void z80_trap(WORD p,BYTE b)
 			{
 				if (p==0x6800) // plus_pri, PROGRAMMABLE RASTER INTERRUPT
 				{
-					if (plus_line==b) // FIRE N FORGET 2 needs this!
-						z80_irq=plus_dcsr|=128; // SET!
-					else if (b) // PREHISTORIK 2 PLUS needs this!
-						if (!((plus_dcsr&=~128)&0x70)) // RESET!
-							z80_irq=0;
+					if (b!=plus_pri)
+					{
+						if (crtc_line==b) // FIRE N FORGET 2 needs this!
+							z80_irq|=128; // SET!
+						else if (b) // PREHISTORIK 2 PLUS needs this!
+							z80_irq&=64+32+16;
+					}
 				}
+				//else if (p==0x6804) // plus_sscr, SOFT SCROLL CONTROL REGISTER
+					//crtc_bank=(crtc_count_r9<<11)+(b<<7)&0x3800; // effect is NOT immediate!
 				plus_bank[p-0x4000]=b;
 			}
 			break;
@@ -1805,20 +1829,12 @@ void z80_trap(WORD p,BYTE b)
 			// DMA channel parameters
 			if (p<0x6C10)
 			{
-				if (p==0x6C0F)
+				if (p==0x6C0F) // plus_dcsr, DMA CONTROL/STATUS REGISTER
 				{
-					BYTE d=plus_dcsr; // plus_dcsr, DMA CONTROL/STATUS REGISTER
-					if (b&16)
-						d&=~16; // acknowledge DMA channel 2 IRQ
-					if (b&32)
-						d&=~32; // acknowledge DMA channel 1 IRQ
-					if (b&64)
-						d&=~64; // acknowledge DMA channel 0 IRQ
-					if (b&128)
-						d&=~128; // acknowledge Raster Interrupt
-					b=(d&~15)+(b&7);
-					if (!(d&0x70))
-						z80_irq=0; // no pending ACKs, no IRQ
+					z80_irq&=~(b&0x70);
+					//if (b&128)
+						//z80_irq=0;
+					b=((plus_dcsr&128)+(b&7))|z80_irq;
 				}
 				plus_bank[p-0x4000]=b;
 			}
@@ -1851,8 +1867,8 @@ void z80_debug_hard(int q,int x,int y)
 	int i; char s[16*20],*t;
 	if (q&1&&plus_enabled)
 	{
-		t=s+sprintf(s,"PLUS: MCR:%02X DCSR:%02X",plus_gate_mcr,plus_dcsr);
-		t+=sprintf(t,"    SSSL:%02X SCAN:%03X",plus_sssl,plus_line);
+		t=s+sprintf(s,"PLUS: M:%02X D:%02X I:%02X",plus_gate_mcr,plus_dcsr,z80_irq);
+		t+=sprintf(t,"    SSSL:%02X SCAN:%03X",plus_sssl,crtc_line);
 		t+=sprintf(t,"    SSSS:%04X PRI:%02X",(WORD)mgetii(plus_ssss),plus_pri);
 		t+=sprintf(t,"    SSCR:%02X IVR:%02X %c",plus_sscr,plus_ivr,plus_gate_enabled?'+':'@'+plus_gate_counter);
 		//t+=sprintf(t,"DMAS:               ");
@@ -2061,7 +2077,9 @@ int z80_ack_delay=0; // making it local adds overhead :-(
 #define Z80_IORQ_NEXT(t)
 #define Z80_IORQ_1X_NEXT(t)
 #define Z80_PEEK PEEK
-#define Z80_PEEK4 PEEK
+#define Z80_PEEK1 Z80_PEEK
+#define Z80_PEEK2 Z80_PEEK
+#define Z80_PEEKX PEEK
 #define Z80_POKE(x,a) do{ int z80_aux=x>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO,z80_trap(x,a),z80_t=0; else mmu_ram[z80_aux][x]=a; }while(0) // a single write
 #define Z80_POKE0 Z80_POKE
 #define Z80_POKE1(x,a) do{ --z80_t; int z80_aux=x>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO,z80_trap(x,a),z80_t=0; else mmu_ram[z80_aux][x]=a; }while(0) // 1st twin write
@@ -2150,8 +2168,7 @@ int bios_load(char *s) // load a cartridge file or a firmware ROM file. 0 OK, !0
 		}
 	else
 	{
-		fseek(f,0,SEEK_END);
-		i=ftell(f);
+		fseek(f,0,SEEK_END); i=ftell(f);
 		if (i>0x4000)
 			fseek(f,i-0x4000+0x0601,SEEK_SET),j=fgetmmmm(f);
 		if (i<=0x4000||i&0x3FFF||i>(1<<19)||j==0xD3FE37C9) // 32k,48k,64k...512k + !Spectrum TAPE LOAD fingerprint
@@ -2270,7 +2287,7 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 	header[0xB2]=irq_delay;
 	header[0xB3]=irq_timer;
 	header[0xB4]=!!z80_irq;
-	header[0xB5]=plus_dcsr; // equivalent here to ICSR
+	header[0xB5]=z80_irq; // compare plus_dcsr with ICSR
 	header[0xB6]=!(header[0xB7]=plus_enabled);
 	strcpy(&header[0xE0],caption_version);
 	fwrite1(header,256,f);
@@ -2419,7 +2436,8 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 		crtc_status=mgetii(&header[0xB0]);
 		irq_delay=header[0xB2];
 		irq_timer=header[0xB3];
-		z80_irq=!!header[0xB4];
+		//z80_irq=!!header[0xB4];
+		z80_irq=header[0xB5]&0xF0;
 	}
 	// handle memory dump (compressed or not) and PLUS ASIC from V3+, if required; careful, [6C][6B] isn't reliable!
 	int j=dumpsize?fread1(mem_ram,dumpsize<<10,f):0,q=0;
@@ -2480,7 +2498,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 	crtc_r3x_update();
 	crtc_r4x_update();
 	crtc_r6x_update();
-	crtc_set_line();
+	crtc_line_set();
 	crtc_prior_r2=crtc_limit_r2=crtc_table[2]; // delay Gigascreen
 	disc_track_update();
 	psg_all_update();

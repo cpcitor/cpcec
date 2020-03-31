@@ -807,7 +807,8 @@ void onscreen_inks(VIDEO_DATATYPE q0,VIDEO_DATATYPE q1) // paper + ink
 	onscreen_ink1=q1;
 }
 
-#define ONSCREEN_XY if ((x*=8)<0) x+=VIDEO_OFFSET_X+VIDEO_PIXELS_X; else x+=VIDEO_OFFSET_X; if ((y*=8)<0) y+=VIDEO_OFFSET_Y+VIDEO_PIXELS_Y; else y+=VIDEO_OFFSET_Y; \
+#define ONSCREEN_XY if ((x*=8)<0) x+=VIDEO_OFFSET_X+VIDEO_PIXELS_X; else x+=VIDEO_OFFSET_X; \
+	if ((y*=8)<0) y+=VIDEO_OFFSET_Y+VIDEO_PIXELS_Y; else y+=VIDEO_OFFSET_Y; \
 	int p=y*VIDEO_LENGTH_X+x,a=video_scanline==1?2:1; \
 	VIDEO_DATATYPE q0=q?onscreen_ink1:onscreen_ink0
 void onscreen_char(int x,int y,int z,int q) // draw a character

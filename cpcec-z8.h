@@ -1670,7 +1670,7 @@ WORD z80_debug_dump(char *t,WORD m)
 #define Z80_INC_R ++r7
 #define Z80_DEC_R --r7
 #define Z80_GET_R8 ((z80_ir.b.l&0x80)+(r7&0x7F)) // rebuild R from R7
-#define Z80_FETCH Z80_PEEK4(z80_pc.w)
+#define Z80_FETCH Z80_PEEKX(z80_pc.w)
 #define Z80_RD_PC Z80_PEEK(z80_pc.w)
 #define Z80_WZ_PC z80_wz=Z80_RD_PC; ++z80_pc.w; z80_wz+=Z80_RD_PC<<8 // read WZ from WORD[PC++]
 #define Z80_RD_HL BYTE b=Z80_PEEK(z80_hl.w)
@@ -1680,7 +1680,7 @@ WORD z80_debug_dump(char *t,WORD m)
 #define Z80_RD_WZ BYTE b=Z80_PEEK(z80_wz)
 #define Z80_WR_WZ Z80_POKE(z80_wz,b)
 #define Z80_LD2(x) x.l=Z80_RD_PC; ++z80_pc.w; x.h=Z80_RD_PC; ++z80_pc.w // load r16 from WORD[PC++]
-#define Z80_RD2(x) Z80_WZ_PC; ++z80_pc.w; x.l=Z80_PEEK(z80_wz); ++z80_wz; x.h=Z80_PEEK(z80_wz) // load r16 from [WZ]
+#define Z80_RD2(x) Z80_WZ_PC; ++z80_pc.w; x.l=Z80_PEEK1(z80_wz); ++z80_wz; x.h=Z80_PEEK2(z80_wz) // load r16 from [WZ]
 #define Z80_WR2(x) Z80_WZ_PC; ++z80_pc.w; Z80_POKE1(z80_wz,x.l); ++z80_wz; Z80_POKE2(z80_wz,x.h) // write r16 to [WZ]
 #define Z80_EXX2(x,y) do{ int w=x; x=y; y=w; }while(0)
 #define Z80_INC1(x) z80_af.b.l=(z80_af.b.l&0x01)+z80_flags_inc[++x]
@@ -1700,7 +1700,7 @@ WORD z80_debug_dump(char *t,WORD m)
 #define Z80_CP1(x) do{ DWORD z=z80_af.b.h-x; z80_af.b.l=(z80_flags_sgn[(BYTE)z]&0xD7)+z80_flags_sub[(z^z80_af.b.h^x)&511]+(x&0x28); }while(0) // unlike SUB, 1.- A intact, 2.- flags 3+5 from argument
 #define Z80_RET2 z80_wz=Z80_PEEK(z80_sp.w); ++z80_sp.w; z80_pc.w=z80_wz+=Z80_PEEK(z80_sp.w)<<8; if (++z80_sp.w>z80_break_stack) { z80_break_stack=0xFFFF; z80_debug_reset(); session_signal|=SESSION_SIGNAL_DEBUG; _t_=0; } // break!
 #define Z80_POP2(x) x.l=Z80_PEEK(z80_sp.w); ++z80_sp.w; x.h=Z80_PEEK(z80_sp.w); ++z80_sp.w
-#define Z80_PUSH2(x) --z80_sp.w; Z80_POKE0(z80_sp.w,x.h); --z80_sp.w; Z80_POKE0(z80_sp.w,x.l)
+#define Z80_PUSH2(x) --z80_sp.w; Z80_POKE1(z80_sp.w,x.h); --z80_sp.w; Z80_POKE2(z80_sp.w,x.l)
 #define Z80_CALL2 --z80_sp.w; Z80_POKE0(z80_sp.w,z80_pc.w>>8); --z80_sp.w; Z80_POKE0(z80_sp.w,z80_pc.w); z80_pc.w=z80_wz
 #define Z80_RLC1(x) x=(x<<1)+(x>>7); z80_af.b.l=z80_flags_xor[x]+(x&1)
 #define Z80_RRC1(x) x=(x>>1)+(x<<7); z80_af.b.l=z80_flags_xor[x]+((x>>7)&1)
@@ -1909,14 +1909,14 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 		}
 		#endif
 		Z80_INC_R; // "Timing Tests 48k Spectrum" requires this!
-		//if (z80_nmi) { z80_pc.w+=z80_halted; Z80_WAIT(7); Z80_STRIDE_X; Z80_STRIDE(0x3A); z80_wz=0x66; Z80_CALL2; z80_halted=z80_iff.b.l=z80_iff0=0; z80_nmi_ok(); } else
+		//if (z80_nmi) { z80_pc.w+=z80_halted; Z80_WAIT(7); Z80_STRIDE_X; Z80_STRIDE(0x3A); z80_wz=0x66; Z80_CALL2; z80_halted=z80_iff.b.l=z80_iff0=0; z80_nmi_ack(); } else
 		if (z80_irq*z80_iff0) // z80_iff0 can be 0 or 1, but z80_irq can be any value
 		{
 			z80_pc.w+=z80_halted; // skip active HALT!
 			if (z80_imd&2)
 			{
 				Z80_WAIT(7); Z80_STRIDE_X(0xE3); // IM 2 timing equals EX HL,(SP) : 19 T / 6 NOP
-				z80_wz=(z80_ir.b.h<<8)+z80_bus; // the address is built according to I and the bus
+				z80_wz=(z80_ir.b.h<<8)+z80_irq_bus; // the address is built according to I and the bus
 				z80_iff.b.l=Z80_PEEK(z80_wz);
 				++z80_wz;
 				z80_iff.b.h=Z80_PEEK(z80_wz);
@@ -1925,11 +1925,11 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 			else
 			{
 				Z80_WAIT(7); Z80_STRIDE_X(0x3A); // IM 0 and IM 1 timing equals LD A,($NNNN) : 13 T / 4 NOP (RST N is actually 11 T!)
-				z80_wz=(z80_imd&1)?0x38:(z80_bus&0x38); // IM 0 reads the address from the bus, `RST x` style; any opcode but a RST crashes anyway.
+				z80_wz=(z80_imd&1)?0x38:(z80_irq_bus&0x38); // IM 0 reads the address from the bus, `RST x` style; any opcode but a RST crashes anyway.
 			}
 			Z80_CALL2;
 			z80_halted=z80_iff.w=z80_iff0=0;
-			z80_irq_ok();
+			z80_irq_ack();
 		}
 		else
 		{
@@ -2859,10 +2859,10 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 				case 0xE3: // EX HL,(SP)
 					z80_wz=Z80_PEEK(z80_sp.w);
 					++z80_sp.w;
-					z80_wz+=Z80_PEEK4(z80_sp.w)<<8;
-					Z80_POKE0(z80_sp.w,z80_hl.b.h);
+					z80_wz+=Z80_PEEKX(z80_sp.w)<<8;
+					Z80_POKE1(z80_sp.w,z80_hl.b.h);
 					--z80_sp.w;
-					Z80_POKE0(z80_sp.w,z80_hl.b.l);
+					Z80_POKE2(z80_sp.w,z80_hl.b.l);
 					z80_hl.w=z80_wz;
 					Z80_IORQ_1X_NEXT(2);
 					Z80_STRIDE_1;
@@ -3315,10 +3315,10 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							case 0xE3: // EX IX,(SP)
 								z80_wz=Z80_PEEK(z80_sp.w);
 								++z80_sp.w;
-								z80_wz+=Z80_PEEK4(z80_sp.w)<<8;
-								Z80_POKE0(z80_sp.w,xy->b.h);
+								z80_wz+=Z80_PEEKX(z80_sp.w)<<8;
+								Z80_POKE1(z80_sp.w,xy->b.h);
 								--z80_sp.w;
-								Z80_POKE0(z80_sp.w,xy->b.l);
+								Z80_POKE2(z80_sp.w,xy->b.l);
 								xy->w=z80_wz;
 								Z80_IORQ_1X_NEXT(2);
 								Z80_STRIDE_1;

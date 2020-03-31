@@ -21,7 +21,7 @@
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN 1 // low dependencies
 #endif
-#include <windows.h> // KERNEL32.DLL, USER32.DLL and GDI32.DLL
+#include <windows.h> // KERNEL32.DLL, USER32.DLL, GDI32.DLL, WINMM.DLL, COMDLG32.DLL, SHELL32.DLL
 
 typedef union { unsigned short w; struct { unsigned char l,h; } b; } Z80W; // little endian: i86, x64, etc.
 //typedef union { unsigned short w; struct { unsigned char h,l; } b; } Z80W; // big endian: powerPC, ARM, etc.
@@ -670,13 +670,13 @@ INLINE void session_render(void) // update video, audio and timers
 	{
 		static BYTE s=1;
 		if (s!=audio_disabled)
-			if (s=!s) // silent mode needs cleanup
+			if (s=audio_disabled) // silent mode needs cleanup
 				memset(audio_memory,AUDIO_ZERO,sizeof(audio_memory));
 		static BYTE o=1;
 		if (o!=(session_fast|audio_disabled)) // sound needs higher priority, but only on realtime
 		{
-			SetPriorityClass(GetCurrentProcess(),(o=!o)?BELOW_NORMAL_PRIORITY_CLASS:ABOVE_NORMAL_PRIORITY_CLASS);
-			//SetThreadPriority(GetCurrentThread(),(o=!o)?THREAD_PRIORITY_NORMAL:THREAD_PRIORITY_ABOVE_NORMAL);
+			SetPriorityClass(GetCurrentProcess(),(o=session_fast|audio_disabled)?BELOW_NORMAL_PRIORITY_CLASS:ABOVE_NORMAL_PRIORITY_CLASS);
+			//SetThreadPriority(GetCurrentThread(),(o=session_fast|audio_disabled)?THREAD_PRIORITY_NORMAL:THREAD_PRIORITY_ABOVE_NORMAL);
 		}
 		if (waveOutGetPosition(session_wo,&session_mmtime,sizeof(MMTIME))) // MMSYSERR_NOERROR?
 			session_audio=0,audio_disabled=-1; // audio device is lost!

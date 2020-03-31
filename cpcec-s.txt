@@ -68,11 +68,11 @@ por ejemplo `-C -d -J` se abrevia `-CdJ`. En caso de duda, el parámetro `-h`
 muestra una breve explicación de las opciones disponibles.
 
 * -C : emular un monitor verde en lugar de (por defecto) uno a todo color;
-* -c0 : elegir el modo de scanlines medios;
-* -c1 : elegir el modo de scanlines normales (por defecto);
+* -c0 : elegir el modo de "scanlines" medios;
+* -c1 : elegir el modo de "scanlines" normales (por defecto);
 * -c2 : elegir el modo de entrelazado simple;
 * -c3 : elegir el modo de entrelazado doble;
-* -d : iniciar la emulación con el debugger activo (por defecto inactivo);
+* -d : iniciar la emulación con el "debugger" activo (por defecto inactivo);
 * -g0, -g1, -g2, -g3, -g4 : elegir el tipo de CRTC de 0 a 4 (tipo 1 por
 defecto);
 * -h : ayuda breve;
@@ -165,7 +165,7 @@ cartucho de formato CPR;
 * F8: insertar un fichero de cinta en el cassette virtual;
 * F8+Mays: empezar a grabar un fichero de cinta nuevo;
 * F8+Control: extraer la cinta del cassette virtual;
-* F9: habilitar el debugger (ver más adelante);
+* F9: habilitar el "debugger" (ver más adelante);
 * F9+Mays: mostrar (u ocultar) los indicadores en pantalla;
 * F9+Control: habilitar (o deshabilitar) la aceleración de cinta;
 * F9+Control+Mays: habilitar (o deshabilitar) el análisis de cinta;
@@ -173,7 +173,7 @@ cartucho de formato CPR;
 creciente;
 * F11+Mays: ídem en sentido contrario, recorriendo las gamas por orden
 decreciente;
-* F11+Control: cambiar el tipo de scanlines, de scanlines medios a entrelazado
+* F11+Control: cambiar el tipo de "scanlines", de scanlines medios a entrelazado
 doble;
 * F11+Control+Mays: ídem en sentido contrario, de entrelazado doble a scanlines
 medios;
@@ -188,10 +188,10 @@ Los ficheros BMP y WAV son los ficheros de imagen y sonido estándares homónimo
 Los ficheros YM son volcados del estado del chip de sonido, que por haber sido
 usado en más plataformas además de Amstrad CPC (Spectrum 128, MSX, Atari ST...)
 pueden ser emulados y reproducidos independientemente en programas terceros
-tales como STSOUND y AY-EMUL. Nótese que el modo de scanlines (opción que simula
-varios tipos de monitor) se refleja en las grabaciones igual que en la pantalla,
-y que cada modo tiene un impacto distinto en el rendimiento del programa: el
-modo normal consume más esfuerzo, y el entrelazado doble, menos.
+tales como STSOUND y AY-EMUL. Nótese que el modo de "scanlines" (opción que
+simula varios tipos de monitor) se refleja en las grabaciones igual que en la
+pantalla, y que cada modo tiene un impacto distinto en el rendimiento del
+programa: el modo normal consume más esfuerzo, y el entrelazado doble, menos.
 
 Los indicadores en pantalla muestran el estado de las unidades de disco (número
 de pista, actividad), la cinta (actividad) y el joystick.
@@ -271,6 +271,7 @@ los caracteres finos y gruesos;
 * Z elimina todos los breakpoints;
 * Espacio ("step into") ejecuta exactamente una instrucción y se detiene en la
 siguiente.
+	+ Mays+Espacio ejecuta instrucciones durante un "scanline" entero;
 * Return ("step over") reanuda la emulación hasta alcanzar la operación
 siguiente a la actual. Se comporta de una forma distinta a Espacio si la
 instrucción actual es una llamada;
@@ -618,3 +619,7 @@ distintos) y eliminar algunos detalles superfluos. Los paquetes de firmware
 opcionales ahora incluyen los cartuchos correspondientes.
 - 20200314 -- ¡primer aniversario! parche menor para resolver problemas de las
 demos "CRTC3" y "Eerie Forest" para Amstrad Plus.
+- 20200331 -- parche menor con mejoras adicionales para las demos de Plus
+"CRTC3" y "Synergy 4" (aunque los sprites de arriba a la izquierda desaparecen
+tras pocos segundos) y la nueva odren Mays+Espacio (saltar "scanline") al
+debugger.

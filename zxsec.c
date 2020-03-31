@@ -7,8 +7,25 @@
  // """"""  "    "   """"   """"""   """"    ----------------------- //
 
 #define MY_CAPTION "ZXSEC"
-#define MY_VERSION "20200314"//"1955"
+#define MY_VERSION "20200331"//"2255"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
+
+/* This notice applies to the source code of CPCEC and its binaries.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+Contact information: <mailto:cngsoft@gmail.com> */
 
 // The goal of this emulator isn't to provide a precise emulation of
 // the ZX Spectrum family (although it sure is desirable) but to show
@@ -486,11 +503,11 @@ BYTE z80_r7; // low 7 bits of R, required by several `IN X,(Y)` operations
 int z80_turbo=0,z80_multi=1; // overclocking options
 
 // the Spectrum hands the Z80 a mainly empty data bus value
-#define z80_bus 0xFF
+#define z80_irq_bus 0xFF
 // the Spectrum lacks special cases where RETI and RETN matter
 #define z80_retn()
 // the Spectrum doesn't obey the Z80 IRQ ACK signal
-#define z80_irq_ok()
+#define z80_irq_ack()
 
 void z80_sync(int t) // the Z80 asks the hardware/video/audio to catch up
 {
@@ -842,7 +859,9 @@ void z80_debug_hard(int q,int x,int y)
 #define Z80_IORQ_NEXT(t) Z80_IORQ_PAGE(t,z80_aux1) // when the very last z80_aux1 is the same as the current one
 #define Z80_IORQ_1X_NEXT(t) do{ for (int z80_auxx=0;z80_auxx<t;++z80_auxx) Z80_IORQ_PAGE(1,z80_aux1); }while(0) // Z80_IORQ is always ZERO on type_id==3
 #define Z80_PEEK(w) ( Z80_MREQ(3,w), mmu_rom[z80_aux1][w] )
-#define Z80_PEEK4(w) ( Z80_MREQ(4,w), mmu_rom[z80_aux1][w] )
+#define Z80_PEEK1 Z80_PEEK
+#define Z80_PEEK2 Z80_PEEK
+#define Z80_PEEKX(w) ( Z80_MREQ(4,w), mmu_rom[z80_aux1][w] )
 #define Z80_POKE(w,b) ( Z80_MREQ(3,w), mmu_ram[z80_aux1][w]=b ) // cfr. Z80_SYNC_IO
 #define Z80_POKE0 Z80_POKE
 #define Z80_POKE1 Z80_POKE
@@ -912,8 +931,7 @@ int bios_load(char *s) // load ROM. `s` path; 0 OK, !0 ERROR
 	if (!f)
 		return 1;
 	int i,j;
-	fseek(f,0,SEEK_END);
-	i=ftell(f);
+	fseek(f,0,SEEK_END); i=ftell(f);
 	if (i>=0x4000)
 		fseek(f,i-0x4000+0x0601,SEEK_SET),j=fgetmmmm(f);
 	if ((i!=(1<<14)&&i!=(1<<15)&&i!=(1<<16))||j!=0xD3FE37C9) // 16/32/64k + Spectrum TAPE LOAD fingerprint
@@ -1033,9 +1051,10 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 	if (!f)
 		return 1;
 	BYTE header[96]; int i,q;
-	fseek(f,0,SEEK_END); i=ftell(f); fseek(f,0,SEEK_SET); // snapshots are defined by filesizes, there's no magic number!
+	fseek(f,0,SEEK_END); i=ftell(f); // snapshots are defined by filesizes, there's no magic number!
 	if ((q=snap_is_a_sna(s))&&i!=49179&&i!=49183&&i!=131103&&i!=147487) // ||(!memcmp("MV - SNA",header,8) fails on TAP files, for example
 		return puff_fclose(f),1;
+	fseek(f,0,SEEK_SET);
 	ula_v3_send(4); // disable PLUS3!
 	ula_v2_send(48); // enable 48K!
 	if (!q) // Z80 format

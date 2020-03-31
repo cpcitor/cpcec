@@ -257,6 +257,7 @@ bold characters;
 * Z deletes all breakpoints;
 * Space ("step into") runs exactly one operation and stops on the next
 operation;
+	+ Shift+Space runs operations during one whole scanline;
 * Return ("step over") resumes the emulation until reaching the next operation.
 It behaves differently from SPACE if the current instruction performs a call;
 * Escape stops the debugger and resumes the emulation.
@@ -589,5 +590,8 @@ with the binaries instead of being delivered upon demand.
 compatibility (WinAPE and ACE employ slightly different CPC+ blocks) and
 removing several useless details. The optional firmware packages now include the
 corresponding cartridges.
-- 20200314 -- first anniversary! minor patch fixing issues in the demos "CRTC3"
-and "Eerie Forest" for Amstrad Plus.
+- 20200314 -- first anniversary! minor patch fixing issues in the Plus demos
+"CRTC3" and "Eerie Forest" for Amstrad Plus.
+- 20200331 -- minor patch providing further fixes for Plus demos "CRTC3" and
+"Synergy 4" (top left sprites disappear after few seconds, though) and adding
+the command Shift+Space (skip scanline) to the debugger.
