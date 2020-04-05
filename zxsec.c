@@ -7,7 +7,7 @@
  // """"""  "    "   """"   """"""   """"    ----------------------- //
 
 #define MY_CAPTION "ZXSEC"
-#define MY_VERSION "20200331"//"2255"
+#define MY_VERSION "20200404"//"1555"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -1303,7 +1303,7 @@ char session_menudata[]=
 	"0x8501 Kempston joystick\n"
 	"0x8502 Sinclair 1 joystick\n"
 	"0x8503 Sinclair 2 joystick\n"
-	"0x8504 Cursor joystick\n"
+	"0x8504 Cursor/AGF joystick\n"
 	"0x8505 QAOP+Space joystick\n"
 	"=\n"
 	"0x8510 Disc controller\n"
@@ -1753,7 +1753,9 @@ int main(int argc,char *argv[])
 							i=argc; // help!
 						break;
 					case 'C':
-						video_type=0;
+						video_type=(BYTE)(argv[i][j++]-'0');
+						if (video_type<0||video_type>4)
+							i=argc; // help!
 						break;
 					case 'd':
 						session_signal=SESSION_SIGNAL_DEBUG;
@@ -1830,16 +1832,16 @@ int main(int argc,char *argv[])
 			#endif
 			" [option..] [file..]\n"
 			"\t-cN\tscanline type (0..3)\n"
-			"\t-C\tmonochrome\n"
+			"\t-CN\tcolour palette (0..4)\n"
 			"\t-d\tdebug\n"
-			"\t-gN\tset joystick type (0..4)\n"
-			"\t-I\temulate Issue 2 ULA\n"
+			"\t-g0\tset Kempston joystick\n"
+			"\t-g1\tset Sinclair 1 joystick\n"
+			"\t-g2\tset Sinclair 2 joystick\n"
+			"\t-g3\tset Cursor/AGF joystick\n"
+			"\t-g4\tset QAOP+Space joystick\n"
+			//"\t-I\temulate Issue 2 ULA\n"
 			"\t-j\tenable joystick keys\n"
 			"\t-J\tdisable joystick\n"
-			""
-			""
-			""
-			""
 			"\t-K\tdisable 48K AY chip\n"
 			"\t-m0\tload 48K firmware\n"
 			"\t-m1\tload 128K firmware\n"
@@ -1866,7 +1868,7 @@ int main(int argc,char *argv[])
 	session_kbdsetup(kbd_map_xlt,length(kbd_map_xlt)/2);
 	video_target=&video_frame[video_pos_y*VIDEO_LENGTH_X+video_pos_y]; audio_target=audio_frame;
 	audio_disabled=!session_audio;
-	onscreen_inks(VIDEO1(0xAA0000),VIDEO1(0x55FF55));
+	video_clut_update(); onscreen_inks(VIDEO1(0xAA0000),VIDEO1(0x55FF55));
 	// it begins, "alea jacta est!"
 	while (!session_listen())
 	{

@@ -67,7 +67,11 @@ said parameters within the link. Options can be abridged in Unix style: for
 example `-C -d -J` becomes `-CdJ`. In case of doubt, the parameter `-h` shows a
 short help explaining the available options.
 
-* -C : emulate a monochrome screen instead of (by default) full colour;
+* -C0 : display the screen in black and white;
+* -C1 : display the screen in dark colour;
+* -C2 : display the screen in full colour (by default);
+* -C3 : display the screen in bright colour;
+* -C4 : display the screen in levels of green;
 * -c0 : set the scanline mode to half;
 * -c1 : set the scanline mode to whole (by default);
 * -c2 : set the interlace mode to simple;
@@ -595,3 +599,7 @@ corresponding cartridges.
 - 20200331 -- minor patch providing further fixes for Plus demos "CRTC3" and
 "Synergy 4" (top left sprites disappear after few seconds, though) and adding
 the command Shift+Space (skip scanline) to the debugger.
+- 20200404 -- minor patch fixing the DMA handler (all commands but LOAD can be
+combined together) and removing several "kludges" for PLUS but the one for
+"Black Sabbath". Thanks to Norecess464 for locating the bug. Also, -C now
+becomes -C0..4.

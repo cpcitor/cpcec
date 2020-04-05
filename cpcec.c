@@ -7,7 +7,7 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "CPCEC"
-#define MY_VERSION "20200331"//"2255"
+#define MY_VERSION "20200404"//"2355"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -368,7 +368,7 @@ INLINE void crtc_table_send(BYTE i)
 	if (!(crtc_index|crtc_type|i)) // CRTC0: REG0 CANNOT BE 0!
 		i=1;
 	int d;
-	if (crtc_index==2&&(d=crtc_table[crtc_index]-i)&&d>-3&&d<3)
+	if (crtc_index==2&&(d=crtc_table[crtc_index]-i)&&d>=-2&&d<=2)
 		++crtc_giga_count;
 	crtc_table[crtc_index]=i;
 	switch(crtc_index)
@@ -507,7 +507,7 @@ INLINE void gate_table_send(BYTE i)
 		plus_palette[gate_index*2+1]=j>>8;
 	}
 }
-void gate_table_update(void) // precalculate palette following `video_type`
+void video_clut_update(void) // precalculate palette following `video_type`
 {
 	if (!plus_enabled)
 		for (int i=0;i<17;++i)
@@ -541,7 +541,7 @@ void gate_reset(void) // reset the Gate Array
 	gate_mcr=gate_ram=gate_rom=gate_index=irq_timer=irq_delay=0;
 	gate_ram_dirty=64;
 	MEMZERO(gate_table);
-	gate_table_update();
+	video_clut_update();
 	mmu_update();
 }
 
@@ -787,19 +787,17 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 					{
 						int i=plus_dmas[4*plus_dma_count+0]+(plus_dmas[4*plus_dma_count+1]<<8); // restore pointer
 						int n=mem_ram[i++]; n+=mem_ram[i++]<<8; // fetch command
-						switch(n>>12)
+						int h=(n>>12)&7;
+						if (!h) // 0RDD = LOAD R,DD
+							psg_table_sendto(n>>8,n&255); // load register
+						else // warning! functions can build up!
 						{
-							case 0: // 0RDD = LOAD R,DD
-								psg_table_sendto(n>>8,n&255); // load register
-								break;
-							case 1: // 1NNN = PAUSE NNN (0=no pause)
+							if (h&1) // 1NNN = PAUSE NNN (0=no pause)
 								plus_dma_regs[plus_dma_count][2]=n&4095; // reload pause
-								break;
-							case 2: // 2NNN = REPEAT NNN (0=no repeat)
-								plus_dma_regs[plus_dma_count][0]=n&4095;
-								plus_dma_regs[plus_dma_count][1]=i;
-								break;
-							case 4: // 40NN = CONTROL BIT MASK: +01 = LOOP, +10 = INT, +20 = STOP
+							if (h&2) // 2NNN = REPEAT NNN (0=no repeat)
+								plus_dma_regs[plus_dma_count][0]=n&4095,plus_dma_regs[plus_dma_count][1]=i;
+							if (h&4) // 40NN = CONTROL BIT MASK: +01 = LOOP, +10 = INT, +20 = STOP
+							{
 								if (n&1)
 									if (plus_dma_regs[plus_dma_count][0])
 										--plus_dma_regs[plus_dma_count][0],i=plus_dma_regs[plus_dma_count][1];
@@ -807,7 +805,7 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 									z80_irq|=(64>>plus_dma_count);
 								if (n&32)
 									plus_dcsr&=~(1<<plus_dma_count);
-								break;
+							}
 						}
 						plus_dmas[4*plus_dma_count+0]=i; plus_dmas[4*plus_dma_count+1]=i>>8; // store pointer
 					}
@@ -884,8 +882,9 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 				if (crtc_count_r4==crtc_table[6])
 					crtc_hi_decoding|=4; // VDISP OFF
 				if (crtc_count_r4==crtc_table[7])
-					(irq_timer=(crtc_count_r4==crtc_limit_r4&&!crtc_type)?0:irq_timer), // kludge for ONESCREEN COLONIES LEVEL 1 (CRTC 0)
-					irq_delay=1,crtc_count_r3y=0,crtc_status|=CRTC_STATUS_VSYNC; // VSYNC ON!
+					irq_timer=(crtc_count_r4==crtc_limit_r4&&!crtc_type)?0:irq_timer, // kludge for ONESCREEN COLONIES
+					irq_delay=(crtc_count_r4==crtc_limit_r4&&plus_gate_enabled)?2:1, // kludge for BLACK SABBATH
+					crtc_count_r3y=0,crtc_status|=/*video_pos_y<video_vsync_min?0:*/CRTC_STATUS_VSYNC; // VSYNC ON!
 			}
 			crtc_r4x_update();
 			crtc_count_r0=0;
@@ -933,7 +932,7 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 			if (crtc_table[0]<crtc_table[1]) // "CAMEMBERT MEETING 4": HIDE VERTICAL STRIPES!
 				crtc_lo_decoding|=4;
 			plus_dma_count=0,plus_dma_delay=plus_enabled?"\000\004\004\005\004\005\005\006"[plus_dcsr&7]-(crtc_limit_r3x&1):0;
-			crtc_count_r3x=0,crtc_status|=CRTC_STATUS_HSYNC; // HSYNC ON!
+			crtc_count_r3x=0,crtc_status|=/*video_pos_x<VIDEO_HSYNC_LO?0:*/CRTC_STATUS_HSYNC; // HSYNC ON!
 			if (plus_pri==crtc_line&&plus_pri)
 				z80_irq|=128; // PLUS ASIC: PROGRAMMABLE RASTER INTERRUPT (early)
 		}
@@ -1056,31 +1055,30 @@ int z80_turbo=0,z80_multi=1; // overclocking options
 // the CPC obeys the Z80 IRQ ACK signal unless the PLUS ASIC IVR bit 0 is off (?)
 void z80_irq_ack(void)
 {
-	if (z80_irq&128)
-		plus_dcsr|=128,z80_irq&=64+32+16;
+	if (z80_irq&128) // OLD IRQ + PLUS PRI
+		plus_dcsr|=128,z80_irq&=64+32+16,irq_timer&=~32;
 	else
 	{
 		plus_dcsr&=~128;
 		if (z80_irq&16) // DMA2?
 		{
 			plus_dcsr|=16;
-			if ((plus_ivr&1))
+			if (!(plus_ivr&1))
 				z80_irq&=64+32;
 		}
 		else if (z80_irq&32) // DMA1?
 		{
 			plus_dcsr|=32;
-			if ((plus_ivr&1))
+			if (!(plus_ivr&1))
 				z80_irq&=64;
 		}
 		else // DMA0!
 		{
 			plus_dcsr|=64;
-			if ((plus_ivr&1))
+			if (!(plus_ivr&1))
 				z80_irq=0;
 		}
 	}
-	irq_timer&=~32; // ROBOCOP2 seems to expect that IRQs are always OK!?
 }
 
 void z80_sync(int t) // the Z80 asks the hardware/video/audio to catch up
@@ -1814,14 +1812,12 @@ void z80_trap(WORD p,BYTE b)
 				{
 					if (b!=plus_pri)
 					{
-						if (crtc_line==b) // FIRE N FORGET 2 needs this!
+						if (crtc_line==b&&crtc_status&CRTC_STATUS_HSYNC) // "FIRE N FORGET 2" needs this!
 							z80_irq|=128; // SET!
-						else if (b) // PREHISTORIK 2 PLUS needs this!
+						else if (b) // "EERIE FOREST" needs this!
 							z80_irq&=64+32+16;
 					}
 				}
-				//else if (p==0x6804) // plus_sscr, SOFT SCROLL CONTROL REGISTER
-					//crtc_bank=(crtc_count_r9<<11)+(b<<7)&0x3800; // effect is NOT immediate!
 				plus_bank[p-0x4000]=b;
 			}
 			break;
@@ -1832,8 +1828,12 @@ void z80_trap(WORD p,BYTE b)
 				if (p==0x6C0F) // plus_dcsr, DMA CONTROL/STATUS REGISTER
 				{
 					z80_irq&=~(b&0x70);
-					//if (b&128)
-						//z80_irq=0;
+					if (!(b&1))
+						z80_irq&=~16;
+					if (!(b&2))
+						z80_irq&=~32;
+					if (!(b&4))
+						z80_irq&=~64;
 					b=((plus_dcsr&128)+(b&7))|z80_irq;
 				}
 				plus_bank[p-0x4000]=b;
@@ -2494,7 +2494,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 			++gate_ram_depth;
 		gate_ram_dirty=gate_ram_kbyte[gate_ram_depth];
 	}
-	gate_table_update();
+	video_clut_update();
 	crtc_r3x_update();
 	crtc_r4x_update();
 	crtc_r6x_update();
@@ -2996,11 +2996,11 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 		case 0x8B04:
 		case 0x8B05:
 			video_type=(k&15)-1;
-			gate_table_update();
+			video_clut_update();
 			break;
 		case 0x8B00: // F11: PALETTE
 			video_type=(video_type+(session_shift?length(video_table)-1:1))%length(video_table);
-			gate_table_update();
+			video_clut_update();
 			break;
 		case 0x0B01:
 		case 0x0B02:
@@ -3114,7 +3114,9 @@ int main(int argc,char *argv[])
 							i=argc; // help!
 						break;
 					case 'C':
-						video_type=0;
+						video_type=(BYTE)(argv[i][j++]-'0');
+						if (video_type<0||video_type>4)
+							i=argc; // help!
 						break;
 					case 'd':
 						session_signal=SESSION_SIGNAL_DEBUG;
@@ -3191,7 +3193,7 @@ int main(int argc,char *argv[])
 			#endif
 			" [option..] [file..]\n"
 			"\t-cN\tscanline type (0..3)\n"
-			"\t-C\tmonochrome\n"
+			"\t-CN\tcolour palette (0..4)\n"
 			"\t-d\tdebug\n"
 			"\t-gN\tset CRTC type (0..4)\n"
 			"\t-j\tenable joystick keys\n"
@@ -3227,7 +3229,7 @@ int main(int argc,char *argv[])
 	session_kbdsetup(kbd_map_xlt,length(kbd_map_xlt)/2);
 	video_target=&video_frame[video_pos_y*VIDEO_LENGTH_X+video_pos_y]; audio_target=audio_frame;
 	audio_disabled=!session_audio;
-	onscreen_inks(VIDEO1(0xAA0000),VIDEO1(0x55FF55));
+	video_clut_update(); onscreen_inks(VIDEO1(0xAA0000),VIDEO1(0x55FF55));
 	// it begins, "alea jacta est!"
 	while (!session_listen())
 	{

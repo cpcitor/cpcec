@@ -67,7 +67,11 @@ contenga dichos parámetros. Las opciones pueden ser abreviadas al estilo Unix:
 por ejemplo `-C -d -J` se abrevia `-CdJ`. En caso de duda, el parámetro `-h`
 muestra una breve explicación de las opciones disponibles.
 
-* -C : emular un monitor verde en lugar de (por defecto) uno a todo color;
+* -C0 : mostrar la imagen en blanco y negro;
+* -C1 : mostrar la imagen a color oscuro;
+* -C2 : mostrar la imagen a todo color (por defecto);
+* -C3 : mostrar la imagen a color claro;
+* -C4 : mostrar la imagen en fósforo verde;
 * -c0 : elegir el modo de "scanlines" medios;
 * -c1 : elegir el modo de "scanlines" normales (por defecto);
 * -c2 : elegir el modo de entrelazado simple;
@@ -623,3 +627,7 @@ demos "CRTC3" y "Eerie Forest" para Amstrad Plus.
 "CRTC3" y "Synergy 4" (aunque los sprites de arriba a la izquierda desaparecen
 tras pocos segundos) y la nueva odren Mays+Espacio (saltar "scanline") al
 debugger.
+- 20200404 -- parche menor que corrige el controlador del DMA (todos los
+comandos menos LOAD pueden combinarse) y elimina varios "apaños" para PLUS menos
+el de "Black Sabbath". Gracias a Norecess464 por ubicar el error. Además -C pasa
+a ser -C0..4.

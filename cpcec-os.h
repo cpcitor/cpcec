@@ -552,7 +552,7 @@ INLINE int session_create(char *s) // create video+audio devices and set menu; 0
 			memset(&wfex,0,sizeof(wfex));
 			wfex.wFormatTag=WAVE_FORMAT_PCM;
 			wfex.wBitsPerSample=AUDIO_BITDEPTH, wfex.nBlockAlign=AUDIO_BITDEPTH/8*(wfex.nChannels=1);
-			wfex.nAvgBytesPerSec=AUDIO_BITDEPTH/8*(wfex.nSamplesPerSec=AUDIO_PLAYBACK);
+			wfex.nAvgBytesPerSec=wfex.nBlockAlign*(wfex.nSamplesPerSec=AUDIO_PLAYBACK);
 			if (session_audio=!waveOutOpen(&session_wo,WAVE_MAPPER,&wfex,0,0,0))
 			{
 				memset(&session_wh,0,sizeof(WAVEHDR));

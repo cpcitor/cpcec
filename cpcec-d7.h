@@ -166,9 +166,8 @@ int disc_track_load(int d,int c) // setup track `c` from drive `d`; 0 OK, !0 ERR
 		if (k>1)
 			fread(disc_track_table[d+4],1,256,disc[d]);
 	}
-	// old style discs lack the explicit size field and thus require calculation
-	for (k=d;k<8;k+=4)
-		if (disc_index_table[k][0]=='M')
+	if (disc_index_table[d][0]=='M') // old style discs lack the explicit size field and thus require calculation
+		for (k=d;k<8;k+=4) // check both sides
 			if ((i=128<<disc_track_table[k][0x14])<(128<<7)) // sector size is defined in the track header
 				for (j=0;j<disc_track_table[k][0x15];++j)
 					disc_track_table[k][j*8+0x1E]=i,disc_track_table[k][j*8+0x1F]=i>>8;
@@ -177,8 +176,7 @@ int disc_track_load(int d,int c) // setup track `c` from drive `d`; 0 OK, !0 ERR
 }
 void disc_track_update(void) // force reload of all tracks
 {
-	int i;
-	for (i=0;i<4;++i)
+	for (int i=0;i<4;++i)
 		disc_track_load(i,disc_track[i]);
 }
 
