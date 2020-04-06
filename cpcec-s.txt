@@ -629,5 +629,7 @@ tras pocos segundos) y la nueva odren Mays+Espacio (saltar "scanline") al
 debugger.
 - 20200404 -- parche menor que corrige el controlador del DMA (todos los
 comandos menos LOAD pueden combinarse) y elimina varios "apaños" para PLUS menos
-el de "Black Sabbath". Gracias a Norecess464 por ubicar el error. Además -C pasa
+el de "Black Sabbath": gracias a Norecess464 por ubicar el error. Además -C pasa
 a ser -C0..4.
+- 20200406 -- parche menor que añade multiplexación parcial de los sprites de
+PLUS: "Synergy 4" recupera los sprites de arriba a la izquierda.

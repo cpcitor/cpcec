@@ -7,7 +7,7 @@
  // """"""  "    "   """"   """"""   """"    ----------------------- //
 
 #define MY_CAPTION "ZXSEC"
-#define MY_VERSION "20200404"//"1555"
+#define MY_VERSION "20200406"//"1735"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -327,7 +327,7 @@ int ula_flash,ula_count_x=0,ula_count_y=0; // flash+horizontal+vertical counters
 int ula_pos_x=0,ula_pos_y=0,ula_scr_x,ula_scr_y=0; // screen bitmap counters
 int ula_snow_disabled=0,ula_snow_z,ula_snow_a;
 
-BYTE ula_clash_bitmap[32],ula_clash_attrib[32];
+BYTE ula_clash_attrib[32];//,ula_clash_bitmap[32];
 int ula_clash_alpha=0;
 
 INLINE void video_main(int t) // render video output for `t` clock ticks
@@ -341,10 +341,10 @@ INLINE void video_main(int t) // render video output for `t` clock ticks
 		if (irq_delay&&(irq_delay-=4)<=0)
 			z80_irq=irq_delay=0; // IRQs are lost after few microseconds
 		if (!ula_clash_alpha++)
-			MEMLOAD(ula_clash_bitmap,ula_bitmap),MEMLOAD(ula_clash_attrib,ula_attrib); // freeze the VRAM when "racing the beam" is over
+			MEMLOAD(ula_clash_attrib,ula_attrib);//,MEMLOAD(ula_clash_bitmap,ula_bitmap); // freeze the VRAM when "racing the beam" is over
 		int q;
 		if (q=(ula_pos_y>=0&&ula_pos_y<192&&ula_pos_x>=0&&ula_pos_x<32))
-			b=ula_clash_bitmap[ula_pos_x],a=ula_clash_attrib[ula_pos_x];
+			a=ula_clash_attrib[ula_pos_x],b=ula_bitmap[ula_pos_x];//b=ula_clash_bitmap[ula_pos_x];
 		else
 			a=0xFF; // border!
 		if (!video_framecount&&(video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y)&&(video_pos_x>VIDEO_OFFSET_X-16&&video_pos_x<VIDEO_OFFSET_X+VIDEO_PIXELS_X))

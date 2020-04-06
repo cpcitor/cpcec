@@ -7,7 +7,7 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "CPCEC"
-#define MY_VERSION "20200404"//"2355"
+#define MY_VERSION "20200406"//"1735"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -394,7 +394,7 @@ INLINE void crtc_table_send(BYTE i)
 			crtc_r6x_update();
 			break;
 		case 9:
-			if (crtc_type&5||crtc_count_r9==i||crtc_table[6]<crtc_table[4])
+			if (crtc_type&5||crtc_count_r9==i||crtc_table[6]<crtc_table[4]||crtc_table[4]==crtc_table[7]+1)
 			// kludges (?): "PINBALL DREAMS" (ingame) needs crtc_count_r9==i; "PINBALL DREAMS" (scroll) needs crtc_table[4]==crtc_table[7]+1; things such as !crtc_count_r3y break "OVERFLOW PREVIEW 3"!
 			// "ZAP'T'BALLS ADVANCED EDITION" (menu) needs crtc_table[6]<crtc_table[4]; REG6<REG4 ensures that both this title and "5KB3: NAYAD" work rather than just the former (<=) or the later (==)!
 				crtc_limit_r9=i;
@@ -595,6 +595,7 @@ char DISC_NEW_SECTOR_IDS[]={0xC1,0xC6,0xC2,0xC7,0xC3,0xC8,0xC4,0xC9,0xC5};
 int crtc_32kb,crtc_zz_char,crtc_line,gate_char,plus_hardbase;
 BYTE crtc_zz_decoding,plus_soft,plus_fix_init,plus_fix_last,plus_fix_exit;
 WORD crtc_char,crtc_past,crtc_bank; VIDEO_DATATYPE plus_fill;
+BYTE plus_sprite_xyz_backup[16*8]; // temporary copy of sprite coordinates
 
 INLINE void video_main1sprites(void) // PLUS ASIC: Hardware Sprites relative to current plus_hardbase, video_target and video_pos_x
 {
@@ -603,12 +604,12 @@ INLINE void video_main1sprites(void) // PLUS ASIC: Hardware Sprites relative to 
 	for (int i=15;i>=0;--i) // sprites follow a priority: #0 highest, #15 lowest
 	{
 		int zoomy,zoomx;
-		if (/*plus_dirtysprite!=i&&*/(zoomy=plus_sprite_xyz[i*8+4]&3)&&(zoomx=plus_sprite_xyz[i*8+4]&12))
+		if (/*plus_dirtysprite!=i&&*/(zoomy=plus_sprite_xyz_backup[i*8+4]&3)&&(zoomx=plus_sprite_xyz_backup[i*8+4]&12))
 		{
-			int basey=(crtc_line-(plus_sprite_xyz[i*8+2]+((signed char)plus_sprite_xyz[i*8+3])*256))>>--zoomy;
+			int basey=(crtc_line-(plus_sprite_xyz_backup[i*8+2]+((signed char)plus_sprite_xyz_backup[i*8+3])*256))>>--zoomy;
 			if (basey>=0&&basey<16)
 			{
-				int basex=(plus_sprite_xyz[i*8+0]+((signed char)plus_sprite_xyz[i*8+1])*256)-plus_soft;
+				int basex=(plus_sprite_xyz_backup[i*8+0]+((signed char)plus_sprite_xyz_backup[i*8+1])*256)-plus_soft;
 				if (basex<plus_span&&(basex+(16<<(zoomx=zoomx/4-1)))>0)
 				{
 					VIDEO_DATATYPE z,*tgt=video_source;
@@ -838,6 +839,8 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 			}
 		}
 
+		if (crtc_count_r0==20&&plus_hardbase>=0) // SYNERGY 4 loses the dancing top left sprites with +23
+			MEMLOAD(plus_sprite_xyz_backup,plus_sprite_xyz); // compare this with ZXSEC's `ula_clash_attrib`
 		if (crtc_count_r0==crtc_table[0]) // new scanline?
 		{
 			if (crtc_giga)
@@ -882,9 +885,13 @@ INLINE void video_main1(int t) // render video output for `t` clock ticks
 				if (crtc_count_r4==crtc_table[6])
 					crtc_hi_decoding|=4; // VDISP OFF
 				if (crtc_count_r4==crtc_table[7])
-					irq_timer=(crtc_count_r4==crtc_limit_r4&&!crtc_type)?0:irq_timer, // kludge for ONESCREEN COLONIES
-					irq_delay=(crtc_count_r4==crtc_limit_r4&&plus_gate_enabled)?2:1, // kludge for BLACK SABBATH
+				{
+					if (crtc_count_r4==crtc_limit_r4&&crtc_count_r4==4&&!crtc_type)
+						irq_timer=0; // kludge for ONESCREEN COLONIES
+					irq_delay=(crtc_count_r4==crtc_limit_r4&&crtc_count_r4==9&&plus_gate_enabled)
+						?2:1, // kludge for BLACK SABBATH
 					crtc_count_r3y=0,crtc_status|=/*video_pos_y<video_vsync_min?0:*/CRTC_STATUS_VSYNC; // VSYNC ON!
+				}
 			}
 			crtc_r4x_update();
 			crtc_count_r0=0;

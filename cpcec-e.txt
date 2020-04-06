@@ -601,5 +601,7 @@ corresponding cartridges.
 the command Shift+Space (skip scanline) to the debugger.
 - 20200404 -- minor patch fixing the DMA handler (all commands but LOAD can be
 combined together) and removing several "kludges" for PLUS but the one for
-"Black Sabbath". Thanks to Norecess464 for locating the bug. Also, -C now
+"Black Sabbath": thanks to Norecess464 for locating the bug. Also, -C now
 becomes -C0..4.
+- 20200406 -- minor patch adding partially multiplexed PLUS sprite rendering:
+"Synergy 4" recovers its top left sprites.
