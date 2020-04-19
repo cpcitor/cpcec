@@ -619,13 +619,13 @@ int puff_open(char *s) // opens a new ZIP archive; !0 ERROR
 	{
 		if (!memcmp(&session_scratch[i],"PK\005\006\000\000\000\000",8)) // expected header
 			if (!memcmp(&session_scratch[i+8],&session_scratch[i+10],2)) // file numbers match
-				if (i+22+session_scratch[i+20]+session_scratch[i+21]*256==k) // comment OK
+				if (i+22+session_scratch[i+20]+session_scratch[i+21]*256<=k) // comment OK
 					break;
 		--i;
 	}
 	if (i<0)
 		return puff_close(),1;
-	puff_diff=l-mgetiiii(&session_scratch[i+12])-(puff_next=mgetiiii(&session_scratch[i+16]))-22;
+	puff_diff=l-mgetiiii(&session_scratch[i+12])-(puff_next=mgetiiii(&session_scratch[i+16]))-k+i; // actual archive header offset
 	return 0;
 }
 int puff_head(void) // reads a ZIP file header, if any; !0 ERROR
@@ -922,23 +922,23 @@ void onscreen_debug(void) // rewrite debug texts
 			else
 				q1=qq0,q0=qq1;
 			z=(y*DEBUG_LENGTH_X*DEBUG_LENGTH_Z+x)*8;
-			int yy,w;
-			for (yy=(8-DEBUG_LENGTH_Z-1)/2;yy<0;++yy)
+			int yy=(8-DEBUG_LENGTH_Z-1)/2;
+			for (;yy<0;++yy)
 			{
-				for (w=0;w<8;++w)
+				for (int w=0;w<8;++w)
 					debug_frame[z++]=q0;
 				z+=(DEBUG_LENGTH_X-1)*8;
 			}
 			for (;yy<8;++yy)
 			{
 				unsigned char bb=*zz++;
-				for (w=128;w;w>>=1)
+				for (int w=128;w;w>>=1)
 					debug_frame[z++]=(w&bb)?q1:q0;
 				z+=(DEBUG_LENGTH_X-1)*8;
 			}
 			for (;yy<(8+DEBUG_LENGTH_Z)/2;++yy)
 			{
-				for (w=0;w<8;++w)
+				for (int w=0;w<8;++w)
 					debug_frame[z++]=q0;
 				z+=(DEBUG_LENGTH_X-1)*8;
 			}

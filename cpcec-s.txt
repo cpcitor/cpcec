@@ -633,3 +633,15 @@ el de "Black Sabbath": gracias a Norecess464 por ubicar el error. Además -C pas
 a ser -C0..4.
 - 20200406 -- parche menor que añade multiplexación parcial de los sprites de
 PLUS: "Synergy 4" recupera los sprites de arriba a la izquierda.
+- 20200418 -- parche menor con mejoras en el contador de interrupciones (que
+empieza con el primer final de HSYNC después del principio de VSYNC -"Onescreen
+Colonies"- excepto en PLUS donde puede empezar cuando el principio de VSYNC
+coincide con el final de HSYNC -"Black Sabbath"-), los puertos de hardware (el
+puerto A del PIO devuelve 0 al leerlo en modo de escritura excepto en PLUS donde
+devuelve 255 -"Tire au Flan"-, el puerto B debe activar VSYNC en medio de la
+pantalla si el CRTC se lo pide -"Chany Dream End Megademo"- y el intervalo de
+bytes 0-191 del Gate Array necesita una lógica de puertos más rígida -"Overflow
+Preview 3"-) y en el debugger: los parámetros del desensamblado están alineados
+verticalmente y el panel de información de hardware está alineado al volcado
+ASCII de memoria. También corrige un error en el buscador de cabeceras de
+archivos ZIP.

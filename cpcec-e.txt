@@ -605,3 +605,13 @@ combined together) and removing several "kludges" for PLUS but the one for
 becomes -C0..4.
 - 20200406 -- minor patch adding partially multiplexed PLUS sprite rendering:
 "Synergy 4" recovers its top left sprites.
+- 20200418 -- minor patch with improvements in the interrupt counter (it starts
+with the first HSYNC fall after the VSYNC rise -"Onescreen Colonies"- unless on
+PLUS where it can start when the VSYNC rise happens together with the HSYNC
+fall: "Black Sabbath"), the hardware ports (PIO port A returns zero when reading
+it in write mode unless on PLUS where it returns 255 -"Tire au Flan"-, PIO port
+B must set VSYNC in the middle of the screen when the CRTC requests it -"Chany
+Dream End Megademo"- and the Gate Array's 0-191 byte range requires a more rigid
+port logic -"Overflow Preview 3"-) and the debugger: disassembly parameters are
+vertically aligned and the hardware information panel is aligned to the ASCII
+memory dump. Fixed a bug in the ZIP archive header seeker, too.

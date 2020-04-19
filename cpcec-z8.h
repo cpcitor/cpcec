@@ -142,24 +142,24 @@ enum { // list of opcodes and parameters used by the dictionnaries (cfr. infra)
 };
 const char z80_dasm_lex[][5]= // SAME ORDER AS ABOVE ENUM!!
 {
-	""	,	"*NOP"	,	"*NOP"	,	"ADC"	,
-	"ADD"	,	"AND"	,	"BIT"	,	"CALL"	,
-	"CCF"	,	"CP"	,	"CPD"	,	"CPDR"	,
-	"CPI"	,	"CPIR"	,	"CPL"	,	"DAA"	,
-	"DEC"	,	"DI"	,	"DJNZ"	,	"EI"	,
-	"EX"	,	"EXX"	,	"HALT"	,	"IM"	,
-	"IN"	,	"INC"	,	"IND"	,	"INDR"	,
-	"INI"	,	"INIR"	,	"JP"	,	"JR"	,
-	"LD"	,	"LDD"	,	"LDDR"	,	"LDI"	,
-	"LDIR"	,	"NEG"	,	"NOP"	,	"OR"	,
-	"OTDR"	,	"OTIR"	,	"OUT"	,	"OUTD"	,
-	"OUTI"	,	"POP"	,	"PUSH"	,	"RES"	,
-	"RET"	,	"RETI"	,	"RETN"	,	"RL"	,
-	"RLA"	,	"RLC"	,	"RLCA"	,	"RLD"	,
-	"RR"	,	"RRA"	,	"RRC"	,	"RRCA"	,
-	"RRD"	,	"RST"	,	"SBC"	,	"SCF"	,
-	"SET"	,	"SLA"	,	"SLL"	,	"SRA"	,
-	"SRL"	,	"SUB"	,	"XOR"	,	"\001"	,
+	""	,	"*NOP"	,	"*NOP"	,	"ADC "	,
+	"ADD "	,	"AND "	,	"BIT "	,	"CALL"	,
+	"CCF "	,	"CP  "	,	"CPD "	,	"CPDR"	,
+	"CPI "	,	"CPIR"	,	"CPL "	,	"DAA "	,
+	"DEC "	,	"DI  "	,	"DJNZ"	,	"EI  "	,
+	"EX  "	,	"EXX "	,	"HALT"	,	"IM  "	,
+	"IN  "	,	"INC "	,	"IND "	,	"INDR"	,
+	"INI "	,	"INIR"	,	"JP  "	,	"JR  "	,
+	"LD  "	,	"LDD "	,	"LDDR"	,	"LDI "	,
+	"LDIR"	,	"NEG "	,	"NOP "	,	"OR  "	,
+	"OTDR"	,	"OTIR"	,	"OUT "	,	"OUTD"	,
+	"OUTI"	,	"POP "	,	"PUSH"	,	"RES "	,
+	"RET "	,	"RETI"	,	"RETN"	,	"RL  "	,
+	"RLA "	,	"RLC "	,	"RLCA"	,	"RLD "	,
+	"RR  "	,	"RRA "	,	"RRC "	,	"RRCA"	,
+	"RRD "	,	"RST "	,	"SBC "	,	"SCF "	,
+	"SET "	,	"SLA "	,	"SLL "	,	"SRA "	,
+	"SRL "	,	"SUB "	,	"XOR "	,	"\001"	,
 	"\002"	,	"\003"	,	"\004"	,	"(BC)"	,
 	"(C)"	,	"(DE)"	,	"(HL)"	,	"\005"	,
 	"\006"	,	"(SP)"	,	"A"	,	"AF"	,
@@ -1551,7 +1551,7 @@ Z80_DASM_DICT z80_dasm_table_xycb= // IX and IY are handled together
 
 WORD z80_dasm(char *r,WORD m) // disassembles instruction at address `m` into string `r`: returns next instruction's address
 {
-	char *t=&r[15]; // format: "0123: DD364567 LD (IX+$45),$67"
+	char *t=&r[15]; // format: "0123: DD364567 LD   (IX+$45),$67"
 	Z80_DASM_DICT *z80_dasm_table_o=&z80_dasm_table;
 	BYTE i,o,xy,z; WORD p,n=m;
 	switch (o=(PEEK(m))) // detect prefixes and select disassembly table
@@ -1698,7 +1698,7 @@ WORD z80_debug_dump(char *t,WORD m)
 #define Z80_XOR1(x) z80_af.b.l=z80_flags_xor[z80_af.b.h=z80_af.b.h^(x)]
 #define Z80_OR1(x) z80_af.b.l=z80_flags_xor[z80_af.b.h=z80_af.b.h|(x)]
 #define Z80_CP1(x) do{ DWORD z=z80_af.b.h-x; z80_af.b.l=(z80_flags_sgn[(BYTE)z]&0xD7)+z80_flags_sub[(z^z80_af.b.h^x)&511]+(x&0x28); }while(0) // unlike SUB, 1.- A intact, 2.- flags 3+5 from argument
-#define Z80_RET2 z80_wz=Z80_PEEK(z80_sp.w); ++z80_sp.w; z80_pc.w=z80_wz+=Z80_PEEK(z80_sp.w)<<8; if (++z80_sp.w>z80_break_stack) { z80_break_stack=0xFFFF; z80_debug_reset(); session_signal|=SESSION_SIGNAL_DEBUG; _t_=0; } // break!
+#define Z80_RET2 z80_wz=Z80_PEEK(z80_sp.w); ++z80_sp.w; z80_pc.w=z80_wz+=Z80_PEEK(z80_sp.w)<<8; if (++z80_sp.w>z80_break_stack) { z80_break_stack=0xFFFF; z80_debug_reset(); session_signal|=SESSION_SIGNAL_DEBUG; _t_=0; } // throw!
 #define Z80_POP2(x) x.l=Z80_PEEK(z80_sp.w); ++z80_sp.w; x.h=Z80_PEEK(z80_sp.w); ++z80_sp.w
 #define Z80_PUSH2(x) --z80_sp.w; Z80_POKE1(z80_sp.w,x.h); --z80_sp.w; Z80_POKE2(z80_sp.w,x.l)
 #define Z80_CALL2 --z80_sp.w; Z80_POKE0(z80_sp.w,z80_pc.w>>8); --z80_sp.w; Z80_POKE0(z80_sp.w,z80_pc.w); z80_pc.w=z80_wz
@@ -3744,7 +3744,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 			}
 			else
 			{
-				z80_debug_reset(); session_signal|=SESSION_SIGNAL_DEBUG; _t_=0; // break!
+				z80_debug_reset(); session_signal|=SESSION_SIGNAL_DEBUG; _t_=0; // throw!
 			}
 		}
 		#endif
@@ -3860,8 +3860,8 @@ void z80_debug_show(void) // redraw debug screen
 	//for (y=0;y<DEBUG_LENGTH_X;++y) debug_locate(y,16),*debug_output=160;//'-';
 	//for (y=0;y<DEBUG_LENGTH_Y;++y) debug_locate(-10,y),*debug_output=160;//'|';
 	//debug_locate(-10,16),*debug_output='+';
-	z80_debug_hard(z80_debug_page,-9-2-20,0);
-	debug_locate(-9-2-18,16-1); debug_prints("press H for help");
+	z80_debug_hard(z80_debug_page,-9-1-20,0);
+	debug_locate(-9-1-20,16-1); debug_printi("%03XX:",video_pos_x&0xFFF); debug_printi("%03XY -- H: help",video_pos_y&0xFFF);
 	onscreen_debug();
 }
 
@@ -3984,8 +3984,9 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 		case ' ': // SPACE: STEP INTO
 			z80_main(1),z80_debug_reset(); break;
 		case 160: // SHIFT+SPACE: STEP INTO (scanline)
-			session_signal&=~SESSION_SIGNAL_DEBUG,z80_main(Z80_DEBUG_SCAN),
-			session_signal|=SESSION_SIGNAL_DEBUG;z80_debug_reset(); break;
+			session_signal&=~SESSION_SIGNAL_DEBUG;
+			k=video_pos_y; do z80_main(1); while (k==video_pos_y);
+			session_signal|=SESSION_SIGNAL_DEBUG,z80_debug_reset(); break;
 		case 7: // SHIFT+TAB
 			z80_debug_panel=(z80_debug_panel-1)&3; break;
 		case 12: // TAB
@@ -4035,7 +4036,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 				char *s; FILE *f;
 				session_parmtr[0]=0;
 				if (session_input(session_parmtr,"Output length")>=0)
-					if ((i=z80_debug_hexs(session_parmtr))>0)
+					if (i=(WORD)z80_debug_hexs(session_parmtr))
 						if (s=session_newfile("","*","Output file"))
 							if (f=fopen(s,"wb"))
 							{
@@ -4052,7 +4053,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 				char *s; FILE *f;
 				session_parmtr[0]=0;
 				if (session_input(session_parmtr,"Disassembly length")>=0)
-					if ((i=z80_debug_hexs(session_parmtr))>0)
+					if (i=(WORD)z80_debug_hexs(session_parmtr))
 						if (s=session_newfile("","*.TXT","Print disassembly"))
 							if (f=fopen(s,"w"))
 							{
@@ -4166,8 +4167,8 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 						}
 						break;
 					case 'K': // CLOSE LOG
-						z80_debug_close(); // *!*
-						break;
+						z80_debug_close();
+						//break;
 					default: k=0; break;
 				}
 				if (i&&k>0&&k<32) // cursors may need to move up or down

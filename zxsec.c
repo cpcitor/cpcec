@@ -7,7 +7,7 @@
  // """"""  "    "   """"   """"""   """"    ----------------------- //
 
 #define MY_CAPTION "ZXSEC"
-#define MY_VERSION "20200406"//"1735"
+#define MY_VERSION "20200418"//"2355"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -330,7 +330,7 @@ int ula_snow_disabled=0,ula_snow_z,ula_snow_a;
 BYTE ula_clash_attrib[32];//,ula_clash_bitmap[32];
 int ula_clash_alpha=0;
 
-INLINE void video_main(int t) // render video output for `t` clock ticks
+INLINE void video_main(int t) // render video output for `t` clock ticks; t is always nonzero!
 {
 	BYTE b,a=ula_temp;
 	static int r=0;
@@ -406,14 +406,14 @@ INLINE void video_main(int t) // render video output for `t` clock ticks
 			ula_attrib=&(ula_bitmap=ula_screen)[0x1800];
 			++ula_flash;
 			ula_count_y=0,ula_pos_y=248-ula_limit_y; // lines of BORDER before the top byte
-			z80_irq=1; irq_delay=(type_id?33:32);//-(ula_clash_z&3); // Spectrum 48K "early" timing is different
+			z80_irq=1; irq_delay=(type_id?33:32); // 128K/+3 VS 48K "early"
 			session_signal|=SESSION_SIGNAL_FRAME; // end of frame!
 		}
 	}
 	ula_temp=a; // ditto! required for "Cobra" and "Arkanoid"!
 }
 
-void audio_main(int t) // render audio output for `t` clock ticks
+void audio_main(int t) // render audio output for `t` clock ticks; t is always nonzero!
 {
 	AUDIO_DATATYPE *z=audio_target;
 	psg_main(t);
@@ -880,7 +880,6 @@ void z80_debug_hard(int q,int x,int y)
 #define Z80_DEBUG_LEN 16 // height of disassemblies, dumps and searches
 #define Z80_DEBUG_MMU 0 // forbid ROM/RAM toggling, it's useless on Spectrum
 #define Z80_DEBUG_EXT 0 // forbid EXTRA hardware debugging info pages
-#define Z80_DEBUG_SCAN (ula_limit_x*4) // amount of ticks per scanline
 #define z80_out0() 0 // hardware sets whether OUT (C) sends 0 or 255
 
 #include "cpcec-z8.h"
