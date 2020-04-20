@@ -615,3 +615,6 @@ Dream End Megademo"- and the Gate Array's 0-191 byte range requires a more rigid
 port logic -"Overflow Preview 3"-) and the debugger: disassembly parameters are
 vertically aligned and the hardware information panel is aligned to the ASCII
 memory dump. Fixed a bug in the ZIP archive header seeker, too.
+- 20200420 -- minor patch fixing the HSYNC signals' black stripes from "Chany
+Dream End Megademo" on CRTC 1, "Onescreen Colonies" on CRTC 0, etc., the value
+of MEMPTR in JR cc,$RR and DJNZ $RR and the logic of BIT n,r,(IX+$XX).

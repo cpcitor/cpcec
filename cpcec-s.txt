@@ -645,3 +645,6 @@ Preview 3"-) y en el debugger: los parámetros del desensamblado están alineado
 verticalmente y el panel de información de hardware está alineado al volcado
 ASCII de memoria. También corrige un error en el buscador de cabeceras de
 archivos ZIP.
+- 20200420 -- parche menor que corrige las barras negras de las señales HSYNC de
+"Chany Dream End Megademo" en CRTC 1, "Onescreen Colonies" en CRTC 0, etc., el
+valor de MEMPTR en JR cc,$RR y DJNZ $RR y la lógica de BIT n,r,(IX+$XX).

@@ -2118,12 +2118,17 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					Z80_ADD2(z80_hl.w,z80_sp.w);
 					break;
 				case 0x10: // DJNZ $RR
-					Z80_WAIT(1); z80_wz=(signed char)Z80_RD_PC; ++z80_pc.w;
+					Z80_WAIT(1);
 					if (--z80_bc.b.h)
 					{
+						z80_wz=(signed char)Z80_RD_PC; ++z80_pc.w;
 						Z80_IORQ_1X_NEXT(5);
 						z80_pc.w=z80_wz+=z80_pc.w;
 						Z80_STRIDE(0x110);
+					}
+					else
+					{
+						Z80_RD_PC; ++z80_pc.w;
 					}
 					break;
 				case 0x18: // JR $RR
@@ -2132,35 +2137,51 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					z80_pc.w=z80_wz+=z80_pc.w+1;
 					break;
 				case 0x20: // JR NZ,$RR
-					z80_wz=(signed char)Z80_RD_PC; ++z80_pc.w;
 					if (!(z80_af.b.l&0x40))
 					{
+						z80_wz=(signed char)Z80_RD_PC; ++z80_pc.w;
 						Z80_IORQ_1X_NEXT(5);
 						z80_pc.w=z80_wz+=z80_pc.w; Z80_STRIDE(0x120);
 					}
+					else
+					{
+						Z80_RD_PC; ++z80_pc.w;
+					}
 					break;
 				case 0x28: // JR Z,$RR
-					z80_wz=(signed char)Z80_RD_PC; ++z80_pc.w;
 					if (z80_af.b.l&0x40)
 					{
+						z80_wz=(signed char)Z80_RD_PC; ++z80_pc.w;
 						Z80_IORQ_1X_NEXT(5);
 						z80_pc.w=z80_wz+=z80_pc.w; Z80_STRIDE(0x128);
 					}
+					else
+					{
+						Z80_RD_PC; ++z80_pc.w;
+					}
 					break;
 				case 0x30: // JR NC,$RR
-					z80_wz=(signed char)Z80_RD_PC; ++z80_pc.w;
 					if (!(z80_af.b.l&0x01))
 					{
+						z80_wz=(signed char)Z80_RD_PC; ++z80_pc.w;
 						Z80_IORQ_1X_NEXT(5);
 						z80_pc.w=z80_wz+=z80_pc.w; Z80_STRIDE(0x130);
 					}
+					else
+					{
+						Z80_RD_PC; ++z80_pc.w;
+					}
 					break;
 				case 0x38: // JR C,$RR
-					z80_wz=(signed char)Z80_RD_PC; ++z80_pc.w;
 					if (z80_af.b.l&0x01)
 					{
+						z80_wz=(signed char)Z80_RD_PC; ++z80_pc.w;
 						Z80_IORQ_1X_NEXT(5);
 						z80_pc.w=z80_wz+=z80_pc.w; Z80_STRIDE(0x138);
+					}
+					else
+					{
+						Z80_RD_PC; ++z80_pc.w;
 					}
 					break;
 				case 0x27: // DAA
@@ -3346,8 +3367,8 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 										case xx+4: yy; Z80_WR_WZ; z80_hl.b.h=b; break; case xx+5: yy; Z80_WR_WZ; z80_hl.b.l=b; break; \
 										case xx+7: yy; Z80_WR_WZ; z80_af.b.h=b; break; case xx+6: yy; Z80_WR_WZ; break
 									#define CASE_Z80_XYCB_BIT(xx,yy) \
-										case xx+6: Z80_BIT1(yy,b,z80_wz>>8); break; \
-										case xx+0: case xx+1: case xx+2: case xx+3: case xx+4: case xx+5: case xx+7: Z80_BIT1(yy,b,b); break
+										case xx+0: case xx+1: case xx+2: case xx+3: case xx+4: case xx+5: case xx+7: \
+										case xx+6: Z80_BIT1(yy,b,z80_wz>>8); break;
 									switch (op)
 									{
 										// 0xDDCBXX00-0xDDCBXX3F
@@ -3861,7 +3882,7 @@ void z80_debug_show(void) // redraw debug screen
 	//for (y=0;y<DEBUG_LENGTH_Y;++y) debug_locate(-10,y),*debug_output=160;//'|';
 	//debug_locate(-10,16),*debug_output='+';
 	z80_debug_hard(z80_debug_page,-9-1-20,0);
-	debug_locate(-9-1-20,16-1); debug_printi("%03XX:",video_pos_x&0xFFF); debug_printi("%03XY -- H: help",video_pos_y&0xFFF);
+	debug_locate(-9-1-20,16-1); debug_printi("(%03X,",video_pos_x&0xFFF); debug_printi("%03X) -- H: help",video_pos_y&0xFFF);
 	onscreen_debug();
 }
 
@@ -4119,9 +4140,9 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 				i=0;
 				switch(k)
 				{
-					case 8: if (--z80_debug_pnl0_x<0) z80_debug_pnl0_x&=1,--z80_debug_pnl0_w; break;
+					case 8 : if (--z80_debug_pnl0_x<0) z80_debug_pnl0_x&=1,--z80_debug_pnl0_w; break;
 					case 128+9: z80_debug_cache[1]=z80_dasm(session_tmpstr,z80_debug_pnl0_w); // no 'break'!
-					case 9: if ((WORD)(++z80_debug_pnl0_x/2+z80_debug_pnl0_w)==z80_debug_cache[1])
+					case 9 : if ((WORD)(++z80_debug_pnl0_x/2+z80_debug_pnl0_w)==z80_debug_cache[1])
 							z80_debug_pnl0_x&=1,z80_debug_pnl0_w=z80_debug_cache[1]; break;
 					case 11: i=-1; break;
 					case 10: i=1; break;
@@ -4219,8 +4240,8 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 				}
 				switch(k)
 				{
-					case 8: if (--z80_debug_pnl1_x<0) z80_debug_pnl1_x=3,--z80_debug_pnl1_y; break; // wrap left and up
-					case 9: if (++z80_debug_pnl1_x>3) z80_debug_pnl1_x=0,++z80_debug_pnl1_y; break; // wrap right and down
+					case 8 : if (--z80_debug_pnl1_x<0) z80_debug_pnl1_x=3,--z80_debug_pnl1_y; break; // wrap left and up
+					case 9 : if (++z80_debug_pnl1_x>3) z80_debug_pnl1_x=0,++z80_debug_pnl1_y; break; // wrap right and down
 					case 11: --z80_debug_pnl1_y; break;
 					case 10: ++z80_debug_pnl1_y; break;
 					case 28: z80_debug_pnl1_x=0; break;
@@ -4242,8 +4263,8 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 				}
 				switch(k)
 				{
-					case 8: if (--z80_debug_pnl2_x<0) z80_debug_pnl2_x=1,--z80_debug_pnl2_w; break; // prev byte
-					case 9: if (++z80_debug_pnl2_x>1) z80_debug_pnl2_x=0,++z80_debug_pnl2_w; break; // next byte
+					case 8 : if (--z80_debug_pnl2_x<0) z80_debug_pnl2_x=1,--z80_debug_pnl2_w; break; // prev byte
+					case 9 : if (++z80_debug_pnl2_x>1) z80_debug_pnl2_x=0,++z80_debug_pnl2_w; break; // next byte
 					case 10: z80_debug_pnl2_w+=16; break;
 					case 11: z80_debug_pnl2_w-=16; break;
 					case 28: z80_debug_pnl2_x=0,z80_debug_pnl2_w=0; break;
@@ -4270,8 +4291,8 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 				}
 				switch(k)
 				{
-					case 8: if (--z80_debug_pnl3_x<0) z80_debug_pnl3_x=3,z80_debug_pnl3_w-=2; break; // prev word
-					case 9: if (++z80_debug_pnl3_x>3) z80_debug_pnl3_x=0,z80_debug_pnl3_w+=2; break; // next word
+					case 8 : if (--z80_debug_pnl3_x<0) z80_debug_pnl3_x=3,z80_debug_pnl3_w-=2; break; // prev word
+					case 9 : if (++z80_debug_pnl3_x>3) z80_debug_pnl3_x=0,z80_debug_pnl3_w+=2; break; // next word
 					case 10: z80_debug_pnl3_w+=2; break;
 					case 11: z80_debug_pnl3_w-=2; break;
 					case 28: z80_debug_pnl3_x=0,z80_debug_pnl3_w=0; break;

@@ -23,7 +23,7 @@
 #define MEMLOAD(x,y) memcpy((x),(y),sizeof(x))
 #define MEMNCPY(x,y,z) memcpy((x),(y),sizeof(*(x))*(z))
 
-unsigned char session_scratch[1<<18];
+unsigned char session_scratch[1<<18]; // at least 256k!
 
 INLINE int ucase(int i) { return i>='a'&&i<='z'?i-32:i; }
 INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
@@ -49,7 +49,8 @@ void session_configwrite(FILE *f) // save common parameters
 {
 	fprintf(f,"scanlines %i\nsoftvideo %i\nsoftaudio %i\n",video_scanline,video_filter,audio_filter);
 }
-char *strrstr(char *h,char *n)
+
+char *strrstr(char *h,char *n) // = strrchr + strstr
 {
 	char *z=NULL;
 	for (;;)
@@ -66,7 +67,6 @@ char *strrstr(char *h,char *n)
 	}
 	return z;
 }
-
 int globbing(char *w,char *t,int q) // wildcard pattern *w against string *t; q = strcasecmp/strcmp; 0 on mismatch!
 {
 	char *ww=NULL,*tt=NULL,c,k;
@@ -363,10 +363,10 @@ INLINE int session_createwave(void) // create a wave file; !0 ERROR
 		return 1; // too many files!
 	if (!(session_wavefile=fopen(session_parmtr,"wb")))
 		return 1; // cannot create file!
-	waveheader[0x16]=1; // channels
+	waveheader[0x16]=AUDIO_CHANNELS; // channels
 	mputiiii(&waveheader[0x18],AUDIO_PLAYBACK); // samples per second
 	mputiiii(&waveheader[0x1C],AUDIO_PLAYBACK*sizeof(AUDIO_DATATYPE)); // bytes per second
-	waveheader[0x20]=1*sizeof(AUDIO_DATATYPE); // bytes per sample
+	waveheader[0x20]=sizeof(AUDIO_DATATYPE); // bytes per sample
 	waveheader[0x22]=AUDIO_BITDEPTH;
 	fwrite(waveheader,1,sizeof(waveheader),session_wavefile);
 	return session_wavesize=0;
@@ -801,11 +801,7 @@ char *puff_session_newfile(char *x,char *y,char *z) // writing within ZIP archiv
 
 VIDEO_DATATYPE onscreen_ink0,onscreen_ink1;
 #include "cpcec-a7.h" //unsigned char *onscreen_chrs;
-void onscreen_inks(VIDEO_DATATYPE q0,VIDEO_DATATYPE q1) // paper + ink
-{
-	onscreen_ink0=q0;
-	onscreen_ink1=q1;
-}
+#define onscreen_inks(q0,q1) onscreen_ink0=q0,onscreen_ink1=q1
 
 #define ONSCREEN_XY if ((x*=8)<0) x+=VIDEO_OFFSET_X+VIDEO_PIXELS_X; else x+=VIDEO_OFFSET_X; \
 	if ((y*=8)<0) y+=VIDEO_OFFSET_Y+VIDEO_PIXELS_Y; else y+=VIDEO_OFFSET_Y; \

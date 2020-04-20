@@ -7,7 +7,7 @@
  // """"""  "    "   """"   """"""   """"    ----------------------- //
 
 #define MY_CAPTION "ZXSEC"
-#define MY_VERSION "20200418"//"2355"
+#define MY_VERSION "20200420"//"2145"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -862,10 +862,10 @@ void z80_debug_hard(int q,int x,int y)
 #define Z80_PEEK1 Z80_PEEK
 #define Z80_PEEK2 Z80_PEEK
 #define Z80_PEEKX(w) ( Z80_MREQ(4,w), mmu_rom[z80_aux1][w] )
-#define Z80_POKE(w,b) ( Z80_MREQ(3,w), mmu_ram[z80_aux1][w]=b ) // cfr. Z80_SYNC_IO
-#define Z80_POKE0 Z80_POKE
-#define Z80_POKE1 Z80_POKE
-#define Z80_POKE2 Z80_POKE
+#define Z80_POKE(w,b) ( Z80_MREQ(3,w), mmu_ram[z80_aux1][w]=b ) // a single write
+#define Z80_POKE0 Z80_POKE // non-unique twin write
+#define Z80_POKE1 Z80_POKE // unique 1st twin write
+#define Z80_POKE2 Z80_POKE // unique 2nd twin write
 #define Z80_WAIT(t) ( z80_t+=t, ula_clash_z+=t )
 #define Z80_BEWARE int z80_t_=z80_t,ula_clash_z_=ula_clash_z
 #define Z80_REWIND z80_t=z80_t_,ula_clash_z=ula_clash_z_

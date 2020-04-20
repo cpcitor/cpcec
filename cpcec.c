@@ -7,7 +7,7 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "CPCEC"
-#define MY_VERSION "20200418"//"2655"
+#define MY_VERSION "20200420"//"2145"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -592,7 +592,7 @@ char DISC_NEW_SECTOR_IDS[]={0xC1,0xC6,0xC2,0xC7,0xC3,0xC8,0xC4,0xC9,0xC5};
 // CPU-HARDWARE-VIDEO-AUDIO INTERFACE =============================== //
 
 int crtc_32kb,crtc_zz_char,crtc_line,gate_char,plus_hardbase,gate_count_r3x;
-BYTE crtc_zz_decoding,plus_soft,plus_fix_init,plus_fix_last,plus_fix_exit;
+BYTE crtc_zz_decoding,plus_soft,plus_fix_init,plus_fix_last,plus_fix_exit,crtc_half_dirt;
 WORD crtc_char,crtc_past,crtc_bank; VIDEO_DATATYPE plus_fill;
 BYTE plus_sprite_xyz_backup[16*8]; // temporary copy of sprite coordinates
 #define gate_limit_r3x 6 // IMPERIAL MAHJONG (INGAME): 1,2,3: fail; 4,5: glitch; 6 good; SCROLL FACTORY (TITLE): 1,2,3,4: glitch; 5,6 good
@@ -677,8 +677,7 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 			if (plus_fix_exit)
 			{
 				video_pos_x-=plus_soft,video_target-=plus_soft,plus_fix_exit=0;
-				if (plus_hardbase>=0)
-					video_main_sprites();
+				if (plus_hardbase>=0) video_main_sprites();
 			}
 			int x=video_pos_x+plus_fix_init;
 			if (x>VIDEO_OFFSET_X-16&&x<VIDEO_OFFSET_X+VIDEO_PIXELS_X)
@@ -863,13 +862,15 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 			crtc_r4x_update();
 			crtc_count_r0=0;
 			crtc_char=crtc_past;
+			crtc_half_dirt=!(crtc_type&5||crtc_hi_decoding&8)&&!video_framecount&&(video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y)
+				&&(video_pos_x>VIDEO_OFFSET_X-16&&video_pos_x<VIDEO_OFFSET_X+VIDEO_PIXELS_X);
 			crtc_hi_decoding&=~8; // HDISP ON!
 			crtc_line_set();
 			if (plus_pri==crtc_line&&plus_pri&&crtc_status&CRTC_STATUS_HSYNC)
 				gate_count_r3x=2; // PLUS ASIC: PROGRAMMABLE RASTER INTERRUPT (late)
 			if (plus_enabled)
 				plus_hardbase=(crtc_table[1]&&!(crtc_hi_decoding&4)&&
-					!(video_framecount)&&(video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y))
+					!video_framecount&&(video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y))
 					?plus_fill=video_clut[16],video_pos_x+(plus_fix_init=plus_soft=(plus_sscr&15)):-1; // remember for later usage
 		}
 		else
@@ -896,7 +897,7 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 					crtc_32kb=0, // the SSSL doesn't support 32kb mode!
 					crtc_char=crtc_past=((plus_ssss[0]&0x30)<<10)+(((plus_ssss[0]&0x3)*256+plus_ssss[1])<<1);
 			}
-			crtc_hi_decoding|=crtc_limit_r3x<3?(64+8):8; // 64 : Gate Array slowdown
+			crtc_hi_decoding|=crtc_limit_r3x==1?32+8:crtc_limit_r3x==2?64+8:8; // 32,64 : Gate Array slowdown
 		}
 		if (crtc_count_r0==crtc_limit_r2)
 		{
@@ -907,13 +908,15 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 			if (plus_pri==crtc_line&&plus_pri)
 				gate_count_r3x=2; // PLUS ASIC: PROGRAMMABLE RASTER INTERRUPT (early)
 		}
+		if (crtc_count_r0==1&&crtc_half_dirt) // "ONESCREEN COLONIES" shows a little shadow on the bricks and the plasma on CRTC 0; CRTC 2 can do it too.
+			video_target[-8]=video_target[-7]=video_target[-6]=video_target[-5]=
+			video_target[-4]=video_target[-3]=video_target[-2]=video_target[-1]=video_clut[16];
 
 		// physical SYNC behavior
 
 		if (((crtc_status&CRTC_STATUS_HSYNC)&&video_pos_x>=VIDEO_HSYNC_LO)||video_pos_x>=VIDEO_HSYNC_HI) // H.REFRESH?
 		{
-			if (plus_hardbase>=0)
-				video_main_sprites();
+			if (plus_hardbase>=0) video_main_sprites();
 			plus_fix_last=0; // restore soft scroll even if it's misaligned (Prehistorik 2)
 			if (!video_framecount)
 				video_drawscanline();
@@ -1909,7 +1912,7 @@ void z80_debug_hard(int q,int x,int y)
 		"    %02X%c%02X%c%02X%c%02X %04X" // VLC, VSC, VTAC, HSC, VDUR
 		,crtc_count_r4,irq_timer,((video_pos_x-VIDEO_OFFSET_X)/16)&0xFF,crtc_count_r0,crtc_zz_char
 		,crtc_count_r9,(crtc_status&CRTC_STATUS_VSYNC)?'*':'-',crtc_count_r3y,(crtc_status&CRTC_STATUS_V_T_A)?'*':'-'
-		,crtc_count_r5,(crtc_status&CRTC_STATUS_HSYNC)?'*':'-',crtc_count_r3x,((video_pos_y-VIDEO_OFFSET_Y)/2+3)&0xFFFF
+		,crtc_count_r5,(crtc_status&CRTC_STATUS_HSYNC)?'*':'-',crtc_count_r3x,(WORD)((video_pos_y-VIDEO_OFFSET_Y)/2+3)
 		);
 		t+=sprintf(t,"PSG:                ""%02X: ",psg_index);
 		for (i=0;i<8;++i)
@@ -2081,7 +2084,7 @@ int z80_ack_delay=0; // making it local adds overhead :-(
 #define Z80_PEEK2 Z80_PEEK
 #define Z80_PEEKX PEEK
 #define Z80_POKE(x,a) do{ int z80_aux=x>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO,z80_trap(x,a),z80_t=0; else mmu_ram[z80_aux][x]=a; }while(0) // a single write
-#define Z80_POKE0 Z80_POKE
+#define Z80_POKE0 Z80_POKE // non-unique twin write
 #define Z80_POKE1(x,a) do{ --z80_t; int z80_aux=x>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO,z80_trap(x,a),z80_t=0; else mmu_ram[z80_aux][x]=a; }while(0) // 1st twin write
 #define Z80_POKE2(x,a) do{ ++z80_t; int z80_aux=x>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO,z80_trap(x,a),z80_t=0; else mmu_ram[z80_aux][x]=a; }while(0) // 2nd twin write
 #define Z80_WAIT(t)
@@ -2470,7 +2473,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 							mem_ram[j++]=m;
 					}
 				}
-				if (k!=l||j&0xFFFF) // damaged compression!
+				if (k!=l||(WORD)j) // damaged compression!
 					return puff_fclose(f),1;
 			}
 			else if ((l==0x10000)&&(l+j<=sizeof(mem_ram))) // uncompressed!

@@ -65,6 +65,7 @@ typedef union { unsigned short w; struct { unsigned char l,h; } b; } Z80W; // li
 	#define AUDIO_ZERO 0
 	#define AUDIO1(x) (x)
 #endif // bitsize
+#define AUDIO_CHANNELS 1
 
 VIDEO_DATATYPE *video_frame; // video frame, allocated on runtime
 AUDIO_DATATYPE *audio_frame,audio_buffer[AUDIO_LENGTH_Z],audio_memory[AUDIO_N_FRAMES*AUDIO_LENGTH_Z]; // audio frame, cycles during playback
@@ -551,7 +552,7 @@ INLINE int session_create(char *s) // create video+audio devices and set menu; 0
 			WAVEFORMATEX wfex;
 			memset(&wfex,0,sizeof(wfex));
 			wfex.wFormatTag=WAVE_FORMAT_PCM;
-			wfex.wBitsPerSample=AUDIO_BITDEPTH, wfex.nBlockAlign=AUDIO_BITDEPTH/8*(wfex.nChannels=1);
+			wfex.wBitsPerSample=AUDIO_BITDEPTH, wfex.nBlockAlign=AUDIO_BITDEPTH/8*(wfex.nChannels=AUDIO_CHANNELS);
 			wfex.nAvgBytesPerSec=wfex.nBlockAlign*(wfex.nSamplesPerSec=AUDIO_PLAYBACK);
 			if (session_audio=!waveOutOpen(&session_wo,WAVE_MAPPER,&wfex,0,0,0))
 			{
