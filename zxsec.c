@@ -7,7 +7,7 @@
  // """"""  "    "   """"   """"""   """"    ----------------------- //
 
 #define MY_CAPTION "ZXSEC"
-#define MY_VERSION "20200420"//"2145"
+#define MY_VERSION "20200430"//"1555"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -37,7 +37,7 @@ Contact information: <mailto:cngsoft@gmail.com> */
 
 #include <stdio.h> // printf()...
 #include <stdlib.h> // strtol()...
-#include <io.h> // chsize(),strcpy()...
+#include <string.h> // strcpy()...
 
 // ZX Spectrum metrics and constants defined as general types ------- //
 
@@ -877,10 +877,11 @@ void z80_debug_hard(int q,int x,int y)
 #define Z80_STRIDE_IO(o)
 #define Z80_STRIDE_HALT 4
 
+#define Z80_XCF_BUG 1 // replicate the SCF/CCF quirk
 #define Z80_DEBUG_LEN 16 // height of disassemblies, dumps and searches
 #define Z80_DEBUG_MMU 0 // forbid ROM/RAM toggling, it's useless on Spectrum
 #define Z80_DEBUG_EXT 0 // forbid EXTRA hardware debugging info pages
-#define z80_out0() 0 // hardware sets whether OUT (C) sends 0 or 255
+#define z80_out0() 0 // whether OUT (C) sends 0 (NMOS) or 255 (CMOS)
 
 #include "cpcec-z8.h"
 
@@ -921,7 +922,7 @@ void all_reset(void) // reset everything!
 // firmware ROM file handling operations ---------------------------- //
 
 BYTE biostype_id=-1; // keeper of the latest loaded BIOS type
-char bios_system[][13]={"SPECTRUM.ROM","SPEC128K.ROM","SPEC-P-2.ROM","SPEC-P-3.ROM"};
+char bios_system[][13]={"spectrum.rom","spec128k.rom","spec-p-2.rom","spec-p-3.rom"};
 char bios_path[STRMAX]="";
 
 int bios_load(char *s) // load ROM. `s` path; 0 OK, !0 ERROR
@@ -1279,7 +1280,7 @@ char session_menudata[]=
 	"0x8801 Browse tape..\n"
 	"0x4800 Play tape\tCtrl+Shift+F8\n"
 	"=\n"
-	"0x7F00 E_xit\n"
+	"0x3F00 E_xit\n"
 	"Edit\n"
 	"0x8500 Select firmware..\tF5\n"
 	"0x0500 Reset emulation\tCtrl+F5\n"
@@ -1394,22 +1395,22 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 	{
 		case 0x8100: // F1: HELP..
 			session_message(
-				"F1\tHelp..\t\t"
+				"F1\tHelp..\t" MESSAGEBOX_WIDETAB
 				"^F1\tAbout..\t" // "\t"
 				"\n"
-				"F2\tSave snapshot..\t"
+				"F2\tSave snapshot.." MESSAGEBOX_WIDETAB
 				"^F2\tSave last snapshot" // "\t"
 				"\n"
-				"F3\tLoad any file..\t"
+				"F3\tLoad any file.." MESSAGEBOX_WIDETAB
 				"^F3\tLoad last snapshot" // "\t"
 				"\n"
-				"F4\tToggle sound\t"
+				"F4\tToggle sound" MESSAGEBOX_WIDETAB
 				"^F4\tToggle joystick" // "\t"
 				"\n"
-				"F5\tLoad firmware..\t"
+				"F5\tLoad firmware.." MESSAGEBOX_WIDETAB
 				"^F5\tReset emulation" // "\t"
 				"\n"
-				"F6\tToggle realtime\t"
+				"F6\tToggle realtime" MESSAGEBOX_WIDETAB
 				"^F6\tToggle turbo Z80" // "\t"
 				"\n"
 				"F7\tInsert disc into A:..\t"
@@ -1418,43 +1419,39 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 				"\t(shift: ..into B:)\t"
 				"\t(shift: ..from B:)" // "\t"
 				"\n"
-				"F8\tInsert tape..\t"
+				"F8\tInsert tape.." MESSAGEBOX_WIDETAB
 				"^F8\tRemove tape" // "\t"
 				"\n"
 				"\t(shift: record..)\t"
 				"\t(shift: play/stop)\t" //"\t-\t" // "\t"
 				"\n"
-				#ifdef DEBUG
-				"F9\tDebug\t\t"
-				#else
-				"F9\t-\t\t"
-				#endif
+				"F9\tDebug\t" MESSAGEBOX_WIDETAB
 				"^F9\tToggle fast tape" // "\t"
 				"\n"
 				"\t(shift: view status)\t"
 				"\t(shift: ..fast load)" // "\t"
 				"\n"
-				"F11\tNext palette\t"
+				"F11\tNext palette" MESSAGEBOX_WIDETAB
 				"^F11\tNext scanlines" // "\t"
 				"\n"
 				"\t(shift: previous..)\t"
 				"\t(shift: ..filter)" // "\t"
 				"\n"
-				"F12\tSave screenshot\t"
+				"F12\tSave screenshot" MESSAGEBOX_WIDETAB
 				"^F12\tRecord wavefile" // "\t"
 				"\n"
-				"\t-\t\t"
-				"\t(shift: ..YM3 file)" // "\t"
+				"\t-\t" MESSAGEBOX_WIDETAB
+				"\t(shift: ..YM file)" // "\t"
 				"\n"
 				"\n"
-				"Num.+\tRaise frameskip\t"
+				"Num.+\tRaise frameskip" MESSAGEBOX_WIDETAB
 				"Num.*\tFull frameskip" // "\t"
 				"\n"
-				"Num.-\tLower frameskip\t"
+				"Num.-\tLower frameskip" MESSAGEBOX_WIDETAB
 				"Num./\tNo frameskip" // "\t"
 				"\n"
-				"Pause\tPause/continue\t"
-				"*Return\tMaximize/restore" // "\t"
+				"Pause\tPause/continue" MESSAGEBOX_WIDETAB
+				"*Return\tMaximize/restore" "\t"
 				"\n"
 			,"Help");
 			break;
@@ -1655,7 +1652,7 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 		case 0x8C00: // F12: SAVE SCREENSHOT
 			session_savebitmap();
 			break;
-		case 0x0C00: // ^F12: RECORD WAVEFILE OR YM3 FILE
+		case 0x0C00: // ^F12: RECORD WAVEFILE OR YM FILE
 			if (session_shift)
 			{
 				if (psg_closelog()) // toggles recording
@@ -1716,10 +1713,12 @@ void session_configwritemore(FILE *f)
 		,type_id,joy1_type,snap_extended,autorun_path,snap_path,tape_path,disc_path,bios_path,onscreen_flag,video_type,tape_rewind,z80_debug_configwrite());
 }
 
-#ifdef DEBUG
+#if defined(DEBUG) || defined(SDL_MAIN_HANDLED)
 void printferror(char *s) { printf("error: %s!\n",s); }
+#define printfusage(s) printf(s)
 #else
 void printferror(char *s) { sprintf(session_tmpstr,"error: %s!\n",s); session_message(session_tmpstr,txt_error); }
+#define printfusage(s) session_message(s,caption_version)
 #endif
 
 // START OF USER INTERFACE ========================================== //
@@ -1824,11 +1823,7 @@ int main(int argc,char *argv[])
 	}
 	if (i>argc)
 		return
-			#ifdef DEBUG
-			printf("usage: %s"
-			#else
-			session_message("Usage: " MY_CAPTION
-			#endif
+			printfusage("Usage: " MY_CAPTION
 			" [option..] [file..]\n"
 			"\t-cN\tscanline type (0..3)\n"
 			"\t-CN\tcolour palette (0..4)\n"
@@ -1853,12 +1848,7 @@ int main(int argc,char *argv[])
 			"\t-X\tdisable +3 disc drive\n"
 			"\t-Y\tdisable tape analysis\n"
 			"\t-Z\tdisable tape speed-up\n"
-			#ifdef DEBUG
-			,argv[0])
-			#else
-			,caption_version)
-			#endif
-			,1;
+			),1;
 	if (bios_reload())
 		return printferror("cannot load firmware"),1;
 	if (session_create(session_menudata))

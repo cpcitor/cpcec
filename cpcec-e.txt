@@ -44,12 +44,21 @@ The Windows binaries can be compiled from GCC (or compatible) through the
 following commands:
 
 	windres cpcec.rc -Ocoff -ocpcec.res
-	gcc -m32 -mwindows -O2 cpcec.res -xc cpcec.c -luser32 -lgdi32 -lwinmm
+	gcc -m32 -mwindows cpcec.res -O2 -xc cpcec.c -luser32 -lgdi32 -lwinmm
 -lcomdlg32 -lshell32 -ocpcec.exe
 
 	windres zxsec.rc -Ocoff -ozxsec.res
-	gcc -m32 -mwindows -O2 zxsec.res -xc zxsec.c -luser32 -lgdi32 -lwinmm
+	gcc -m32 -mwindows zxsec.res -O2 -xc zxsec.c -luser32 -lgdi32 -lwinmm
 -lcomdlg32 -lshell32 -ozxsec.exe
+
+The binaries for operating systems supported by SDL2 needed different commands:
+
+	gcc -O2 -xc cpcec.c -DSDL_MAIN_HANDLED -lSDL2 -ocpcec.elf
+
+	gcc -O2 -xc zxsec.c -DSDL_MAIN_HANDLED -lSDL2 -ozxsec.elf
+
+(besides, the filenames must be in lower case: the contents of the ZIP archive
+must be extracted with "unzip -LL cpcec-20XXXXXX.zip")
 
 Pelles C and other visual compilers can define the whole project from the source
 files CPCEC.C and ZXSEC.C and the resource files CPCEC.RC and ZXSEC.RC, and
@@ -146,7 +155,7 @@ doubt, key F1 shows a short index of these function keys.
 * F3+Control: load again the last selected snapshot;
 * F4: enable (or disable) sound emulation;
 * F4+Control: enable (or disable) the keyboard-emulated joystick;
-* F5: choose the emulated CPC firmware, either as a ROM file or as a
+* F5: choose the emulated CPC firmware, that can be a ROM file, an INI file or a
 CPR-formatted cartridge;
 * F5+Control: reset the emulation;
 * F6: enable (or disable) realtime emulation;
@@ -178,6 +187,11 @@ interlace;
 * Alt+Return: maximize (or restore) the window. The menu becomes hidden when
 maximizing the window with these keys.
 
+SDL2-based versions are slightly different because they provide their own
+graphical interface; the menu shows up when the user presses F10, and to change
+the disc file access mode the user must press TAB within the file selection
+dialog shown by F7 or F7+Shift.
+
 Files BMP and WAV are the namesake standard files of image and sound. YM files
 are dumps of the sound chip states, that because of their usage in other
 platforms besides the Amstrad CPC (Spectrum 128, MSX, Atari ST...) can be
@@ -186,6 +200,13 @@ and AY-EMUL. Notice that the scanline mode (option that simulates several types
 of screen) mirrors itself on the recordings as well as on the screen, and that
 each mode has a different impact on the programme performance: the normal mode
 consumes the most processing power, and the double interlace, the least.
+
+INI files can be used to define a set of extra ROMs to load on top of the
+current firmware. Internally they're simple text files where each line is either
+LOWEST=filename (that sets the LOW ROM content) or HIGHxx=filename (that sets
+the n-th HIGH ROM slot content, where "n" is the hexadecimal value of "xx"): for
+example HIGH07=PARADOS.ROM means that slot 7 of HIGH ROM is occupied by the file
+PARADOS.ROM.
 
 The onscreen indicators show the state of the disc drives (track number, busy or
 idle), the tape deck (busy or idle) and the joystick.
@@ -616,5 +637,14 @@ port logic -"Overflow Preview 3"-) and the debugger: disassembly parameters are
 vertically aligned and the hardware information panel is aligned to the ASCII
 memory dump. Fixed a bug in the ZIP archive header seeker, too.
 - 20200420 -- minor patch fixing the HSYNC signals' black stripes from "Chany
-Dream End Megademo" on CRTC 1, "Onescreen Colonies" on CRTC 0, etc., the value
-of MEMPTR in JR cc,$RR and DJNZ $RR and the logic of BIT n,r,(IX+$XX).
+Dream End Megademo" on CRTC 1, "Onescreen Colonies" on CRTC 0, etc., as well as
+the value of MEMPTR in JR cc,$RR and DJNZ $RR and the logic of BIT n,r,(IX+$XX):
+the error rates of ZXSEC in the 2012 RAXOFT tests are Z80FULL 10/152, Z80CCF
+70/152 and Z80MEMPTR 4/152.
+- 20200430 -- sixteenth public release. Now you can compile CPCEC and ZXSEC with
+SDL2 (featuring its own graphical user interface) for multiple operating systems
+thru the option -DSDL_MAIN_HANDLED; the precompiled files CPCEC.ELF and
+ZXSEC.ELF for 32bit GNU/Linux are included, too. New support for extended ROM
+profiles through INI files enumerating up to 257 16K ROM blocks. Further Z80
+tweaks: the new error rates of ZXSEC in the 2012 RAXOFT tests are 8/152 Z80FULL,
+5/152 Z80CCF and 0/152 Z80MEMPTR.

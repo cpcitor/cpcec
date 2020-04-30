@@ -23,10 +23,6 @@
 #define MEMLOAD(x,y) memcpy((x),(y),sizeof(x))
 #define MEMNCPY(x,y,z) memcpy((x),(y),sizeof(*(x))*(z))
 
-unsigned char session_scratch[1<<18]; // at least 256k!
-
-INLINE int ucase(int i) { return i>='a'&&i<='z'?i-32:i; }
-INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 int fread1(void *t,int l,FILE *f) { int k=0,i; while (l>0) { if (!(i=fread(t,1,l,f))) break; t=(void*)((char*)t+i); k+=i; l-=i; } return k; } // safe fread(t,1,l,f)
 int fwrite1(void *t,int l,FILE *f) { int k=0,i; while (l>0) { if (!(i=fwrite(t,1,l,f))) break; t=(void*)((char*)t+i); k+=i; l-=i; } return k; } // safe fwrite(t,1,l,f)
 
@@ -800,7 +796,6 @@ char *puff_session_newfile(char *x,char *y,char *z) // writing within ZIP archiv
 // on-screen and debug text printing -------------------------------- //
 
 VIDEO_DATATYPE onscreen_ink0,onscreen_ink1;
-#include "cpcec-a7.h" //unsigned char *onscreen_chrs;
 #define onscreen_inks(q0,q1) onscreen_ink0=q0,onscreen_ink1=q1
 
 #define ONSCREEN_XY if ((x*=8)<0) x+=VIDEO_OFFSET_X+VIDEO_PIXELS_X; else x+=VIDEO_OFFSET_X; \
@@ -895,6 +890,10 @@ void onscreen_debug(void) // rewrite debug texts
 				break;
 			case 2:
 				memcpy(onscreen_debug_chrs,onscreen_chrs,sizeof(onscreen_chrs)); // thin
+				break;
+			case 4:
+				for (int i=0,j;i<sizeof(onscreen_debug_chrs);++i)
+					j=onscreen_chrs[i],onscreen_debug_chrs[i]=j|(i&4?(j<<1):(j>>1)); // italic
 				break;
 			case 6:
 				for (int i=0,j;i<sizeof(onscreen_debug_chrs);++i)

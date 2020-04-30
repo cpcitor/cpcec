@@ -7,7 +7,7 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "CPCEC"
-#define MY_VERSION "20200420"//"2145"
+#define MY_VERSION "20200430"//"1555"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -37,7 +37,7 @@ Contact information: <mailto:cngsoft@gmail.com> */
 
 #include <stdio.h> // printf()...
 #include <stdlib.h> // strtol()...
-#include <io.h> // chsize(),strcpy()...
+#include <string.h> // strcpy()...
 
 // Amstrad CPC metrics and constants defined as general types ------- //
 
@@ -261,11 +261,13 @@ int audio_table[17]={0,85,121,171,241,341,483,683,965,1365,1931,2731,3862,5461,7
 
 // HARDWARE DEFINITIONS ============================================= //
 
-BYTE mem_ram[9<<16],mem_rom[33<<14]; // memory: 9*64k RAM (BASE 64K BANK + 8 EXTENDED 64K BANKS) and 33*16k ROM (512K ASIC PLUS CARTRIDGE + 16K BDOS)
+BYTE mem_ram[9<<16],mem_rom[33<<14]; // RAM (BASE 64K BANK + 8x 64K BANKS) and ROM (512K ASIC PLUS CARTRIDGE + 16K BDOS)
+BYTE mem_xtr[257<<14]; // 33x 16K EXTENDED ROMS
 #define plus_enabled (type_id>2) // the PLUS ASIC hardware MUST BE tied to the model!
 #define bdos_rom (&mem_rom[32<<14])
 BYTE *mmu_ram[4],*mmu_rom[4]; // memory is divided in 14 6k R+W areas
-BYTE mmu_bit[4]={0,0,0,0}; // bit masks: nonzero raises a write event
+BYTE mmu_bit[4]={0,0,0,0}; // RAM bit masks: nonzero raises a write event
+BYTE mmu_xtr[257]; // ROM bit masks: nonzero reads from EXTENDED rather than from DEFAULT/CARTRIDGE
 #define PEEK(x) mmu_rom[(x)>>14][x] // WARNING, x cannot be `x=EXPR`!
 #define POKE(x) mmu_ram[(x)>>14][x] // WARNING, x cannot be `x=EXPR`!
 
@@ -384,8 +386,6 @@ INLINE void crtc_table_send(BYTE i)
 		case 4:
 			if (crtc_type&5)//||crtc_count_r4==i)
 				crtc_limit_r4=i;
-			//if (crtc_count_r9==crtc_limit_r9&&!i&&!crtc_limit_r4&&crtc_count_r4)
-				//printf("%i<%i:%i<%i ",crtc_count_r4,crtc_limit_r4,crtc_count_r9,crtc_limit_r9),crtc_count_r4=0;
 			break;
 		case 5:
 			if (crtc_type&5)//||crtc_count_r5==i)
@@ -404,7 +404,7 @@ INLINE void crtc_table_send(BYTE i)
 	}
 }
 INLINE BYTE crtc_table_recv(void) { return (crtc_index>=12&&crtc_index<18)?crtc_table[crtc_index]:(crtc_type>2&&crtc_index<8?crtc_table[crtc_index+8]:0); }
-INLINE BYTE crtc_table_info(void) { return crtc_count_r4>=crtc_table[6]?96:64; }
+INLINE BYTE crtc_table_info(void) { return crtc_count_r4>=crtc_table[6]?32:0; } // +64???
 
 #define crtc_setup()
 
@@ -451,7 +451,7 @@ void mmu_update(void) // update the MMU tables with all the new offsets
 	// page 0x0000-0x3FFF
 	if ((j=mmu_ram_mode[i][0])>=0x10000-0x0000) j+=k;
 	mmu_ram[0]=&mem_ram[j];
-	mmu_rom[0]=(gate_mcr&4)?mmu_ram[0]:&mem_rom[0x0000-0x0000];
+	mmu_rom[0]=(gate_mcr&4)?mmu_ram[0]:mmu_xtr[0]?&mem_xtr[0x0000-0x0000]:&mem_rom[0x0000-0x0000];
 	// page 0x4000-0x7FFF
 	if ((j=mmu_ram_mode[i][1])>=0x10000-0x4000) j+=k;
 	mmu_rom[1]=mmu_ram[1]=&mem_ram[j];
@@ -461,13 +461,13 @@ void mmu_update(void) // update the MMU tables with all the new offsets
 	// page 0xC000-0xFFFF
 	if ((j=mmu_ram_mode[i][3])>=0x10000-0xC000) j+=k;
 	mmu_ram[3]=&mem_ram[j];
-	mmu_rom[3]=(gate_mcr&8)?mmu_ram[3]:(gate_rom!=7||disc_disabled)?&mem_rom[0x4000-0xC000]:&bdos_rom[0x0000-0xC000];
+	mmu_rom[3]=(gate_mcr&8)?mmu_ram[3]:(gate_rom<length(mmu_xtr)-1&&mmu_xtr[gate_rom+1]?&mem_xtr[0x4000+(gate_rom<<14)-0xC000]:(gate_rom!=7||disc_disabled)?&mem_rom[0x4000-0xC000]:&bdos_rom[0x0000-0xC000]);
 
 	if (plus_enabled)
 	{
 		if (!(gate_mcr&4))
 		{
-			mmu_rom[0]=&mem_rom[(plus_gate_mcr&7)<<14]; // show low ROM
+			mmu_rom[0]=mmu_xtr[0]?&mem_xtr[0x0000-0x0000]:&mem_rom[(plus_gate_mcr&7)<<14]; // show low ROM
 			switch (plus_gate_mcr&24)
 			{
 				case 8:
@@ -483,7 +483,9 @@ void mmu_update(void) // update the MMU tables with all the new offsets
 		if (mmu_bit[1]=((plus_gate_mcr&24)==24))
 			mmu_rom[1]=mmu_ram[1]=&plus_bank[0x0000-0x4000]; // show PLUS ASIC bank
 		if (!(gate_mcr&8))
-			mmu_rom[3]=gate_rom<128?gate_rom==7?&mem_rom[0xC000-0xC000]:&mem_rom[0x4000-0xC000]:&mem_rom[((gate_rom&31)<<14)-0xC000]; // show high ROM
+			mmu_rom[3]=
+			gate_rom<length(mmu_xtr)-1&&mmu_xtr[gate_rom+1]?&mem_xtr[0x4000+(gate_rom<<14)-0xC000]:
+			gate_rom<128?gate_rom==7?&mem_rom[0xC000-0xC000]:&mem_rom[0x4000-0xC000]:&mem_rom[((gate_rom&31)<<14)-0xC000]; // show high ROM
 	}
 	else
 		mmu_bit[1]=0; // hide PLUS ASIC bank
@@ -1415,7 +1417,7 @@ INLINE void z80_tape_fastload(void)
 					{
 						// DE is kept in the stack :-( E!=0 means there are bytes to write on memory
 						if (z80_tape_fastdump(z80_tape_spystackadd(4))==0)
-							while(tape_bits>15&&POKE(z80_sp.w+2)>1)
+							while (tape_bits>15&&POKE(z80_sp.w+2)>1)
 							{
 								j=fasttape_dump();
 								POKE(z80_ix.w)=j;
@@ -1438,7 +1440,7 @@ INLINE void z80_tape_fastload(void)
 				if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&((i=z80_tape_fastfeed(z80_tape_spystack()))==1||i==2||i==7))
 				{
 					if (((j=z80_tape_fastdump(z80_tape_spystack()))==1||j==4||j==9)&&(z80_af2.b.l&0x41)==0x41)
-						while(tape_bits>15&&z80_de2.b.l>1)
+						while (tape_bits>15&&z80_de2.b.l>1)
 							z80_hl2.b.h^=POKE(z80_ix.w)=fasttape_dump(),(j==4?--z80_ix.w:++z80_ix.w),--z80_de2.w;
 					j=fasttape_feed(),tape_feedskip=z80_hl2.b.l=128+(j>>1),z80_bc2.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc2.b.l>>6,16);
 				}
@@ -1449,7 +1451,7 @@ INLINE void z80_tape_fastload(void)
 				if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_fastfeed(z80_tape_spystack())==1)
 				{
 					if (z80_tape_fastdump(z80_tape_spystack())==2&&z80_af2.b.l&0x40)
-						while(tape_bits>15&&z80_de.b.l>1)
+						while (tape_bits>15&&z80_de.b.l>1)
 							z80_hl.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de.w;
 					j=fasttape_feed(),tape_feedskip=z80_hl.b.l=128+(j>>1),z80_bc.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc.b.l>>7,25);
 				}
@@ -1463,7 +1465,7 @@ INLINE void z80_tape_fastload(void)
 				if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&((i=z80_tape_fastfeed(z80_tape_spystack()))==3||i==4||i==15))
 				{
 					if ((j=z80_tape_fastdump(z80_tape_spystack()))==3||j==8)
-						while(tape_bits>15&&z80_de.b.l>1)
+						while (tape_bits>15&&z80_de.b.l>1)
 							z80_af2.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de.w;
 					j=fasttape_feed();
 					if (i==3)
@@ -1487,7 +1489,7 @@ INLINE void z80_tape_fastload(void)
 				if (z80_de.b.l==0x01&&FASTTAPE_CAN_FEED()&&((i=z80_tape_fastfeed(z80_tape_spystack()))==5||i==6||i==9||i==22))
 				{
 					if (z80_tape_fastdump(z80_tape_spystack())==7)
-						while(tape_bits>15&&z80_de2.b.l>1)
+						while (tape_bits>15&&z80_de2.b.l>1)
 							POKE(z80_hl.w)=fasttape_dump(),++z80_hl.w,--z80_de2.w;
 					j=fasttape_feed(),tape_feedskip=z80_de.b.l=128+(j>>1),z80_de.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc.b.l>>7,13);
 				}
@@ -1498,7 +1500,7 @@ INLINE void z80_tape_fastload(void)
 				if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_fastfeed(z80_tape_spystack())==7)
 				{
 					if (z80_tape_fastdump(z80_tape_spystack())==9&&(z80_af2.b.l&0x41)==0x41)
-						while(tape_bits>15&&z80_de2.b.l>1)
+						while (tape_bits>15&&z80_de2.b.l>1)
 							z80_hl2.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de2.w;
 					j=fasttape_feed(),tape_feedskip=z80_hl2.b.l=128+(j>>1),z80_bc2.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc2.b.l>>7,18);
 				}
@@ -1509,7 +1511,7 @@ INLINE void z80_tape_fastload(void)
 				if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&((i=z80_tape_fastfeed(z80_tape_spystack()))==12||i==13))
 				{
 					if ((i=z80_tape_fastdump(z80_tape_spystack()))==14||i==15)
-						while(tape_bits>15&&z80_de.b.l>1)
+						while (tape_bits>15&&z80_de.b.l>1)
 							z80_hl.b.h^=POKE(z80_ix.w)=fasttape_dump(),i==14?++z80_ix.w:--z80_ix.w,--z80_de.w;
 					j=fasttape_feed(),tape_feedskip=z80_hl.b.l=128+(j>>1),z80_bc.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc.b.l>>7,14);
 				}
@@ -1526,7 +1528,7 @@ INLINE void z80_tape_fastload(void)
 				if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_fastfeed(z80_tape_spystack())==7)
 				{
 					if (z80_tape_fastdump(z80_tape_spystack())==9&&(z80_af2.b.l&0x41)==0x41)
-						while(tape_bits>15&&z80_de.b.l>1)
+						while (tape_bits>15&&z80_de.b.l>1)
 							z80_hl.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de.w;
 					j=fasttape_feed(),tape_feedskip=z80_hl.b.l=128+(j>>1),z80_bc.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc.b.l>>6,18);
 				}
@@ -1538,7 +1540,7 @@ INLINE void z80_tape_fastload(void)
 				if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_fastfeed(z80_tape_spystack())==7)
 				{
 					if (z80_tape_fastdump(z80_tape_spystack())==10)
-						while(tape_bits>15&&z80_de2.b.l>1)
+						while (tape_bits>15&&z80_de2.b.l>1)
 							POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de2.w;
 					j=fasttape_feed(),tape_feedskip=z80_hl2.b.l=128+(j>>1),z80_bc2.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc2.b.l>>7,15);
 				}
@@ -1553,7 +1555,7 @@ INLINE void z80_tape_fastload(void)
 				if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_fastfeed(z80_tape_spystack())==8)
 				{
 					if (z80_tape_fastdump(z80_tape_spystack())==11)
-						while(tape_bits>15&&z80_de.b.l>1)
+						while (tape_bits>15&&z80_de.b.l>1)
 							POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de.w;
 					j=fasttape_feed(),tape_feedskip=z80_hl.b.l=128+(j>>1),z80_hl.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc.b.l>>7,13);
 				}
@@ -1573,7 +1575,7 @@ INLINE void z80_tape_fastload(void)
 				if (FASTTAPE_CAN_FEED()&&PEEK(z80_sp.w+3)==0x08&&z80_tape_fastfeed(z80_tape_spystack())==17)
 				{
 					if ((i=z80_tape_fastdump(z80_tape_spystack()))==5||i==6)
-						while(tape_bits>15&&z80_de.b.l>1)
+						while (tape_bits>15&&z80_de.b.l>1)
 							z80_hl2.w+=POKE(z80_ix.w)=fasttape_dump(),--z80_ix.w,--z80_de.w;
 					j=fasttape_feed(),POKE(z80_sp.w+3)=1,z80_hl.b.h=tape_feedskip=(j>>1),z80_hl.b.l=j&1?-2:0,FASTTAPE_FEED_END(0,13); // -2 avoids the later INC L!
 				}
@@ -1590,7 +1592,7 @@ INLINE void z80_tape_fastload(void)
 				if (FASTTAPE_CAN_FEED()&&PEEK(z80_sp.w+3)==0x08&&z80_tape_fastfeed(z80_tape_spystack())==17)
 				{
 					if (z80_tape_fastdump(z80_tape_spystack())==6)
-						while(tape_bits>15&&z80_de.b.l>1)
+						while (tape_bits>15&&z80_de.b.l>1)
 							z80_hl2.w+=POKE(z80_ix.w)=fasttape_dump(),--z80_ix.w,--z80_de.w;
 					j=fasttape_feed(),POKE(z80_sp.w+3)=1,z80_hl.b.h=tape_feedskip=(j>>1),z80_hl.b.l=j&1?-1:0,FASTTAPE_FEED_END(0,8);
 				}
@@ -1602,7 +1604,7 @@ INLINE void z80_tape_fastload(void)
 				if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_fastfeed(z80_tape_spystack())==7)
 				{
 					if (z80_tape_fastdump(z80_tape_spystack())==12)
-						while(tape_bits>15&&z80_de2.b.l>1)
+						while (tape_bits>15&&z80_de2.b.l>1)
 							z80_hl2.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de2.w;
 					j=fasttape_feed(),tape_feedskip=z80_hl2.b.l=128+(j>>1),z80_bc2.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc2.b.l>>7,17);
 				}
@@ -1625,7 +1627,7 @@ INLINE void z80_tape_fastload(void)
 				if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&((i=z80_tape_fastfeed(z80_tape_spystack()))==10||i==11))
 				{
 					if (z80_tape_fastdump(z80_tape_spystack())==13)
-						while(tape_bits>15&&z80_de.b.l>1)
+						while (tape_bits>15&&z80_de.b.l>1)
 							z80_hl.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de.w;
 					j=fasttape_feed(),tape_feedskip=z80_hl.b.l=128+(j>>1),z80_bc.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc.b.l,16);
 				}
@@ -1636,7 +1638,7 @@ INLINE void z80_tape_fastload(void)
 				if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&((i=z80_tape_fastfeed(z80_tape_spystack()))==2||i==7))
 				{
 					if (((i=z80_tape_fastdump(z80_tape_spystack()))==1||i==16)&&(z80_af2.b.l&0x41)==0x41)
-						while(tape_bits>15&&z80_de2.b.l>1)
+						while (tape_bits>15&&z80_de2.b.l>1)
 							z80_hl2.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de2.w;
 					j=fasttape_feed(),tape_feedskip=z80_hl2.b.l=128+(j>>1),z80_bc2.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc2.b.l>>6,17);
 				}
@@ -1729,7 +1731,7 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 					// VSYNC (0x01; CRTC2 MISSES IT DURING HORIZONTAL OVERFLOW!) + AMSTRAD MODEL (0x1E) + PRINTER IS OFFLINE (0x40) + TAPE SIGNAL (0x80)
 					b&=(crtc_status&CRTC_STATUS_VSYNC?
 						crtc_type!=2||crtc_table[2]+crtc_limit_r3x<crtc_table[0]||crtc_table[2]+crtc_limit_r3x>crtc_table[0]+1:
-						crtc_table[8]==3&&!irq_timer&&video_pos_y>=VIDEO_LENGTH_Y*5/12&&video_pos_y<VIDEO_LENGTH_Y*7/12) // interlaced CRTC VSYNC!
+						crtc_table[8]==3&&irq_timer<3&&video_pos_y>=VIDEO_LENGTH_Y*5/12&&video_pos_y<VIDEO_LENGTH_Y*7/12) // interlaced CRTC VSYNC!
 						+((tape_delay|tape_status)?0xDE:0x5E);
 				}
 				else
@@ -2098,10 +2100,11 @@ int z80_ack_delay=0; // making it local adds overhead :-(
 #define Z80_STRIDE_IO(o) z80_t=z80_delays[o]
 #define Z80_STRIDE_HALT 1
 
+#define Z80_XCF_BUG 0 // don't replicate the SCF/CCF quirk
 #define Z80_DEBUG_LEN 16 // height of disassemblies, dumps and searches
 #define Z80_DEBUG_MMU 1 // allow ROM/RAM toggling, it's useful on CPC!
 #define Z80_DEBUG_EXT 1 // allow EXTRA hardware debugging info pages
-#define z80_out0() 0 // hardware sets whether OUT (C) sends 0 or 255
+#define z80_out0() 0 //  whether OUT (C) sends 0 (NMOS) or 255 (CMOS)
 
 #include "cpcec-z8.h"
 
@@ -2146,58 +2149,94 @@ void all_reset(void) // reset everything!
 // firmware/cartridge ROM file handling operations ------------------ //
 
 BYTE biostype_id=-1; // keeper of the latest loaded BIOS type
-char bios_system[][13]={"CPC464.ROM","CPC664.ROM","CPC6128.ROM","CPCPLUS.ROM"};
+char bios_system[][13]={"cpc464.rom","cpc664.rom","cpc6128.rom","cpcplus.rom"};
 char bios_path[STRMAX]="";
 
 int bios_load(char *s) // load a cartridge file or a firmware ROM file. 0 OK, !0 ERROR
 {
-	FILE *f=puff_fopen(s,"rb");
-	if (!f)
-		return 1;
-	int i=0,j=0x63623030,k,l;
-	if (fgetmmmm(f)==0x52494646&&fgetiiii(f)>0&&fgetmmmm(f)==0x414D5321) // cartridge file?
-		while ((k=fgetmmmm(f))&&(l=fgetiiii(f))>=0&&!feof(f))
+	if (globbing("*.ini",s,1)) // profile?
+	{
+		char t[STRMAX],*tt,u[STRMAX],*uu;
+		strcpy(u,s); if (uu=strrchr(u,PATH_SEPARATOR)) ++uu; else uu=u; // make ROM files relative to INI path
+		MEMZERO(mmu_xtr);
+		FILE *f,*ff;
+		if (f=puff_fopen(s,"r"))
 		{
-			//logprintf(" [%08X:%08X]",k,l);
-			if (k==j&&i+l<=(1<<19))
+			while (fgets(t,STRMAX,f))
 			{
-				i+=fread1(&mem_rom[i],l,f);
-				if (((++j)&15)==10)
-					j+=256-10; // "cb09" is followed by "cb10" (decimal format)
+				tt=t; while (*tt>=' ') ++tt;
+					*tt=0;
+				if ((tt=strchr(t,'='))&&*++tt)
+				{
+					strcpy(uu,tt);
+					if (globbing("LOWEST*",t,1))
+					{
+						if (ff=puff_fopen(u,"rb"))
+							fread1(&mem_xtr[0],0x4000,ff),puff_fclose(ff),mmu_xtr[0]=1;
+					}
+					else if (globbing("HIGH*",t,1))
+					{
+						int i=strtol(&t[4],NULL,16);
+						if (i>=0&&i<length(mmu_xtr)-1)
+							if (ff=puff_fopen(u,"rb"))
+								fread1(&mem_xtr[0x4000+(i<<14)],0x4000,ff),puff_fclose(ff),mmu_xtr[i+1]=1;
+					}
+				}
 			}
-			else if (l)
-				fseek(f,l,SEEK_CUR);
+			puff_fclose(f);
 		}
-	else
-	{
-		fseek(f,0,SEEK_END); i=ftell(f);
-		if (i>0x4000)
-			fseek(f,i-0x4000+0x0601,SEEK_SET),j=fgetmmmm(f);
-		if (i<=0x4000||i&0x3FFF||i>(1<<19)||j==0xD3FE37C9) // 32k,48k,64k...512k + !Spectrum TAPE LOAD fingerprint
-			return puff_fclose(f),1; // reject!
-		fseek(f,0,SEEK_SET);
-		fread1(mem_rom,sizeof(mem_rom),f);
 	}
-	puff_fclose(f);
-	if (i==(1<<15)&&mgetmmmm(&mem_rom[0])==0x01897FED&&mem_rom[0x4002]<3) // firmware fingerprint
+	else // binary file!
 	{
-		type_id=mem_rom[0x4002]; // firmware revision
-		if (crtc_type==3) crtc_type=0; // adjust hardware
-		plus_reset(); // PLUS ASIC can be safely reset
-		logprintf("ROM firmware v%i.\n",1+type_id);
-	}
-	else // Amstrad PLUS cartridge
-	{
-		type_id=crtc_type=3; // enforce hardware
-		j=1<<14;
-		while(j<i) j<<=1;
-		if (j>i) memset(&mem_rom[i],-1,j-i); // pad memory
-		while (j<(1<<19)) // mirror low ROM up
+		FILE *f=puff_fopen(s,"rb");
+		if (!f)
+			return 1;
+		int i=0,j=0x63623030,k,l;
+		if (fgetmmmm(f)==0x52494646&&fgetiiii(f)>0&&fgetmmmm(f)==0x414D5321) // cartridge file?
+			while ((k=fgetmmmm(f))&&(l=fgetiiii(f))>=0&&!feof(f))
+			{
+				//logprintf(" [%08X:%08X]",k,l);
+				if (k==j&&i+l<=(1<<19))
+				{
+					i+=fread1(&mem_rom[i],l,f);
+					if (((++j)&15)==10)
+						j+=256-10; // "cb09" is followed by "cb10" (decimal format)
+				}
+				else if (l)
+					fseek(f,l,SEEK_CUR);
+			}
+		else
 		{
-			memcpy(&mem_rom[j],mem_rom,j);
-			j<<=1;
+			fseek(f,0,SEEK_END); i=ftell(f);
+			if (i>0x4000)
+				fseek(f,i-0x4000+0x0601,SEEK_SET),j=fgetmmmm(f);
+			if (i<=0x4000||i&0x3FFF||i>(1<<19)||j==0xD3FE37C9) // 32k,48k,64k...512k + !Spectrum TAPE LOAD fingerprint
+				return puff_fclose(f),1; // reject!
+			fseek(f,0,SEEK_SET);
+			fread1(mem_rom,sizeof(mem_rom),f);
 		}
-		logprintf("PLUS cartridge %iK.\n",i>>10);
+		puff_fclose(f);
+		MEMZERO(mmu_xtr);
+		if (i==(1<<15)&&mgetmmmm(&mem_rom[0])==0x01897FED&&mem_rom[0x4002]<3) // firmware fingerprint
+		{
+			type_id=mem_rom[0x4002]; // firmware revision
+			if (crtc_type==3) crtc_type=0; // adjust hardware
+			plus_reset(); // PLUS ASIC can be safely reset
+			logprintf("ROM firmware v%i.\n",1+type_id);
+		}
+		else // Amstrad PLUS cartridge
+		{
+			type_id=crtc_type=3; // enforce hardware
+			j=1<<14;
+			while (j<i) j<<=1;
+			if (j>i) memset(&mem_rom[i],-1,j-i); // pad memory
+			while (j<(1<<19)) // mirror low ROM up
+			{
+				memcpy(&mem_rom[j],mem_rom,j);
+				j<<=1;
+			}
+			logprintf("PLUS cartridge %iK.\n",i>>10);
+		}
 	}
 	if (bios_path!=s&&(char*)session_substr!=s)
 		strcpy(bios_path,s);
@@ -2635,7 +2674,7 @@ char session_menudata[]=
 	"0x8801 Browse tape..\n"
 	//"0x4800 Play tape\tCtrl+Shift+F8\n"
 	"=\n"
-	"0x7F00 E_xit\n"
+	"0x3F00 E_xit\n"
 	"Edit\n"
 	"0x8500 Select firmware..\tF5\n"
 	"0x0500 Reset emulation\tCtrl+F5\n"
@@ -2754,22 +2793,22 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 	{
 		case 0x8100: // F1: HELP..
 			session_message(
-				"F1\tHelp..\t\t"
+				"F1\tHelp..\t" MESSAGEBOX_WIDETAB
 				"^F1\tAbout..\t" // "\t"
 				"\n"
-				"F2\tSave snapshot..\t"
+				"F2\tSave snapshot.." MESSAGEBOX_WIDETAB
 				"^F2\tSave last snapshot" // "\t"
 				"\n"
-				"F3\tLoad any file..\t"
+				"F3\tLoad any file.." MESSAGEBOX_WIDETAB
 				"^F3\tLoad last snapshot" // "\t"
 				"\n"
-				"F4\tToggle sound\t"
+				"F4\tToggle sound" MESSAGEBOX_WIDETAB
 				"^F4\tToggle joystick" // "\t"
 				"\n"
-				"F5\tLoad firmware..\t"
+				"F5\tLoad firmware.." MESSAGEBOX_WIDETAB
 				"^F5\tReset emulation" // "\t"
 				"\n"
-				"F6\tToggle realtime\t"
+				"F6\tToggle realtime" MESSAGEBOX_WIDETAB
 				"^F6\tToggle turbo Z80" // "\t"
 				"\n"
 				"F7\tInsert disc into A:..\t"
@@ -2778,39 +2817,39 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 				"\t(shift: ..into B:)\t"
 				"\t(shift: ..from B:)" // "\t"
 				"\n"
-				"F8\tInsert tape..\t"
+				"F8\tInsert tape.." MESSAGEBOX_WIDETAB
 				"^F8\tRemove tape" // "\t"
 				"\n"
 				"\t(shift: record..)\t"
 				"\t-\t\t" //"\t(shift: play/stop)" // "\t"
 				"\n"
-				"F9\tDebug\t\t"
+				"F9\tDebug\t" MESSAGEBOX_WIDETAB
 				"^F9\tToggle fast tape" // "\t"
 				"\n"
 				"\t(shift: view status)\t"
 				"\t(shift: ..fast load)" // "\t"
 				"\n"
-				"F11\tNext palette\t"
+				"F11\tNext palette" MESSAGEBOX_WIDETAB
 				"^F11\tNext scanlines" // "\t"
 				"\n"
 				"\t(shift: previous..)\t"
 				"\t(shift: ..filter)" // "\t"
 				"\n"
-				"F12\tSave screenshot\t"
+				"F12\tSave screenshot" MESSAGEBOX_WIDETAB
 				"^F12\tRecord wavefile" // "\t"
 				"\n"
-				"\t-\t\t"
-				"\t(shift: ..YM3 file)" // "\t"
+				"\t-\t" MESSAGEBOX_WIDETAB
+				"\t(shift: ..YM file)" // "\t"
 				"\n"
 				"\n"
-				"Num.+\tRaise frameskip\t"
+				"Num.+\tRaise frameskip" MESSAGEBOX_WIDETAB
 				"Num.*\tFull frameskip" // "\t"
 				"\n"
-				"Num.-\tLower frameskip\t"
+				"Num.-\tLower frameskip" MESSAGEBOX_WIDETAB
 				"Num./\tNo frameskip" // "\t"
 				"\n"
-				"Pause\tPause/continue\t"
-				"*Return\tMaximize/restore" // "\t"
+				"Pause\tPause/continue" MESSAGEBOX_WIDETAB
+				"*Return\tMaximize/restore" "\t"
 				"\n"
 			,"Help");
 			break;
@@ -2833,7 +2872,7 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 					session_message(txt_error_snap_save,txt_error);
 			break;
 		case 0x8300: // F3: LOAD ANY FILE..
-			if (puff_session_getfile(session_shift?snap_path:autorun_path,session_shift?snap_pattern:"*.sna;*.rom;*.crt;*.cpr;*.dsk;*.cdt;*.tzx;*.csw;*.wav",session_shift?"Load snapshot":"Load file"))
+			if (puff_session_getfile(session_shift?snap_path:autorun_path,session_shift?snap_pattern:"*.sna;*.rom;*.crt;*.cpr;*.ini;*.dsk;*.cdt;*.tzx;*.csw;*.wav",session_shift?"Load snapshot":"Load file"))
 		case 0x8000: // DRAG AND DROP
 				if (any_load(session_parmtr,!session_shift))
 					session_message(txt_error_any_load,txt_error);
@@ -2887,7 +2926,7 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 			gate_ram_depth=4;
 			break;
 		case 0x8500: // F5: LOAD FIRMWARE..
-			if (s=puff_session_getfile(bios_path,"*.rom;*.crt;*.cpr","Load firmware"))
+			if (s=puff_session_getfile(bios_path,"*.rom;*.crt;*.cpr;*.ini","Load firmware"))
 			{
 				if (bios_load(s)) // error? warn and undo!
 					session_message(txt_error_bios,txt_error),bios_reload(); // reload valid firmware, if required
@@ -3020,7 +3059,7 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 		case 0x8C00: // F12: SAVE SCREENSHOT
 			session_savebitmap();
 			break;
-		case 0x0C00: // ^F12: RECORD WAVEFILE OR YM3 FILE
+		case 0x0C00: // ^F12: RECORD WAVEFILE OR YM FILE
 			if (session_shift)
 			{
 				if (psg_closelog()) // toggles recording
@@ -3081,10 +3120,12 @@ void session_configwritemore(FILE *f)
 		,type_id,crtc_type,gate_ram_depth,autorun_path,snap_path,tape_path,disc_path,bios_path,onscreen_flag,video_type,tape_rewind,z80_debug_configwrite());
 }
 
-#ifdef DEBUG
+#if defined(DEBUG) || defined(SDL_MAIN_HANDLED)
 void printferror(char *s) { printf("Error: %s\n",s); }
+#define printfusage(s) printf(s)
 #else
 void printferror(char *s) { sprintf(session_tmpstr,"Error: %s\n",s); session_message(session_tmpstr,txt_error); }
+#define printfusage(s) session_message(s,caption_version)
 #endif
 
 // START OF USER INTERFACE ========================================== //
@@ -3189,11 +3230,7 @@ int main(int argc,char *argv[])
 	}
 	if (i>argc)
 		return
-			#ifdef DEBUG
-			printf("usage: %s"
-			#else
-			session_message("Usage: " MY_CAPTION
-			#endif
+			printfusage("Usage: " MY_CAPTION
 			" [option..] [file..]\n"
 			"\t-cN\tscanline type (0..3)\n"
 			"\t-CN\tcolour palette (0..4)\n"
@@ -3218,13 +3255,8 @@ int main(int argc,char *argv[])
 			"\t-X\tdisable disc drives\n"
 			"\t-Y\tdisable tape analysis\n"
 			"\t-Z\tdisable tape speed-up\n"
-			#ifdef DEBUG
-			,argv[0])
-			#else
-			,caption_version)
-			#endif
-			,1;
-	if (bios_reload()||bdos_path_load("CPCADOS.ROM"))
+			),1;
+	if (bios_reload()||bdos_path_load("cpcados.rom"))
 		return printferror(txt_error_bios),1;
 	if (session_create(session_menudata))
 		return printferror("Cannot create session!"),1;

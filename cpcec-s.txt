@@ -44,12 +44,21 @@ Los binarios para Windows pueden ser compilados desde GCC (o compatibles)
 mediante los siguientes comandos:
 
 	windres cpcec.rc -Ocoff -ocpcec.res
-	gcc -m32 -mwindows cpcec.res -xc cpcec.c -luser32 -lgdi32 -lwinmm
+	gcc -m32 -mwindows cpcec.res -O2 -xc cpcec.c -luser32 -lgdi32 -lwinmm
 -lcomdlg32 -lshell32 -ocpcec.exe
 
 	windres zxsec.rc -Ocoff -ozxsec.res
-	gcc -m32 -mwindows zxsec.res -xc zxsec.c -luser32 -lgdi32 -lwinmm
+	gcc -m32 -mwindows zxsec.res -O2 -xc zxsec.c -luser32 -lgdi32 -lwinmm
 -lcomdlg32 -lshell32 -ozxsec.exe
+
+Los binarios para sistemas operativos con soporte SDL2 necesitan otros comandos:
+
+	gcc -DSDL_MAIN_HANDLED -O2 -xc cpcec.c -lSDL2 -ocpcec.elf
+
+	gcc -DSDL_MAIN_HANDLED -O2 -xc zxsec.c -lSDL2 -ozxsec.elf
+
+(además, los nombres de fichero deben estar en minúsculas: el contenido del
+archivo ZIP debe extraerse con "unzip -LL cpcec-20XXXXXX.zip")
 
 Pelles C y otros compiladores visuales pueden definir el proyecto entero a
 partir de los ficheros fuente CPCEC.C y ZXSEC.C y los ficheros de recursos
@@ -156,8 +165,8 @@ cartucho;
 * F3+Control: volver a cargar la última instantánea seleccionada;
 * F4: habilitar (o deshabilitar) la emulación de sonido;
 * F4+Control: habilitar (o deshabilitar) el joystick por teclado;
-* F5: elegir el firmware del CPC emulado, tanto como un fichero ROM como un
-cartucho de formato CPR;
+* F5: elegir el firmware del CPC emulado, que puede ser un fichero ROM, un
+fichero INI o un cartucho de formato CPR;
 * F5+Control: reiniciar la emulación;
 * F6: habilitar (o deshabilitar) la emulación en tiempo real;
 * F6+Control: elevar la velocidad del Z80 emulado de 4 MHz a 8, 12 y 16 MHz;
@@ -188,6 +197,11 @@ medios;
 * Alt+Return: maximizar (o restaurar) la ventana. El menú se oculta al maximizar
 la ventana mediante estas teclas.
 
+Las versiones para SDL2 son ligeramente distintas en la medida en que
+proporcionan su propio interfaz gráfico; el menú aparece al pulsar la tecla F10,
+y para cambiar el modo de acceso de ficheros de disco hay que pulsar TAB dentro
+del diálogo de selección de ficheros mostrado por F7 ó F7+Mays.
+
 Los ficheros BMP y WAV son los ficheros de imagen y sonido estándares homónimos.
 Los ficheros YM son volcados del estado del chip de sonido, que por haber sido
 usado en más plataformas además de Amstrad CPC (Spectrum 128, MSX, Atari ST...)
@@ -196,6 +210,13 @@ tales como STSOUND y AY-EMUL. Nótese que el modo de "scanlines" (opción que
 simula varios tipos de monitor) se refleja en las grabaciones igual que en la
 pantalla, y que cada modo tiene un impacto distinto en el rendimiento del
 programa: el modo normal consume más esfuerzo, y el entrelazado doble, menos.
+
+Los ficheros INI pueden definir un conjunto de ROMs extras para cargar por
+encima del firmware actual. Internamente son simples ficheros de texto donde
+cada línea es o bien LOWEST=nombrefichero (que define el contenido de ROM LOW) o
+HIGHxx=nombrefichero (que define el contenido de la enésima ranura de ROM HIGH,
+donde "n" es el valor hexadecimal de "xx"): por ejemplo HIGH07=PARADOS.ROM
+significa que la ranura 7 de HIGH ROM está ocupada por el fichero PARADOS.ROM.
 
 Los indicadores en pantalla muestran el estado de las unidades de disco (número
 de pista, actividad), la cinta (actividad) y el joystick.
@@ -646,5 +667,15 @@ verticalmente y el panel de información de hardware está alineado al volcado
 ASCII de memoria. También corrige un error en el buscador de cabeceras de
 archivos ZIP.
 - 20200420 -- parche menor que corrige las barras negras de las señales HSYNC de
-"Chany Dream End Megademo" en CRTC 1, "Onescreen Colonies" en CRTC 0, etc., el
-valor de MEMPTR en JR cc,$RR y DJNZ $RR y la lógica de BIT n,r,(IX+$XX).
+"Chany Dream End Megademo" en CRTC 1, "Onescreen Colonies" en CRTC 0, etc., así
+como el valor de MEMPTR en JR cc,$RR y DJNZ $RR y la lógica de BIT n,r,(IX+$XX):
+las cuotas de error de ZXSEC en las pruebas de 2012 RAXOFT son Z80FULL 10/152,
+Z80CCF 70/152 y Z80MEMPTR 4/152.
+- 20200430 -- decimosexta versión pública. Ahora es posible compilar CPCEC y
+ZXSEC con SDL2 (que incluye su propio interfaz gráfico de usuario) para
+múltiples sistemas operativos mediante la opción -DSDL_MAIN_HANDLED; también se
+incluyen los ficheros CPCEC.ELF y ZXSEC.ELF para GNU/Linux 32bit ya compilados.
+Nuevo soporte de perfiles de extensiones de ROM mediante ficheros INI capaces de
+contener hasta 257 bloques ROM de 16K. Más retoques de Z80: las nuevas cuotas de
+errores de ZXSEC en las pruebas 2012 RAXOFT son 8/152 Z80FULL, 5/152 Z80CCF y
+0/152 Z80MEMPTR.

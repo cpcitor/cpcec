@@ -11,36 +11,51 @@
 // interface of variables and procedures that don't require particular
 // knowledge of the emulation's intrinsic properties.
 
-// Right now only Windows 5.0+ is supported. Compile the emulator with
+// To compile the emulator for Windows 5.0+, the default platform,
 // "$(CC) -xc cpcec.c -luser32 -lgdi32 -lcomdlg32 -lshell32 -lwinmm"
 // or the equivalent options as defined by your preferred compiler.
 // Tested compilers: GCC 4.9.2, GCC 5.1.0, TCC 0.9.27, Pelles C 4.50.113
 
-// START OF WINDOWS 5.0+ DEFINITIONS ================================ //
+#define INLINE // 'inline': useless in TCC and GCC4, harmful in GCC5!
+INLINE int ucase(int i) { return i>='a'&&i<='z'?i-32:i; }
+INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
+
+unsigned char session_scratch[1<<18]; // at least 256k!
+
+#include "cpcec-a7.h" //unsigned char *onscreen_chrs;
+
+char caption_version[]=MY_CAPTION " " MY_VERSION;
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN 1 // low dependencies
 #endif
+
+#ifdef SDL_MAIN_HANDLED // SDL2?
+
+#include "cpcec-ox.h"
+
+#else // START OF WINDOWS 5.0+ DEFINITIONS ========================== //
+
 #include <windows.h> // KERNEL32.DLL, USER32.DLL, GDI32.DLL, WINMM.DLL, COMDLG32.DLL, SHELL32.DLL
-
-typedef union { unsigned short w; struct { unsigned char l,h; } b; } Z80W; // little endian: i86, x64, etc.
-//typedef union { unsigned short w; struct { unsigned char h,l; } b; } Z80W; // big endian: powerPC, ARM, etc.
-
 #include <commdlg.h> // COMDLG32.DLL: getOpenFileName()...
 #include <shellapi.h> // SHELL32.DLL: DragQueryFile()...
 #include <mmsystem.h> // WINMM.DLL: waveOutWrite()...
+
+typedef union { unsigned short w; struct { unsigned char l,h; } b; } Z80W; // WIN32 is a lil-endian platform!
+
 #define STRMAX 256 // widespread in Windows
 #define PATH_SEPARATOR '\\' // '/' in POSIX
 #define strcasecmp _stricmp
-#define fsetsize(f,l) _chsize(_fileno(f),l)
-
-#define INLINE // 'inline': useless in TCC and GCC4, harmful in GCC5!
+#define fsetsize(f,l) _chsize(_fileno(f),(l))
+#include <io.h> // _chsize(),_fileno()...
 
 #ifdef DEBUG
 #define logprintf(...) (fprintf(stdout,__VA_ARGS__))
 #else
 #define logprintf(...)
 #endif
+
+#define MESSAGEBOX_WIDETAB "\t"
 
 // general engine constants and variables --------------------------- //
 
@@ -82,6 +97,9 @@ BYTE session_fast=0,session_wait=0,session_audio=1,session_blit=0; // timing and
 BYTE session_stick=1,session_shift=0,session_key2joy=0; // keyboard and joystick
 BYTE video_scanline=0,video_scanlinez=-1; // 0 = solid, 1 = scanlines, 2 = full interlace, 3 = half interlace
 BYTE video_filter=0,audio_filter=0; // interpolation flags
+BYTE session_intzoom=0;
+
+FILE *session_wavefile=NULL; // audio recording is done on each session update
 
 RECT session_ideal; // ideal rectangle where the window fits perfectly
 JOYINFO session_ji; // joystick buffer
@@ -95,7 +113,7 @@ HDC session_dc,session_cdc; HGDIOBJ session_dib; // video structs
 #endif
 HWAVEOUT session_wo; WAVEHDR session_wh; MMTIME session_mmtime; // audio structs
 
-BYTE session_signal=0;
+BYTE session_paused=0,session_signal=0;
 #define SESSION_SIGNAL_FRAME 1
 #define SESSION_SIGNAL_DEBUG 2
 #define SESSION_SIGNAL_PAUSE 4
@@ -202,7 +220,6 @@ BYTE kbd_bit[16]; // up to 128 keys in 16 rows of 8 bits
 #define	KBCODE_R_SHIFT	0x36
 #define	KBCODE_R_CTRL	0x9D
 #define	KBCODE_R_ALT	0xB8 // trapped by Win32
-#define	KBCODE_CONTEXT	0xDD
 // extended keys
 #define	KBCODE_PRINT	0x54 // trapped by Win32
 #define	KBCODE_SCR_LOCK	0x46
@@ -239,7 +256,7 @@ BYTE kbd_bit[16]; // up to 128 keys in 16 rows of 8 bits
 const BYTE kbd_k2j[]= // these keys can simulate a joystick
 	{ KBCODE_UP, KBCODE_DOWN, KBCODE_LEFT, KBCODE_RIGHT, KBCODE_Z, KBCODE_X, KBCODE_C, KBCODE_V };
 
-unsigned char kbd_map[224]; // key-to-key translation map
+unsigned char kbd_map[256]; // key-to-key translation map
 
 // general engine functions and procedures -------------------------- //
 
@@ -256,9 +273,8 @@ void session_please(void) // stop activity for a short while
 	{
 		if (session_audio)
 			waveOutPause(session_wo);
+		video_framecount=-1;
 		session_wait=1;
-		//if (!video_framecount)
-			video_framecount=-1;
 	}
 }
 
@@ -279,8 +295,7 @@ int session_key_n_joy(int k) // handle some keys as joystick motions
 				return kbd_joy[i];
 	return kbd_map[k];
 }
-
-int session_intzoom=0;
+BYTE session_dontblit=0;
 void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 {
 	RECT r; GetClientRect(hwnd,&r);
@@ -300,15 +315,7 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 			xx=VIDEO_PIXELS_X,yy=VIDEO_PIXELS_Y; // window area is too small!
 		int x=(r.right-xx)/2,y=(r.bottom-yy)/2; // locate bitmap on window center
 		static HGDIOBJ session_oldselect=NULL;
-		#ifndef DEBUG
-		if (session_signal&SESSION_SIGNAL_DEBUG)
-		{
-			if (session_oldselect!=session_dbg_dib)
-				SelectObject(session_cdc,session_oldselect=session_dbg_dib);
-			BitBlt(h,(r.right-DEBUG_LENGTH_X*8)/2,(r.bottom-DEBUG_LENGTH_Y*DEBUG_LENGTH_Z)/2,DEBUG_LENGTH_X*8,DEBUG_LENGTH_Y*DEBUG_LENGTH_Y,session_cdc,0,0,SRCCOPY);
-		}
-		else
-		#endif
+		if (!session_dontblit)
 		{
 			if (session_oldselect!=session_dib)
 				SelectObject(session_cdc,session_oldselect=session_dib);
@@ -317,6 +324,17 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 			else
 				StretchBlt(h,x,y,xx,yy,session_cdc,VIDEO_OFFSET_X,VIDEO_OFFSET_Y,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,SRCCOPY); // slow :-(
 		}
+		else
+			session_dontblit=0;
+		#ifndef DEBUG
+		if (session_signal&SESSION_SIGNAL_DEBUG)
+		{
+			if (session_oldselect!=session_dbg_dib)
+				SelectObject(session_cdc,session_oldselect=session_dbg_dib);
+			BitBlt(h,(r.right-DEBUG_LENGTH_X*8)/2,(r.bottom-DEBUG_LENGTH_Y*DEBUG_LENGTH_Z)/2,DEBUG_LENGTH_X*8,DEBUG_LENGTH_Y*DEBUG_LENGTH_Y,session_cdc,0,0,SRCCOPY);
+		}
+		//else
+		#endif
 	}
 }
 
@@ -366,7 +384,7 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 			}
 			break;
 		case WM_COMMAND:
-			if (0x7F00==(WORD)wparam)
+			if (0x3F00==(WORD)wparam)
 				PostMessage(hwnd,WM_CLOSE,0,0);
 			else
 			{
@@ -374,16 +392,19 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 				session_event=wparam&0xBFFF; // cfr infra: bit 7 means CONTROL KEY OFF
 			}
 			break;
+		#ifndef DEBUG
+		case WM_CHAR:
+			if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant for the debugger, see below
+				session_event=wparam>=32&&wparam<=255?wparam:0;
+			break;
+		#endif
 		case WM_KEYDOWN:
 			{
 				int vkc=GetKeyState(VK_CONTROL)<0;
 				session_shift=GetKeyState(VK_SHIFT)<0;
 				#ifndef DEBUG
 				if (session_signal&SESSION_SIGNAL_DEBUG)
-				{
-					if ((wparam>='0'&&wparam<='9')||(wparam>='A'&&wparam<='Z'))
-						session_event=wparam-(vkc?64:0);
-					else switch (wparam)
+					switch (wparam)
 					{
 						case VK_LEFT: session_event=8; break;
 						case VK_RIGHT: session_event=9; break;
@@ -395,15 +416,14 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 						case VK_END: session_event=29; break;
 						case VK_NEXT: session_event=30; break;
 						case VK_PRIOR: session_event=31; break;
-						case VK_SPACE: session_event=session_shift?160:' '; break;
+						case VK_SPACE: if (session_shift) session_event=160; break;
 						case VK_BACK: session_event=session_shift?9:8; break;
 						case VK_TAB: session_event=session_shift?7:12; break;
 						default: session_event=0; break;
 					}
-				}
 				#endif
-				int k;
-				if ((k=session_key_n_joy(((lparam>>16)&127)+((lparam>>17)&128)))<128) // normal key
+				int k=session_key_n_joy(((lparam>>16)&127)+((lparam>>17)&128));
+				if (k<128) // normal key
 				{
 					#ifndef DEBUG
 					if (!(session_signal&SESSION_SIGNAL_DEBUG))
@@ -456,8 +476,6 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 	return 0;
 }
 
-char caption_version[]=MY_CAPTION " " MY_VERSION;
-char session_text[]="%s | %s | %g%% CPU %g%% %s";
 INLINE int session_create(char *s) // create video+audio devices and set menu; 0 OK, !0 ERROR
 {
 	HMENU session_submenu=NULL;
@@ -515,65 +533,64 @@ INLINE int session_create(char *s) // create video+audio devices and set menu; 0
 	session_ideal.right-=session_ideal.left;
 	session_ideal.bottom-=session_ideal.top;
 	session_ideal.left=session_ideal.top=0; // ensure that the ideal area is defined as (0,0,WIDTH,HEIGHT)
-	if (session_hwnd=CreateWindow(wc.lpszClassName,caption_version,i,CW_USEDEFAULT,CW_USEDEFAULT,session_ideal.right,session_ideal.bottom,NULL,session_submenu?session_menu:NULL,wc.hInstance,NULL))
+	if (!(session_hwnd=CreateWindow(wc.lpszClassName,caption_version,i,CW_USEDEFAULT,CW_USEDEFAULT,session_ideal.right,session_ideal.bottom,NULL,session_submenu?session_menu:NULL,wc.hInstance,NULL)))
+		return 1;
+	DragAcceptFiles(session_hwnd,1);
+	BITMAPINFO bmi;
+	memset(&bmi,0,sizeof(bmi));
+	bmi.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
+	bmi.bmiHeader.biWidth=VIDEO_LENGTH_X;
+	bmi.bmiHeader.biHeight=-VIDEO_LENGTH_Y; // negative values make a top-to-bottom bitmap; Windows' default bitmap is bottom-to-top
+	bmi.bmiHeader.biPlanes=1;
+	bmi.bmiHeader.biBitCount=32; // cfr. VIDEO_DATATYPE
+	bmi.bmiHeader.biCompression=BI_RGB;
+	session_dc=GetDC(session_hwnd); // caution: we assume that if CreateWindow() succeeds all other USER and GDI calls will succeed too
+	session_cdc=CreateCompatibleDC(session_dc); // ditto
+	session_dib=CreateDIBSection(session_dc,&bmi,DIB_RGB_COLORS,(void **)&video_frame,NULL,0); // ditto
+	#ifndef DEBUG
+		bmi.bmiHeader.biWidth=DEBUG_LENGTH_X*8;
+		bmi.bmiHeader.biHeight=-DEBUG_LENGTH_Y*DEBUG_LENGTH_Z;
+		session_dbg_dib=CreateDIBSection(session_dc,&bmi,DIB_RGB_COLORS,(void **)&debug_frame,NULL,0);
+	#endif
+	ShowWindow(session_hwnd,SW_SHOWDEFAULT);
+	UpdateWindow(session_hwnd);
+	session_timer=GetTickCount();
+	if (session_stick)
 	{
-		DragAcceptFiles(session_hwnd,1);
-		BITMAPINFO bmi;
-		memset(&bmi,0,sizeof(bmi));
-		bmi.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
-		bmi.bmiHeader.biWidth=VIDEO_LENGTH_X;
-		bmi.bmiHeader.biHeight=-VIDEO_LENGTH_Y; // negative values make a top-to-bottom bitmap; Windows' default bitmap is bottom-to-top
-		bmi.bmiHeader.biPlanes=1;
-		bmi.bmiHeader.biBitCount=32; // cfr. VIDEO_DATATYPE
-		bmi.bmiHeader.biCompression=BI_RGB;
-		session_dc=GetDC(session_hwnd); // caution: we assume that if CreateWindow() succeeds all other USER and GDI calls will succeed too
-		session_cdc=CreateCompatibleDC(session_dc); // ditto
-		session_dib=CreateDIBSection(session_dc,&bmi,DIB_RGB_COLORS,(void **)&video_frame,NULL,0); // ditto
-		#ifndef DEBUG
-			bmi.bmiHeader.biWidth=DEBUG_LENGTH_X*8;
-			bmi.bmiHeader.biHeight=-DEBUG_LENGTH_Y*DEBUG_LENGTH_Z;
-			session_dbg_dib=CreateDIBSection(session_dc,&bmi,DIB_RGB_COLORS,(void **)&debug_frame,NULL,0);
-		#endif
-		ShowWindow(session_hwnd,SW_SHOWDEFAULT);
-		UpdateWindow(session_hwnd);
-		session_timer=GetTickCount();
-		if (session_stick)
-		{
-			int i=joyGetNumDevs(),j=0;
-			while (j<i&&joyGetPos(j,&session_ji)) // scan joysticks until we run out or one is OK
-				++j;
-			session_stick=(j<i)?j+1:0; // ID+1 if available, 0 if missing
-		}
-		session_wo=0; // no audio unless device is detected
-		if (session_audio)
-		{
-			memset(&session_mmtime,0,sizeof(session_mmtime));
-			session_mmtime.wType=TIME_SAMPLES; // Windows doesn't always provide TIME_MS!
-			WAVEFORMATEX wfex;
-			memset(&wfex,0,sizeof(wfex));
-			wfex.wFormatTag=WAVE_FORMAT_PCM;
-			wfex.wBitsPerSample=AUDIO_BITDEPTH, wfex.nBlockAlign=AUDIO_BITDEPTH/8*(wfex.nChannels=AUDIO_CHANNELS);
-			wfex.nAvgBytesPerSec=wfex.nBlockAlign*(wfex.nSamplesPerSec=AUDIO_PLAYBACK);
-			if (session_audio=!waveOutOpen(&session_wo,WAVE_MAPPER,&wfex,0,0,0))
-			{
-				memset(&session_wh,0,sizeof(WAVEHDR));
-				memset(audio_frame=audio_memory,AUDIO_ZERO,sizeof(audio_memory));
-				session_wh.lpData=(BYTE *)audio_memory;
-				session_wh.dwBufferLength=AUDIO_N_FRAMES*AUDIO_LENGTH_Z*wfex.nBlockAlign;
-				session_wh.dwFlags=WHDR_BEGINLOOP|WHDR_ENDLOOP;
-				session_wh.dwLoops=-1; // loop forever!
-				waveOutPrepareHeader(session_wo,&session_wh,sizeof(WAVEHDR));
-				waveOutWrite(session_wo,&session_wh,sizeof(WAVEHDR));
-				session_timer=0;
-			}
-		}
-		return 0;
+		int i=joyGetNumDevs(),j=0;
+		while (j<i&&joyGetPos(j,&session_ji)) // scan joysticks until we run out or one is OK
+			++j;
+		session_stick=(j<i)?j+1:0; // ID+1 if available, 0 if missing
 	}
-	return 1;
+	session_wo=0; // no audio unless device is detected
+	if (session_audio)
+	{
+		memset(&session_mmtime,0,sizeof(session_mmtime));
+		session_mmtime.wType=TIME_SAMPLES; // Windows doesn't always provide TIME_MS!
+		WAVEFORMATEX wfex;
+		memset(&wfex,0,sizeof(wfex));
+		wfex.wFormatTag=WAVE_FORMAT_PCM;
+		wfex.wBitsPerSample=AUDIO_BITDEPTH, wfex.nBlockAlign=AUDIO_BITDEPTH/8*(wfex.nChannels=AUDIO_CHANNELS);
+		wfex.nAvgBytesPerSec=wfex.nBlockAlign*(wfex.nSamplesPerSec=AUDIO_PLAYBACK);
+		if (session_audio=!waveOutOpen(&session_wo,WAVE_MAPPER,&wfex,0,0,0))
+		{
+			memset(&session_wh,0,sizeof(WAVEHDR));
+			memset(audio_frame=audio_memory,AUDIO_ZERO,sizeof(audio_memory));
+			session_wh.lpData=(BYTE *)audio_memory;
+			session_wh.dwBufferLength=AUDIO_N_FRAMES*AUDIO_LENGTH_Z*wfex.nBlockAlign;
+			session_wh.dwFlags=WHDR_BEGINLOOP|WHDR_ENDLOOP;
+			session_wh.dwLoops=-1; // loop forever!
+			waveOutPrepareHeader(session_wo,&session_wh,sizeof(WAVEHDR));
+			waveOutWrite(session_wo,&session_wh,sizeof(WAVEHDR));
+			session_timer=0;
+		}
+	}
+	session_please();
+	return 0;
 }
 
 void session_menuinfo(void); // set the current menu flags. Must be defined later on!
-int session_paused=0,session_dirtymenu=1; // to force new status text
+BYTE session_dirtymenu=1; // to force new status text
 INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 {
 	static int config_signal=0; // catch DEBUG and PAUSE signals
@@ -590,10 +607,10 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 		#ifndef DEBUG
 		if (session_signal&SESSION_SIGNAL_DEBUG)
 		{
-			if (debug_buffer[0]==128)
+			if (*debug_buffer==128)
 				session_please(),session_debug_show();
-			if (debug_buffer[0])//!=0
-				session_redraw(session_hwnd,session_dc),debug_buffer[0]=0;
+			if (*debug_buffer)//!=0
+				session_redraw(session_hwnd,session_dc),*debug_buffer=0;
 		}
 		else
 		#endif
@@ -601,9 +618,10 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 		{
 			session_please();
 			sprintf(session_tmpstr,"%s | %s | PAUSED",caption_version,session_info);
-			session_paused=SetWindowText(session_hwnd,session_tmpstr);
+			SetWindowText(session_hwnd,session_tmpstr);
+			session_paused=1;
 		}
-		WaitMessage();
+		WaitMessage(); session_dontblit=1; // reduce flickering
 	}
 	MSG msg;
 	int q=0;
@@ -621,35 +639,35 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 			session_event=0;
 		}
 	}
-
 	return q;
 }
 
-FILE *session_wavefile=NULL; // audio recording is done on each session update
 INLINE void session_writewave(AUDIO_DATATYPE *t); // save the current sample frame. Must be defined later on!
 INLINE void session_render(void) // update video, audio and timers
 {
 	int i,j,k;
 	static int performance_t=0,performance_f=0,performance_b=0; ++performance_f;
 	if (!video_framecount) // do we need to hurry up?
+	{
 		if ((video_interlaces=!video_interlaces)||!video_interlaced)
 			++performance_b,session_redraw(session_hwnd,session_dc);
-	if (session_stick&&!session_key2joy) // do we need to check the joystick?
-	{
-		if (!joyGetPos(session_stick-1,&session_ji))
-			j=((session_ji.wYpos<0x4000)?1:0)+((session_ji.wYpos>=0xC000)?2:0) // UP, DOWN
-			+((session_ji.wXpos<0x4000)?4:0)+((session_ji.wXpos>=0xC000)?8:0) // LEFT, RIGHT
-			+((session_ji.wButtons&JOY_BUTTON1)?16:0)+((session_ji.wButtons&JOY_BUTTON2)?32:0) // FIRE1, FIRE2
-			+((session_ji.wButtons&JOY_BUTTON3)?64:0)+((session_ji.wButtons&JOY_BUTTON4)?128:0); // FIRE3, FIRE4
-		else
-			j=0; // joystick failure, release its keys
-		for (i=0;i<sizeof(kbd_joy);++i)
+		if (session_stick&&!session_key2joy) // do we need to check the joystick?
 		{
-			k=kbd_joy[i];
-			if (j&(1<<i))
-				kbd_bit_set(k); // key is down
+			if (!joyGetPos(session_stick-1,&session_ji))
+				j=((session_ji.wYpos<0x4000)?1:0)+((session_ji.wYpos>=0xC000)?2:0) // UP, DOWN
+				+((session_ji.wXpos<0x4000)?4:0)+((session_ji.wXpos>=0xC000)?8:0) // LEFT, RIGHT
+				+((session_ji.wButtons&JOY_BUTTON1)?16:0)+((session_ji.wButtons&JOY_BUTTON2)?32:0) // FIRE1, FIRE2
+				+((session_ji.wButtons&JOY_BUTTON3)?64:0)+((session_ji.wButtons&JOY_BUTTON4)?128:0); // FIRE3, FIRE4
 			else
-				kbd_bit_res(k); // key is up
+				j=0; // joystick failure, release its keys
+			for (i=0;i<sizeof(kbd_joy);++i)
+			{
+				k=kbd_joy[i];
+				if (j&(1<<i))
+					kbd_bit_set(k); // key is down
+				else
+					kbd_bit_res(k); // key is up
+			}
 		}
 	}
 	audio_target=&audio_memory[AUDIO_LENGTH_Z*audio_session];
@@ -713,7 +731,7 @@ INLINE void session_render(void) // update video, audio and timers
 	{
 		if (performance_t)
 		{
-			sprintf(session_tmpstr,session_text,caption_version,session_info,performance_f*100.0/VIDEO_PLAYBACK,performance_b*100.0/VIDEO_PLAYBACK,session_blit?"GFX":"gfx");
+			sprintf(session_tmpstr,"%s | %s | %g%% CPU %g%% %s",caption_version,session_info,performance_f*100.0/VIDEO_PLAYBACK,performance_b*100.0/VIDEO_PLAYBACK,session_blit?"GFX":"gfx");
 			SetWindowText(session_hwnd,session_tmpstr);
 		}
 		performance_t=i,performance_f=performance_b=session_paused=0;
@@ -740,10 +758,10 @@ INLINE void session_byebye(void) // delete video+audio devices
 
 void session_detectpath(char *s) // detects session path
 {
-	if (s=strrchr(strcpy(session_path,s),PATH_SEPARATOR))
-		s[1]=0; // no path
+	char *t; if ((t=strrchr(strcpy(session_path,s),'\\'))||(t=strrchr(strcpy(session_path,s),':')))
+		t[1]=0; // keep separator
 	else
-		session_path[0]=0;
+		*session_path=0; // no path
 }
 char *session_configfile(void) // returns path to configuration file
 {
@@ -753,18 +771,14 @@ char *session_configfile(void) // returns path to configuration file
 void session_writebitmap(FILE *f) // write current bitmap into a BMP file
 {
 	static BYTE r[VIDEO_PIXELS_X*3];
-	int i;
-	for (i=VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-1;i>=VIDEO_OFFSET_Y;--i)
+	for (int i=VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-1;i>=VIDEO_OFFSET_Y;--i)
 	{
 		BYTE *s=(BYTE *)&video_frame[(VIDEO_OFFSET_X+i*VIDEO_LENGTH_X)],*t=r;
-		int j;
-		for (j=0;j<VIDEO_PIXELS_X;++j) // turn RGBA (32 bits) into RGB (24 bits)
-		{
-			*t++=*s++; // copy R
-			*t++=*s++; // copy G
-			*t++=*s++; // copy B
+		for (int j=0;j<VIDEO_PIXELS_X;++j) // turn RGBA (32 bits) into RGB (24 bits)
+			*t++=*s++, // copy R
+			*t++=*s++, // copy G
+			*t++=*s++, // copy B
 			s++; // skip A
-		}
 		fwrite(r,1,VIDEO_PIXELS_X*3,f);
 	}
 }
@@ -787,68 +801,72 @@ void session_menuradio(int id,int a,int z) // select option `id` in the range `a
 void session_message(char *s,char *t) // show multi-lined text `s` under caption `t`
 	{ session_please(); MessageBox(session_hwnd,s,t,strchr(t,'?')?MB_ICONQUESTION:(strchr(t,'!')?MB_ICONEXCLAMATION:MB_OK)); }
 void session_aboutme(char *s,char *t) // special case: "About.."
-	{
-		session_please();
-		MSGBOXPARAMS mbp;
-		mbp.cbSize=sizeof(MSGBOXPARAMS);
-		mbp.hwndOwner=session_hwnd;
-		mbp.hInstance=GetModuleHandle(0);
-		mbp.lpszText=s;
-		mbp.lpszCaption=t;
-		mbp.dwStyle=MB_OK|MB_USERICON;
-		mbp.lpszIcon=MAKEINTRESOURCE(34002);
-		mbp.dwContextHelpId=0;
-		mbp.lpfnMsgBoxCallback=NULL;
-		mbp.dwLanguageId=0;
-		MessageBoxIndirect(&mbp);
-	}
-
-// file dialog ------------------------------------------------------ //
-
-OPENFILENAME session_ofn;
-int session_filedialog(char *r,char *s,char *t,int q,int f) // auxiliar function, see below
 {
-	memset(&session_ofn,0,sizeof(session_ofn));
-	session_ofn.lStructSize=sizeof(OPENFILENAME);
-	session_ofn.hwndOwner=session_hwnd;
-	if (r!=(char *)session_tmpstr)
-		strcpy(session_tmpstr,r);
-	if (r=strrchr(session_tmpstr,PATH_SEPARATOR))
-		strcpy(session_parmtr,++r),*r=0;
-	else
-		strcpy(session_parmtr,session_tmpstr),strcpy(session_tmpstr,".\\");
-	if (!strcmp(session_parmtr,".")) // BUG: Win10 cancels showing a file selector if the source FILENAME is "." (valid path but invalid file)
-		session_parmtr[0]=0;
-	strcpy(session_substr,s);
-	strcpy(&session_substr[strlen(s)+1],s);
-	session_substr[strlen(s)*2+2]=session_substr[strlen(s)*2+3]=0;
-	//printf("T:%s // P:%s // S:%s\n",session_tmpstr,session_parmtr,session_substr); // tmpstr: "C:\ABC"; parmtr: "XYZ.EXT"; substr: "*.EX1;*.EX2"(x2)
-	session_ofn.lpstrFilter=session_substr;
-	session_ofn.nFilterIndex=1;
-	session_ofn.lpstrFile=session_parmtr;
-	session_ofn.nMaxFile=sizeof(session_parmtr);
-	session_ofn.lpstrInitialDir=session_tmpstr;
-	session_ofn.lpstrTitle=t;
-	session_ofn.lpstrDefExt=((t=strrchr(s,'.'))&&(*++t!='*'))?t:NULL;
-	session_ofn.Flags=OFN_PATHMUSTEXIST|OFN_NONETWORKBUTTON|OFN_NOCHANGEDIR|(q?OFN_OVERWRITEPROMPT:(OFN_FILEMUSTEXIST|f));
 	session_please();
-	return q?GetSaveFileName(&session_ofn):GetOpenFileName(&session_ofn);
+	MSGBOXPARAMS mbp;
+	mbp.cbSize=sizeof(MSGBOXPARAMS);
+	mbp.hwndOwner=session_hwnd;
+	mbp.hInstance=GetModuleHandle(0);
+	mbp.lpszText=s;
+	mbp.lpszCaption=t;
+	mbp.dwStyle=MB_OK|MB_USERICON;
+	mbp.lpszIcon=MAKEINTRESOURCE(34002);
+	mbp.dwContextHelpId=0;
+	mbp.lpfnMsgBoxCallback=NULL;
+	mbp.dwLanguageId=0;
+	MessageBoxIndirect(&mbp);
 }
-#define session_filedialog_readonly (session_ofn.Flags&OFN_READONLY)
-#define session_filedialog_readonly0() (session_ofn.Flags&=~OFN_READONLY)
-#define session_filedialog_readonly1() (session_ofn.Flags|=OFN_READONLY)
-char *session_newfile(char *r,char *s,char *t) // "Create File" | ...and returns NULL on failure, or a string on success.
-	{ return session_filedialog(r,s,t,1,0)?session_parmtr:NULL; }
-char *session_getfile(char *r,char *s,char *t) // "Open a File" | lists files in path `r` matching pattern `s` under caption `t`, etc.
-	{ return session_filedialog(r,s,t,0,OFN_HIDEREADONLY)?session_parmtr:NULL; }
-char *session_getfilereadonly(char *r,char *s,char *t,int q) // "Open a File" with Read Only option | lists files in path `r` matching pattern `s` under caption `t`; `q` is the default Read Only value, etc.
-	{ return session_filedialog(r,s,t,0,q?OFN_READONLY:0)?session_parmtr:NULL; }
-
-// list dialog ------------------------------------------------------ //
 
 HWND session_dialog_item;
 char *session_dialog_text;
 int session_dialog_return;
+
+// input dialog ----------------------------------------------------- //
+
+LRESULT CALLBACK inputproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // dialog callback function
+{
+	switch(msg)
+	{
+		case WM_INITDIALOG:
+			{
+				SetWindowText(hwnd,session_dialog_text);
+				session_dialog_item=GetDlgItem(hwnd,12345);
+				SendMessage(session_dialog_item,WM_SETTEXT,0,lparam);
+				SendMessage(session_dialog_item,EM_SETLIMITTEXT,STRMAX-1,0);
+			}
+			break;
+		/*case WM_SIZE:
+			{
+				RECT r; GetClientRect(hwnd,&r);
+				SetWindowPos(session_dialog_item,NULL,0,0,r.right,r.bottom*1/2,SWP_NOZORDER);
+				SetWindowPos(GetDlgItem(hwnd,IDOK),NULL,0,r.bottom*1/2,r.right/2,r.bottom/2,SWP_NOZORDER);
+				SetWindowPos(GetDlgItem(hwnd,IDCANCEL),NULL,r.right/2,r.bottom*1/2,r.right/2,r.bottom/2,SWP_NOZORDER);
+			}
+			break;*/
+		case WM_COMMAND:
+			if (LOWORD(wparam)==IDCANCEL)
+				EndDialog(hwnd,0);
+			else if (!HIWORD(wparam)&&LOWORD(wparam)==IDOK)
+			{
+				session_dialog_return=SendMessage(session_dialog_item,WM_GETTEXT,STRMAX,(LPARAM)session_parmtr);
+				EndDialog(hwnd,0);
+			}
+			break;
+		default:
+			return 0;
+	}
+	return 1;
+}
+int session_input(char *s,char *t) // `s` is the target string (empty or not), `t` is the caption; returns -1 on error or LENGTH on success
+{
+	session_dialog_return=-1;
+	session_dialog_text=t;
+	session_please();
+	DialogBoxParam(GetModuleHandle(0),(LPCSTR)34004,session_hwnd,(DLGPROC)inputproc,(LPARAM)s);
+	return session_dialog_return; // the string is in `session_parmtr`
+}
+
+// list dialog ------------------------------------------------------ //
 
 LRESULT CALLBACK listproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // dialog callback function
 {
@@ -903,56 +921,50 @@ int session_list(int i,char *s,char *t) // `s` is a list of ASCIZ entries, `i` i
 	return session_dialog_return; // the string is in `session_parmtr`
 }
 
-// input dialog ----------------------------------------------------- //
+// file dialog ------------------------------------------------------ //
 
-HWND session_dialoginput;
-LRESULT CALLBACK inputproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // dialog callback function
+OPENFILENAME session_ofn;
+int session_filedialog(char *r,char *s,char *t,int q,int f) // auxiliar function, see below
 {
-	switch(msg)
-	{
-		case WM_INITDIALOG:
-			{
-				SetWindowText(hwnd,session_dialog_text);
-				session_dialog_item=GetDlgItem(hwnd,12345);
-				SendMessage(session_dialog_item,WM_SETTEXT,0,lparam);
-				SendMessage(session_dialog_item,EM_SETLIMITTEXT,STRMAX-1,0);
-			}
-			break;
-		/*case WM_SIZE:
-			{
-				RECT r; GetClientRect(hwnd,&r);
-				SetWindowPos(session_dialog_item,NULL,0,0,r.right,r.bottom*1/2,SWP_NOZORDER);
-				SetWindowPos(GetDlgItem(hwnd,IDOK),NULL,0,r.bottom*1/2,r.right/2,r.bottom/2,SWP_NOZORDER);
-				SetWindowPos(GetDlgItem(hwnd,IDCANCEL),NULL,r.right/2,r.bottom*1/2,r.right/2,r.bottom/2,SWP_NOZORDER);
-			}
-			break;*/
-		case WM_COMMAND:
-			if (LOWORD(wparam)==IDCANCEL)
-				EndDialog(hwnd,0);
-			else if (!HIWORD(wparam)&&LOWORD(wparam)==IDOK)
-			{
-				session_dialog_return=SendMessage(session_dialog_item,WM_GETTEXT,STRMAX,(LPARAM)session_parmtr);
-				EndDialog(hwnd,0);
-			}
-			break;
-		default:
-			return 0;
-	}
-	return 1;
-}
-int session_input(char *s,char *t) // `s` is the target string (empty or not), `t` is the caption; returns -1 on error or LENGTH on success
-{
-	session_dialog_return=-1;
-	session_dialog_text=t;
+	memset(&session_ofn,0,sizeof(session_ofn));
+	session_ofn.lStructSize=sizeof(OPENFILENAME);
+	session_ofn.hwndOwner=session_hwnd;
+	if (r!=(char *)session_tmpstr)
+		strcpy(session_tmpstr,r);
+	if (r=strrchr(session_tmpstr,'\\'))
+		strcpy(session_parmtr,++r),*r=0;
+	else
+		strcpy(session_parmtr,session_tmpstr),strcpy(session_tmpstr,".\\");
+	if (!strcmp(session_parmtr,".")) // BUG: Win10 cancels showing a file selector if the source FILENAME is "." (valid path but invalid file)
+		*session_parmtr=0;
+	strcpy(session_substr,s);
+	strcpy(&session_substr[strlen(s)+1],s);
+	session_substr[strlen(s)*2+2]=session_substr[strlen(s)*2+3]=0;
+	//printf("T:%s // P:%s // S:%s\n",session_tmpstr,session_parmtr,session_substr); // tmpstr: "C:\ABC"; parmtr: "XYZ.EXT"; substr: "*.EX1;*.EX2"(x2)
+	session_ofn.lpstrFilter=session_substr;
+	session_ofn.nFilterIndex=1;
+	session_ofn.lpstrFile=session_parmtr;
+	session_ofn.nMaxFile=sizeof(session_parmtr);
+	session_ofn.lpstrInitialDir=session_tmpstr;
+	session_ofn.lpstrTitle=t;
+	session_ofn.lpstrDefExt=((t=strrchr(s,'.'))&&(*++t!='*'))?t:NULL;
+	session_ofn.Flags=OFN_PATHMUSTEXIST|OFN_NONETWORKBUTTON|OFN_NOCHANGEDIR|(q?OFN_OVERWRITEPROMPT:(OFN_FILEMUSTEXIST|f));
 	session_please();
-	DialogBoxParam(GetModuleHandle(0),(LPCSTR)34004,session_hwnd,(DLGPROC)inputproc,(LPARAM)s);
-	return session_dialog_return; // the string is in `session_parmtr`
+	return q?GetSaveFileName(&session_ofn):GetOpenFileName(&session_ofn);
 }
+#define session_filedialog_readonly (session_ofn.Flags&OFN_READONLY)
+#define session_filedialog_readonly0() (session_ofn.Flags&=~OFN_READONLY)
+#define session_filedialog_readonly1() (session_ofn.Flags|=OFN_READONLY)
+char *session_newfile(char *r,char *s,char *t) // "Create File" | ...and returns NULL on failure, or a string on success.
+	{ return session_filedialog(r,s,t,1,0)?session_parmtr:NULL; }
+char *session_getfile(char *r,char *s,char *t) // "Open a File" | lists files in path `r` matching pattern `s` under caption `t`, etc.
+	{ return session_filedialog(r,s,t,0,OFN_HIDEREADONLY)?session_parmtr:NULL; }
+char *session_getfilereadonly(char *r,char *s,char *t,int q) // "Open a File" with Read Only option | lists files in path `r` matching pattern `s` under caption `t`; `q` is the default Read Only value, etc.
+	{ return session_filedialog(r,s,t,0,q?OFN_READONLY:0)?session_parmtr:NULL; }
 
 // OS-dependant composite funcions ---------------------------------- //
 
-// 'i' = little endian (Intel), 'm' = big endian (Motorola)
-// notice that very little error checking is performed!
+// 'i' = lil-endian (Intel), 'm' = big-endian (Motorola)
 
 //#define mgetc(x) (*(x))
 //#define mputc(x,y) (*(x)=(y))
@@ -960,19 +972,19 @@ int session_input(char *s,char *t) // `s` is the target string (empty or not), `
 #define mgetiiii(x) (*(DWORD*)(x))
 #define mputii(x,y) ((*(WORD*)(x))=(y))
 #define mputiiii(x,y) ((*(DWORD*)(x))=(y))
-int mgetmm(unsigned char *x) { return (x[0]<<8)+x[1]; }
-int mgetmmmm(unsigned char *x) { return (x[0]<<24)+(x[1]<<16)+(x[2]<<8)+x[3]; }
-void mputmm(unsigned char *x,int y) { x[0]=y>>8; x[1]=y; }
-void mputmmmm(unsigned char *x,int y) { x[0]=y>>24; x[1]=y>>16; x[2]=y>>8; x[3]=y; }
+int  mgetmm(unsigned char *x) { return (*x<<8)+x[1]; }
+int  mgetmmmm(unsigned char *x) { return (*x<<24)+(x[1]<<16)+(x[2]<<8)+x[3]; }
+void mputmm(unsigned char *x,int y) { *x=y>>8; x[1]=y; }
+void mputmmmm(unsigned char *x,int y) { *x=y>>24; x[1]=y>>16; x[2]=y>>8; x[3]=y; }
 
-int fgetii(FILE *f) { int i=0; return (fread(&i,1,2,f)!=2)?EOF:i; } // native 16-bit fgetc()
-int fgetiiii(FILE *f) { int i=0; return (fread(&i,1,4,f)!=4)?EOF:i; } // native 32-bit fgetc()
-int fputii(int i,FILE *f) { return (fwrite(&i,1,2,f)!=2)?EOF:i; } // native 16-bit fputc()
-int fputiiii(int i,FILE *f) { return (fwrite(&i,1,4,f)!=4)?EOF:i; } // native 32-bit fputc()
-int fgetmm(FILE *f) { int i=fgetc(f)<<8; return i+fgetc(f); } // compatible big-endian 16-bit fgetc()
-int fgetmmmm(FILE *f) { int i=fgetc(f)<<24; i+=fgetc(f)<<16; i+=fgetc(f)<<8; return i+fgetc(f); } // compatible big-endian 32-bit fgetc()
-int fputmm(int i,FILE *f) { fputc(i>>8,f); return fputc(i,f); } // compatible big-endian 16-bit fputc()
-int fputmmmm(int i,FILE *f) { fputc(i>>24,f); fputc(i>>16,f); fputc(i>>8,f); return fputc(i,f); } // compatible big-endian 32-bit fputc()
+int fgetii(FILE *f) { int i=0; return (fread(&i,1,2,f)!=2)?EOF:i; } // native lil-endian 16-bit fgetc()
+int fputii(int i,FILE *f) { return (fwrite(&i,1,2,f)!=2)?EOF:i; } // native lil-endian 16-bit fputc()
+int fgetiiii(FILE *f) { int i=0; return (fread(&i,1,4,f)!=4)?EOF:i; } // native lil-endian 32-bit fgetc()
+int fputiiii(int i,FILE *f) { return (fwrite(&i,1,4,f)!=4)?EOF:i; } // native lil-endian 32-bit fputc()
+int fgetmm(FILE *f) { int i=fgetc(f)<<8; return i+fgetc(f); } // common big-endian 16-bit fgetc()
+int fputmm(int i,FILE *f) { fputc(i>>8,f); return fputc(i,f); } // common big-endian 16-bit fputc()
+int fgetmmmm(FILE *f) { int i=fgetc(f)<<24; i+=fgetc(f)<<16; i+=fgetc(f)<<8; return i+fgetc(f); } // common big-endian 32-bit fgetc()
+int fputmmmm(int i,FILE *f) { fputc(i>>24,f); fputc(i>>16,f); fputc(i>>8,f); return fputc(i,f); } // common big-endian 32-bit fputc()
 
 #ifdef DEBUG
 #define BOOTSTRAP
@@ -983,4 +995,4 @@ int fputmmmm(int i,FILE *f) { fputc(i>>24,f); fputc(i>>16,f); fputc(i>>8,f); ret
 #define BOOTSTRAP int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) { return main(__argc,__argv); }
 #endif
 
-// ================================== END OF WINDOWS 5.0+ DEFINITIONS //
+#endif // =========================== END OF WINDOWS 5.0+ DEFINITIONS //
