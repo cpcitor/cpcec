@@ -106,8 +106,8 @@ int multiglobbing(char *w,char *t,int q) // like globbing(), but with multiple p
 
 // interframe functions --------------------------------------------- //
 
-#define VIDEO_FILTER_Y_MASK 1
-#define VIDEO_FILTER_X_MASK 2
+#define VIDEO_FILTER_X_MASK 1
+#define VIDEO_FILTER_Y_MASK 2
 #define VIDEO_FILTER_SMUDGE 4
 
 INLINE void video_newscanlines(int x,int y)

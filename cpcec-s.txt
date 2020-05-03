@@ -679,3 +679,7 @@ Nuevo soporte de perfiles de extensiones de ROM mediante ficheros INI capaces de
 contener hasta 257 bloques ROM de 16K. Más retoques de Z80: las nuevas cuotas de
 errores de ZXSEC en las pruebas 2012 RAXOFT son 8/152 Z80FULL, 5/152 Z80CCF y
 0/152 Z80MEMPTR.
+- 20200503 -- parche menor que mejora el comportamiento de las operaciones INI,
+IND, INIR, INDR, OUTI, OUTD, OTIR y OTIR del Z80: las pruebas 2012 RAXOFT
+(Z80CCF, Z80FULL y Z80MEMPTR) obtienen cero errores. Frameskip automático algo
+más preciso.

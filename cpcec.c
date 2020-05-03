@@ -7,7 +7,7 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "CPCEC"
-#define MY_VERSION "20200430"//"1555"
+#define MY_VERSION "20200503"//"1955"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -665,6 +665,7 @@ INLINE void video_main_sprites(void) // PLUS ASIC: Hardware Sprites relative to 
 	if (plus_sscr&128)
 		for (int z=plus_soft;z<16;++z)
 			*video_source++=plus_fill;
+	//plus_dirtysprite=-1;
 	plus_hardbase=-1;
 }
 
@@ -763,7 +764,6 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 		else
 			video_pos_x+=16,video_target+=16,
 			video_clut[video_clut_index]=video_clut_value; // slow update
-		//plus_dirtysprite=-1;
 
 		// Gate Array delays rendering
 
@@ -1140,6 +1140,8 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 							z80_irq&=~128,irq_timer=0;
 						gate_mcr=b&15; // 0x80-0xBF: MULTICONFIGURATION REGISTER
 					}
+					if (!(gate_mcr&4)&&z80_pc.w<8)
+						gate_ram_dirty=64; // catch warm reset
 				}
 			}
 			else
@@ -2100,7 +2102,7 @@ int z80_ack_delay=0; // making it local adds overhead :-(
 #define Z80_STRIDE_IO(o) z80_t=z80_delays[o]
 #define Z80_STRIDE_HALT 1
 
-#define Z80_XCF_BUG 0 // don't replicate the SCF/CCF quirk
+#define Z80_XCF_BUG 1 // replicate the SCF/CCF quirk
 #define Z80_DEBUG_LEN 16 // height of disassemblies, dumps and searches
 #define Z80_DEBUG_MMU 1 // allow ROM/RAM toggling, it's useful on CPC!
 #define Z80_DEBUG_EXT 1 // allow EXTRA hardware debugging info pages

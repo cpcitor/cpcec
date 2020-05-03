@@ -648,3 +648,6 @@ ZXSEC.ELF for 32bit GNU/Linux are included, too. New support for extended ROM
 profiles through INI files enumerating up to 257 16K ROM blocks. Further Z80
 tweaks: the new error rates of ZXSEC in the 2012 RAXOFT tests are 8/152 Z80FULL,
 5/152 Z80CCF and 0/152 Z80MEMPTR.
+- 20200503 -- minor patch improving the behavior of the Z80 operations INI, IND,
+INIR, INDR, OUTI, OUTD, OTIR and OTIR: the 2012 RAXOFT tests (Z80CCF, Z80FULL
+and Z80MEMPTR) score zero errors. Slightly more precise automatic frameskip.

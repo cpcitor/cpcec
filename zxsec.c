@@ -7,7 +7,7 @@
  // """"""  "    "   """"   """"""   """"    ----------------------- //
 
 #define MY_CAPTION "ZXSEC"
-#define MY_VERSION "20200430"//"1555"
+#define MY_VERSION "20200503"//"1955"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -60,16 +60,16 @@ Contact information: <mailto:cngsoft@gmail.com> */
 #define session_debug_show z80_debug_show
 #define session_debug_user z80_debug_user
 
-// The ZX Spectrum 48K keyboard; later models add combinations such as BREAK=CAPS SHIFT+SPACE
+// The ZX Spectrum 48K keyboard; later models add combinations, f.e. BREAK = CAPS SHIFT + SPACE
 // +---------------------------------------------------------------------+
 // | 1 18 | 2 19 | 3 1A | 4 1B | 5 1C | 6 24 | 7 23 | 8 22 | 9 21 | 0 20 |
 // +---------------------------------------------------------------------+
 // | Q 10 | W 11 | E 12 | R 13 | T 14 | Y 2C | U 2B | I 2A | O 29 | P 28 |
 // +---------------------------------------------------------------------+
-// | A 08 | S 09 | D 0A | F 0B | G 0C | H 34 | J 33 | K 32 | L 31 | r 30 | r = RETURN
-// +---------------------------------------------------------------------+ c = CAPS SHIFT
-// | c 00 | Z 01 | X 02 | C 03 | V 04 | B 3C | N 3B | M 3A | y 39 | s 38 | s = SPACE
-// +---------------------------------------------------------------------+ y = SYMBOL SHIFT
+// | A 08 | S 09 | D 0A | F 0B | G 0C | H 34 | J 33 | K 32 | L 31 | * 30 | * = RETURN
+// +---------------------------------------------------------------------+ + = CAPS SHIFT
+// | + 00 | Z 01 | X 02 | C 03 | V 04 | B 3C | N 3B | M 3A | - 39 | / 38 | / = SPACE
+// +---------------------------------------------------------------------+ - = SYMBOL SHIFT
 
 /*const*/ unsigned char kbd_joy[]= // ATARI norm: up, down, left, right, fire1, fire2...
 	{ 0,0,0,0,0 };

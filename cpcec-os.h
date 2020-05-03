@@ -273,7 +273,7 @@ void session_please(void) // stop activity for a short while
 	{
 		if (session_audio)
 			waveOutPause(session_wo);
-		video_framecount=-1;
+		//video_framecount=-1;
 		session_wait=1;
 	}
 }
@@ -715,8 +715,7 @@ INLINE void session_render(void) // update video, audio and timers
 			if (i=(1000*i/j)) // avoid zero, it has a special value in Windows!
 				Sleep(i>1000/VIDEO_PLAYBACK?1+1000/VIDEO_PLAYBACK:i);
 		}
-		else if (!video_framecount)
-			video_framecount=-1;
+		else if (!video_framecount) video_framecount=-2; // automatic frameskip!
 		audio_session=(audio_session+1)%AUDIO_N_FRAMES;
 	}
 	if (session_wait) // resume activity after a pause

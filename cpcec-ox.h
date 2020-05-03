@@ -250,7 +250,7 @@ void session_please(void) // stop activity for a short while
 	{
 		if (session_audio)
 			SDL_PauseAudioDevice(session_audio,1);
-		video_framecount=-1;
+		//video_framecount=-1;
 		session_wait=1;
 	}
 }
@@ -1269,12 +1269,9 @@ INLINE void session_render(void) // update video, audio and timers
 	else
 	{
 		j=1000/VIDEO_PLAYBACK-(i-session_timer);
-		if (j>0)//&&j<=1000/VIDEO_PLAYBACK)
-		{
-			SDL_Delay(j);
-		}
-		else if (!video_framecount)
-			video_framecount=-1;
+		if (j>0)
+			SDL_Delay(j>1000/VIDEO_PLAYBACK?1+1000/VIDEO_PLAYBACK:j);
+		else if (!video_framecount) video_framecount=-2; // automatic frameskip!
 		session_timer+=1000/VIDEO_PLAYBACK;
 	}
 
