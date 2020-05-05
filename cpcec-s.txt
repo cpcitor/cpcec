@@ -683,3 +683,6 @@ errores de ZXSEC en las pruebas 2012 RAXOFT son 8/152 Z80FULL, 5/152 Z80CCF y
 IND, INIR, INDR, OUTI, OUTD, OTIR y OTIR del Z80: las pruebas 2012 RAXOFT
 (Z80CCF, Z80FULL y Z80MEMPTR) obtienen cero errores. Frameskip automático algo
 más preciso.
+- 20200505 -- parche menor centrado en el toolkit de SDL2: corrige un fallo al
+confirmar sobreescribir archivos, y mejora la búsqueda de ficheros entre
+directorios eligiendo por defecto el directorio anterior.

@@ -651,3 +651,6 @@ tweaks: the new error rates of ZXSEC in the 2012 RAXOFT tests are 8/152 Z80FULL,
 - 20200503 -- minor patch improving the behavior of the Z80 operations INI, IND,
 INIR, INDR, OUTI, OUTD, OTIR and OTIR: the 2012 RAXOFT tests (Z80CCF, Z80FULL
 and Z80MEMPTR) score zero errors. Slightly more precise automatic frameskip.
+- 20200505 -- minor patch focused on the SDL2 toolkit: fixed a bug when
+confirming overwriting files, and improved file browsing across directories by
+pointing by default to the previous directory.

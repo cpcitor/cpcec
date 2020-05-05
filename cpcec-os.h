@@ -340,7 +340,7 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 
 LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // window callback function
 {
-	switch(msg)
+	switch (msg)
 	{
 		case WM_CLOSE:
 			DestroyWindow(hwnd);
@@ -373,6 +373,7 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 		case WM_SIZE:
 			InvalidateRect(hwnd,NULL,1); // force full update! there's dirt otherwise!
 			break;
+		case WM_SETFOCUS: // force full redraw
 		case WM_PAINT:
 			{
 				PAINTSTRUCT ps; HDC h;
@@ -416,7 +417,7 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 						case VK_END: session_event=29; break;
 						case VK_NEXT: session_event=30; break;
 						case VK_PRIOR: session_event=31; break;
-						case VK_SPACE: if (session_shift) session_event=160; break;
+						case VK_SPACE: if (session_shift) session_event=160; break; // special case unlike WM_CHAR
 						case VK_BACK: session_event=session_shift?9:8; break;
 						case VK_TAB: session_event=session_shift?7:12; break;
 						default: session_event=0; break;
@@ -824,7 +825,7 @@ int session_dialog_return;
 
 LRESULT CALLBACK inputproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // dialog callback function
 {
-	switch(msg)
+	switch (msg)
 	{
 		case WM_INITDIALOG:
 			{
@@ -869,7 +870,7 @@ int session_input(char *s,char *t) // `s` is the target string (empty or not), `
 
 LRESULT CALLBACK listproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // dialog callback function
 {
-	switch(msg)
+	switch (msg)
 	{
 		case WM_INITDIALOG:
 			{

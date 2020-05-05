@@ -3778,7 +3778,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 				else
 				{
 					int z;
-					switch(z80_breakpoints[z80_pc.w]&7)
+					switch (z80_breakpoints[z80_pc.w]&7)
 					{
 						// Z80 8-bit "BCDEHLFA" order
 						case 0: z=z80_bc.b.h; break;
@@ -3971,7 +3971,7 @@ void z80_debug_find(int q)
 			break;
 	}
 	if (m)
-		switch(z80_debug_panel)
+		switch (z80_debug_panel)
 		{
 			case 0: z80_debug_pnl0_x=0, z80_debug_pnl0_w=m; break;
 			case 2: z80_debug_pnl2_x=0, z80_debug_pnl2_w=m; break;
@@ -4017,7 +4017,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 		else
 			k=' '; // equivalent to SPACE
 	}
-	switch(ucase(k))
+	switch (ucase(k))
 	{
 		case 'U': // 'U': RETURN FROM..
 			if (z80_sp.w>=0xFFFE) // fringe case?
@@ -4159,7 +4159,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 				,"Debugger help"
 				);
 			break;
-		default: switch(z80_debug_panel)
+		default: switch (z80_debug_panel)
 		{
 			case 0: // DISASSEMBLY
 				if ((i=z80_debug_hex(k))>=0)
@@ -4170,7 +4170,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 					k=128+9; // force RIGHT + RECALCULATE
 				}
 				i=0;
-				switch(ucase(k))
+				switch (ucase(k))
 				{
 					case 8 : if (--z80_debug_pnl0_x<0) z80_debug_pnl0_x&=1,--z80_debug_pnl0_w; break;
 					case 128+9: z80_debug_cache[1]=z80_dasm(session_tmpstr,z80_debug_pnl0_w); // no 'break'!
@@ -4202,7 +4202,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 						session_parmtr[0]=0;
 						if (session_input(session_parmtr,"Log register")==1)
 						{
-							switch(session_parmtr[0]&~32)
+							switch (session_parmtr[0]&~32)
 							{
 								// cfr. "BCDEHLFA"
 								case 'B': i=8+0; break;
@@ -4270,7 +4270,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 					}
 					k=9; // force RIGHT
 				}
-				switch(k)
+				switch (k)
 				{
 					case 8 : if (--z80_debug_pnl1_x<0) z80_debug_pnl1_x=3,--z80_debug_pnl1_y; break; // wrap left and up
 					case 9 : if (++z80_debug_pnl1_x>3) z80_debug_pnl1_x=0,++z80_debug_pnl1_y; break; // wrap right and down
@@ -4293,7 +4293,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 					POKE(z80_debug_pnl2_w)=i;
 					k=9; // force RIGHT
 				}
-				switch(ucase(k))
+				switch (ucase(k))
 				{
 					case 8 : if (--z80_debug_pnl2_x<0) z80_debug_pnl2_x=1,--z80_debug_pnl2_w; break; // prev byte
 					case 9 : if (++z80_debug_pnl2_x>1) z80_debug_pnl2_x=0,++z80_debug_pnl2_w; break; // next byte
@@ -4321,7 +4321,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 					POKEW(z80_debug_pnl3_w,o);
 					k=9; // force RIGHT
 				}
-				switch(ucase(k))
+				switch (ucase(k))
 				{
 					case 8 : if (--z80_debug_pnl3_x<0) z80_debug_pnl3_x=3,z80_debug_pnl3_w-=2; break; // prev word
 					case 9 : if (++z80_debug_pnl3_x>3) z80_debug_pnl3_x=0,z80_debug_pnl3_w+=2; break; // next word

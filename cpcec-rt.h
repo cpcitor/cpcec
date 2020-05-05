@@ -882,7 +882,7 @@ unsigned char onscreen_debug_chrs[sizeof(onscreen_chrs)];
 void onscreen_debug(void) // rewrite debug texts
 {
 	if ((onscreen_debug_mask_^onscreen_debug_mask)&~1)
-		switch((onscreen_debug_mask_=(onscreen_debug_mask&=7))&6) // font styles
+		switch ((onscreen_debug_mask_=(onscreen_debug_mask&=7))&6) // font styles
 		{
 			default:
 				for (int i=0,j;i<sizeof(onscreen_debug_chrs);++i)

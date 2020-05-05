@@ -7,7 +7,7 @@
  // """"""  "    "   """"   """"""   """"    ----------------------- //
 
 #define MY_CAPTION "ZXSEC"
-#define MY_VERSION "20200503"//"1955"
+#define MY_VERSION "20200505"//"0955"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -1114,7 +1114,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 				if ((q-=3)<0||q>7) // ignore ROM copies
 					q=8; // dummy 16K
 				else if (!type_id) // 128K banks follow the normal order,
-					switch(q) // but 48K banks are stored differently
+					switch (q) // but 48K banks are stored differently
 					{
 						case 5:
 							q=5;

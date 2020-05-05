@@ -348,6 +348,7 @@ int session_ui_exchange(void) // update window and wait for a keystroke
 		SDL_WaitEvent(&event);
 		switch (event.type)
 		{
+			case SDL_WINDOWEVENT_FOCUS_GAINED: // force full redraw
 			case SDL_WINDOWEVENT_EXPOSED:
 				SDL_UpdateWindowSurface(session_hwnd);//session_redraw(1);//
 				break;
@@ -463,7 +464,7 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 					itemw=j,items=k;
 				++menus;
 			}
-			session_redraw(0);
+			session_redraw(0); // build background, delay refresh
 			session_border(hmenu,1,1,1);
 			session_ui_free(hitem);
 			hitem=session_ui_alloc(itemw,items);
@@ -607,7 +608,7 @@ int session_ui_text(char *s,char *t) // see session_message
 	session_centre(htext,1);//SDL_BlitSurface(htext,NULL,SDL_GetWindowSurface(session_hwnd),NULL);
 	for (;;)
 	{
-		switch(session_ui_exchange())
+		switch (session_ui_exchange())
 		{
 			case KBCODE_ESCAPE:
 			case KBCODE_SPACE:
@@ -699,7 +700,9 @@ int session_ui_list(int item,char *s,char *t,void x(void)) // see session_list
 				return item;
 			default:
 				if (session_ui_char>=32&&session_ui_char<=128)
-					for (int o=lcase(session_ui_char),n=items;n;--n)
+				{
+					int itemz=item,n=items;
+					for (int o=lcase(session_ui_char);n;--n)
 					{
 						if (item<0)
 							item=0,z=s;
@@ -714,6 +717,9 @@ int session_ui_list(int item,char *s,char *t,void x(void)) // see session_list
 						if (lcase(*z)==o)
 							break;
 					}
+					if (!n)
+						item=itemz; // allow rewinding to -1
+				}
 				break;
 		}
 	}
@@ -971,13 +977,34 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 		if (m[-1]==PATH_SEPARATOR) // the user chose a directory
 		{
 			strcat(strcpy(session_scratch,basepath),session_parmtr);
-			*pastname=0;
 			#ifdef __WIN32__
 			if (session_parmtr[1]==':')
-				strcpy(basepath,session_parmtr);
+				*pastname=0,strcpy(basepath,session_parmtr);
 			else
+			{
+				if (!strcmp(session_parmtr,strcpy(pastname,"..\\")))
+				{
+					m=strrchr(basepath,PATH_SEPARATOR);
+					while(m&&m>basepath&&*--m!=PATH_SEPARATOR)
+						;
+					if (m)
+						strcpy(pastname,&m[1]); // allow returning to previous directory
+					else
+						*pastname=0;
+				}
 				GetFullPathName(session_scratch,STRMAX,basepath,&m);
+			}
 			#else
+			if (!strcmp(session_parmtr,strcpy(pastname,"../")))
+			{
+				m=strrchr(basepath,PATH_SEPARATOR);
+				while(m&&m>basepath&&*--m!=PATH_SEPARATOR)
+					;
+				if (m)
+					strcpy(pastname,&m[1]); // allow returning to previous directory
+				else
+					*pastname=0;
+			}
 			realpath(session_scratch,basepath); // realpath() requires the target to be at least 4096 bytes long in Linux 4.10.0-38-generic, Linux 4.15.0-96-generic...!
 			#endif
 			session_ui_filedialog_sanitizepath(basepath);
@@ -1003,11 +1030,12 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 				else
 					return 0; // failure, quit!
 			}
-			strcpy(session_scratch,session_parmtr);
-			strcat(strcpy(session_parmtr,basepath),session_scratch);
-			// is the user going to overwrite a file?
-			if (q||f||session_ui_filedialog_stat(session_parmtr)<0||!session_ui_list(0,"YES\000NO\000\000","Overwrite?",NULL))
-				return 1; // the user succesfully chose a file!
+			strcat(strcpy(session_scratch,basepath),session_parmtr); // build full name
+			strcpy(session_parmtr,session_scratch); // copy to target, but keep the source...
+			if (q||f||session_ui_filedialog_stat(session_parmtr)<0)
+				return 1; // the user succesfully chose a file, either extant for reading or new for writing!
+			if (session_ui_list(0,"YES\000NO\000\000","Overwrite?",NULL)==0)
+				return strcpy(session_parmtr,session_scratch),1; // ...otherwise session_parmtr would hold "YES"!
 		}
 	}
 }
@@ -1018,7 +1046,7 @@ INLINE int session_create(char *s) // create video+audio devices and set menu; 0
 {
 	if (SDL_Init(SDL_INIT_VIDEO|SDL_INIT_AUDIO|SDL_INIT_TIMER|SDL_INIT_JOYSTICK)<0)
 		return 1;
-	if (!(session_hwnd=SDL_CreateWindow(caption_version,SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,0)))
+	if (!(session_hwnd=SDL_CreateWindow(caption_version,SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,0*SDL_WINDOW_BORDERLESS)))
 		return SDL_Quit(),1;
 	if (!(session_dib=SDL_CreateRGBSurface(0,VIDEO_LENGTH_X,VIDEO_LENGTH_Y,32,0xFF0000,0x00FF00,0x0000FF,0)))
 		return SDL_Quit(),1;
@@ -1135,6 +1163,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 	{
 		switch (event.type)
 		{
+			case SDL_WINDOWEVENT_FOCUS_GAINED: // force full redraw
 			case SDL_WINDOWEVENT_EXPOSED:
 				SDL_UpdateWindowSurface(session_hwnd);//session_redraw(1);//
 				break;
@@ -1145,13 +1174,12 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 						session_event=128+(session_event&31)*64+(event.text.text[1]&63);
 				break;
 			#endif
-			case SDL_KEYDOWN:
-				if (event.key.state==SDL_PRESSED)
+			case SDL_KEYDOWN: //if (event.key.state==SDL_PRESSED)
 				{
 					session_shift=!!(event.key.keysym.mod&KMOD_SHIFT);
 					if (event.key.keysym.mod&KMOD_ALT&&event.key.keysym.sym==SDLK_RETURN)
 					{
-						SDL_SetWindowFullscreen(session_hwnd,SDL_GetWindowFlags(session_hwnd)&SDL_WINDOW_FULLSCREEN_DESKTOP?0:SDL_WINDOW_FULLSCREEN_DESKTOP);
+						SDL_SetWindowFullscreen(session_hwnd,SDL_GetWindowFlags(session_hwnd)&SDL_WINDOW_FULLSCREEN_DESKTOP?0*SDL_WINDOW_BORDERLESS:SDL_WINDOW_FULLSCREEN_DESKTOP);
 						break;
 					}
 					if (event.key.keysym.sym==SDLK_F10)
@@ -1173,7 +1201,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 							case SDLK_END: session_event=29; break;
 							case SDLK_PAGEDOWN: session_event=30; break;
 							case SDLK_PAGEUP: session_event=31; break;
-							case SDLK_SPACE: if (session_shift) session_event=160; break;
+							case SDLK_SPACE: if (session_shift) session_event=160; break; // special case unlike WM_CHAR
 							case SDLK_BACKSPACE: session_event=session_shift?9:8; break;
 							case SDLK_TAB: session_event=session_shift?7:12; break;
 							default: session_event=0; break;
@@ -1191,8 +1219,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 						session_event=(k-((event.key.keysym.mod&KMOD_CTRL)?128:0))<<8;
 				}
 				break;
-			case SDL_KEYUP:
-				if (event.key.state==SDL_RELEASED)
+			case SDL_KEYUP: //if (event.key.state==SDL_RELEASED)
 				{
 					session_shift=!!(event.key.keysym.mod&KMOD_SHIFT);
 					int k=session_key_n_joy(event.key.keysym.scancode);

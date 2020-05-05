@@ -7,7 +7,7 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "CPCEC"
-#define MY_VERSION "20200503"//"1955"
+#define MY_VERSION "20200505"//"0955"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -262,7 +262,7 @@ int audio_table[17]={0,85,121,171,241,341,483,683,965,1365,1931,2731,3862,5461,7
 // HARDWARE DEFINITIONS ============================================= //
 
 BYTE mem_ram[9<<16],mem_rom[33<<14]; // RAM (BASE 64K BANK + 8x 64K BANKS) and ROM (512K ASIC PLUS CARTRIDGE + 16K BDOS)
-BYTE mem_xtr[257<<14]; // 33x 16K EXTENDED ROMS
+BYTE *mem_xtr; // external 257x 16K EXTENDED ROMS
 #define plus_enabled (type_id>2) // the PLUS ASIC hardware MUST BE tied to the model!
 #define bdos_rom (&mem_rom[32<<14])
 BYTE *mmu_ram[4],*mmu_rom[4]; // memory is divided in 14 6k R+W areas
@@ -373,7 +373,7 @@ INLINE void crtc_table_send(BYTE i)
 	if (crtc_index==2&&(d=crtc_table[crtc_index]-i)&&d>=-2&&d<=2)
 		++crtc_giga_count;
 	crtc_table[crtc_index]=i;
-	switch(crtc_index)
+	switch (crtc_index)
 	{
 		case 2:
 			if (!crtc_giga)
@@ -1747,7 +1747,7 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 	if (!(p&0x0400)) // 0xFB00, FDC 765
 	{
 		if (!disc_disabled)
-			switch(p&0x0381) // 0xF87E+n
+			switch (p&0x0381) // 0xF87E+n
 			{
 				case 0x0300: // 0xFB7E: STATUS
 					b&=disc_data_info();
@@ -1765,7 +1765,7 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 // the PLUS ASIC features a special memory bank that behaves like a hardware address set rather than as a completely normal memory page.
 void z80_trap(WORD p,BYTE b)
 {
-	switch(p>>8)
+	switch (p>>8)
 	{
 		case 0x40: case 0x41: case 0x42: case 0x43:
 		case 0x44: case 0x45: case 0x46: case 0x47:
@@ -1778,7 +1778,7 @@ void z80_trap(WORD p,BYTE b)
 		case 0x60:
 			// sprite coordinates
 			if (p<0x6080)
-				switch(p&7)
+				switch (p&7)
 				{
 					case 1: // POSX: -256..+767
 						if ((b&=3)==3)
@@ -2534,9 +2534,11 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 	logprintf("SNAv1 RAM size %iK.\n",dumpsize);
 	if (dumpsize>(gate_ram_dirty=64))
 	{
-		while (gate_ram_depth<4&&gate_ram_kbyte[gate_ram_depth]<dumpsize)
-			++gate_ram_depth;
-		gate_ram_dirty=gate_ram_kbyte[gate_ram_depth];
+		q=0; // look for lowest RAM limit that fits
+		while ((gate_ram_dirty=gate_ram_kbyte[++q])<dumpsize&&q<length(gate_ram_kbyte))
+			;
+		if (gate_ram_depth<q)
+			gate_ram_depth=q; // expand RAM limit if required
 	}
 	video_clut_update(); // sync both Old and Plus palettes
 	crtc_r3x_update();
@@ -3260,7 +3262,7 @@ int main(int argc,char *argv[])
 			),1;
 	if (bios_reload()||bdos_path_load("cpcados.rom"))
 		return printferror(txt_error_bios),1;
-	if (session_create(session_menudata))
+	if (!(mem_xtr=malloc(257<<14))||session_create(session_menudata))
 		return printferror("Cannot create session!"),1;
 	session_kbdreset();
 	session_kbdsetup(kbd_map_xlt,length(kbd_map_xlt)/2);
