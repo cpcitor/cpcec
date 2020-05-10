@@ -41,15 +41,15 @@
 	#define fsetsize(f,l) ftruncate(fileno(f),(l))
 #endif
 
+#define BYTE Uint8
+#define WORD Uint16
+#define DWORD Uint32
+
 #ifdef DEBUG
 #define logprintf(...) (fprintf(stdout,__VA_ARGS__))
 #else
 #define logprintf(...)
 #endif
-
-#define BYTE Uint8
-#define WORD Uint16
-#define DWORD Uint32
 
 #define MESSAGEBOX_WIDETAB "\t\t"
 
@@ -279,8 +279,8 @@ SDL_Surface *session_dib=NULL;
 
 // extremely tiny graphical user interface: SDL2 provides no widgets! //
 
+SDL_Rect session_ideal;
 #define SESSION_UI_HEIGHT 14 // DEBUG_LENGTH_Z
-
 SDL_Surface *session_ui_alloc(int w,int h) { return ((w+=2)*h)?SDL_CreateRGBSurface(0,w*8,h*SESSION_UI_HEIGHT,32,0xFF0000,0x00FF00,0x0000FF,0):NULL; }
 void session_ui_free(SDL_Surface *s) { if (s) SDL_FreeSurface(s); }
 
@@ -316,23 +316,34 @@ void session_centre(SDL_Surface *s,int q) // draw surface in centre with an opti
 
 void session_redraw(BYTE q)
 {
+	SDL_Rect src;
+	src.x=VIDEO_OFFSET_X; src.w=VIDEO_PIXELS_X;
+	src.y=VIDEO_OFFSET_Y; src.h=VIDEO_PIXELS_Y;
+	SDL_Surface *surface=SDL_GetWindowSurface(session_hwnd);
+	int xx=surface->w,yy=surface->h;
+	if (xx>0&&yy>0) // don't redraw invalid windows
 	{
-		SDL_Rect src;
-		src.x=VIDEO_OFFSET_X;
-		src.y=VIDEO_OFFSET_Y;
-		src.w=VIDEO_PIXELS_X;
-		src.h=VIDEO_PIXELS_Y;
+		if (xx>yy*VIDEO_PIXELS_X/VIDEO_PIXELS_Y) // window area is too wide?
+			xx=yy*VIDEO_PIXELS_X/VIDEO_PIXELS_Y;
+		if (yy>xx*VIDEO_PIXELS_Y/VIDEO_PIXELS_X) // window area is too tall?
+			yy=xx*VIDEO_PIXELS_Y/VIDEO_PIXELS_X;
+		if (session_intzoom) // integer zoom? (100%, 200%, 300%...)
+		{
+			xx=(xx/(VIDEO_PIXELS_X*62/64))*VIDEO_PIXELS_X; // the MM/NN factor is a tolerance margin:
+			yy=(yy/(VIDEO_PIXELS_Y*62/64))*VIDEO_PIXELS_Y; // 61/64 allows 200% on windowed 1920x1080
+		}
+		session_ideal.x=(surface->w-(session_ideal.w=xx))/2; session_ideal.y=(surface->h-(session_ideal.h=yy))/2;
 		if (SDL_GetWindowFlags(session_hwnd)&SDL_WINDOW_FULLSCREEN_DESKTOP)
-			SDL_BlitScaled(session_dib,&src,SDL_GetWindowSurface(session_hwnd),NULL);
+			SDL_BlitScaled(session_dib,&src,SDL_GetWindowSurface(session_hwnd),&session_ideal);
 		else
-			SDL_BlitSurface(session_dib,&src,SDL_GetWindowSurface(session_hwnd),NULL);
+			SDL_BlitSurface(session_dib,&src,SDL_GetWindowSurface(session_hwnd),&session_ideal);
+		#ifndef DEBUG
+		if (session_signal&SESSION_SIGNAL_DEBUG)
+			session_centre(session_dbg_dib,0);
+		#endif
+		if (q)
+			SDL_UpdateWindowSurface(session_hwnd);
 	}
-	#ifndef DEBUG
-	if (session_signal&SESSION_SIGNAL_DEBUG)
-		session_centre(session_dbg_dib,0);
-	//else
-	#endif
-	if (q) SDL_UpdateWindowSurface(session_hwnd);
 }
 
 void session_ui_init(void) { memset(kbd_bit,0,sizeof(kbd_bit)); session_please(); }
@@ -350,6 +361,7 @@ int session_ui_exchange(void) // update window and wait for a keystroke
 		{
 			case SDL_WINDOWEVENT_FOCUS_GAINED: // force full redraw
 			case SDL_WINDOWEVENT_EXPOSED:
+				SDL_FillRect(SDL_GetWindowSurface(session_hwnd),NULL,0); // wipe leftovers
 				SDL_UpdateWindowSurface(session_hwnd);//session_redraw(1);//
 				break;
 			case SDL_TEXTINPUT:
@@ -419,20 +431,22 @@ int session_ui_printasciz(SDL_Surface *t,char *s,int x,int y,int m,int q) // pri
 	return l+2;
 }
 
-BYTE session_ui_menudata[1<<12]=""; // encoded menu data
+BYTE session_ui_menudata[1<<12],session_ui_menusize; // encoded menu data
 
 void session_ui_menu(void) // show the menu and set session_event accordingly
 {
-	if (!session_ui_menudata)
+	if (!session_ui_menusize)
 		return;
 	session_ui_init();
 	SDL_Surface *hmenu,*hitem=NULL;
 	int menu=0,menus=0,menuz=-1,item=0,items=0,itemz=-1,itemx=0,itemw=0;
 	char *zz,*z;
-	hmenu=session_ui_alloc(VIDEO_PIXELS_X/8-4,1);
-	session_ui_printasciz(hmenu,"",0,0,VIDEO_PIXELS_X/8-4,0);//SDL_FillRect(,NULL,VIDEO1(0xFFFFFF));
+	hmenu=session_ui_alloc(session_ui_menusize-2,1);
+	//session_ui_printasciz(hmenu,"",0,0,VIDEO_PIXELS_X/8-4,0);//SDL_FillRect(,NULL,VIDEO1(0xFFFFFF));
 	for (;;) // redraw menus and items as required, then obey the user
 	{
+		int ox=(session_ideal.x+(session_ideal.w-VIDEO_PIXELS_X)/2)/8,
+			oy=(session_ideal.y+(session_ideal.h-VIDEO_PIXELS_Y)/2)/SESSION_UI_HEIGHT;
 		if (menuz!=menu)
 		{
 			menuz=menu;
@@ -465,7 +479,7 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 				++menus;
 			}
 			session_redraw(0); // build background, delay refresh
-			session_border(hmenu,1,1,1);
+			session_border(hmenu,1+ox,1+oy,1);
 			session_ui_free(hitem);
 			hitem=session_ui_alloc(itemw,items);
 		}
@@ -495,7 +509,7 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 				}
 				++i;
 			}
-			session_border(hitem,itemx+1,2,1);
+			session_border(hitem,itemx+1+ox,2+oy,1);
 		}
 		switch (session_ui_exchange())
 		{
@@ -1082,12 +1096,13 @@ INLINE int session_create(char *s) // create video+audio devices and set menu; 0
 	session_timer=SDL_GetTicks();
 
 	// translate menu data into custom format
-	BYTE *t=session_ui_menudata;
+	BYTE *t=session_ui_menudata; session_ui_menusize=0;
 	while (*s)
 	{
 		// menu header
 		while ((*t++=*s++)!='\n')
-			;
+			++session_ui_menusize;
+		session_ui_menusize+=2;
 		t[-1]=0;
 		// items
 		for (;;)
@@ -1123,6 +1138,11 @@ INLINE int session_create(char *s) // create video+audio devices and set menu; 0
 	SDL_StartTextInput();
 	session_please();
 	return 0;
+}
+
+void session_togglefullscreen(void)
+{
+	SDL_SetWindowFullscreen(session_hwnd,SDL_GetWindowFlags(session_hwnd)&SDL_WINDOW_FULLSCREEN_DESKTOP?0*SDL_WINDOW_BORDERLESS:SDL_WINDOW_FULLSCREEN_DESKTOP);
 }
 
 void session_menuinfo(void); // set the current menu flags. Must be defined later on!
@@ -1165,6 +1185,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 		{
 			case SDL_WINDOWEVENT_FOCUS_GAINED: // force full redraw
 			case SDL_WINDOWEVENT_EXPOSED:
+				SDL_FillRect(SDL_GetWindowSurface(session_hwnd),NULL,0); // wipe leftovers
 				SDL_UpdateWindowSurface(session_hwnd);//session_redraw(1);//
 				break;
 			#ifndef DEBUG
@@ -1179,7 +1200,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 					session_shift=!!(event.key.keysym.mod&KMOD_SHIFT);
 					if (event.key.keysym.mod&KMOD_ALT&&event.key.keysym.sym==SDLK_RETURN)
 					{
-						SDL_SetWindowFullscreen(session_hwnd,SDL_GetWindowFlags(session_hwnd)&SDL_WINDOW_FULLSCREEN_DESKTOP?0*SDL_WINDOW_BORDERLESS:SDL_WINDOW_FULLSCREEN_DESKTOP);
+						session_togglefullscreen();
 						break;
 					}
 					if (event.key.keysym.sym==SDLK_F10)
@@ -1454,25 +1475,51 @@ char *session_getfilereadonly(char *r,char *s,char *t,int q) // "Open a File" wi
 
 // 'i' = lil-endian (Intel), 'm' = big-endian (Motorola)
 
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+
 //#define mgetc(x) (*(x))
 //#define mputc(x,y) (*(x)=(y))
 int  mgetii(unsigned char *x) { return (x[1]<<8)+*x; }
 void mputii(unsigned char *x,int y) { x[1]=y>>8; *x=y; }
 int  mgetiiii(unsigned char *x) { return (x[3]<<24)+(x[2]<<16)+(x[1]<<8)+*x; }
 void mputiiii(unsigned char *x,int y) { x[3]=y>>24; x[2]=y>>16; x[1]=y>>8; *x=y; }
-int  mgetmm(unsigned char *x) { return (*x<<8)+x[1]; }
-void mputmm(unsigned char *x,int y) { *x=y>>8; x[1]=y; }
-int  mgetmmmm(unsigned char *x) { return (*x<<24)+(x[1]<<16)+(x[2]<<8)+x[3]; }
-void mputmmmm(unsigned char *x,int y) { *x=y>>24; x[1]=y>>16; x[2]=y>>8; x[3]=y; }
+#define mgetmm(x) (*(WORD*)(x))
+#define mgetmmmm(x) (*(DWORD*)(x))
+#define mputmm(x,y) ((*(WORD*)(x))=(y))
+#define mputmmmm(x,y) ((*(DWORD*)(x))=(y))
 
 int fgetii(FILE *f) { int i=fgetc(f); return i+(fgetc(f)<<8); } // common lil-endian 16-bit fgetc()
 int fputii(int i,FILE *f) { fputc(i,f); return fputc(i>>8,f); } // common lil-endian 16-bit fputc()
 int fgetiiii(FILE *f) { int i=fgetc(f); i+=fgetc(f)<<8; i+=fgetc(f)<<16; return i+(fgetc(f)<<24); } // common lil-endian 32-bit fgetc()
 int fputiiii(int i,FILE *f) { fputc(i,f); fputc(i>>8,f); fputc(i>>16,f); return fputc(i>>24,f); } // common lil-endian 32-bit fputc()
+int fgetmm(FILE *f) { int i=0; return (fread(&i,1,2,f)!=2)?EOF:i; } // native lil-endian 16-bit fgetc()
+int fputmm(int i,FILE *f) { return (fwrite(&i,1,2,f)!=2)?EOF:i; } // native lil-endian 16-bit fputc()
+int fgetmmmm(FILE *f) { int i=0; return (fread(&i,1,4,f)!=4)?EOF:i; } // native lil-endian 32-bit fgetc()
+int fputmmmm(int i,FILE *f) { return (fwrite(&i,1,4,f)!=4)?EOF:i; } // native lil-endian 32-bit fputc()
+
+#else
+
+//#define mgetc(x) (*(x))
+//#define mputc(x,y) (*(x)=(y))
+#define mgetii(x) (*(WORD*)(x))
+#define mgetiiii(x) (*(DWORD*)(x))
+#define mputii(x,y) ((*(WORD*)(x))=(y))
+#define mputiiii(x,y) ((*(DWORD*)(x))=(y))
+int  mgetmm(unsigned char *x) { return (*x<<8)+x[1]; }
+void mputmm(unsigned char *x,int y) { *x=y>>8; x[1]=y; }
+int  mgetmmmm(unsigned char *x) { return (*x<<24)+(x[1]<<16)+(x[2]<<8)+x[3]; }
+void mputmmmm(unsigned char *x,int y) { *x=y>>24; x[1]=y>>16; x[2]=y>>8; x[3]=y; }
+
+int fgetii(FILE *f) { int i=0; return (fread(&i,1,2,f)!=2)?EOF:i; } // native lil-endian 16-bit fgetc()
+int fputii(int i,FILE *f) { return (fwrite(&i,1,2,f)!=2)?EOF:i; } // native lil-endian 16-bit fputc()
+int fgetiiii(FILE *f) { int i=0; return (fread(&i,1,4,f)!=4)?EOF:i; } // native lil-endian 32-bit fgetc()
+int fputiiii(int i,FILE *f) { return (fwrite(&i,1,4,f)!=4)?EOF:i; } // native lil-endian 32-bit fputc()
 int fgetmm(FILE *f) { int i=fgetc(f)<<8; return i+fgetc(f); } // common big-endian 16-bit fgetc()
 int fputmm(int i,FILE *f) { fputc(i>>8,f); return fputc(i,f); } // common big-endian 16-bit fputc()
 int fgetmmmm(FILE *f) { int i=fgetc(f)<<24; i+=fgetc(f)<<16; i+=fgetc(f)<<8; return i+fgetc(f); } // common big-endian 32-bit fgetc()
 int fputmmmm(int i,FILE *f) { fputc(i>>24,f); fputc(i>>16,f); fputc(i>>8,f); return fputc(i,f); } // common big-endian 32-bit fputc()
+
+#endif
 
 #define BOOTSTRAP
 

@@ -24,11 +24,12 @@ in the file GPL.TXT within the package.
 
 ## Requirements and setup ##
 
-CPCEC requires a Microsoft Windows 2000 operating system or later. The minimal
-hardware requirements are those fitting the operating system, and it's advised
-that the main microprocessor runs at 400 MHz at least. Screen resolution in
-pixels must be 800x600 at least. A sound card is optional. Using a joystick is
-optional, too.
+The default build of CPCEC requires a Microsoft Windows 2000 operating system or
+later, while the SDL2 build requires any operating system supported by the SDL2
+library. The minimal hardware requirements are those fitting the operating
+system, and it's advised that the main microprocessor runs at 400 MHz at least.
+Screen resolution in pixels must be 800x600 at least. A sound card is optional.
+Using a joystick is optional, too.
 
 The emulator spans several files: the runnable binary proper CPCEC.EXE and the
 firmware files CPC464.ROM, CPC664.ROM, CPC6128.ROM and CPCADOS.ROM. All these
@@ -103,6 +104,7 @@ differ in the amount of RAM, the disc controller and the keyboard);
 * -O : hide onscreen indicators (by default shown);
 * -R : disable real time emulation (by default enabled);
 * -S : disable sound (by default enabled if there's a sound card);
+* -W : use the full screen rather than a window;
 * -X : disable emulation of disc drives (by default enabled);
 * -Y : disable tape analysis (by default enabled; see below);
 * -Z : disable tape acceleration (by default enabled);
@@ -654,3 +656,7 @@ and Z80MEMPTR) score zero errors. Slightly more precise automatic frameskip.
 - 20200505 -- minor patch focused on the SDL2 toolkit: fixed a bug when
 confirming overwriting files, and improved file browsing across directories by
 pointing by default to the previous directory.
+- 20200509 -- minor patch improving the synchrony between Z80 and video on
+ZXSEC: the ULA48 test already worked before, but ULA128 had problems; now both
+work well. Added the option -W (use the full screen rather than a window) and
+improved the SDL2 handling of bigger windows.

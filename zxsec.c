@@ -7,7 +7,7 @@
  // """"""  "    "   """"   """"""   """"    ----------------------- //
 
 #define MY_CAPTION "ZXSEC"
-#define MY_VERSION "20200505"//"0955"
+#define MY_VERSION "20200509"//"1155"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -537,7 +537,8 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 		ula_v1_send(b);
 		tape_output=(b>>3)&1; // tape record signal
 	}
-	else if ((p&15)==13) // 0x??FD, MULTIPLE DEVICES
+	//else if ((p&15)==13) // 0x??FD, MULTIPLE DEVICES
+	if ((p&14)==12)
 	{
 		if ((p&0x0A00)!=0x0A00) // catch broken 128K ports!
 			p=3<<13; // AteBit's "Mipmap" and "Cube" need this!
@@ -841,11 +842,11 @@ void z80_debug_hard(int q,int x,int y)
 #define Z80_MREQ_PAGE(t,p) ( z80_t+=(z80_aux2=(t+ula_clash_mreq[p][(WORD)ula_clash_z])), ula_clash_z+=z80_aux2 )
 #define Z80_IORQ_PAGE(t,p) ( z80_t+=(z80_aux2=(t+ula_clash_iorq[p][(WORD)ula_clash_z])), ula_clash_z+=z80_aux2 )
 // input/output
-#define Z80_SYNC_IO ( _t_-=z80_t, z80_sync(z80_t), z80_t=0 )
-#define Z80_PRAE_RECV(w) do{ Z80_IORQ(1,w); if (w&1) Z80_IORQ_1X(3,w); else Z80_MREQ_PAGE(3,4); Z80_SYNC_IO; }while(0)
+#define Z80_SYNC_IO(d) ( _t_-=z80_t+d, z80_sync(z80_t+d), z80_t=-d )
+#define Z80_PRAE_RECV(w) do{ Z80_IORQ(1,w); if (w&1) Z80_IORQ_1X(3,w); else Z80_MREQ_PAGE(3,4); Z80_SYNC_IO(0); }while(0)
 #define Z80_RECV z80_recv
 #define Z80_POST_RECV(w)
-#define Z80_PRAE_SEND(w) ( Z80_IORQ(1,w), Z80_SYNC_IO )
+#define Z80_PRAE_SEND(w) ( Z80_IORQ(1,w), Z80_SYNC_IO(2) ) // the ULA reacts 2 T after the OUT: 0 breaks ULA128, 1 breaks SCROLL17, 3 breaks ULA48!
 #define Z80_SEND z80_send
 #define Z80_POST_SEND(w) do{ if (w&1) Z80_IORQ_1X(3,w); else Z80_MREQ_PAGE(3,4); }while(0)
 // fine timings
@@ -1737,7 +1738,7 @@ int main(int argc,char *argv[])
 	all_setup();
 	all_reset();
 	video_pos_x=video_pos_y=audio_pos_z=0;
-	i=0; while (++i<argc)
+	BYTE want_fullscreen=0; i=0; while (++i<argc)
 	{
 		if (argv[i][0]=='-')
 		{
@@ -1796,6 +1797,9 @@ int main(int argc,char *argv[])
 					case 'S':
 						session_audio=0;
 						break;
+					case 'W':
+						want_fullscreen=1;
+						break;
 					case 'X':
 						disc_disabled=1;
 						break;
@@ -1845,6 +1849,7 @@ int main(int argc,char *argv[])
 			"\t-rN\tset frameskip (0..9)\n"
 			"\t-R\tdisable realtime\n"
 			"\t-S\tdisable sound\n"
+			"\t-W\tfullscreen mode\n"
 			"\t-X\tdisable +3 disc drive\n"
 			"\t-Y\tdisable tape analysis\n"
 			"\t-Z\tdisable tape speed-up\n"
@@ -1858,6 +1863,7 @@ int main(int argc,char *argv[])
 	video_target=&video_frame[video_pos_y*VIDEO_LENGTH_X+video_pos_y]; audio_target=audio_frame;
 	audio_disabled=!session_audio;
 	video_clut_update(); onscreen_inks(VIDEO1(0xAA0000),VIDEO1(0x55FF55));
+	if (want_fullscreen) session_togglefullscreen();
 	// it begins, "alea jacta est!"
 	while (!session_listen())
 	{

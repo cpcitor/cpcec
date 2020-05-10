@@ -24,11 +24,13 @@ License v3, como se ve en el fichero GPL.TXT adjunto al paquete.
 
 ## Requisitos e instalación ##
 
-CPCEC requiere un sistema operativo Microsoft Windows 2000 o posterior. El
-hardware mínimo es el propio de dichos sistemas operativos, y se recomienda que
-el microprocesador central funcione a 400 MHz por lo menos. La resolución de
-pantalla en píxeles debe ser 800x600 como mínimo. Una tarjeta de sonido es
-opcional, así como emplear un joystick.
+La versión normal de CPCEC requiere un sistema operativo Microsoft Windows 2000
+o posterior, mientras que la versión para SDL2 necesita cualquier sistema
+operativo que disponga de la librería SDL2. El hardware mínimo es el propio de
+dichos sistemas operativos, y se recomienda que el microprocesador central
+funcione a 400 MHz por lo menos. La resolución de pantalla en píxeles debe ser
+800x600 como mínimo. Una tarjeta de sonido es opcional, así como emplear un
+joystick.
 
 El emulador se compone de varios ficheros: el ejecutable propiamente dicho
 CPCEC.EXE y los ficheros de firmware CPC464.ROM, CPC664.ROM, CPC6128.ROM y
@@ -107,6 +109,7 @@ teclado);
 * -R : deshabilitar emulación en tiempo real (por defecto habilitada);
 * -S : deshabilitar sonido (por defecto habilitado si hay una tarjeta de
 sonido);
+* -X : emplear la pantalla completa en lugar de una ventana;
 * -X : deshabilitar emulación de unidades de disco (por defecto habilitada);
 * -Y : deshabilitar el análisis de cinta (por defecto habilitado; ver más
 adelante);
@@ -686,3 +689,7 @@ más preciso.
 - 20200505 -- parche menor centrado en el toolkit de SDL2: corrige un fallo al
 confirmar sobreescribir archivos, y mejora la búsqueda de ficheros entre
 directorios eligiendo por defecto el directorio anterior.
+- 20200509 -- parche menor que mejora la sincronía entre Z80 y vídeo en ZXSEC:
+el test ULA48 ya funcionaba antes, pero ULA128 tenía problemas; ahora ambos
+funcionan bien. Añade la opción -W (emplear la pantalla completa en lugar de una
+ventana) y mejora el código de SDL2 para ampliar la ventana.

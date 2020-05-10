@@ -38,8 +38,8 @@ char caption_version[]=MY_CAPTION " " MY_VERSION;
 
 #include <windows.h> // KERNEL32.DLL, USER32.DLL, GDI32.DLL, WINMM.DLL, COMDLG32.DLL, SHELL32.DLL
 #include <commdlg.h> // COMDLG32.DLL: getOpenFileName()...
-#include <shellapi.h> // SHELL32.DLL: DragQueryFile()...
 #include <mmsystem.h> // WINMM.DLL: waveOutWrite()...
+#include <shellapi.h> // SHELL32.DLL: DragQueryFile()...
 
 typedef union { unsigned short w; struct { unsigned char l,h; } b; } Z80W; // WIN32 is a lil-endian platform!
 
@@ -302,10 +302,10 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 	int xx,yy; // calculate window area
 	if ((xx=(r.right-=r.left))>0&&(yy=(r.bottom-=r.top))>0) // divisions by zero happen on WM_PAINT during window resizing!
 	{
-		if (xx*VIDEO_PIXELS_Y/yy>VIDEO_PIXELS_X) // window area is too wide?
-			xx=VIDEO_PIXELS_X*yy/VIDEO_PIXELS_Y;
-		if (yy*VIDEO_PIXELS_X/xx>VIDEO_PIXELS_Y) // window area is too tall?
-			yy=VIDEO_PIXELS_Y*xx/VIDEO_PIXELS_X;
+		if (xx>yy*VIDEO_PIXELS_X/VIDEO_PIXELS_Y) // window area is too wide?
+			xx=yy*VIDEO_PIXELS_X/VIDEO_PIXELS_Y;
+		if (yy>xx*VIDEO_PIXELS_Y/VIDEO_PIXELS_X) // window area is too tall?
+			yy=xx*VIDEO_PIXELS_Y/VIDEO_PIXELS_X;
 		if (session_intzoom) // integer zoom? (100%, 200%, 300%...)
 		{
 			xx=(xx/(VIDEO_PIXELS_X*62/64))*VIDEO_PIXELS_X; // the MM/NN factor is a tolerance margin:
@@ -333,8 +333,27 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 				SelectObject(session_cdc,session_oldselect=session_dbg_dib);
 			BitBlt(h,(r.right-DEBUG_LENGTH_X*8)/2,(r.bottom-DEBUG_LENGTH_Y*DEBUG_LENGTH_Z)/2,DEBUG_LENGTH_X*8,DEBUG_LENGTH_Y*DEBUG_LENGTH_Y,session_cdc,0,0,SRCCOPY);
 		}
-		//else
 		#endif
+	}
+}
+
+void session_togglefullscreen(void)
+{
+	if (IsZoomed(session_hwnd))
+	{
+		SetWindowLong(session_hwnd,GWL_STYLE,(GetWindowLong(session_hwnd,GWL_STYLE)|WS_CAPTION)); //&~WS_POPUP&~WS_CLIPCHILDREN // show caption and buttons
+		SetMenu(session_hwnd,session_menu); // show menu
+		RECT r; GetWindowRect(session_hwnd,&r); // adjust to screen center
+		ShowWindow(session_hwnd,SW_RESTORE);
+		r.left+=((r.right-r.left)-session_ideal.right)/2;
+		r.top+=((r.bottom-r.top)-session_ideal.bottom)/2;
+		MoveWindow(session_hwnd,r.left,r.top,session_ideal.right,session_ideal.bottom,1);
+	}
+	else
+	{
+		SetWindowLong(session_hwnd,GWL_STYLE,(GetWindowLong(session_hwnd,GWL_STYLE)&~WS_CAPTION)); //|WS_POPUP|WS_CLIPCHILDREN // hide caption and buttons
+		SetMenu(session_hwnd,NULL); // hide menu
+		ShowWindow(session_hwnd,SW_MAXIMIZE); // adjust to entire screen
 	}
 }
 
@@ -454,24 +473,7 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 			memset(kbd_bit,0,sizeof(kbd_bit)); // loss of focus: no keys!
 		default: // no 'break'!
 			if (msg==WM_SYSKEYDOWN&&wparam==VK_RETURN) // ALT+RETURN toggles MAXIMIZE/RESTORE!
-			{
-				if (IsZoomed(hwnd))
-				{
-					SetWindowLong(hwnd,GWL_STYLE,(GetWindowLong(hwnd,GWL_STYLE)|WS_CAPTION)); //&~WS_POPUP&~WS_CLIPCHILDREN // show caption and buttons
-					SetMenu(hwnd,session_menu); // show menu
-					RECT r; GetWindowRect(hwnd,&r); // adjust to screen center
-					ShowWindow(hwnd,SW_RESTORE);
-					r.left+=((r.right-r.left)-session_ideal.right)/2;
-					r.top+=((r.bottom-r.top)-session_ideal.bottom)/2;
-					MoveWindow(hwnd,r.left,r.top,session_ideal.right,session_ideal.bottom,1);
-				}
-				else
-				{
-					SetWindowLong(hwnd,GWL_STYLE,(GetWindowLong(hwnd,GWL_STYLE)&~WS_CAPTION)); //|WS_POPUP|WS_CLIPCHILDREN // hide caption and buttons
-					SetMenu(hwnd,NULL); // hide menu
-					ShowWindow(hwnd,SW_MAXIMIZE); // adjust to entire screen
-				}
-			}
+				session_togglefullscreen();
 			return DefWindowProc(hwnd,msg,wparam,lparam);
 	}
 	return 0;

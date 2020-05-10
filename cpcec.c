@@ -7,7 +7,7 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "CPCEC"
-#define MY_VERSION "20200505"//"0955"
+#define MY_VERSION "20200509"//"1155"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -3148,7 +3148,7 @@ int main(int argc,char *argv[])
 	all_setup();
 	all_reset();
 	video_pos_x=video_pos_y=audio_pos_z=0;
-	i=0; while (++i<argc)
+	BYTE want_fullscreen=0; i=0; while (++i<argc)
 	{
 		if (argv[i][0]=='-')
 		{
@@ -3207,6 +3207,9 @@ int main(int argc,char *argv[])
 					case 'S':
 						session_audio=0;
 						break;
+					case 'W':
+						want_fullscreen=1;
+						break;
 					case 'X':
 						disc_disabled=1;
 						break;
@@ -3256,6 +3259,7 @@ int main(int argc,char *argv[])
 			"\t-rN\tset frameskip (0..9)\n"
 			"\t-R\tdisable realtime\n"
 			"\t-S\tdisable sound\n"
+			"\t-W\tfullscreen mode\n"
 			"\t-X\tdisable disc drives\n"
 			"\t-Y\tdisable tape analysis\n"
 			"\t-Z\tdisable tape speed-up\n"
@@ -3269,6 +3273,7 @@ int main(int argc,char *argv[])
 	video_target=&video_frame[video_pos_y*VIDEO_LENGTH_X+video_pos_y]; audio_target=audio_frame;
 	audio_disabled=!session_audio;
 	video_clut_update(); onscreen_inks(VIDEO1(0xAA0000),VIDEO1(0x55FF55));
+	if (want_fullscreen) session_togglefullscreen();
 	// it begins, "alea jacta est!"
 	while (!session_listen())
 	{
