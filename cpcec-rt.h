@@ -12,7 +12,8 @@
 
 // START OF OS-INDEPENDENT ROUTINES ================================= //
 
-#define GPL_3_INFO "This program comes with ABSOLUTELY NO WARRANTY; for more details" "\n" \
+#define GPL_3_INFO \
+	"This program comes with ABSOLUTELY NO WARRANTY; for more details" "\n" \
 	"please read the GNU General Public License. This is free software" "\n" \
 	"and you are welcome to redistribute it under certain conditions."
 
@@ -35,6 +36,7 @@ char *session_configread(char *t) // reads configuration file; s points to the p
 	while (*s==' ') ++s; // skip spaces between both
 	//if (*s) // handle common parameters, if valid
 	{
+		if (!strcmp(session_parmtr,"monophony")) return audio_monaural=*s&1,NULL;
 		if (!strcmp(session_parmtr,"scanlines")) return video_scanline=*s&3,NULL;
 		if (!strcmp(session_parmtr,"softaudio")) return audio_filter=*s&3,NULL;
 		if (!strcmp(session_parmtr,"softvideo")) return video_filter=*s&7,NULL;
@@ -43,7 +45,7 @@ char *session_configread(char *t) // reads configuration file; s points to the p
 }
 void session_configwrite(FILE *f) // save common parameters
 {
-	fprintf(f,"scanlines %i\nsoftvideo %i\nsoftaudio %i\n",video_scanline,video_filter,audio_filter);
+	fprintf(f,"monophony %i\nscanlines %i\nsoftaudio %i\nsoftvideo %i\n",audio_monaural,video_scanline,audio_filter,video_filter);
 }
 
 char *strrstr(char *h,char *n) // = strrchr + strstr
@@ -102,6 +104,34 @@ int multiglobbing(char *w,char *t,int q) // like globbing(), but with multiple p
 	}
 	while (c);
 	return 0;
+}
+
+// the following algorithms are weak, but proper binary search is difficult to perform on packed lists; fortunately, items are likely to be sorted beforehand
+int sortedinsert(char *t,int z,char *s) // insert string 's' in its alphabetical order within the packed list of strings 't' of length 'l'; returns the list's new length
+{
+	int m=z,n; while (m>0)
+	{
+		n=m;
+		do --n; while (n>0&&t[n-1]);
+		if (strcasecmp(s,&t[n])>=0)
+			break;
+		m=n;
+	}
+	n=strlen(s)+1;
+	if (z>m)
+		memmove(&t[m+n],&t[m],z-m);
+	return memcpy(&t[m],s,n),z+n;
+}
+int sortedsearch(char *t,int z,char *s) // look for string 's' in an alphabetically ordered packed list of strings 't' of length 'l'; returns index (not offset!) in list
+{
+	char *r=&t[z]; int i=0; while (t<r)
+	{
+		if (!strcasecmp(s,t))
+			return i;
+		++i; while (*t++)
+			;
+	}
+	return -1; // 's' was not found!
 }
 
 // interframe functions --------------------------------------------- //
@@ -220,89 +250,93 @@ INLINE void video_drawscanline(void) // call between scanlines
 }
 INLINE void video_endscanlines(VIDEO_DATATYPE z) // call between frames
 {
-	#if 0
-		static int video_rasterscan;
-		for (int i=8;i>0;--i)
-		{
-			video_rasterscan=(video_rasterscan+2)%VIDEO_LENGTH_Y;
-			if (video_rasterscan>=VIDEO_OFFSET_Y&&video_rasterscan<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y)
-			{
-				VIDEO_DATATYPE *p=video_frame+VIDEO_OFFSET_X+video_rasterscan*VIDEO_LENGTH_X;
-				for (int x=0;x<VIDEO_PIXELS_X;x+=i)
-					*p=VIDEO_FILTER_AVG(*p,VIDEO1(0xE0E0E0)),p+=i;
-				if (video_scanlinez==0)
-				{
-					p+=VIDEO_LENGTH_X-VIDEO_PIXELS_X;
-					for (int x=0;x<VIDEO_PIXELS_X;x+=i)
-					*p=VIDEO_FILTER_AVG(*p,VIDEO1(0xC0C0C0)),p+=i;
-				}
-			}
-		}
-	#endif
-	static VIDEO_DATATYPE zzz=-1; // first value intentionally invalid!
 	VIDEO_DATATYPE zz=(video_filter&VIDEO_FILTER_Y_MASK)?VIDEO_FILTER_X1(z):z; // minor video interpolation: weak scanlines
 	if (video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y) // empty bottom lines?
 	{
 		VIDEO_DATATYPE *p=video_target-video_pos_x+VIDEO_OFFSET_X;
-		int x,y;
 		if (video_scanlinez==0)
-			for (y=video_pos_y;y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;y+=2,p+=VIDEO_LENGTH_X-VIDEO_PIXELS_X)
+			for (int y=video_pos_y;y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;y+=2,p+=VIDEO_LENGTH_X-VIDEO_PIXELS_X)
 			{
-				for (x=0;x<VIDEO_PIXELS_X;++x)
+				for (int x=0;x<VIDEO_PIXELS_X;++x)
 					*p++=z; // render primary scanlines
 				p+=VIDEO_LENGTH_X-VIDEO_PIXELS_X;
-				for (x=0;x<VIDEO_PIXELS_X;++x)
+				for (int x=0;x<VIDEO_PIXELS_X;++x)
 					*p++=zz; // filter secondary scanlines
 			}
 		else
-			for (y=video_pos_y;y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;y+=2,p+=VIDEO_LENGTH_X*2-VIDEO_PIXELS_X)
-				for (x=0;x<VIDEO_PIXELS_X;++x)
+			for (int y=video_pos_y;y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;y+=2,p+=VIDEO_LENGTH_X*2-VIDEO_PIXELS_X)
+				for (int x=0;x<VIDEO_PIXELS_X;++x)
 					*p++=z; // render primary scanlines only
 	}
+	static VIDEO_DATATYPE zzz=-1; // first value intentionally invalid!
 	if (video_scanlinez!=video_scanline||zzz!=zz) // did the config change?
-	{
 		if ((video_scanlinez=video_scanline)==1) // do we have to redo the secondary scanlines?
 		{
 			zzz=zz;
-			int x,y; VIDEO_DATATYPE *p=video_frame+VIDEO_OFFSET_X+(VIDEO_OFFSET_Y+1)*VIDEO_LENGTH_X;
-			for (y=0;y<VIDEO_PIXELS_Y;y+=2,p+=VIDEO_LENGTH_X*2-VIDEO_PIXELS_X)
-				for (x=0;x<VIDEO_PIXELS_X;++x)
+			VIDEO_DATATYPE *p=video_frame+VIDEO_OFFSET_X+(VIDEO_OFFSET_Y+1)*VIDEO_LENGTH_X;
+			for (int y=0;y<VIDEO_PIXELS_Y;y+=2,p+=VIDEO_LENGTH_X*2-VIDEO_PIXELS_X)
+				for (int x=0;x<VIDEO_PIXELS_X;++x)
 					*p++=zz; // render secondary scanlines only
 		}
-	}
+	/*if (!video_interlaces||!(video_scanline&2)) // vertical cross-hatching (!?)
+	{
+		VIDEO_DATATYPE *p=video_frame+VIDEO_OFFSET_X+(VIDEO_OFFSET_Y+1)*VIDEO_LENGTH_X;
+		for (int y=0;y<VIDEO_PIXELS_Y;++y,p+=VIDEO_LENGTH_X-VIDEO_PIXELS_X)
+			for (int x=0;x<VIDEO_PIXELS_X;x+=2)
+				*p=p[+VIDEO_LENGTH_X],++p,++p;
+	}*/
 }
 
 INLINE void audio_playframe(int q,AUDIO_DATATYPE *ao) // call between frames by the OS wrapper
 {
-	static AUDIO_DATATYPE az=AUDIO_ZERO;
 	AUDIO_DATATYPE aa,*ai=audio_frame; // session_filter[(aa<<8)+az] is 8-bit only and isn't faster than the calculations
-	int i; switch (q)
+	#if AUDIO_STEREO
+	static AUDIO_DATATYPE a0=AUDIO_ZERO,a1=AUDIO_ZERO;
+	switch (q)
 	{
 		case 1:
-			for (i=0;i<AUDIO_LENGTH_Z;++i)
-				aa=*ai++,
-				*ao++=az=(aa+az+(aa>az))/2; // hard filter
-				//*ao++=(aa+az+(aa>az))/2,az=aa; // soft filter
+			for (int i=0;i<AUDIO_LENGTH_Z;++i)
+				aa=*ai++,*ao++=a0=(aa+a0+(aa>a0))/2,
+				aa=*ai++,*ao++=a1=(aa+a1+(aa>a1))/2; // hard filter
 			break;
 		case 2:
-			for (i=0;i<AUDIO_LENGTH_Z;++i)
-				aa=*ai++,
-				*ao++=az=(aa+az*3+(aa>az)*3)/4; // hard filter
-				//*ao++=(aa+az*3+(aa>az)*2)/4,az=aa; // soft filter
+			for (int i=0;i<AUDIO_LENGTH_Z;++i)
+				aa=*ai++,*ao++=a0=(aa+a0*3+(aa>a0)*3)/4,
+				aa=*ai++,*ao++=a1=(aa+a1*3+(aa>a1)*3)/4; // hard filter
 			break;
 		case 3:
-			for (i=0;i<AUDIO_LENGTH_Z;++i)
-				aa=*ai++,
-				*ao++=az=(aa+az*7+(aa>az)*7)/8; // hard filter
-				//*ao++=(aa+az*7+(aa>az)*4)/8,az=aa; // soft filter
+			for (int i=0;i<AUDIO_LENGTH_Z;++i)
+				aa=*ai++,*ao++=a0=(aa+a0*7+(aa>a0)*7)/8,
+				aa=*ai++,*ao++=a1=(aa+a1*7+(aa>a1)*7)/8; // hard filter
 			break;
 	}
+	#else
+	static AUDIO_DATATYPE az=AUDIO_ZERO;
+	switch (q)
+	{
+		case 1:
+			for (int i=0;i<AUDIO_LENGTH_Z;++i)
+				aa=*ai++,*ao++=az=(aa+az+(aa>az))/2; // hard filter
+				//aa=*ai++,*ao++=(aa+az+(aa>az))/2,az=aa; // soft filter
+			break;
+		case 2:
+			for (int i=0;i<AUDIO_LENGTH_Z;++i)
+				aa=*ai++,*ao++=az=(aa+az*3+(aa>az)*3)/4; // hard filter
+				//aa=*ai++,*ao++=(aa+az*3+(aa>az)*2)/4,az=aa; // soft filter
+			break;
+		case 3:
+			for (int i=0;i<AUDIO_LENGTH_Z;++i)
+				aa=*ai++,*ao++=az=(aa+az*7+(aa>az)*7)/8; // hard filter
+				//aa=*ai++,*ao++=(aa+az*7+(aa>az)*4)/8,az=aa; // soft filter
+			break;
+	}
+	#endif
 }
 
 INLINE void session_update(void) // render video+audio thru OS and handle realtime logic (self-adjusting delays, automatic frameskip, etc.)
 {
 	session_render();
-	session_signal&=~SESSION_SIGNAL_FRAME;
+	session_signal&=~SESSION_SIGNAL_FRAME; // new frame!
 	audio_target=audio_frame;
 	if (video_scanline==3)
 		video_interlaced|=1;
@@ -359,7 +393,7 @@ INLINE int session_createwave(void) // create a wave file; !0 ERROR
 		return 1; // too many files!
 	if (!(session_wavefile=fopen(session_parmtr,"wb")))
 		return 1; // cannot create file!
-	waveheader[0x16]=AUDIO_CHANNELS; // channels
+	waveheader[0x16]=AUDIO_STEREO+1; // channels
 	mputiiii(&waveheader[0x18],AUDIO_PLAYBACK); // samples per second
 	mputiiii(&waveheader[0x1C],AUDIO_PLAYBACK*sizeof(AUDIO_DATATYPE)); // bytes per second
 	waveheader[0x20]=sizeof(AUDIO_DATATYPE); // bytes per sample
@@ -677,14 +711,14 @@ unsigned int puff_dohash(unsigned int k,unsigned char *s,int l)
 	return k;
 }
 // ZIP-aware fopen()
-char PUFF_SEPARATOR[]="|",puff_path[STRMAX];
+char PUFFCHAR[]="|",puff_path[STRMAX];
 FILE *puff_ffile=NULL;
 FILE *puff_fopen(char *s,char *m) // mimics fopen(), so NULL on error, *FILE otherwise
 {
 	if (!s||!m)
 		return NULL; // wrong parameters!
 	char *z;
-	if (!(z=strrstr(s,PUFF_SEPARATOR))||!strchr(m,'r'))
+	if (!(z=strrstr(s,PUFFCHAR))||!strchr(m,'r'))
 		return fopen(s,m); // normal file logic
 	if (!strcmp(puff_path,s))
 		return fseek(puff_ffile,0,SEEK_SET),puff_ffile; // recycle last file!
@@ -733,9 +767,9 @@ char *puff_session_filedialog(char *r,char *s,char *t,int q,int f) // ZIP archiv
 	strcpy(rr,r);
 	for (;;) // try either a file list or the file dialog until the user either chooses a file or quits
 	{
-		if (zz=strrstr(rr,PUFF_SEPARATOR)) // 'rr' holds the path, does it contain the separator already?
+		if (zz=strrstr(rr,PUFFCHAR)) // 'rr' holds the path, does it contain the separator already?
 		{
-			*zz=0; zz+=strlen(PUFF_SEPARATOR);  // *zz++=0; // now it either points to the previous file name or to a zero
+			*zz=0; zz+=strlen(PUFFCHAR);  // *zz++=0; // now it either points to the previous file name or to a zero
 			z=session_scratch; // generate list of files in archive
 			int l=0,i=-1; // number of files, default selection
 			if (!puff_open(rr))
@@ -746,10 +780,10 @@ char *puff_session_filedialog(char *r,char *s,char *t,int q,int f) // ZIP archiv
 					{
 						if (multiglobbing(s,puff_name,1))
 						{
-							if (!strcasecmp(zz,puff_name))
-								i=l; // select file
+							//if (!strcasecmp(zz,puff_name))
+								//i=l; // select file
 							++l;
-							z+=1+sprintf(z,"%s",puff_name);
+							z=&session_scratch[sortedinsert(session_scratch,z-session_scratch,puff_name)];//z+=1+sprintf(z,"%s",puff_name);
 						}
 					}
 					puff_body(0);
@@ -764,21 +798,22 @@ char *puff_session_filedialog(char *r,char *s,char *t,int q,int f) // ZIP archiv
 			if (l==1) // exactly one file?
 			{
 				if (!*zz) // new archive? (old archive would still show a file here)
-					return session_filedialog_readonly1(),strcpy(session_parmtr,strcat(strcat(rr,PUFF_SEPARATOR),session_scratch));
+					return session_filedialog_readonly1(),strcpy(session_parmtr,strcat(strcat(rr,PUFFCHAR),session_scratch));
 			}
 			else if (l) // at least one file?
 			{
+				i=sortedsearch(session_scratch,z-session_scratch,zz);
 				*z++=0; // END OF LIST
 				sprintf(z,"Browse archive %s",rr);
 				if (session_list(i,session_scratch,z)>=0) // default to latest file if possible
-					return session_filedialog_readonly1(),strcpy(session_parmtr,strcat(strcat(rr,PUFF_SEPARATOR),session_parmtr));
+					return session_filedialog_readonly1(),strcpy(session_parmtr,strcat(strcat(rr,PUFFCHAR),session_parmtr));
 			}
 		}
 		if (!(z=(q?session_getfilereadonly(rr,ss,t,f):session_getfile(rr,ss,t)))) // what did the user choose?
 			return NULL; // user cancel: give up
 		if (strlen(z)<4||strcasecmp(z+strlen(z)-4,&puff_pattern[1]))
 			return z; // normal file: accept it
-		strcat(strcpy(rr,z),PUFF_SEPARATOR); // ZIP archive: append and try again
+		strcat(strcpy(rr,z),PUFFCHAR); // ZIP archive: append and try again
 	}
 }
 #define puff_session_getfile(x,y,z) puff_session_filedialog(x,y,z,0,0)
@@ -787,8 +822,8 @@ char *puff_session_newfile(char *x,char *y,char *z) // writing within ZIP archiv
 {
 	char xx[STRMAX],*zz;
 	strcpy(xx,x); // cancelling must NOT destroy the source path
-	if (zz=strrstr(xx,PUFF_SEPARATOR))
-		while (--zz>=xx&&*zz!=PATH_SEPARATOR)
+	if (zz=strrstr(xx,PUFFCHAR))
+		while (--zz>=xx&&*zz!=PATHCHAR)
 			*zz=0; // remove ZIP archive and file within
 	return session_newfile(xx,y,z);
 }

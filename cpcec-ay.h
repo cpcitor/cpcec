@@ -200,21 +200,36 @@ void psg_main(int t) // render audio output for `t` clock ticks
 		for (int c=0;c<3;++c)
 			if (--psg_tone_count[c]<=0) // update channel
 				psg_tone_count[c]=psg_tone_limit[c],psg_tone_state[c]=~psg_tone_state[c];
+		#if AUDIO_STEREO
+		static int n=0,o0=0,o1=0,p=0; // output averaging variables
+		#else
 		static int n=0,o=0,p=0; // output averaging variables
+		#endif
 		p+=AUDIO_PLAYBACK<<PSG_MAIN_EXTRABITS;
 		while (p>0&&n<(1<<PSG_MAIN_EXTRABITS))
 		{
 			for (int c=0;c<3;++c)
 				if (psg_tone_state[c]|(psg_tone_catch[c]&(7*1))) // is the channel active?
 					if (psg_noise_state|(psg_tone_catch[c]&(7*8))) // is the channel noisy?
+						#if AUDIO_STEREO
+						o0+=audio_table[psg_tone_power[c]]*psg_stereo[c][0],
+						o1+=audio_table[psg_tone_power[c]]*psg_stereo[c][1];
+						#else
 						o+=audio_table[psg_tone_power[c]];
+						#endif
 			++n;
 			p-=TICKS_PER_SECOND/PSG_TICK_STEP;
 		}
 		if (n>=(1<<PSG_MAIN_EXTRABITS)) // enough data to write a sample? (n will rarely be >1)
 		{
+			#if AUDIO_STEREO
+			*audio_target++=(((o0+n/2)/n)>>(24-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average (left)
+			*audio_target++=(((o1+n/2)/n)>>(24-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average (right)
+			o0=o1=n=0;//%=1<<PSG_MAIN_EXTRABITS; // reset output averaging variables
+			#else
 			*audio_target++=(((o+n/2)/n)>>(16-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average
 			o=n=0;//%=1<<PSG_MAIN_EXTRABITS; // reset output averaging variables
+			#endif
 			if (++audio_pos_z>=AUDIO_LENGTH_Z)
 			{
 				r%=PSG_TICK_STEP; // throw ticks away!

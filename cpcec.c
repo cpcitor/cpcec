@@ -7,7 +7,7 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "CPCEC"
-#define MY_VERSION "20200509"//"1155"
+#define MY_VERSION "20200603"//"1555"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -562,6 +562,10 @@ void pio_reset(void)
 #define PSG_TICK_STEP 8 // 1 MHz /2 /8 = 62500 Hz
 #define PSG_KHZ_CLOCK 1000
 #define PSG_MAIN_EXTRABITS 0
+#if AUDIO_STEREO
+int psg_stereo[3][2]; const int psg_stereos[2][3][2]={{{512,0},{256,256},{0,512}}
+	,{{256,256},{256,256},{256,256}}}; // A left, B middle, C right
+#endif
 
 #include "cpcec-ay.h"
 
@@ -1079,9 +1083,9 @@ void z80_irq_ack(void)
 
 void z80_sync(int t) // the Z80 asks the hardware/video/audio to catch up
 {
-	static int r=0;
-	int tt=(r+=t)/z80_multi; // calculate base value of `t`
-	r-=(t=(tt*z80_multi)); // adjust `t` and keep remainder
+	static int r=0; r+=t;
+	int tt=r/z80_multi; // calculate base value of `t`
+	r-=(t=tt*z80_multi); // adjust `t` and keep remainder
 	if (t)
 	{
 		if (!disc_disabled)
@@ -1186,13 +1190,16 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 		{
 			if (!(p&0x0100)) // 0xF400, PIO PORT A
 			{
-				pio_port_a=b;
-				if (pio_port_c&0x80)
+				if (!(pio_control&0x10)) // reject READ PSG REGISTER
 				{
-					if (pio_port_c&0x40) // SELECT PSG REGISTER
-						psg_table_select(pio_port_a);
-					else // WRITE PSG REGISTER
-						psg_table_send(pio_port_a);
+					pio_port_a=b;
+					if (pio_port_c&0x80)
+					{
+						if (pio_port_c&0x40) // SELECT PSG REGISTER
+							psg_table_select(pio_port_a);
+						else // WRITE PSG REGISTER
+							psg_table_send(pio_port_a);
+					}
 				}
 			}
 			else // 0xF500, PIO PORT B
@@ -1374,14 +1381,17 @@ const BYTE z80_tape_fastloader[][24]= // format: chains of {offset relative to t
 	/* 39 */ {   -6,   8,0x24,0xC8,0x06,0xF5,0xED,0x78,0xA9,0xF2,-128,  -8 }, // SPEEDLOCK LEVELS
 	/* 40 */ {   -6,   5,0x04,0xC8,0x3E,0xF5,0xDB,  +1,   7,0x00,0xA9,0xD8,0xE6,0x80,0x28,0xF3 }, // SUPERTRUX 1/2
 	/* 41 */ {   -6,   5,0x04,0xC8,0x3E,0xF5,0xDB,  +1,   6,0x00,0xA9,0xE6,0x80,0x28,0xF4 }, // SUPERTRUX 2/2
+	/* 42 */ {   -7,  10,0x06,0xF5,0x0C,0x28,0x14,0xED,0x78,0x17,0x30,0xF8 }, // AUDIOGENIC 1/2
+	/* 43 */ {   -5,   8,0x0C,0x28,0x0C,0xED,0x78,0x17,0x38,0xF8 }, // AUDIOGENIC 2/2
+	/* 44 */ {   -6,  13,0x04,0xC8,0x3E,0xF5,0xDB,0xFF,0xB7,0xD8,0xA9,0xE6,0x80,0x28,0xF3 }, // BIRDIE
 };
-void z80_tape_fastload_firmwarechecksum(int mask8)
+void z80_tape_fastload_ccitt(int mask8)
 {
 	WORD x=type_id?0xB1EB:0xB8D3; // CCITT 16-bit checksum location
 	WORD crc16=mgetii(&PEEK(x));
 	while (mask8&0xFF)
 	{
-		if (((mask8^crc16)&0x8000))
+		if ((mask8^crc16)&0x8000)
 			crc16=(crc16<<1)^0x1021;
 		else
 			crc16<<=1;
@@ -1423,13 +1433,13 @@ INLINE void z80_tape_fastload(void)
 							{
 								j=fasttape_dump();
 								POKE(z80_ix.w)=j;
-								z80_tape_fastload_firmwarechecksum((j<<8)+1);
+								z80_tape_fastload_ccitt((j<<8)+1);
 								++z80_ix.w;
 								--POKE(z80_sp.w+2);
 								--POKE(z80_sp.w+3);
 							}
 						j=fasttape_feed();
-						z80_tape_fastload_firmwarechecksum((j<<8)+2);
+						z80_tape_fastload_ccitt((j<<8)+2);
 					}
 					else
 						j=fasttape_feed();
@@ -1552,7 +1562,7 @@ INLINE void z80_tape_fastload(void)
 			case 12: // BLEEPLOAD1-MUSICAL ("SPIKY HAROLD", "RASPUTIN") // INC L // XOR C:JP NS,..
 				fasttape_add8(z80_bc.b.l>>7,9,&z80_hl.b.l,1);
 				break;
-			case 13: // UNILODE ("YES PRIME MINISTER", "TRIVIAL PURSUIT") // INC H // XOR C:AND $80:JP Z,..
+				break;
 			case 39: // SPEEDLOCK LEVELS ("RAINBOW ISLANDS")
 				if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_fastfeed(z80_tape_spystack())==8)
 				{
@@ -1562,6 +1572,7 @@ INLINE void z80_tape_fastload(void)
 					j=fasttape_feed(),tape_feedskip=z80_hl.b.l=128+(j>>1),z80_hl.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc.b.l>>7,13);
 				}
 				else
+			case 13: // UNILODE ("YES PRIME MINISTER", "TRIVIAL PURSUIT") // INC H // XOR C:AND $80:JP Z,..
 					fasttape_add8(z80_bc.b.l>>7,13,&z80_hl.b.h,1);
 				break;
 			case 15: // ZYDROLOAD ("HOSTAGES", "NORTH & SOUTH") // INC B // XOR C:AND $20:JR Z,..
@@ -1659,12 +1670,7 @@ INLINE void z80_tape_fastload(void)
 				break;
 			case 35: // TITUS 3/X // COUNTER IS R7, OPPOSITE LIMIT IS (IY+0) // XOR C:JR Z,...
 			case 36: // TITUS 4/X // COUNTER IS R7, OPPOSITE LIMIT IS (IY+0) // XOR C:JR Z,...
-				{
-					int i=PEEK(z80_iy.w)+1;
-					z80_r7-=i;
-					fasttape_add8(z80_bc.b.l>>7,20,&z80_r7,10);
-					z80_r7+=i;
-				}
+				z80_r7+=5*10; tape_main(5*19); // 5 is a value that pleases both "ONE" and "BLUES BROTHERS"
 				break;
 			case 37: // TITUS 5/X // ADD E,$04 // XOR C:JR Z,...
 				fasttape_add8(z80_bc.b.l>>7,18,&z80_de.b.l,4);
@@ -1680,6 +1686,15 @@ INLINE void z80_tape_fastload(void)
 					j=fasttape_feed(),tape_feedskip=z80_hl.b.l=128+(j>>1),z80_bc.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc.b.l>>7,15);
 				else
 					fasttape_add8(z80_bc.b.l>>7,15,&z80_bc.b.h,1);
+				break;
+			case 42: // AUDIOGENIC 1/2 (LONE WOLF)
+				fasttape_add8(0,11,&z80_bc.b.l,1);
+				break;
+			case 43: // AUDIOGENIC 2/2
+				fasttape_add8(1,11,&z80_bc.b.l,1);
+				break;
+			case 44: // BIRDIE
+				fasttape_add8(z80_bc.b.l>>7,17,&z80_bc.b.h,1);
 				break;
 		}
 		//if (n) logprintf("[%02i:x%03i] ",i,n);
@@ -1719,7 +1734,7 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 		switch (p&0x0300)
 		{
 			case 0x0000: // 0xF400, PIO PORT A
-				if (pio_control&0x10) //((pio_port_c&0xC0)==0x40) // READ PSG REGISTER
+				if (pio_control&0x10) // READ PSG REGISTER
 					b&=psg_index==14?(~autorun_kbd_bit[pio_port_c&15]):psg_table_recv(); // index 14 is keyboard port!
 				else if (!plus_enabled)
 					b=0; // "TIRE AU FLAN" expects this!? Is it nonzero on PLUS!?
@@ -2159,7 +2174,7 @@ int bios_load(char *s) // load a cartridge file or a firmware ROM file. 0 OK, !0
 	if (globbing("*.ini",s,1)) // profile?
 	{
 		char t[STRMAX],*tt,u[STRMAX],*uu;
-		strcpy(u,s); if (uu=strrchr(u,PATH_SEPARATOR)) ++uu; else uu=u; // make ROM files relative to INI path
+		strcpy(u,s); if (uu=strrchr(u,PATHCHAR)) ++uu; else uu=u; // make ROM files relative to INI path
 		MEMZERO(mmu_xtr);
 		FILE *f,*ff;
 		if (f=puff_fopen(s,"r"))
@@ -2219,7 +2234,7 @@ int bios_load(char *s) // load a cartridge file or a firmware ROM file. 0 OK, !0
 		}
 		puff_fclose(f);
 		MEMZERO(mmu_xtr);
-		if (i==(1<<15)&&mgetmmmm(&mem_rom[0])==0x01897FED&&mem_rom[0x4002]<3) // firmware fingerprint
+		if (i==(1<<15)&&mgetiiii(&mem_rom[0])==0xED7F8901&&mem_rom[0x4002]<3) // firmware fingerprint
 		{
 			type_id=mem_rom[0x4002]; // firmware revision
 			if (crtc_type==3) crtc_type=0; // adjust hardware
@@ -2240,6 +2255,12 @@ int bios_load(char *s) // load a cartridge file or a firmware ROM file. 0 OK, !0
 			logprintf("PLUS cartridge %iK.\n",i>>10);
 		}
 	}
+	if (mgetiiii(&mem_rom[0x2BF9])==0x0B068201) //
+		mem_rom[0x2BF9+2]=0;//mputii(&mem_rom[0x2BF9+1],1); // 664+6128+PLUS HACK: reduced initial tape reading delay!
+	else if (mgetiiii(&mem_rom[0x2A89])==0x0B068201)
+		mem_rom[0x2A89+2]=0;//mputii(&mem_rom[0x2A89+1],1); // ditto, for CPC464
+	if (!memcmp(&mem_rom[0xCE06],"\xCD\x1B\xBB\x30\xF0\xFE\x81\x28\x0C\xEE\x82",11))
+		mem_rom[0xCE07]=0x09,mem_rom[0xCE0C]=0x31,mem_rom[0xCE10]=0x32; // PLUS HACK: boot menu accepts '1' and '2'!
 	if (bios_path!=s&&(char*)session_substr!=s)
 		strcpy(bios_path,s);
 	return biostype_id=type_id,mmu_update(),0;
@@ -2261,7 +2282,7 @@ int bdos_path_load(char *s) // load AMSDOS ROM. `s` path; 0 OK, !0 ERROR
 	int i=fread1(bdos_rom,1<<14,f);
 	i+=fread1(bdos_rom,1<<14,f);
 	fclose(f);
-	return i!=(1<<14)||mgetmmmm(&bdos_rom[0x3C])!=0xC366C6C3; // AMSDOS fingerprint
+	return i!=(1<<14)||mgetiiii(&bdos_rom[0x3C])!=0xC3C666C3; // AMSDOS fingerprint
 }
 
 // snapshot file handling operations -------------------------------- //
@@ -2528,7 +2549,14 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 			fseek(f,l,SEEK_CUR); // skip unknown block
 	}
 	if (!q)
+	{
 		plus_reset(); // reset PLUS hardware if the snapshot is OLD style!
+		for (i=0;i<17;++i) // avoid accidents in old snapshots recorded as PLUS but otherwise sticking to old hardware
+		{
+			int j=video_asic_table[gate_table[i]];
+			plus_palette[i*2+0]=j; plus_palette[i*2+1]=j>>8;
+		}
+	}
 	// we adjust the REAL RAM SIZE if the snapshot is bigger than the current setup!
 	dumpsize=j>>10;
 	logprintf("SNAv1 RAM size %iK.\n",dumpsize);
@@ -2743,7 +2771,11 @@ char session_menudata[]=
 	"=\n"
 	"0x8C00 Save screenshot\tF12\n"
 	"Audio\n"
-	"0x8400 Sound\tF4\n"
+	"0x8400 Sound playback\tF4\n"
+	#if AUDIO_STEREO
+	"0xC400 Enable stereo\tShift+F4\n"
+	"=\n"
+	#endif
 	"0x8401 No interpolation\n"
 	"0x8402 Light interpolation\n"
 	"0x8403 Middle interpolation\n"
@@ -2786,6 +2818,10 @@ void session_menuinfo(void)
 	session_menucheck(0x8902,video_filter&VIDEO_FILTER_Y_MASK);
 	session_menucheck(0x8903,video_filter&VIDEO_FILTER_X_MASK);
 	session_menucheck(0x8904,video_filter&VIDEO_FILTER_SMUDGE);
+	#if AUDIO_STEREO
+	session_menucheck(0xC400,!audio_disabled&&!audio_monaural);
+	MEMLOAD(psg_stereo,psg_stereos[audio_monaural]);
+	#endif
 	z80_multi=1+z80_turbo; // setup overclocking
 	sprintf(session_info,"%i:%iK CRTC%c %gMHz"//" | disc %s | tape %s | %s"
 		,gate_ram_dirty,gate_ram_kbyte[gate_ram_depth],48+crtc_type,4.0*z80_multi);
@@ -2888,7 +2924,14 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 			break;
 		case 0x8400: // F4: TOGGLE SOUND
 			if (session_audio)
-				audio_disabled^=1;
+			{
+				#if AUDIO_STEREO
+				if (session_shift) // TOGGLE STEREO
+					audio_monaural^=1;
+				else
+				#endif
+					audio_disabled^=1;
+			}
 			break;
 		case 0x8401:
 		case 0x8402:
@@ -3126,7 +3169,7 @@ void session_configwritemore(FILE *f)
 
 #if defined(DEBUG) || defined(SDL_MAIN_HANDLED)
 void printferror(char *s) { printf("Error: %s\n",s); }
-#define printfusage(s) printf(s)
+#define printfusage(s) printf(MY_CAPTION " " MY_VERSION " " MY_LICENSE "\n" s)
 #else
 void printferror(char *s) { sprintf(session_tmpstr,"Error: %s\n",s); session_message(session_tmpstr,txt_error); }
 #define printfusage(s) session_message(s,caption_version)
@@ -3207,6 +3250,9 @@ int main(int argc,char *argv[])
 					case 'S':
 						session_audio=0;
 						break;
+					case 'T':
+						audio_monaural=1;
+						break;
 					case 'W':
 						want_fullscreen=1;
 						break;
@@ -3237,7 +3283,7 @@ int main(int argc,char *argv[])
 	}
 	if (i>argc)
 		return
-			printfusage("Usage: " MY_CAPTION
+			printfusage("usage: " MY_CAPTION
 			" [option..] [file..]\n"
 			"\t-cN\tscanline type (0..3)\n"
 			"\t-CN\tcolour palette (0..4)\n"
@@ -3259,6 +3305,7 @@ int main(int argc,char *argv[])
 			"\t-rN\tset frameskip (0..9)\n"
 			"\t-R\tdisable realtime\n"
 			"\t-S\tdisable sound\n"
+			"\t-T\tdisable stereo\n"
 			"\t-W\tfullscreen mode\n"
 			"\t-X\tdisable disc drives\n"
 			"\t-Y\tdisable tape analysis\n"
@@ -3266,8 +3313,8 @@ int main(int argc,char *argv[])
 			),1;
 	if (bios_reload()||bdos_path_load("cpcados.rom"))
 		return printferror(txt_error_bios),1;
-	if (!(mem_xtr=malloc(257<<14))||session_create(session_menudata))
-		return printferror("Cannot create session!"),1;
+	char *s="not enough memory"; if (!(mem_xtr=malloc(257<<14))||(s=session_create(session_menudata)))
+		return sprintf(session_scratch,"Cannot create session: %s!",s),printferror(session_scratch),1;
 	session_kbdreset();
 	session_kbdsetup(kbd_map_xlt,length(kbd_map_xlt)/2);
 	video_target=&video_frame[video_pos_y*VIDEO_LENGTH_X+video_pos_y]; audio_target=audio_frame;
@@ -3289,7 +3336,7 @@ int main(int argc,char *argv[])
 					:irq_delay?3-irq_delay:(52-irq_timer) // the safest way to handle the fastest interrupt countdown possible (CRTC R0=0)
 				)<<(session_fast&~1)) // ...without missing any IRQ and CRTC deadlines!
 			);
-		if (session_signal&SESSION_SIGNAL_FRAME)
+		if (session_signal&SESSION_SIGNAL_FRAME) // end of frame?
 		{
 			if (!video_framecount&&onscreen_flag)
 			{

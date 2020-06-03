@@ -24,7 +24,7 @@
 #define strcasecmp SDL_strcasecmp
 #ifdef __WIN32__
 	#define STRMAX 256 // widespread in Windows
-	#define PATH_SEPARATOR '\\' // WIN32
+	#define PATHCHAR '\\' // WIN32
 	#include <windows.h> // FindFirstFile...
 	#include <io.h> // _chsize(),_fileno()...
 	#define fsetsize(f,l) _chsize(_fileno(f),(l))
@@ -34,7 +34,7 @@
 	#else
 		#define STRMAX 512 // MacOS lacks PATH_MAX; TCC's LIMITS.H sets it to 512 and seems safe, with the exception of realpath()
 	#endif
-	#define PATH_SEPARATOR '/' // POSIX
+	#define PATHCHAR '/' // POSIX
 	#include <dirent.h> // opendir()...
 	#include <sys/stat.h> // stat()...
 	#include <unistd.h> // ftruncate(),fileno()...
@@ -76,16 +76,16 @@
 	#define AUDIO_ZERO 0
 	#define AUDIO1(x) (x)
 #endif // bitsize
-#define AUDIO_CHANNELS 1
+#define AUDIO_STEREO 1
 
 VIDEO_DATATYPE *video_frame; // video frame, allocated on runtime
-AUDIO_DATATYPE *audio_frame,audio_buffer[AUDIO_LENGTH_Z]; // audio frame
+AUDIO_DATATYPE *audio_frame,audio_buffer[AUDIO_LENGTH_Z*(AUDIO_STEREO+1)]; // audio frame
 VIDEO_DATATYPE *video_target; // pointer to current video pixel
 AUDIO_DATATYPE *audio_target; // pointer to current audio sample
 int video_pos_x,video_pos_y,audio_pos_z; // counters to keep pointers within range
 BYTE video_interlaced=0,video_interlaces=0,video_interlacez=0; // video scanline status
-BYTE video_framelimit=0,video_framecount=0; // video frameskip counters
-BYTE audio_disabled=0,audio_session=0; // audio status and counter
+char video_framelimit=0,video_framecount=0; // video frameskip counters; must be signed!
+BYTE audio_disabled=0,audio_monaural=0,audio_session=0; // audio status and counter
 unsigned char session_path[STRMAX],session_parmtr[STRMAX],session_tmpstr[STRMAX],session_substr[STRMAX],session_info[STRMAX]="";
 
 int session_timer,session_event=0; // timing synchronisation and user command
@@ -359,10 +359,10 @@ int session_ui_exchange(void) // update window and wait for a keystroke
 		SDL_WaitEvent(&event);
 		switch (event.type)
 		{
-			case SDL_WINDOWEVENT_FOCUS_GAINED: // force full redraw
+			//case SDL_WINDOWEVENT_FOCUS_GAINED: // force full redraw
 			case SDL_WINDOWEVENT_EXPOSED:
 				SDL_FillRect(SDL_GetWindowSurface(session_hwnd),NULL,0); // wipe leftovers
-				SDL_UpdateWindowSurface(session_hwnd);//session_redraw(1);//
+				session_redraw(1);//SDL_UpdateWindowSurface(session_hwnd);//
 				break;
 			case SDL_TEXTINPUT:
 				session_ui_char=event.text.text[0];
@@ -833,42 +833,18 @@ int session_ui_input(char *s,char *t) // see session_input
 }
 
 int multiglobbing(char *w,char *t,int q); // multi-pattern globbing; must be defined later on!
+int sortedinsert(char *t,int z,char *s); // ordered list inserting; must be defined later on!
+int sortedsearch(char *t,int z,char *s); // ordered list searching; must be defined later on!
 int session_ui_fileflags;
-char *session_ui_filedialog_sortedinsert(char *init,char *exit,char *item) // crude sorted insertion
-{
-	#if 1
-	char *loww=exit,*temp=exit;
-	while ((temp=loww)>init)
-	{
-		--loww;
-		while (loww>init&&loww[-1])
-			--loww;
-		if (strcasecmp(loww,item)<0)
-			break;
-	}
-	int l=strlen(item)+1;
-	memmove(temp+l,temp,exit-temp);
-	strcpy(temp,item);
-	return exit+l;
-	#else
-	while (init<exit&&strcasecmp(init,item)<0)
-		while (*init++);
-			;
-	int l=strlen(item)+1;
-	memmove(init+l,init,exit-init);
-	strcpy(init,item);
-	return exit+l;
-	#endif
-}
-char *session_ui_filedialog_sanitizepath(char *s) // restore PATH_SEPARATOR at the end of a path name
+char *session_ui_filedialog_sanitizepath(char *s) // restore PATHCHAR at the end of a path name
 {
 	if (s&&*s)
 	{
 		char *t=s;
 		while (*t)
 			++t;
-		if (t[-1]!=PATH_SEPARATOR)
-			*t=PATH_SEPARATOR,t[1]=0;
+		if (t[-1]!=PATHCHAR)
+			*t=PATHCHAR,t[1]=0;
 	}
 	return s;
 }
@@ -892,7 +868,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 {
 	int i; char *m,*n,basepath[8<<9],pastname[STRMAX],basefind[STRMAX]; // realpath() is an exception, see below
 	session_ui_fileflags=f;
-	if (m=strrchr(r,PATH_SEPARATOR))
+	if (m=strrchr(r,PATHCHAR))
 		i=m[1],m[1]=0,strcpy(basepath,r),m[1]=i,strcpy(pastname,&m[1]);
 	else
 		*basepath=0,strcpy(pastname,r);
@@ -907,18 +883,18 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 			session_ui_filedialog_sanitizepath(basepath);
 		}
 		WIN32_FIND_DATA wfd; HANDLE h; strcpy(basefind,basepath); strcat(basefind,"*");
-		char drives[]="::\\"; long int dummy;
+		char drives[]="::\\",*half=m; long int dummy;
 		for (drives[0]='A';drives[0]<='Z';++drives[0])
 			if (GetDriveType(drives)>1&&GetDiskFreeSpace(drives,&dummy,&dummy,&dummy,&dummy))
-				++i,m=session_ui_filedialog_sortedinsert(session_scratch,m,drives);
-		*m++=*m++='.'; *m++=PATH_SEPARATOR; *m++=0; // always before the directories!
-		char *half=m;
+				++i,m=&half[sortedinsert(half,m-half,drives)];//session_ui_filedialog_sortedinsert(session_scratch,m,drives);
+		*m++=*m++='.'; *m++=PATHCHAR; *m++=0; // always before the directories!
+		half=m;
 		if ((h=FindFirstFile(basefind,&wfd))!=INVALID_HANDLE_VALUE)
 		{
 			do
 				if (!(wfd.dwFileAttributes&FILE_ATTRIBUTE_HIDDEN)&&(wfd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)) // reject invisible directories
 					if (strcmp(n=wfd.cFileName,".")&&strcmp(n=wfd.cFileName,"..")) // add directory name with the separator at the end
-						++i,m=session_ui_filedialog_sortedinsert(half,m,session_ui_filedialog_sanitizepath(n));
+						++i,m=&half[sortedinsert(half,m-half,session_ui_filedialog_sanitizepath(n))];//session_ui_filedialog_sortedinsert(half,m,session_ui_filedialog_sanitizepath(n));
 			while (FindNextFile(h,&wfd)&&m-(char *)session_scratch<sizeof(session_scratch)-STRMAX);
 			FindClose(h);
 		}
@@ -928,7 +904,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 			do
 				if (!(wfd.dwFileAttributes&FILE_ATTRIBUTE_HIDDEN)&&!(wfd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)) // reject invisible files
 					if (multiglobbing(s,n=wfd.cFileName,1)) // add file name
-						++i,m=session_ui_filedialog_sortedinsert(half,m,n);
+						++i,m=&half[sortedinsert(half,m-half,n)];//session_ui_filedialog_sortedinsert(half,m,n);
 			while (FindNextFile(h,&wfd)&&m-(char *)session_scratch<sizeof(session_scratch)-STRMAX);
 			FindClose(h);
 		}
@@ -939,14 +915,14 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 			getcwd(basepath,STRMAX); // fall back to current directory
 			session_ui_filedialog_sanitizepath(basepath);
 		}
-		*m++=*m++='.'; *m++=PATH_SEPARATOR; *m++=0; // always before the directories!
+		*m++=*m++='.'; *m++=PATHCHAR; *m++=0; // always before the directories!
 		char *half=m;
 		if (d=opendir(basepath))
 		{
 			while ((e=readdir(d))&&m-(char *)session_scratch<sizeof(session_scratch)-STRMAX)
 				if (n=e->d_name,n[0]!='.') // reject ".*"
 					if (session_ui_filedialog_stat(strcat(strcpy(basefind,basepath),n))>0) // add directory name with the separator at the end
-						++i,m=session_ui_filedialog_sortedinsert(half,m,session_ui_filedialog_sanitizepath(n));
+						++i,m=&half[sortedinsert(half,m-half,session_ui_filedialog_sanitizepath(n))];//session_ui_filedialog_sortedinsert(half,m,session_ui_filedialog_sanitizepath(n));
 			closedir(d);
 		}
 		half=m;
@@ -955,32 +931,15 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 			while ((e=readdir(d))&&m-(char *)session_scratch<sizeof(session_scratch)-STRMAX)
 				if (n=e->d_name,n[0]!='.'&&multiglobbing(s,n,1)) // reject ".*"
 					if (!session_ui_filedialog_stat(strcat(strcpy(basefind,basepath),n))) // add file name
-						++i,m=session_ui_filedialog_sortedinsert(half,m,n);
+						++i,m=&half[sortedinsert(half,m-half,n)];//session_ui_filedialog_sortedinsert(half,m,n);
 			closedir(d);
 		}
 		#endif
 
 		if (!q&&!f)
-			++i,*m++='*',*m++=0;
-		*m=0; // end of list
-
-		i=!q&&!f?i-1:-1; // point at "*" by default on SAVE, and at nothing elsewhere
-		if (*pastname) // locate old file, if any
-		{
-			m=session_scratch;
-			int j=0;
-			while (*m)
-			{
-				if (!strcasecmp(m,pastname))
-				{
-					i=j;
-					break;
-				}
-				++j;
-				while (*m++)
-					;
-			}
-		}
+			++i,memcpy(m,"*NEW*\000",7); // point at "*" by default on SAVE
+		else
+			*m=0,half=session_scratch,i=sortedsearch(half,m-half,pastname); // look for past name, if any
 
 		if (session_ui_list(i,session_scratch,t,q?session_ui_filedialog_tabkey:NULL)<0)
 			return 0; // user closed the dialog!
@@ -988,7 +947,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 		m=session_parmtr;
 		while (*m)
 			++m;
-		if (m[-1]==PATH_SEPARATOR) // the user chose a directory
+		if (m[-1]==PATHCHAR) // the user chose a directory
 		{
 			strcat(strcpy(session_scratch,basepath),session_parmtr);
 			#ifdef __WIN32__
@@ -998,8 +957,8 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 			{
 				if (!strcmp(session_parmtr,strcpy(pastname,"..\\")))
 				{
-					m=strrchr(basepath,PATH_SEPARATOR);
-					while(m&&m>basepath&&*--m!=PATH_SEPARATOR)
+					m=strrchr(basepath,PATHCHAR);
+					while(m&&m>basepath&&*--m!=PATHCHAR)
 						;
 					if (m)
 						strcpy(pastname,&m[1]); // allow returning to previous directory
@@ -1011,8 +970,8 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 			#else
 			if (!strcmp(session_parmtr,strcpy(pastname,"../")))
 			{
-				m=strrchr(basepath,PATH_SEPARATOR);
-				while(m&&m>basepath&&*--m!=PATH_SEPARATOR)
+				m=strrchr(basepath,PATHCHAR);
+				while(m&&m>basepath&&*--m!=PATHCHAR)
 					;
 				if (m)
 					strcpy(pastname,&m[1]); // allow returning to previous directory
@@ -1056,14 +1015,15 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 
 // create, handle and destroy session ------------------------------- //
 
-INLINE int session_create(char *s) // create video+audio devices and set menu; 0 OK, !0 ERROR
+INLINE char* session_create(char *s) // create video+audio devices and set menu; 0 OK, !0 ERROR
 {
+	SDL_SetMainReady();
 	if (SDL_Init(SDL_INIT_VIDEO|SDL_INIT_AUDIO|SDL_INIT_TIMER|SDL_INIT_JOYSTICK)<0)
-		return 1;
+		return SDL_GetError();
 	if (!(session_hwnd=SDL_CreateWindow(caption_version,SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,0*SDL_WINDOW_BORDERLESS)))
-		return SDL_Quit(),1;
+		return SDL_Quit(),SDL_GetError();
 	if (!(session_dib=SDL_CreateRGBSurface(0,VIDEO_LENGTH_X,VIDEO_LENGTH_Y,32,0xFF0000,0x00FF00,0x0000FF,0)))
-		return SDL_Quit(),1;
+		return SDL_Quit(),SDL_GetError();
 	SDL_SetSurfaceBlendMode(session_dib,SDL_BLENDMODE_NONE);
 	video_frame=session_dib->pixels;
 
@@ -1088,7 +1048,7 @@ INLINE int session_create(char *s) // create video+audio devices and set menu; 0
 		SDL_zero(spec);
 		spec.freq=AUDIO_PLAYBACK;
 		spec.format=AUDIO_BITDEPTH>8?AUDIO_S16SYS:AUDIO_U8;
-		spec.channels=AUDIO_CHANNELS;
+		spec.channels=AUDIO_STEREO+1;
 		spec.samples=4096; // safe value?
 		if (session_audio=SDL_OpenAudioDevice(NULL,0,&spec,NULL,0))
 			audio_frame=audio_buffer;
@@ -1137,7 +1097,7 @@ INLINE int session_create(char *s) // create video+audio devices and set menu; 0
 	*t=0;
 	SDL_StartTextInput();
 	session_please();
-	return 0;
+	return NULL;
 }
 
 void session_togglefullscreen(void)
@@ -1183,7 +1143,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 	{
 		switch (event.type)
 		{
-			case SDL_WINDOWEVENT_FOCUS_GAINED: // force full redraw
+			//case SDL_WINDOWEVENT_FOCUS_GAINED: // force full redraw
 			case SDL_WINDOWEVENT_EXPOSED:
 				SDL_FillRect(SDL_GetWindowSurface(session_hwnd),NULL,0); // wipe leftovers
 				SDL_UpdateWindowSurface(session_hwnd);//session_redraw(1);//
@@ -1295,7 +1255,6 @@ INLINE void session_render(void) // update video, audio and timers
 {
 	int i,j;
 	static int performance_t=0,performance_f=0,performance_b=0; ++performance_f;
-
 	if (!video_framecount) // do we need to hurry up?
 	{
 		if ((video_interlaces=!video_interlaces)||!video_interlaced)
@@ -1311,6 +1270,12 @@ INLINE void session_render(void) // update video, audio and timers
 			}
 	}
 
+	if (!audio_disabled)
+		if (audio_filter) // audio interpolation: sample averaging
+			audio_playframe(audio_filter,audio_buffer);
+	if (session_wavefile) // record audio output, if required
+		session_writewave(audio_frame);
+
 	i=SDL_GetTicks();
 	if (session_wait||session_fast)
 		session_timer=i; // ensure that the next frame can be valid!
@@ -1319,15 +1284,11 @@ INLINE void session_render(void) // update video, audio and timers
 		j=1000/VIDEO_PLAYBACK-(i-session_timer);
 		if (j>0)
 			SDL_Delay(j>1000/VIDEO_PLAYBACK?1+1000/VIDEO_PLAYBACK:j);
-		else if (!video_framecount) video_framecount=-2; // automatic frameskip!
+		else if (j<0)
+			video_framecount=-2; // automatic frameskip!
 		session_timer+=1000/VIDEO_PLAYBACK;
 	}
 
-	if (!audio_disabled)
-		if (audio_filter) // audio interpolation: sample averaging
-			audio_playframe(audio_filter,audio_buffer);
-	if (session_wavefile) // record audio output, if required
-		session_writewave(audio_frame);
 	if (session_audio)
 	{
 		static BYTE s=1;
@@ -1375,7 +1336,7 @@ INLINE void session_byebye(void) // delete video+audio devices
 
 void session_detectpath(char *s) // detects session path
 {
-	if (s=strrchr(strcpy(session_path,s),PATH_SEPARATOR))
+	if (s=strrchr(strcpy(session_path,s),PATHCHAR))
 		s[1]=0; // keep separator
 	else
 		*session_path=0; // no path

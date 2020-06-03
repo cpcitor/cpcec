@@ -44,7 +44,7 @@ char caption_version[]=MY_CAPTION " " MY_VERSION;
 typedef union { unsigned short w; struct { unsigned char l,h; } b; } Z80W; // WIN32 is a lil-endian platform!
 
 #define STRMAX 256 // widespread in Windows
-#define PATH_SEPARATOR '\\' // '/' in POSIX
+#define PATHCHAR '\\' // '/' in POSIX
 #define strcasecmp _stricmp
 #define fsetsize(f,l) _chsize(_fileno(f),(l))
 #include <io.h> // _chsize(),_fileno()...
@@ -80,16 +80,16 @@ typedef union { unsigned short w; struct { unsigned char l,h; } b; } Z80W; // WI
 	#define AUDIO_ZERO 0
 	#define AUDIO1(x) (x)
 #endif // bitsize
-#define AUDIO_CHANNELS 1
+#define AUDIO_STEREO 1
 
 VIDEO_DATATYPE *video_frame; // video frame, allocated on runtime
-AUDIO_DATATYPE *audio_frame,audio_buffer[AUDIO_LENGTH_Z],audio_memory[AUDIO_N_FRAMES*AUDIO_LENGTH_Z]; // audio frame, cycles during playback
+AUDIO_DATATYPE *audio_frame,audio_buffer[AUDIO_LENGTH_Z*(AUDIO_STEREO+1)],audio_memory[AUDIO_N_FRAMES*AUDIO_LENGTH_Z*(AUDIO_STEREO+1)]; // audio frame, cycles during playback
 VIDEO_DATATYPE *video_target; // pointer to current video pixel
 AUDIO_DATATYPE *audio_target; // pointer to current audio sample
 int video_pos_x,video_pos_y,audio_pos_z; // counters to keep pointers within range
 BYTE video_interlaced=0,video_interlaces=0,video_interlacez=0; // video scanline status
-BYTE video_framelimit=0,video_framecount=0; // video frameskip counters
-BYTE audio_disabled=0,audio_session=0; // audio status and counter
+char video_framelimit=0,video_framecount=0; // video frameskip counters; must be signed!
+BYTE audio_disabled=0,audio_monaural=0,audio_session=0; // audio status and counter
 unsigned char session_path[STRMAX],session_parmtr[STRMAX],session_tmpstr[STRMAX],session_substr[STRMAX],session_info[STRMAX]="";
 
 int session_timer,session_event=0; // timing synchronisation and user command
@@ -314,24 +314,28 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 		if (!(xx*yy))
 			xx=VIDEO_PIXELS_X,yy=VIDEO_PIXELS_Y; // window area is too small!
 		int x=(r.right-xx)/2,y=(r.bottom-yy)/2; // locate bitmap on window center
-		static HGDIOBJ session_oldselect=NULL;
-		if (!session_dontblit)
-		{
-			if (session_oldselect!=session_dib)
-				SelectObject(session_cdc,session_oldselect=session_dib);
-			if (session_blit=(xx<=VIDEO_PIXELS_X||yy<=VIDEO_PIXELS_Y)) // window area is a perfect fit?
-				BitBlt(h,x,y,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,session_cdc,VIDEO_OFFSET_X,VIDEO_OFFSET_Y,SRCCOPY); // fast :-)
-			else
-				StretchBlt(h,x,y,xx,yy,session_cdc,VIDEO_OFFSET_X,VIDEO_OFFSET_Y,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,SRCCOPY); // slow :-(
-		}
-		else
+		HGDIOBJ session_oldselect;
+		if (session_dontblit)
 			session_dontblit=0;
+		else
+		{
+			if (session_oldselect=SelectObject(session_cdc,session_dib))
+			{
+				if (session_blit=(xx<=VIDEO_PIXELS_X||yy<=VIDEO_PIXELS_Y)) // window area is a perfect fit?
+					BitBlt(h,x,y,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,session_cdc,VIDEO_OFFSET_X,VIDEO_OFFSET_Y,SRCCOPY); // fast :-)
+				else
+					StretchBlt(h,x,y,xx,yy,session_cdc,VIDEO_OFFSET_X,VIDEO_OFFSET_Y,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,SRCCOPY); // slow :-(
+				SelectObject(session_cdc,session_oldselect);
+			}
+		}
 		#ifndef DEBUG
 		if (session_signal&SESSION_SIGNAL_DEBUG)
 		{
-			if (session_oldselect!=session_dbg_dib)
-				SelectObject(session_cdc,session_oldselect=session_dbg_dib);
-			BitBlt(h,(r.right-DEBUG_LENGTH_X*8)/2,(r.bottom-DEBUG_LENGTH_Y*DEBUG_LENGTH_Z)/2,DEBUG_LENGTH_X*8,DEBUG_LENGTH_Y*DEBUG_LENGTH_Y,session_cdc,0,0,SRCCOPY);
+			if (session_oldselect=SelectObject(session_cdc,session_dbg_dib))
+			{
+				BitBlt(h,(r.right-DEBUG_LENGTH_X*8)/2,(r.bottom-DEBUG_LENGTH_Y*DEBUG_LENGTH_Z)/2,DEBUG_LENGTH_X*8,DEBUG_LENGTH_Y*DEBUG_LENGTH_Y,session_cdc,0,0,SRCCOPY);
+				SelectObject(session_cdc,session_oldselect);
+			}
 		}
 		#endif
 	}
@@ -392,9 +396,10 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 		case WM_SIZE:
 			InvalidateRect(hwnd,NULL,1); // force full update! there's dirt otherwise!
 			break;
-		case WM_SETFOCUS: // force full redraw
+		//case WM_SETFOCUS: // force full redraw
 		case WM_PAINT:
 			{
+				session_dontblit=0;
 				PAINTSTRUCT ps; HDC h;
 				if (h=BeginPaint(hwnd,&ps))
 				{
@@ -479,7 +484,7 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 	return 0;
 }
 
-INLINE int session_create(char *s) // create video+audio devices and set menu; 0 OK, !0 ERROR
+INLINE char* session_create(char *s) // create video+audio devices and set menu; 0 OK, !0 ERROR
 {
 	HMENU session_submenu=NULL;
 	char c,*t; int i;
@@ -537,7 +542,7 @@ INLINE int session_create(char *s) // create video+audio devices and set menu; 0
 	session_ideal.bottom-=session_ideal.top;
 	session_ideal.left=session_ideal.top=0; // ensure that the ideal area is defined as (0,0,WIDTH,HEIGHT)
 	if (!(session_hwnd=CreateWindow(wc.lpszClassName,caption_version,i,CW_USEDEFAULT,CW_USEDEFAULT,session_ideal.right,session_ideal.bottom,NULL,session_submenu?session_menu:NULL,wc.hInstance,NULL)))
-		return 1;
+		return "cannot create window";
 	DragAcceptFiles(session_hwnd,1);
 	BITMAPINFO bmi;
 	memset(&bmi,0,sizeof(bmi));
@@ -573,7 +578,7 @@ INLINE int session_create(char *s) // create video+audio devices and set menu; 0
 		WAVEFORMATEX wfex;
 		memset(&wfex,0,sizeof(wfex));
 		wfex.wFormatTag=WAVE_FORMAT_PCM;
-		wfex.wBitsPerSample=AUDIO_BITDEPTH, wfex.nBlockAlign=AUDIO_BITDEPTH/8*(wfex.nChannels=AUDIO_CHANNELS);
+		wfex.wBitsPerSample=AUDIO_BITDEPTH, wfex.nBlockAlign=AUDIO_BITDEPTH/8*(wfex.nChannels=(AUDIO_STEREO+1));
 		wfex.nAvgBytesPerSec=wfex.nBlockAlign*(wfex.nSamplesPerSec=AUDIO_PLAYBACK);
 		if (session_audio=!waveOutOpen(&session_wo,WAVE_MAPPER,&wfex,0,0,0))
 		{
@@ -589,7 +594,7 @@ INLINE int session_create(char *s) // create video+audio devices and set menu; 0
 		}
 	}
 	session_please();
-	return 0;
+	return NULL;
 }
 
 void session_menuinfo(void); // set the current menu flags. Must be defined later on!
@@ -648,7 +653,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 INLINE void session_writewave(AUDIO_DATATYPE *t); // save the current sample frame. Must be defined later on!
 INLINE void session_render(void) // update video, audio and timers
 {
-	int i,j,k;
+	int i,j;
 	static int performance_t=0,performance_f=0,performance_b=0; ++performance_f;
 	if (!video_framecount) // do we need to hurry up?
 	{
@@ -665,7 +670,7 @@ INLINE void session_render(void) // update video, audio and timers
 				j=0; // joystick failure, release its keys
 			for (i=0;i<sizeof(kbd_joy);++i)
 			{
-				k=kbd_joy[i];
+				int k=kbd_joy[i];
 				if (j&(1<<i))
 					kbd_bit_set(k); // key is down
 				else
@@ -673,7 +678,7 @@ INLINE void session_render(void) // update video, audio and timers
 			}
 		}
 	}
-	audio_target=&audio_memory[AUDIO_LENGTH_Z*audio_session];
+	audio_target=&audio_memory[AUDIO_LENGTH_Z*(AUDIO_STEREO+1)*audio_session];
 	if (!audio_disabled) // avoid conflicts when realtime is off: output and playback buffers clash!
 	{
 		if (audio_filter) // audio interpolation: sample averaging
@@ -708,7 +713,7 @@ INLINE void session_render(void) // update video, audio and timers
 		i=GetTickCount(),j=1000;
 	if (session_wait||session_fast)
 	{
-		audio_session=((i/AUDIO_LENGTH_Z)+AUDIO_N_FRAMES-1)%AUDIO_N_FRAMES;
+		audio_session=((i/(AUDIO_LENGTH_Z))+AUDIO_N_FRAMES-1)%AUDIO_N_FRAMES;
 		session_timer=i; // ensure that the next frame can be valid!
 	}
 	else
@@ -718,7 +723,8 @@ INLINE void session_render(void) // update video, audio and timers
 			if (i=(1000*i/j)) // avoid zero, it has a special value in Windows!
 				Sleep(i>1000/VIDEO_PLAYBACK?1+1000/VIDEO_PLAYBACK:i);
 		}
-		else if (!video_framecount) video_framecount=-2; // automatic frameskip!
+		else if (i<0)
+			video_framecount=-2; // automatic frameskip!
 		audio_session=(audio_session+1)%AUDIO_N_FRAMES;
 	}
 	if (session_wait) // resume activity after a pause

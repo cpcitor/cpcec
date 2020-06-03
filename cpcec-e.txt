@@ -104,6 +104,7 @@ differ in the amount of RAM, the disc controller and the keyboard);
 * -O : hide onscreen indicators (by default shown);
 * -R : disable real time emulation (by default enabled);
 * -S : disable sound (by default enabled if there's a sound card);
+* -T : disable stereophony (by default enabled);
 * -W : use the full screen rather than a window;
 * -X : disable emulation of disc drives (by default enabled);
 * -Y : disable tape analysis (by default enabled; see below);
@@ -660,3 +661,14 @@ pointing by default to the previous directory.
 ZXSEC: the ULA48 test already worked before, but ULA128 had problems; now both
 work well. Added the option -W (use the full screen rather than a window) and
 improved the SDL2 handling of bigger windows.
+- 20200603 -- seventeenth public release. Added stereo sound. Fixed a bug in the
+CPC PIO (the read-only mode of port A allowed writing), another bug in the tape
+analysis (CPCEC: the algorithm for TITUS caused trouble in "The Blues Brothers";
+ZXSEC: Speedlock5 didn't recognize the heading noise; both systems add patches
+to shorten the initial delays), another one in the loading of CPC snapshots (a
+snapshot saved on PLUS hardware without the "CPC+" block showed a completely
+black palette), another one in the Z80 debugger (the command 'P0 could generate
+an infinite disassembly), another one on tape handling (reading a WAV file must
+use >128 as reference instead of >=128) and some problems in Win32 (the screen
+stopped updating after pausing, switching windows in and out) and SDL2 (boot
+message errors weren't shown; the filename sorting algorithm was slow).

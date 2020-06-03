@@ -220,7 +220,7 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 				if ((tape_status=tape_fgetc())<0) // EOF?
 					if (tape_endoftape())
 						return; // quit!
-				tape_status>>=7;
+				tape_status=tape_status>128; // tape_status>>=7
 			}
 			break;
 		case 1: // CSW

@@ -62,11 +62,19 @@ void z80_debug_close(void)
 }
 #endif
 
+#ifdef DEBUG
+#else
+void z80_reset_breakpoints(void)
+{
+	MEMZERO(z80_breakpoints);
+}
+#endif
+
 void z80_setup(void) // setup the Z80
 {
 	#ifdef DEBUG
 	#else
-		MEMZERO(z80_breakpoints);
+		z80_reset_breakpoints();
 	#endif
 	// flag bit reference:
 	// - 7, 0x80: S, Sign
@@ -3795,7 +3803,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 						fwrite(z80_debug_logtmp,1,sizeof(z80_debug_logtmp),z80_debug_logfile),z80_debug_logpos=0;
 				}
 			}
-			else
+			else // pure breakpoints?
 			{
 				z80_debug_reset(); session_signal|=SESSION_SIGNAL_DEBUG; _t_=0; // throw!
 			}
@@ -4110,9 +4118,13 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 						if (s=session_newfile("","*.TXT","Print disassembly"))
 							if (f=fopen(s,"w"))
 							{
-								i+=w;
-								while (w<i||w>=i+4) // WRAP!
-									w=z80_dasm(session_tmpstr,w),fprintf(f,"%s\n",session_tmpstr);
+								do // WRAP!
+								{
+									WORD u=z80_dasm(session_tmpstr,w);
+									fprintf(f,"%s\n",session_tmpstr);
+									i-=(WORD)(u-w); w=u;
+								}
+								while (i>0);
 								fclose(f);
 							}
 			}
@@ -4189,7 +4201,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 						z80_breakpoints[z80_debug_pnl0_w]=!z80_breakpoints[z80_debug_pnl0_w];
 						break;
 					case 'Z': // RESET BREAKPOINTS
-						MEMZERO(z80_breakpoints);
+						z80_reset_breakpoints();
 						break;
 					case 'J': // JUMP TO
 						z80_pc.w=z80_debug_pnl0_w;

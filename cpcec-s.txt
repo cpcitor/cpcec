@@ -109,6 +109,7 @@ teclado);
 * -R : deshabilitar emulación en tiempo real (por defecto habilitada);
 * -S : deshabilitar sonido (por defecto habilitado si hay una tarjeta de
 sonido);
+* -T : deshabilitar estereofonía (por defecto habilitada);
 * -X : emplear la pantalla completa en lugar de una ventana;
 * -X : deshabilitar emulación de unidades de disco (por defecto habilitada);
 * -Y : deshabilitar el análisis de cinta (por defecto habilitado; ver más
@@ -693,3 +694,16 @@ directorios eligiendo por defecto el directorio anterior.
 el test ULA48 ya funcionaba antes, pero ULA128 tenía problemas; ahora ambos
 funcionan bien. Añade la opción -W (emplear la pantalla completa en lugar de una
 ventana) y mejora el código de SDL2 para ampliar la ventana.
+- 20200603 -- decimoséptima versión pública. Añade sonido estéreo. Corrige un
+bug en el PIO de CPC (el modo de sólo-lectura del puerto A permitía escrituras),
+otro en el análisis de cintas (CPCEC: el algoritmo para TITUS provocaba
+problemas en "The Blues Brothers"; ZXSEC: Speedlock5 no reconocía el ruido
+inicial; ambos sistemas añaden parches para reducir las esperas iniciales), otro
+en la carga de snapshots de CPC (cargar un snapshot grabado en hardware PLUS sin
+el bloque "CPC+" mostraba una paleta totalmente negra), otro en el debugger de
+Z80 (la orden 'P' podía generar un desensamblado infinito), otro en la gestión
+de cinta (leer un fichero WAV debe usar >128 como referencia, no >=128) y
+algunos problemas en Win32 (la pantalla dejaba de redibujarse al hacer una
+pausa, cambiar de ventana y volver al emulador) y otros en SDL2 (no mostraba
+mensajes de error en el arranque; el algoritmo para ordenar nombres de ficheros
+era lento).
