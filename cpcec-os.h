@@ -89,7 +89,7 @@ AUDIO_DATATYPE *audio_target; // pointer to current audio sample
 int video_pos_x,video_pos_y,audio_pos_z; // counters to keep pointers within range
 BYTE video_interlaced=0,video_interlaces=0,video_interlacez=0; // video scanline status
 char video_framelimit=0,video_framecount=0; // video frameskip counters; must be signed!
-BYTE audio_disabled=0,audio_monaural=0,audio_session=0; // audio status and counter
+BYTE audio_disabled=0,audio_channels=1,audio_session=0; // audio status and counter
 unsigned char session_path[STRMAX],session_parmtr[STRMAX],session_tmpstr[STRMAX],session_substr[STRMAX],session_info[STRMAX]="";
 
 int session_timer,session_event=0; // timing synchronisation and user command

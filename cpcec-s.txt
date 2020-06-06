@@ -32,10 +32,11 @@ funcione a 400 MHz por lo menos. La resolución de pantalla en píxeles debe ser
 800x600 como mínimo. Una tarjeta de sonido es opcional, así como emplear un
 joystick.
 
-El emulador se compone de varios ficheros: el ejecutable propiamente dicho
-CPCEC.EXE y los ficheros de firmware CPC464.ROM, CPC664.ROM, CPC6128.ROM y
-CPCADOS.ROM. Todos ellos deben ser copiados en un mismo directorio, idealmente
-creado para alojar el emulador.
+El emulador se compone de varios ficheros: los binarios ejecutables CPCEC.EXE y
+ZXSEC.EXE para Windows, CPCEC.ELF y ZXSEC.ELF para GNU/Linux, y los ficheros de
+firmware CPC464.ROM, CPC664.ROM, CPC6128.ROM, CPCADOS.ROM, CPCPLUS.ROM,
+SPEC128K.ROM, SPEC-P-2.ROM, SPEC-P-3.ROM y SPECTRUM.ROM. Todos ellos deben ser
+copiados en un mismo directorio, idealmente creado para alojar el emulador.
 
 Los binarios pueden ser compilados a partir de los ficheros fuente siguiendo las
 instrucciones incluidas a continuación. GCC 4.9.2, GCC 5.1.0, Pelles 4.50.113 y
@@ -632,7 +633,7 @@ juegos protegidos de Design Design ("2112 AD"), The Edge ("Palitron"), Titus
 ("Prehistorik" y "Moktar/Titus the Fox") y errores corregidos (READ ID: "5KB
 Demo 3", "Daley Thompson's Olympic Challenge" y "Turbo Copy III"; FORMAT TRACK
 convierte discos del estilo antiguo MV - CPC al estilo nuevo EXTENDED, y limpia
-el final del disco de datos inútiles).  CPCEC respeta el tamaño de RAM (hasta
+el final del disco de datos inútiles). CPCEC respeta el tamaño de RAM (hasta
 576k) y el tipo de CRTC al leer un snapshot (demo "Postscript") y lo mismo hace
 ZXSEC, que puede leer instantáneas Z80 y cambia de PLUS3 a PLUS2 si el usuario
 pide cargar una cinta y además permite elegir entre snapshots estrictos de 48K o
@@ -685,7 +686,7 @@ errores de ZXSEC en las pruebas 2012 RAXOFT son 8/152 Z80FULL, 5/152 Z80CCF y
 0/152 Z80MEMPTR.
 - 20200503 -- parche menor que mejora el comportamiento de las operaciones INI,
 IND, INIR, INDR, OUTI, OUTD, OTIR y OTIR del Z80: las pruebas 2012 RAXOFT
-(Z80CCF, Z80FULL y Z80MEMPTR) obtienen cero errores. Frameskip automático algo
+(Z80CCF, Z80FULL y Z80MEMPTR) obtienen cero errores. "Frameskip" automático algo
 más preciso.
 - 20200505 -- parche menor centrado en el toolkit de SDL2: corrige un fallo al
 confirmar sobreescribir archivos, y mejora la búsqueda de ficheros entre
@@ -707,3 +708,5 @@ algunos problemas en Win32 (la pantalla dejaba de redibujarse al hacer una
 pausa, cambiar de ventana y volver al emulador) y otros en SDL2 (no mostraba
 mensajes de error en el arranque; el algoritmo para ordenar nombres de ficheros
 era lento).
+- 20200606 -- parche menor con sonido envolvente: el usuario puede elegir la
+separación de canales entre 0% (mono), 50% (envolvente) y 100% (estéreo).

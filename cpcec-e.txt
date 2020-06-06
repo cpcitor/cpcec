@@ -31,10 +31,11 @@ system, and it's advised that the main microprocessor runs at 400 MHz at least.
 Screen resolution in pixels must be 800x600 at least. A sound card is optional.
 Using a joystick is optional, too.
 
-The emulator spans several files: the runnable binary proper CPCEC.EXE and the
-firmware files CPC464.ROM, CPC664.ROM, CPC6128.ROM and CPCADOS.ROM. All these
-files must be copied in a single directory, ideally created to host the
-emulator.
+The emulator spans several files: the runnable binaries CPCEC.EXE and ZXSEC.EXE
+for Windows, CPCEC.ELF and ZXSEC.ELF for GNU/Linux, and the firmware files
+CPC464.ROM, CPC664.ROM, CPC6128.ROM, CPCADOS.ROM, CPCPLUS.ROM, SPEC128K.ROM,
+SPEC-P-2.ROM, SPEC-P-3.ROM and SPECTRUM.ROM. All these files must be copied in a
+single directory, ideally created to host the emulator.
 
 The binaries can be compiled from the source files by following the instructions
 in the next paragraphs. GCC 4.9.2, GCC 5.1.0, Pelles 4.50.113 and TCC 0.9.27
@@ -672,3 +673,5 @@ an infinite disassembly), another one on tape handling (reading a WAV file must
 use >128 as reference instead of >=128) and some problems in Win32 (the screen
 stopped updating after pausing, switching windows in and out) and SDL2 (boot
 message errors weren't shown; the filename sorting algorithm was slow).
+- 20200606 -- minor patch with surround sound: the user can set the channel
+separation to 0% (mono), 50% (surround) or 100% (stereo).

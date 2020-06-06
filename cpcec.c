@@ -7,7 +7,7 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "CPCEC"
-#define MY_VERSION "20200603"//"1555"
+#define MY_VERSION "20200606"//"0955"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -563,8 +563,7 @@ void pio_reset(void)
 #define PSG_KHZ_CLOCK 1000
 #define PSG_MAIN_EXTRABITS 0
 #if AUDIO_STEREO
-int psg_stereo[3][2]; const int psg_stereos[2][3][2]={{{512,0},{256,256},{0,512}}
-	,{{256,256},{256,256},{256,256}}}; // A left, B middle, C right
+int psg_stereo[3][2]; const int psg_stereos[3][3]={{0,0,0},{+256,0,-256},{+128,0,-128}}; // A left, B middle, C right
 #endif
 
 #include "cpcec-ay.h"
@@ -2773,7 +2772,10 @@ char session_menudata[]=
 	"Audio\n"
 	"0x8400 Sound playback\tF4\n"
 	#if AUDIO_STEREO
-	"0xC400 Enable stereo\tShift+F4\n"
+	//"0xC400 Enable stereo\tShift+F4\n"
+	"0xC401 0% stereo\n"
+	"0xC403 50% stereo\n"
+	"0xC402 100% stereo\n"
 	"=\n"
 	#endif
 	"0x8401 No interpolation\n"
@@ -2819,8 +2821,11 @@ void session_menuinfo(void)
 	session_menucheck(0x8903,video_filter&VIDEO_FILTER_X_MASK);
 	session_menucheck(0x8904,video_filter&VIDEO_FILTER_SMUDGE);
 	#if AUDIO_STEREO
-	session_menucheck(0xC400,!audio_disabled&&!audio_monaural);
-	MEMLOAD(psg_stereo,psg_stereos[audio_monaural]);
+	//session_menucheck(0xC400,audio_channels);
+	audio_channels=audio_channels<1?0:audio_channels>1?2:audio_channels;
+	session_menuradio(0xC401+audio_channels,0xC401,0xC403);
+	for (int i=0;i<length(psg_stereo);++i)
+		psg_stereo[i][0]=256+psg_stereos[audio_channels][i],psg_stereo[i][1]=256-psg_stereos[audio_channels][i];
 	#endif
 	z80_multi=1+z80_turbo; // setup overclocking
 	sprintf(session_info,"%i:%iK CRTC%c %gMHz"//" | disc %s | tape %s | %s"
@@ -2927,7 +2932,7 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 			{
 				#if AUDIO_STEREO
 				if (session_shift) // TOGGLE STEREO
-					audio_monaural^=1;
+					audio_channels=!audio_channels;
 				else
 				#endif
 					audio_disabled^=1;
@@ -2937,6 +2942,11 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 		case 0x8402:
 		case 0x8403:
 		case 0x8404:
+			#if AUDIO_STEREO
+			if (session_shift) // TOGGLE STEREO
+				audio_channels=(k&15)-1;
+			else
+			#endif
 			audio_filter=(k&15)-1;
 			break;
 		case 0x0400: // ^F4: TOGGLE JOYSTICK
@@ -3251,7 +3261,7 @@ int main(int argc,char *argv[])
 						session_audio=0;
 						break;
 					case 'T':
-						audio_monaural=1;
+						audio_channels=0;
 						break;
 					case 'W':
 						want_fullscreen=1;

@@ -36,7 +36,7 @@ char *session_configread(char *t) // reads configuration file; s points to the p
 	while (*s==' ') ++s; // skip spaces between both
 	//if (*s) // handle common parameters, if valid
 	{
-		if (!strcmp(session_parmtr,"monophony")) return audio_monaural=*s&1,NULL;
+		if (!strcmp(session_parmtr,"polyphony")) return audio_channels=*s&3,NULL;
 		if (!strcmp(session_parmtr,"scanlines")) return video_scanline=*s&3,NULL;
 		if (!strcmp(session_parmtr,"softaudio")) return audio_filter=*s&3,NULL;
 		if (!strcmp(session_parmtr,"softvideo")) return video_filter=*s&7,NULL;
@@ -45,7 +45,7 @@ char *session_configread(char *t) // reads configuration file; s points to the p
 }
 void session_configwrite(FILE *f) // save common parameters
 {
-	fprintf(f,"monophony %i\nscanlines %i\nsoftaudio %i\nsoftvideo %i\n",audio_monaural,video_scanline,audio_filter,video_filter);
+	fprintf(f,"polyphony %i\nscanlines %i\nsoftaudio %i\nsoftvideo %i\n",audio_channels,video_scanline,audio_filter,video_filter);
 }
 
 char *strrstr(char *h,char *n) // = strrchr + strstr
