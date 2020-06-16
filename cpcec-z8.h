@@ -3885,8 +3885,8 @@ void z80_debug_show(void) // redraw debug screen
 		*debug_output^=128;
 	}
 	// MEMORY DUMP
-	m=(z80_debug_pnl2_w-((DEBUG_LENGTH_Y-17)/2)*16)&~15;
-	for (y=17;y<DEBUG_LENGTH_Y;++y)
+	m=(z80_debug_pnl2_w-((DEBUG_LENGTH_Y-16)/2)*16)&~15;
+	for (y=16;y<DEBUG_LENGTH_Y;++y)
 	{
 		debug_locate(0,y);
 		debug_printi("%04X:",m);
@@ -3904,7 +3904,7 @@ void z80_debug_show(void) // redraw debug screen
 	}
 	// STACK
 	m=z80_debug_pnl3_w;//z80_sp.w;
-	for (y=17;y<DEBUG_LENGTH_Y;++y)
+	for (y=16;y<DEBUG_LENGTH_Y;++y)
 	{
 		debug_locate(-9,y);
 		debug_printi("%04X",m);
@@ -4313,8 +4313,8 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 					case 11: z80_debug_pnl2_w-=16; break;
 					case 28: z80_debug_pnl2_x=0,z80_debug_pnl2_w=0; break;
 					case 29: z80_debug_pnl2_x=0,z80_debug_pnl2_w=z80_pc.w; break;
-					case 31: z80_debug_pnl2_w-=(DEBUG_LENGTH_Y-16-2)*16; break;
-					case 30: z80_debug_pnl2_w+=(DEBUG_LENGTH_Y-16-2)*16; break;
+					case 31: z80_debug_pnl2_w-=(DEBUG_LENGTH_Y-16)*16; break;
+					case 30: z80_debug_pnl2_w+=(DEBUG_LENGTH_Y-16)*16; break;
 					case 'G': if ((i=z80_debug_goto(z80_debug_pnl2_w))>=0) z80_debug_pnl2_x=0,z80_debug_pnl2_w=i; break;
 					default: k=0; break;
 				}
@@ -4341,8 +4341,8 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 					case 11: z80_debug_pnl3_w-=2; break;
 					case 28: z80_debug_pnl3_x=0,z80_debug_pnl3_w=0; break;
 					case 29: z80_debug_pnl3_x=0,z80_debug_pnl3_w=z80_sp.w; break;
-					case 31: z80_debug_pnl3_w-=2*(DEBUG_LENGTH_Y-16-2); break;
-					case 30: z80_debug_pnl3_w+=2*(DEBUG_LENGTH_Y-16-2); break;
+					case 31: z80_debug_pnl3_w-=2*(DEBUG_LENGTH_Y-16); break;
+					case 30: z80_debug_pnl3_w+=2*(DEBUG_LENGTH_Y-16); break;
 					case 'G': if ((i=z80_debug_goto(z80_debug_pnl3_w))>=0) z80_debug_pnl3_x=0,z80_debug_pnl3_w=i; break;
 					default: k=0; break;
 				}

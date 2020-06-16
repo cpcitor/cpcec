@@ -7,7 +7,7 @@
  // """"""  "    "   """"   """"""   """"    ----------------------- //
 
 #define MY_CAPTION "ZXSEC"
-#define MY_VERSION "20200606"//"0955"
+#define MY_VERSION "20200616"//"1155"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -969,8 +969,10 @@ int bios_load(char *s) // load ROM. `s` path; 0 OK, !0 ERROR
 	fseek(f,0,SEEK_SET);
 	fread1(mem_rom,sizeof(mem_rom),f);
 	puff_fclose(f);
+	#if 0//1 // fast tape hack!!
 	if (mgetiiii(&mem_rom[i-0x4000+0x0571])==0x10041521)
-		mem_rom[i-0x4000+0x0571+2]=0;//mputii(&mem_rom[i-0x4000+0x0571+1],1); // HACK: reduced initial tape reading delay!
+		mem_rom[i-0x4000+0x0571+2]/=2;//mputii(&mem_rom[i-0x4000+0x0571+1],1); // HACK: reduced initial tape reading delay!
+	#endif
 	if (i<(1<<15))
 		memcpy(&mem_rom[1<<14],mem_rom,1<<14); // mirror 16k ROM up
 	if (i<(1<<16))
@@ -1344,7 +1346,7 @@ char session_menudata[]=
 	"0x8513 Strict SNA files\n"
 	"Video\n"
 	"0x8901 Onscreen status\tShift+F9\n"
-	"0x8904 Interpolation\n"
+	"0x8904 Filtering\n"
 	"0x8903 X-Masking\n"
 	"0x8902 Y-Masking\n"
 	"=\n"
@@ -1378,10 +1380,10 @@ char session_menudata[]=
 	"0xC402 100% stereo\n"
 	"=\n"
 	#endif
-	"0x8401 No interpolation\n"
-	"0x8402 Light interpolation\n"
-	"0x8403 Middle interpolation\n"
-	"0x8404 Heavy interpolation\n"
+	"0x8401 No filtering\n"
+	"0x8402 Light filtering\n"
+	"0x8403 Middle filtering\n"
+	"0x8404 Heavy filtering\n"
 	"=\n"
 	"0x0C00 Record WAV file\tCtrl+F12\n"
 	"0x4C00 Record YM file\tCtrl+Shift+F12\n"

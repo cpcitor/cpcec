@@ -54,7 +54,15 @@ mediante los siguientes comandos:
 	gcc -m32 -mwindows zxsec.res -O2 -xc zxsec.c -luser32 -lgdi32 -lwinmm
 -lcomdlg32 -lshell32 -ozxsec.exe
 
-Los binarios para sistemas operativos con soporte SDL2 necesitan otros comandos:
+Pelles C y otros compiladores visuales pueden definir el proyecto entero a
+partir de los ficheros fuente CPCEC.C y ZXSEC.C y los ficheros de recursos
+CPCEC.RC y ZXSEC.RC, y deducir los ficheros adicionales por sí mismos (iconos y
+ficheros de cabecera) mientras que las librerías necesarias para compilarlo (de
+no reconocerlas automáticamente el compilador) son USER32, GDI32, WINMM,
+COMDLG32 y SHELL32, todas ellas del SDK de Win32.
+
+Los binarios para sistemas operativos con soporte SDL2 necesitan comandos
+distintos:
 
 	gcc -DSDL_MAIN_HANDLED -O2 -xc cpcec.c -lSDL2 -ocpcec.elf
 
@@ -62,13 +70,6 @@ Los binarios para sistemas operativos con soporte SDL2 necesitan otros comandos:
 
 (además, los nombres de fichero deben estar en minúsculas: el contenido del
 archivo ZIP debe extraerse con "unzip -LL cpcec-20XXXXXX.zip")
-
-Pelles C y otros compiladores visuales pueden definir el proyecto entero a
-partir de los ficheros fuente CPCEC.C y ZXSEC.C y los ficheros de recursos
-CPCEC.RC y ZXSEC.RC, y deducir los ficheros adicionales por sí mismos (iconos y
-ficheros de cabecera) mientras que las librerías necesarias para compilarlo (de
-no reconocerlas automáticamente el compilador) son USER32, GDI32, WINMM,
-COMDLG32 y SHELL32, todas ellas del SDK de Win32.
 
 ## Configuración y ficheros ##
 
@@ -710,3 +711,7 @@ mensajes de error en el arranque; el algoritmo para ordenar nombres de ficheros
 era lento).
 - 20200606 -- parche menor con sonido envolvente: el usuario puede elegir la
 separación de canales entre 0% (mono), 50% (envolvente) y 100% (estéreo).
+- 20200616 -- parche menor que añade algunos aceleradores de cinta y elimina el
+parche para acelerar las esperas iniciales (provocaba problemas). Varios cambios
+en SDL2 (menos "warnings", caché de unidades de disco en Win32) y en el debugger
+de Z80 (más contenido: 256 bytes en el volcado de memoria y 32 en la pila).

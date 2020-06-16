@@ -7,7 +7,7 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "CPCEC"
-#define MY_VERSION "20200606"//"0955"
+#define MY_VERSION "20200616"//"1155"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -1256,27 +1256,35 @@ BYTE z80_tape_fastindices[1<<16]; // full Z80 16-bit cache
 
 const BYTE z80_tape_fastdumper[][24]=
 {
-	/*  0 */ {   +0,  10,0xD0,0xDD,0x77,0x00,0xDD,0x23,0x15,0x1D,0x20,0xF3 }, // AMSTRAD CPC FIRMWARE
-	/*  1 */ {  -11,   4,0xDD,0x23,0x1B,0x08, +17,   7,0x7C,0xAD,0x67,0x7A,0xB3,0x20,0xCB }, // DINAMIC, GREMLIN OLD
-	/*  2 */ {  -11,   4,0xDD,0x23,0x1B,0x08, +17,   7,0x7C,0xAD,0x67,0x7A,0xB3,0x20,0xD2 }, // TOPO SOFT
-	/*  3 */ {  -29,   6,0xDD,0x75,0x00,0xDD,0x23,0x1B, +35,   7,0x08,0xAD,0x08,0x7A,0xB3,0x20,0xD0 }, // SPEEDLOCK1
-	/*  4 */ {  -11,   4,0xDD,0x2B,0x1B,0x08, +17,   7,0x7C,0xAD,0x67,0x7A,0xB3,0x20,0xCB }, // GRANDSLAM
-	/*  5 */ {  +15,  10,0xDD,0x74,0x00,0xDD,0x2B,0x1B,0x7B,0xB2,0x20,0xDE }, // OPERA SOFT 1
-	/*  6 */ {  +15,   4,0xDD,0x74,0x00,0x7C,  +6,   7,0xDD,0x2B,0x1B,0x7B,0xB2,0x20,0xD7 }, // OPERA SOFT 2
-	/*  7 */ {  +11,  10,0x73,0x23,0x1E,0x01,0xD9,0x1B,0x7A,0xB3,0xD9,0x3E,  +1,   2,0x20,0xE5 }, // CODEMASTERS1,OCEAN LEVELS (DALEY THOMPSON'S OLYMPIC CHALLENGE)
-	/*  8 */ {  -13,   6,0xDD,0x75,0x00,0xDD,0x23,0x1B, +17,   8,0x00,0x00,0x00,0x00,0x7A,0xB3,0x20,0xE1 }, // RICOCHET
-	/*  9 */ {  -11,   4,0xDD,0x23,0x1B,0x08, +18,   7,0x7C,0xAD,0x67,0x7A,0xB3,0x20,0xCA }, // MASTERTRONIC, CODEMASTERS2
-	/* 10 */ {  -17,  11,0xDD,0x75,0x00,0xDD,0x23,0x1B,0x7A,0xB3,0x37,0xC8,0x06 }, // MIKROGEN
-	/* 11 */ {  +11,  11,0xDD,0x75,0x00,0xDD,0x23,0x2E,0x01,0x1B,0x7A,0xB3,0x3E,  +1,   4,0x00,0x00,0x20,0xE2 }, // SPEEDLOCK LEVELS
-	/* 12 */ {  -13,   7,0xDD,0x75,0x00,0xDD,0x23,0x1B,0x06, +17,   7,0x7C,0xAD,0x67,0x7A,0xB3,0x20,0xE1 }, // CODEMASTERS3
-	/* 13 */ {  -13,   7,0xDD,0x75,0x00,0xDD,0x23,0x1B,0x06, +17,   6,0x7C,0xAD,0x67,0x7A,0x3C,0x20 }, // GREMLIN 128K
-	/* 14 */ {  -16,   7,0xDD,0x75,0x00,0xDD,0x23,0x1B,0x2E, +15,   7,0x7C,0xAD,0x67,0x7A,0xB3,0x20,0xE3 }, // MINILOAD ++
-	/* 15 */ {  -16,   7,0xDD,0x75,0x00,0xDD,0x2B,0x1B,0x2E, +15,   7,0x7C,0xAD,0x67,0x7A,0xB3,0x20,0xE3 }, // MINILOAD --
-	/* 16 */ {  -11,   4,0xDD,0x23,0x1B,0x08, +18,   7,0x7C,0xAD,0x67,0x7A,0xB3,0x20,0xD1 }, // GREMLIN OLD LEVELS
+	/*  0 */ {  + 3,  10,0XD0,0XDD,0X77,0X00,0XDD,0X23,0X15,0X1D,0X20,0XF3 }, // AMSTRAD CPC FIRMWARE
+	/*  1 */ {  - 8,   4,0XDD,0X23,0X1B,0X08, +17,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XCB }, // DINAMIC, GREMLIN OLD
+	/*  2 */ {  - 8,   4,0XDD,0X23,0X1B,0X08, +17,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XD2 }, // TOPO SOFT
+	/*  3 */ {  -26,   6,0XDD,0X75,0X00,0XDD,0X23,0X1B, +35,   7,0X08,0XAD,0X08,0X7A,0XB3,0X20,0XD0 }, // SPEEDLOCK1
+	/*  4 */ {  - 8,   4,0XDD,0X2B,0X1B,0X08, +17,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XCB }, // GRANDSLAM
+	/*  5 */ {  +18,  10,0XDD,0X74,0X00,0XDD,0X2B,0X1B,0X7B,0XB2,0X20,0XDE }, // OPERA SOFT 1
+	/*  6 */ {  +18,   4,0XDD,0X74,0X00,0X7C,  +6,   7,0XDD,0X2B,0X1B,0X7B,0XB2,0X20,0XD7 }, // OPERA SOFT 2
+	/*  7 */ {  +14,  10,0X73,0X23,0X1E,0X01,0XD9,0X1B,0X7A,0XB3,0XD9,0X3E,  +1,   2,0X20,0XE5 }, // CODEMASTERS1,OCEAN LEVELS (DALEY THOMPSON'S OLYMPIC CHALLENGE)
+	/*  8 */ {  -10,   6,0XDD,0X75,0X00,0XDD,0X23,0X1B, +17,   8,0X00,0X00,0X00,0X00,0X7A,0XB3,0X20,0XE1 }, // RICOCHET
+	/*  9 */ {  - 8,   4,0XDD,0X23,0X1B,0X08, +18,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XCA }, // MASTERTRONIC, CODEMASTERS2
+	/* 10 */ {  -14,  11,0xDD,0x75,0x00,0xDD,0x23,0x1B,0x7A,0xB3,0x37,0xC8,0x06, +17,    2,0x18,0xE2 }, // HI-TEC
+	/* 11 */ {  +14,  11,0XDD,0X75,0X00,0XDD,0X23,0X2E,0X01,0X1B,0X7A,0XB3,0X3E,  +1,   4,0X00,0X00,0X20,0XE2 }, // SPEEDLOCK LEVELS
+	/* 12 */ {  -10,   7,0XDD,0X75,0X00,0XDD,0X23,0X1B,0X06, +17,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XE1 }, // CODEMASTERS3
+	/* 13 */ {  -10,   7,0XDD,0X75,0X00,0XDD,0X23,0X1B,0X06, +17,   6,0X7C,0XAD,0X67,0X7A,0X3C,0X20 }, // GREMLIN 128K
+	/* 14 */ {  - 8,   4,0XDD,0X23,0X1B,0X08, +18,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XD1 }, // GREMLIN OLD LEVELS
+	/* 15 */ {  -22,   4,0XDD,0X75,0X00,0X18, +10,   5,0XDD,0X23,0X1B,0X08,0X06 }, // MIKROGEN
+	/* 16 */ {  -13,   8,0XDD,0X75,0X00,0XDD,0X23,0X1B,0X2E,0x01, +14,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XE3 }, // MINILOAD ++ (NORMAL)
+	/* 17 */ {  -13,   8,0XDD,0X75,0X00,0XDD,0X2B,0X1B,0X2E,0x01, +14,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XE3 }, // MINILOAD -- (NORMAL)
+	/* 18 */ {  -13,   8,0XDD,0X75,0X00,0XDD,0X23,0X1B,0X2E,0x01, +18,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XDF }, // MINILOAD ++ (CUSTOM)
+	/* 19 */ {  -13,   8,0XDD,0X75,0X00,0XDD,0X2B,0X1B,0X2E,0x01, +18,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XDF }, // MINILOAD -- (CUSTOM)
+	/* 20 */ {  -13,   8,0xDD,0X75,0X00,0XDD,0X23,0X1B,0X2E,0X01, +15,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XE2 }, // TINYTAPE ++ (COUNTER)
+	/* 21 */ {  -13,   8,0xDD,0X75,0X00,0XDD,0X2B,0X1B,0X2E,0X01, +15,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XE2 }, // TINYTAPE -- (COUNTER)
+	/* 22 */ {  +10,  10,0X7C,0XAD,0X67,0XDD,0X75,0X00,0XDD,0X23,0X18,0XE5 }, // TINYTAPE ++ (NO COUNTER)
+	/* 23 */ {  +10,  10,0X7C,0XAD,0X67,0XDD,0X75,0X00,0XDD,0X2B,0X18,0XE5 }, // TINYTAPE -- (NO COUNTER)
 };
 int z80_tape_fastdump(WORD p)
 {
-	int i=z80_tape_fastindices[p^1]-192; // avoid clashing with z80_tape_fastfeed!
+	p-=3; // avoid clashes with z80_tape_fastfeed()
+	int i=z80_tape_fastindices[p]-192; // avoid clashing with z80_tape_fastfeed!
 	if (i<0||i>length(z80_tape_fastdumper)) // already in the cache?
 	{
 		for (i=0;i<length(z80_tape_fastdumper);++i)
@@ -1284,34 +1292,35 @@ int z80_tape_fastdump(WORD p)
 				break;
 		logprintf("FASTDUMP %04X:%02i\n",p,i<length(z80_tape_fastdumper)?i:-1);
 	}
-	return z80_tape_fastindices[p^1]=i+192,i;
+	return z80_tape_fastindices[p]=i+192,i;
 }
 
 const BYTE z80_tape_fastfeeder[][24]=
 {
-	/*  0 */ {   +0,   8,0x30,0x0D,0x7C,0x91,0x9F,0xCB,0x12,0xCD,  +2,   3,0x1D,0x20,0xEA }, // AMSTRAD CPC FIRMWARE
-	/*  1 */ {   +0,   2,0xD0,0x3E,  +1,   4,0xB8,0xCB,0x15,0x06,  +1,   2,0x30,0xF3 }, // DINAMIC, TOPO SOFT
-	/*  2 */ {   +0,   1,0x3E,  +1,   4,0xB8,0xCB,0x15,0x06,  +1,   1,0xD2 }, // GRANDSLAM
-	/*  3 */ {   +0,   3,0xE1,0xD0,0x3E,  +1,   4,0xBC,0xCB,0x15,0x26,  +1,   1,0xD2 }, // SPEEDLOCK1
-	/*  4 */ {   +0,   2,0xD0,0x3E,  +1,   4,0xBC,0xCB,0x15,0x26,  +1,   1,0xD2 }, // SPEEDLOCK2
-	/*  5 */ {   +0,   3,0x30,0x1E,0x3E,  +1,   4,0xBA,0xCB,0x13,0x16,  +1,   2,0x30,0xF0 }, // OCEAN LEVELS (DALEY THOMPSON'S OLYMPIC CHALLENGE)
-	/*  6 */ {   +0,   3,0x30,0x1D,0x3E,  +1,   4,0xBA,0xCB,0x13,0x16,  +1,   2,0x30,0xF0 }, // OCEAN LEVELS (OPERATION WOLF)
-	/*  7 */ {   +0,   2,0xD0,0x3E,  +1,   4,0xB8,0xCB,0x15,0x06,  +1,   1,0xD2 }, // HI-TEC, RAINBOW ARTS, CODEMASTERS2, CODEMASTERS3, SUPERTRUX
-	/*  8 */ {   +0,   3,0x30,0x26,0x3E,  +1,   4,0xBC,0xCB,0x15,0x26,  +1,   2,0x30,0xF0 }, // SPEEDLOCK LEVELS 1
-	/*  9 */ {   +0,   3,0x30,0x1F,0x3E,  +1,   4,0xBA,0xCB,0x13,0x16,  +1,   2,0x30,0xF0 }, // CODEMASTERS1
-	/* 10 */ {   +0,   3,0x30,0x32,0x3E,  +1,   4,0xB8,0xCB,0x15,0x06,  +1,   2,0x30,0xF2 }, // GREMLIN 128K
-	/* 11 */ {   +0,   3,0x30,0x33,0x3E,  +1,   4,0xB8,0xCB,0x15,0x06,  +1,   2,0x30,0xF2 }, // GREMLIN 128K LEVELS
-	/* 12 */ {   +0,   7,0x30,0x30,0x90,0xCB,0x15,0x30,0xF1 }, // TINYTAPE
-	/* 13 */ {   +0,   6,0xD0,0x90,0xCB,0x15,0x30,0xF2 }, // MINILOAD
-	/* 14 */ {   +0,   1,0xD2,  +2,   1,0x3E,  +1,   9,0xB8,0xCB,0x15,0x3E,0x00,0x00,0x3E,0x15,0xD2 }, // ALKATRAZ
-	/* 15 */ {   +0,   2,0xD0,0x3E,  +1,   4,0xBC,0xCB,0x15,0x26,  +1,   2,0x30,0xF3 }, // RICOCHET
-	/* 16 */ {   +0,   1,0xFE,  +1,   4,0x3F,0xCB,0x13,0xD2 }, // GREMLIN 2/2 ("BASIL")
-	/* 17 */ {   +0,   2,0x7D,0xFE,  +1,   7,0x3F,0xCB,0x14,0xAC,0xE6,0x1F,0xCD,  +2,   3,0xC1,0x10,0xEA }, // OPERA SOFT
-	/* 18 */ {   +0,   1,0xD2,  +2,   1,0x3E,  +1,  +4,0xB8,0xCB,0x15,0x3E,  +1,  +1,0xD2 }, // HEXAGON
-	/* 19 */ {   +0,  10,0x30,0x0A,0x7C,0x91,0x9F,0xCB,0x12,0x1D,0x20,0xED }, // CASSYS
-	/* 20 */ {   -8,   3,0x16,0x01,0xCD,  +5,   1,0x3A,  +2,   5,0xBB,0xCB,0x12,0x30,0xF2 }, // BLEEPLOAD 2(1)
-	/* 21 */ {   -8,   3,0x16,0x01,0xCD,  +5,   1,0x3E,  +1,   5,0xBB,0xCB,0x12,0x30,0xF3 }, // BLEEPLOAD 2(2)
-	/* 22 */ {   +0,   2,0xD0,0x3E,  +1,   4,0xBA,0XCB,0X13,0X16,  +1,   2,0x30,0xF1 }, // OCEAN LEVELS (SLY SPY)
+	/*  0 */ {   +0,   8,0X30,0X0D,0X7C,0X91,0X9F,0XCB,0X12,0XCD,  +2,   3,0X1D,0X20,0XEA }, // AMSTRAD CPC FIRMWARE
+	/*  1 */ {   +0,   2,0XD0,0X3E,  +1,   4,0XB8,0XCB,0X15,0X06,  +1,   2,0X30,0XF3 }, // DINAMIC, TOPO SOFT
+	/*  2 */ {   +0,   1,0X3E,  +1,   4,0XB8,0XCB,0X15,0X06,  +1,   1,0XD2,-128, -11 }, // GRANDSLAM
+	/*  3 */ {   +0,   3,0XE1,0XD0,0X3E,  +1,   4,0XBC,0XCB,0X15,0X26,  +1,   1,0XD2,-128, -22 }, // SPEEDLOCK1
+	/*  4 */ {   +0,   2,0XD0,0X3E,  +1,   4,0XBC,0XCB,0X15,0X26,  +1,   1,0XD2 }, // SPEEDLOCK2
+	/*  5 */ {   +0,   3,0X30,0X1E,0X3E,  +1,   4,0XBA,0XCB,0X13,0X16,  +1,   2,0X30,0XF0 }, // OCEAN LEVELS (DALEY THOMPSON'S OLYMPIC CHALLENGE)
+	/*  6 */ {   +0,   3,0X30,0X1D,0X3E,  +1,   4,0XBA,0XCB,0X13,0X16,  +1,   2,0X30,0XF0 }, // OCEAN LEVELS (OPERATION WOLF)
+	/*  7 */ {   +0,   2,0XD0,0X3E,  +1,   4,0XB8,0XCB,0X15,0X06,  +1,   1,0XD2 }, // HI-TEC, RAINBOW ARTS, CODEMASTERS2, CODEMASTERS3, SUPERTRUX
+	/*  8 */ {   +0,   3,0X30,0X26,0X3E,  +1,   4,0XBC,0XCB,0X15,0X26,  +1,   2,0X30,0XF0 }, // SPEEDLOCK LEVELS 1
+	/*  9 */ {   +0,   3,0X30,0X1F,0X3E,  +1,   4,0XBA,0XCB,0X13,0X16,  +1,   2,0X30,0XF0 }, // CODEMASTERS1
+	/* 10 */ {   +0,   3,0X30,0X32,0X3E,  +1,   4,0XB8,0XCB,0X15,0X06,  +1,   2,0X30,0XF2 }, // GREMLIN 128K
+	/* 11 */ {   +0,   3,0X30,0X33,0X3E,  +1,   4,0XB8,0XCB,0X15,0X06,  +1,   2,0X30,0XF2 }, // GREMLIN 128K LEVELS
+	/* 12 */ {   +0,   1,0X30,  +1,   5,0X90,0XCB,0X15,0X30,0XF1 }, // TINYTAPE
+	/* 13 */ {   +0,   6,0XD0,0X90,0XCB,0X15,0X30,0XF2 }, // MINILOAD
+	/* 14 */ {   +0,   1,0XD2,  +2,   1,0X3E,  +1,   9,0XB8,0XCB,0X15,0X3E,0X00,0X00,0X3E,0X15,0XD2,-128, -19 }, // ALKATRAZ
+	/* 15 */ {   +0,   2,0XD0,0X3E,  +1,   4,0XBC,0XCB,0X15,0X26,  +1,   2,0X30,0XF3 }, // RICOCHET
+	/* 16 */ {   -5,   3,0x1E,0x01,0xCD,  +2,   1,0XFE,  +1,   4,0X3F,0XCB,0X13,0XD2,-128,  -9 }, // GREMLIN 1+2 ("BASIL", "MASK")
+	/* 17 */ {   +0,   2,0X7D,0XFE,  +1,   7,0X3F,0XCB,0X14,0XAC,0XE6,0X1F,0XCD,  +2,   3,0XC1,0X10,0XEA }, // OPERA SOFT
+	/* 18 */ {   +0,   1,0XD2,  +2,   1,0X3E,  +1,  +4,0XB8,0XCB,0X15,0X3E,  +1,  +1,0XD2,-128, -16 }, // HEXAGON
+	/* 19 */ {   +0,  10,0X30,0X0A,0X7C,0X91,0X9F,0XCB,0X12,0X1D,0X20,0XED }, // CASSYS
+	/* 20 */ {   -8,   3,0X16,0X01,0XCD,  +5,   1,0X3A,  +2,   5,0XBB,0XCB,0X12,0X30,0XF2 }, // BLEEPLOAD 2(1)
+	/* 21 */ {   -8,   3,0X16,0X01,0XCD,  +5,   1,0X3E,  +1,   5,0XBB,0XCB,0X12,0X30,0XF3 }, // BLEEPLOAD 2(2)
+	/* 22 */ {   +0,   2,0XD0,0X3E,  +1,   4,0XBA,0XCB,0X13,0X16,  +1,   2,0X30,0XF1 }, // OCEAN LEVELS (SLY SPY)
+	/* 23 */ {   +0,   1,0XD2,  +2,   1,0X3E,  +1,   4,0XB8,0XCB,0X15,0X06,  +1,   1,0XD2 }, // MIKROGEN
 };
 int z80_tape_fastfeed(WORD p)
 {
@@ -1338,51 +1347,51 @@ WORD z80_tape_spystackadd(int n)
 
 const BYTE z80_tape_fastloader[][24]= // format: chains of {offset relative to the PC of the trapped IN opcode, size, string of opcodes}; extra -128 stands for PC of the first byte
 {
-	/*  0 */ {   -8,  13,0x79,0xC6,0x02,0x4F,0x38,0x0E,0xED,0x78,0xAD,0xE6,0x80,0x20,0xF3 }, // AMSTRAD CPC FIRMWARE
-	/*  1 */ {   -5,  12,0x04,0xC8,0xD9,0xED,0x78,0xD9,0x1F,0xA9,0xE6,0x40,0x28,0xF4 }, // DINAMIC
-	/*  2 */ {  -15,  20,0x04,0xC8,0x3E,0xF4,0xDB,0x00,0xE6,0x04,0xEE,0x04,0xC0,0x3E,0xF5,0xDB,0x00,0xA9,0xE6,0x80,0x28,0xEC }, // TOPO
-	/*  3 */ {   -6,  12,0x04,0xC8,0x3E,0xF5,0xDB,0x00,0xA9,0xE6,0x80,0xD8,0x28,0xF4 }, // MULTILOAD
-	/*  4 */ {   -6,  11,0x24,0xC8,0x06,0xF5,0xED,0x78,0xA9,0xE6,0x80,0x28,0xF5 }, // SPEEDLOCK
-	/*  5 */ {   -6,  12,0x04,0xC8,0x3E,0xF5,0xDB,0xFF,0x1F,0xC8,0xA9,0xE6,0x40,0x28 }, // ALKATRAZ, HEXAGON
-	/*  6 */ {   -6,   8,0x14,0xC8,0x06,0xF5,0xED,0x78,0xA9,0xF2,-128,  -8 }, // CODEMASTERS1
-	/*  7 */ {   -7,  14,0x04,0xC8,0x37,0x00,0xD9,0xED,0x78,0xD9,0x00,0xA9,0xE6,0x80,0x28,0xF2 }, // MASTERTRONIC,CODEMASTERS0
-	/*  8 */ {   -6,   5,0x04,0xC8,0x3E,0xF5,0xDB,  +1,   5,0xA9,0xE6,0x80,0x28,0xF5 }, // TINYTAPE/MINILOAD
-	/*  9 */ {   -3,   5,0x1C,0xED,0x78,0xA9,0xF2,-128,  -5 }, // BLEEPLOAD(1+2)
-	/* 10 */ {   -6,  15,0x04,0xC8,0x3E,0xF5,0xDB,0x00,0x1F,0x00,0x00,0x00,0xA9,0xE6,0x40,0x28,0xF1 }, // CODEMASTERS2
-	/* 11 */ {   -5,  11,0x04,0xC8,0xD9,0xED,0x78,0xD9,0xA9,0xE6,0x80,0x28,0xF5 }, // MIKROGEN
-	/* 12 */ {   -3,   5,0x2C,0xED,0x78,0xA9,0xF2,-128,  -5 }, // BLEEPLOAD1-MUSICAL
-	/* 13 */ {   -4,   8,0x24,0xC8,0xED,0x78,0xA9,0xE6,0x80,0xCA,-128,  -8 }, // UNILODE
-	/* 14 */ {   -7,  10,0x04,0xC8,0xD9,0x06,0xF5,0xED,0x78,0xD9,0xA9,0xF2,-128, -10 }, // HI-TEC, RAINBOW ARTS
-	/* 15 */ {   -6,  13,0x04,0xC8,0x3E,0xF5,0xDB,0xFF,0x1F,0x1F,0xA9,0xE6,0x20,0x28,0xF3 }, // ZYDROLOAD
-	/* 16 */ {   -5,   9,0x01,0x00,0xF5,0xED,0x78,0xCB,0x7F,0x20,0xF7 }, // OPERA1 1/2
-	/* 17 */ {   -5,  10,0x01,0x00,0xF5,0xED,0x78,0x2C,0xCB,0x7F,0x28,0xF6 }, // OPERA1 2/2
-	/* 18 */ {   -2,   4,0xED,0x78,0xA9,0xF2,-128,  -4 }, // BLEEPLOAD1-GAPS
-	/* 19 */ {   -2,   3,0xED,0x78,0xFA,-128,  -3 }, // OPERA2 1/2 + MARMELADE 1/2
-	/* 20 */ {   -3,   4,0x2C,0xED,0x78,0xF2,-128,  -4 }, // OPERA2 2/2
-	/* 21 */ {   -5,  13,0x04,0xC8,0xD9,0xED,0x78,0xD9,0x00,0x00,0xA9,0xE6,0x80,0x28,0xF3 }, // RAINBOW ARTS
-	/* 22 */ {   -4,   9,0x14,0xC8,0xED,0x78,0xA9,0xE6,0x80,0x28,0xF7 }, // HALFLOAD
-	/* 23 */ {   -3,   4,0x0C,0xED,0x78,0xFA,-128,  -4 }, // GREMLIN 1/2
-	/* 24 */ {   -3,   4,0x0C,0xED,0x78,0xF2,-128,  -4 }, // GREMLIN 2/2
-	/* 25 */ {   -2,   3,0xED,0x78,0xF2,-128,  -3 }, // GREMLIN SKIP + MARMELADE 2/2
-	/* 26 */ {   -6,  13,0x04,0xC8,0x3E,0xF5,0xDB,0x00,0x07,0xA9,0xE6,0x01,0x00,0x28,0xF3 }, // GREMLIN 128K
-	/* 27 */ {   -5,  13,0x04,0xC8,0xD9,0xED,0x78,0xD9,0x1F,0x00,0xA9,0xE6,0x40,0x28,0xF3 }, // GREMLIN OLD
-	/* 28 */ {   -4,   9,0x3E,0xF5,0xDB,0x00,0x07,0x38,0x02,0x10,0xF7 }, // "PUFFY'S SAGA" 1/2
-	/* 29 */ {   -4,   9,0x3E,0xF5,0xDB,0x00,0x07,0x30,0x02,0x10,0xF7 }, // "PUFFY'S SAGA" 2/2
-	/* 30 */ {   -8,  13,0x79,0xC6,0x02,0x4F,0x38,0x17,0xED,0x78,0xAD,0xE6,0x80,0x20,0xF3 }, // "KORONIS RIFT"
-	/* 31 */ {   -5,   7,0x0C,0x28,0x0B,0xED,0x78,0xAD,0xF2,-128,  -7 }, // "TWINWORLD"
-	/* 32 */ {   -4,   8,0x14,0xC8,0xED,0x78,0xE6,0x80,0xA9,0xCA,-128,  -8 }, // "SPLIT PERSONALITIES"
-	/* 33 */ {   -4,   9,0x06,0xF5,0xED,0x78,0xE6,0x80,0xA9,0x28,0xF9 }, // TITUS 1/X
-	/* 34 */ {   -2,   5,0xED,0x78,0xE6,0x80,0x4F }, // TITUS 2/X (just to detect it)
-	/* 35 */ {   -9,  14,0xED,0x5F,0xFD,0xBE,0x00,0x30,0x12,0xED,0x78,0xE6,0x80,0xA9,0x28,0xF2 }, // TITUS 3/X
-	/* 36 */ {   -9,  14,0xED,0x5F,0xFD,0xBE,0x00,0x30,0x11,0xED,0x78,0xE6,0x80,0xA9,0x28,0xF2 }, // TITUS 4/X
-	/* 37 */ {   -2,  15,0xED,0x78,0xE6,0x80,0xA9,0x20,0x08,0x00,0x00,0x3E,0x04,0x83,0x5F,0x18,0xF1 }, // TITUS 5/X
-	/* 38 */ {   -7,  13,0x04,0xC8,0xD9,0x06,0xF5,0xED,0x78,0xD9,0xA9,0xE6,0x80,0x28,0xF3 }, // CODEMASTERS3
-	/* 39 */ {   -6,   8,0x24,0xC8,0x06,0xF5,0xED,0x78,0xA9,0xF2,-128,  -8 }, // SPEEDLOCK LEVELS
-	/* 40 */ {   -6,   5,0x04,0xC8,0x3E,0xF5,0xDB,  +1,   7,0x00,0xA9,0xD8,0xE6,0x80,0x28,0xF3 }, // SUPERTRUX 1/2
-	/* 41 */ {   -6,   5,0x04,0xC8,0x3E,0xF5,0xDB,  +1,   6,0x00,0xA9,0xE6,0x80,0x28,0xF4 }, // SUPERTRUX 2/2
-	/* 42 */ {   -7,  10,0x06,0xF5,0x0C,0x28,0x14,0xED,0x78,0x17,0x30,0xF8 }, // AUDIOGENIC 1/2
-	/* 43 */ {   -5,   8,0x0C,0x28,0x0C,0xED,0x78,0x17,0x38,0xF8 }, // AUDIOGENIC 2/2
-	/* 44 */ {   -6,  13,0x04,0xC8,0x3E,0xF5,0xDB,0xFF,0xB7,0xD8,0xA9,0xE6,0x80,0x28,0xF3 }, // BIRDIE
+	/*  0 */ {   -8,  13,0X79,0XC6,0X02,0X4F,0X38,0X0E,0XED,0X78,0XAD,0XE6,0X80,0X20,0XF3 }, // AMSTRAD CPC FIRMWARE
+	/*  1 */ {   -5,  12,0X04,0XC8,0XD9,0XED,0X78,0XD9,0X1F,0XA9,0XE6,0X40,0X28,0XF4 }, // DINAMIC
+	/*  2 */ {  -15,  20,0X04,0XC8,0X3E,0XF4,0XDB,0X00,0XE6,0X04,0XEE,0X04,0XC0,0X3E,0XF5,0XDB,0X00,0XA9,0XE6,0X80,0X28,0XEC }, // TOPO
+	/*  3 */ {   -6,  12,0X04,0XC8,0X3E,0XF5,0XDB,0X00,0XA9,0XE6,0X80,0XD8,0X28,0XF4 }, // MULTILOAD
+	/*  4 */ {   -6,  11,0X24,0XC8,0X06,0XF5,0XED,0X78,0XA9,0XE6,0X80,0X28,0XF5 }, // SPEEDLOCK
+	/*  5 */ {   -6,  12,0X04,0XC8,0X3E,0XF5,0XDB,0XFF,0X1F,0XC8,0XA9,0XE6,0X40,0X28 }, // ALKATRAZ, HEXAGON
+	/*  6 */ {   -6,   8,0X14,0XC8,0X06,0XF5,0XED,0X78,0XA9,0XF2,-128,  -8 }, // CODEMASTERS1
+	/*  7 */ {   -7,  14,0X04,0XC8,0X37,0X00,0XD9,0XED,0X78,0XD9,0X00,0XA9,0XE6,0X80,0X28,0XF2 }, // MASTERTRONIC,CODEMASTERS0
+	/*  8 */ {   -6,   5,0X04,0XC8,0X3E,0XF5,0XDB,  +1,   5,0XA9,0XE6,0X80,0X28,0XF5 }, // TINYTAPE/MINILOAD
+	/*  9 */ {   -3,   5,0X1C,0XED,0X78,0XA9,0XF2,-128,  -5 }, // BLEEPLOAD(1+2)
+	/* 10 */ {   -6,  15,0X04,0XC8,0X3E,0XF5,0XDB,0X00,0X1F,0X00,0X00,0X00,0XA9,0XE6,0X40,0X28,0XF1 }, // CODEMASTERS2
+	/* 11 */ {   -5,  11,0X04,0XC8,0XD9,0XED,0X78,0XD9,0XA9,0XE6,0X80,0X28,0XF5 }, // MIKROGEN
+	/* 12 */ {   -3,   5,0X2C,0XED,0X78,0XA9,0XF2,-128,  -5 }, // BLEEPLOAD1-MUSICAL
+	/* 13 */ {   -4,   8,0X24,0XC8,0XED,0X78,0XA9,0XE6,0X80,0XCA,-128,  -8 }, // UNILODE
+	/* 14 */ {   -7,  10,0X04,0XC8,0XD9,0X06,0XF5,0XED,0X78,0XD9,0XA9,0XF2,-128, -10 }, // HI-TEC, RAINBOW ARTS
+	/* 15 */ {   -6,  13,0X04,0XC8,0X3E,0XF5,0XDB,0XFF,0X1F,0X1F,0XA9,0XE6,0X20,0X28,0XF3 }, // ZYDROLOAD
+	/* 16 */ {   -5,   9,0X01,0X00,0XF5,0XED,0X78,0XCB,0X7F,0X20,0XF7 }, // OPERA1 1/2
+	/* 17 */ {   -5,  10,0X01,0X00,0XF5,0XED,0X78,0X2C,0XCB,0X7F,0X28,0XF6 }, // OPERA1 2/2
+	/* 18 */ {   -2,   4,0XED,0X78,0XA9,0XF2,-128,  -4 }, // BLEEPLOAD1-GAPS
+	/* 19 */ {   -2,   3,0XED,0X78,0XFA,-128,  -3 }, // OPERA2 1/2 + MARMELADE 1/2
+	/* 20 */ {   -3,   4,0X2C,0XED,0X78,0XF2,-128,  -4 }, // OPERA2 2/2
+	/* 21 */ {   -5,  13,0X04,0XC8,0XD9,0XED,0X78,0XD9,0X00,0X00,0XA9,0XE6,0X80,0X28,0XF3 }, // RAINBOW ARTS
+	/* 22 */ {   -4,   9,0X14,0XC8,0XED,0X78,0XA9,0XE6,0X80,0X28,0XF7 }, // HALFLOAD
+	/* 23 */ {   -3,   4,0X0C,0XED,0X78,0XFA,-128,  -4 }, // GREMLIN 1/2
+	/* 24 */ {   -3,   4,0X0C,0XED,0X78,0XF2,-128,  -4 }, // GREMLIN 2/2
+	/* 25 */ {   -2,   3,0XED,0X78,0XF2,-128,  -3 }, // GREMLIN SKIP + MARMELADE 2/2
+	/* 26 */ {   -6,  13,0X04,0XC8,0X3E,0XF5,0XDB,0X00,0X07,0XA9,0XE6,0X01,0X00,0X28,0XF3 }, // GREMLIN 128K
+	/* 27 */ {   -5,  13,0X04,0XC8,0XD9,0XED,0X78,0XD9,0X1F,0X00,0XA9,0XE6,0X40,0X28,0XF3 }, // GREMLIN OLD
+	/* 28 */ {   -4,   9,0X3E,0XF5,0XDB,0X00,0X07,0X38,0X02,0X10,0XF7 }, // "PUFFY'S SAGA" 1/2
+	/* 29 */ {   -4,   9,0X3E,0XF5,0XDB,0X00,0X07,0X30,0X02,0X10,0XF7 }, // "PUFFY'S SAGA" 2/2
+	/* 30 */ {   -8,  13,0X79,0XC6,0X02,0X4F,0X38,0X17,0XED,0X78,0XAD,0XE6,0X80,0X20,0XF3 }, // "KORONIS RIFT"
+	/* 31 */ {   -5,   7,0X0C,0X28,0X0B,0XED,0X78,0XAD,0XF2,-128,  -7 }, // "TWINWORLD"
+	/* 32 */ {   -4,   8,0X14,0XC8,0XED,0X78,0XE6,0X80,0XA9,0XCA,-128,  -8 }, // "SPLIT PERSONALITIES"
+	/* 33 */ {   -4,   9,0X06,0XF5,0XED,0X78,0XE6,0X80,0XA9,0X28,0XF9 }, // TITUS 1/X
+	/* 34 */ {   -2,   5,0XED,0X78,0XE6,0X80,0X4F }, // TITUS 2/X (JUST TO DETECT IT)
+	/* 35 */ {   -9,  14,0XED,0X5F,0XFD,0XBE,0X00,0X30,0X12,0XED,0X78,0XE6,0X80,0XA9,0X28,0XF2 }, // TITUS 3/X
+	/* 36 */ {   -9,  14,0XED,0X5F,0XFD,0XBE,0X00,0X30,0X11,0XED,0X78,0XE6,0X80,0XA9,0X28,0XF2 }, // TITUS 4/X
+	/* 37 */ {   -2,  15,0XED,0X78,0XE6,0X80,0XA9,0X20,0X08,0X00,0X00,0X3E,0X04,0X83,0X5F,0X18,0XF1 }, // TITUS 5/X
+	/* 38 */ {   -7,  13,0X04,0XC8,0XD9,0X06,0XF5,0XED,0X78,0XD9,0XA9,0XE6,0X80,0X28,0XF3 }, // CODEMASTERS3
+	/* 39 */ {   -6,   8,0X24,0XC8,0X06,0XF5,0XED,0X78,0XA9,0XF2,-128,  -8 }, // SPEEDLOCK LEVELS
+	/* 40 */ {   -6,   5,0X04,0XC8,0X3E,0XF5,0XDB,  +1,   7,0X00,0XA9,0XD8,0XE6,0X80,0X28,0XF3 }, // SUPERTRUX 1/2
+	/* 41 */ {   -6,   5,0X04,0XC8,0X3E,0XF5,0XDB,  +1,   6,0X00,0XA9,0XE6,0X80,0X28,0XF4 }, // SUPERTRUX 2/2
+	/* 42 */ {   -7,  10,0X06,0XF5,0X0C,0X28,0X14,0XED,0X78,0X17,0X30,0XF8 }, // AUDIOGENIC 1/2
+	/* 43 */ {   -5,   8,0X0C,0X28,0X0C,0XED,0X78,0X17,0X38,0XF8 }, // AUDIOGENIC 2/2
+	/* 44 */ {   -6,  13,0X04,0XC8,0X3E,0XF5,0XDB,0XFF,0XB7,0XD8,0XA9,0XE6,0X80,0X28,0XF3 }, // BIRDIE
 };
 void z80_tape_fastload_ccitt(int mask8)
 {
@@ -1521,9 +1530,9 @@ INLINE void z80_tape_fastload(void)
 			case 8: // TINYTAPE/MINILOAD (CPCRETRODEV 2018 et al.) // INC B // XOR C:AND $80:JR Z,..
 				if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&((i=z80_tape_fastfeed(z80_tape_spystack()))==12||i==13))
 				{
-					if ((i=z80_tape_fastdump(z80_tape_spystack()))==14||i==15)
-						while (tape_bits>15&&z80_de.b.l>1)
-							z80_hl.b.h^=POKE(z80_ix.w)=fasttape_dump(),i==14?++z80_ix.w:--z80_ix.w,--z80_de.w;
+					if ((i=z80_tape_fastdump(z80_tape_spystack()))>=16&&i<=23)
+						while (tape_bits>15&&(i>=20||z80_de.b.l>1))
+							z80_hl.b.h^=POKE(z80_ix.w)=fasttape_dump(),(i&1)?--z80_ix.w:++z80_ix.w,(i<22)?--z80_de.w:0;
 					j=fasttape_feed(),tape_feedskip=z80_hl.b.l=128+(j>>1),z80_bc.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc.b.l>>7,14);
 				}
 				else
@@ -1548,9 +1557,9 @@ INLINE void z80_tape_fastload(void)
 				break;
 			case 11: // MIKROGEN ("FROST BYTE", "COP OUT") // INC B' // XOR C':AND $80:JR Z,..
 			case 14: // HI-TEC ("INTERCHANGE", "JONNY QUEST") // INC B' // XOR C':JP NS,..
-				if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_fastfeed(z80_tape_spystack())==7)
+				if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&(i=z80_tape_fastfeed(z80_tape_spystack()))==7||i==23)
 				{
-					if (z80_tape_fastdump(z80_tape_spystack())==10)
+					if ((i=z80_tape_fastdump(z80_tape_spystack()))==10||i==15)
 						while (tape_bits>15&&z80_de2.b.l>1)
 							POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de2.w;
 					j=fasttape_feed(),tape_feedskip=z80_hl2.b.l=128+(j>>1),z80_bc2.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc2.b.l>>7,15);
@@ -1627,7 +1636,7 @@ INLINE void z80_tape_fastload(void)
 				fasttape_add8(1,8,&z80_bc.b.l,1);
 				break;
 			case 24: // GREMLIN 2/2 // INC C // JP NS,...
-				if (z80_de.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_fastfeed(z80_tape_spystack())==16)
+				if (z80_de.b.l==0x01&&FASTTAPE_CAN_FEEDX()&&z80_tape_fastfeed(z80_tape_spystack())==16)
 					j=fasttape_feed(),tape_feedskip=z80_de.b.l=128+(j>>1),z80_bc.b.l=j&1?-1:0,FASTTAPE_FEED_END(0,8);
 				else
 					fasttape_add8(0,8,&z80_bc.b.l,1);
@@ -1649,7 +1658,7 @@ INLINE void z80_tape_fastload(void)
 			case 27: // GREMLIN OLD ("THING ON A SPRING") // INC B' // XOR C':AND $40:JR Z,..
 				if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&((i=z80_tape_fastfeed(z80_tape_spystack()))==2||i==7))
 				{
-					if (((i=z80_tape_fastdump(z80_tape_spystack()))==1||i==16)&&(z80_af2.b.l&0x41)==0x41)
+					if (((i=z80_tape_fastdump(z80_tape_spystack()))==1||i==14)&&(z80_af2.b.l&0x41)==0x41)
 						while (tape_bits>15&&z80_de2.b.l>1)
 							z80_hl2.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de2.w;
 					j=fasttape_feed(),tape_feedskip=z80_hl2.b.l=128+(j>>1),z80_bc2.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc2.b.l>>6,17);
@@ -2254,10 +2263,12 @@ int bios_load(char *s) // load a cartridge file or a firmware ROM file. 0 OK, !0
 			logprintf("PLUS cartridge %iK.\n",i>>10);
 		}
 	}
+	#if 0//1 // fast tape hack!!
 	if (mgetiiii(&mem_rom[0x2BF9])==0x0B068201) //
-		mem_rom[0x2BF9+2]=0;//mputii(&mem_rom[0x2BF9+1],1); // 664+6128+PLUS HACK: reduced initial tape reading delay!
+		mem_rom[0x2BF9+2]/=2;//mputii(&mem_rom[0x2BF9+1],1); // 664+6128+PLUS HACK: reduced initial tape reading delay!
 	else if (mgetiiii(&mem_rom[0x2A89])==0x0B068201)
-		mem_rom[0x2A89+2]=0;//mputii(&mem_rom[0x2A89+1],1); // ditto, for CPC464
+		mem_rom[0x2A89+2]/=2;//mputii(&mem_rom[0x2A89+1],1); // ditto, for CPC464
+	#endif
 	if (!memcmp(&mem_rom[0xCE06],"\xCD\x1B\xBB\x30\xF0\xFE\x81\x28\x0C\xEE\x82",11))
 		mem_rom[0xCE07]=0x09,mem_rom[0xCE0C]=0x31,mem_rom[0xCE10]=0x32; // PLUS HACK: boot menu accepts '1' and '2'!
 	if (bios_path!=s&&(char*)session_substr!=s)
@@ -2744,7 +2755,7 @@ char session_menudata[]=
 	"0x8510 Disc controller\n"
 	"Video\n"
 	"0x8901 Onscreen status\tShift+F9\n"
-	"0x8904 Interpolation\n"
+	"0x8904 Filtering\n"
 	"0x8903 X-Masking\n"
 	"0x8902 Y-Masking\n"
 	"=\n"
@@ -2778,10 +2789,10 @@ char session_menudata[]=
 	"0xC402 100% stereo\n"
 	"=\n"
 	#endif
-	"0x8401 No interpolation\n"
-	"0x8402 Light interpolation\n"
-	"0x8403 Middle interpolation\n"
-	"0x8404 Heavy interpolation\n"
+	"0x8401 No filtering\n"
+	"0x8402 Light filtering\n"
+	"0x8403 Middle filtering\n"
+	"0x8404 Heavy filtering\n"
 	"=\n"
 	"0x0C00 Record WAV file\tCtrl+F12\n"
 	"0x4C00 Record YM file\tCtrl+Shift+F12\n"

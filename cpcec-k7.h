@@ -698,7 +698,8 @@ BYTE fasttape_feed(void) // get a byte from the stream, aligned or not, and leav
 	while ((b<<=1)<128);
 	return tape_mask<<=1,i>>=8;
 }
-#define FASTTAPE_CAN_FEED() (!(tape_pilots|tape_syncs|tape_half)&&tape_mask&&tape_bits>7)
+#define FASTTAPE_CAN_FEED() (!(tape_pilots|tape_syncs|tape_half)&&tape_mask&&tape_bits>7) // general purpose loader handling
+#define FASTTAPE_CAN_FEEDX() (!(tape_pilots|tape_syncs)&&tape_mask&&tape_bits>7) // polarity-dependent loaders may need this
 #define FASTTAPE_FEED_END(x,y) fasttape_skip((x),(y))
 
 // ============================================== END OF TAPE SUPPORT //
