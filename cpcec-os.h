@@ -49,7 +49,7 @@ typedef union { unsigned short w; struct { unsigned char l,h; } b; } Z80W; // WI
 #define fsetsize(f,l) _chsize(_fileno(f),(l))
 #include <io.h> // _chsize(),_fileno()...
 
-#ifdef DEBUG
+#ifdef CONSOLE_DEBUGGER
 #define logprintf(...) (fprintf(stdout,__VA_ARGS__))
 #else
 #define logprintf(...)
@@ -106,7 +106,7 @@ JOYINFO session_ji; // joystick buffer
 HWND session_hwnd; // window handle
 HMENU session_menu=NULL; // menu handle
 HDC session_dc,session_cdc; HGDIOBJ session_dib; // video structs
-#ifndef DEBUG
+#ifndef CONSOLE_DEBUGGER
 	VIDEO_DATATYPE *debug_frame;
 	BYTE debug_buffer[DEBUG_LENGTH_X*DEBUG_LENGTH_Y]; // [0] can be a valid character, 128 (new redraw required) or 0 (redraw not required)
 	HGDIOBJ session_dbg_dib;
@@ -261,7 +261,7 @@ unsigned char kbd_map[256]; // key-to-key translation map
 // general engine functions and procedures -------------------------- //
 
 int session_user(int k); // handle the user's commands; 0 OK, !0 ERROR. Must be defined later on!
-#ifndef DEBUG
+#ifndef CONSOLE_DEBUGGER
 	void session_debug_show(void);
 	int session_debug_user(int k); // debug logic is a bit different: 0 UNKNOWN COMMAND, !0 OK
 #endif
@@ -328,7 +328,7 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 				SelectObject(session_cdc,session_oldselect);
 			}
 		}
-		#ifndef DEBUG
+		#ifndef CONSOLE_DEBUGGER
 		if (session_signal&SESSION_SIGNAL_DEBUG)
 		{
 			if (session_oldselect=SelectObject(session_cdc,session_dbg_dib))
@@ -417,7 +417,7 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 				session_event=wparam&0xBFFF; // cfr infra: bit 7 means CONTROL KEY OFF
 			}
 			break;
-		#ifndef DEBUG
+		#ifndef CONSOLE_DEBUGGER
 		case WM_CHAR:
 			if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant for the debugger, see below
 				session_event=wparam>=32&&wparam<=255?wparam:0;
@@ -427,7 +427,7 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 			{
 				int vkc=GetKeyState(VK_CONTROL)<0;
 				session_shift=GetKeyState(VK_SHIFT)<0;
-				#ifndef DEBUG
+				#ifndef CONSOLE_DEBUGGER
 				if (session_signal&SESSION_SIGNAL_DEBUG)
 					switch (wparam)
 					{
@@ -450,7 +450,7 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 				int k=session_key_n_joy(((lparam>>16)&127)+((lparam>>17)&128));
 				if (k<128) // normal key
 				{
-					#ifndef DEBUG
+					#ifndef CONSOLE_DEBUGGER
 					if (!(session_signal&SESSION_SIGNAL_DEBUG))
 					#endif
 						kbd_bit_set(k);
@@ -555,7 +555,7 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	session_dc=GetDC(session_hwnd); // caution: we assume that if CreateWindow() succeeds all other USER and GDI calls will succeed too
 	session_cdc=CreateCompatibleDC(session_dc); // ditto
 	session_dib=CreateDIBSection(session_dc,&bmi,DIB_RGB_COLORS,(void **)&video_frame,NULL,0); // ditto
-	#ifndef DEBUG
+	#ifndef CONSOLE_DEBUGGER
 		bmi.bmiHeader.biWidth=DEBUG_LENGTH_X*8;
 		bmi.bmiHeader.biHeight=-DEBUG_LENGTH_Y*DEBUG_LENGTH_Z;
 		session_dbg_dib=CreateDIBSection(session_dc,&bmi,DIB_RGB_COLORS,(void **)&debug_frame,NULL,0);
@@ -606,13 +606,13 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 		config_signal=session_signal,session_dirtymenu=1;
 	if (session_dirtymenu)
 		session_dirtymenu=0,session_menuinfo();
-	#ifndef DEBUG
+	#ifndef CONSOLE_DEBUGGER
 	if (session_signal)
 	#else
 	if (session_signal&~SESSION_SIGNAL_DEBUG)
 	#endif
 	{
-		#ifndef DEBUG
+		#ifndef CONSOLE_DEBUGGER
 		if (session_signal&SESSION_SIGNAL_DEBUG)
 		{
 			if (*debug_buffer==128)
@@ -640,7 +640,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 		DispatchMessage(&msg);
 		if (session_event)
 		{
-			#ifndef DEBUG
+			#ifndef CONSOLE_DEBUGGER
 			if (!((session_signal&SESSION_SIGNAL_DEBUG)&&session_debug_user(session_event)))
 			#endif
 				q|=session_user(session_event);
@@ -754,7 +754,7 @@ INLINE void session_byebye(void) // delete video+audio devices
 		waveOutUnprepareHeader(session_wo,&session_wh,sizeof(WAVEHDR));
 		waveOutClose(session_wo);
 	}
-	#ifndef DEBUG
+	#ifndef CONSOLE_DEBUGGER
 		DeleteObject(session_dbg_dib);
 	#endif
 	DeleteDC(session_cdc);
@@ -994,7 +994,7 @@ int fputmm(int i,FILE *f) { fputc(i>>8,f); return fputc(i,f); } // common big-en
 int fgetmmmm(FILE *f) { int i=fgetc(f)<<24; i+=fgetc(f)<<16; i+=fgetc(f)<<8; return i+fgetc(f); } // common big-endian 32-bit fgetc()
 int fputmmmm(int i,FILE *f) { fputc(i>>24,f); fputc(i>>16,f); fputc(i>>8,f); return fputc(i,f); } // common big-endian 32-bit fputc()
 
-#ifdef DEBUG
+#ifdef CONSOLE_DEBUGGER
 #define BOOTSTRAP
 #else
 #ifndef __argc

@@ -7,7 +7,7 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "CPCEC"
-#define MY_VERSION "20200616"//"1155"
+#define MY_VERSION "20200622"//"0955"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -262,7 +262,7 @@ int audio_table[17]={0,85,121,171,241,341,483,683,965,1365,1931,2731,3862,5461,7
 // HARDWARE DEFINITIONS ============================================= //
 
 BYTE mem_ram[9<<16],mem_rom[33<<14]; // RAM (BASE 64K BANK + 8x 64K BANKS) and ROM (512K ASIC PLUS CARTRIDGE + 16K BDOS)
-BYTE *mem_xtr; // external 257x 16K EXTENDED ROMS
+BYTE *mem_xtr=NULL; // external 257x 16K EXTENDED ROMS
 #define plus_enabled (type_id>2) // the PLUS ASIC hardware MUST BE tied to the model!
 #define bdos_rom (&mem_rom[32<<14])
 BYTE *mmu_ram[4],*mmu_rom[4]; // memory is divided in 14 6k R+W areas
@@ -396,7 +396,7 @@ INLINE void crtc_table_send(BYTE i)
 			crtc_r6x_update();
 			break;
 		case 9:
-			if (crtc_type&5||crtc_count_r9==i||crtc_table[4]==crtc_table[7]+1||crtc_table[4]>crtc_table[6])
+			if ((crtc_type&5&&(crtc_table[7]>crtc_limit_r4+1))||crtc_count_r9==i||crtc_table[4]==crtc_table[7]+1||crtc_table[4]>crtc_table[6]) // "PHX" (cylinders) and "PINBALL DREAMS" (BG GAMES logo) reset R4!
 			// kludges (?): "PINBALL DREAMS" (ingame) needs crtc_count_r9==i; "PINBALL DREAMS" (scroll) needs crtc_table[4]==crtc_table[7]+1; things such as !crtc_count_r3y break "OVERFLOW PREVIEW 3"!
 			// "ZAP'T'BALLS ADVANCED EDITION" (menu) needs crtc_table[4]>crtc_table[6]; REG4>REG6 ensures that both this title and "5KB3: NAYAD" work rather than just the former (>=) or the later (==)!
 				crtc_limit_r9=i;
@@ -690,7 +690,7 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 			{
 				video_pos_x+=16;
 				#define VIDEO_NEXT *video_target++ // "VIDEO_NEXT = VIDEO_NEXT = ..." generates invalid code on VS13 and slower code on TCC
-				switch (crtc_zz_decoding+crtc_lo_decoding)
+				switch ((BYTE)(crtc_zz_decoding+crtc_lo_decoding))
 				{
 					case 0: // MODE 0: 4:2px 4bit
 					{
@@ -704,15 +704,15 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 					case 1: // MODE 1: 2:2px 2bit
 					{
 						BYTE b; VIDEO_DATATYPE p;
-						p=video_clut[gate_mode1[0][b=mem_ram[crtc_zz_char+0]]]; VIDEO_NEXT=p;VIDEO_NEXT=p;
-						p=video_clut[gate_mode1[1][b]]; VIDEO_NEXT=p;VIDEO_NEXT=p;
-						p=video_clut[gate_mode1[2][b]]; VIDEO_NEXT=p;VIDEO_NEXT=p;
-						p=video_clut[gate_mode1[3][b]]; VIDEO_NEXT=p;VIDEO_NEXT=p;
+						p=video_clut[gate_mode1[0][b=mem_ram[crtc_zz_char+0]]]; VIDEO_NEXT=p; VIDEO_NEXT=p;
+						p=video_clut[gate_mode1[1][b]]; VIDEO_NEXT=p; VIDEO_NEXT=p;
+						p=video_clut[gate_mode1[2][b]]; VIDEO_NEXT=p; VIDEO_NEXT=p;
+						p=video_clut[gate_mode1[3][b]]; VIDEO_NEXT=p; VIDEO_NEXT=p;
 						video_clut[video_clut_index]=video_clut_value; // slow update
-						p=video_clut[gate_mode1[0][b=mem_ram[crtc_zz_char+1]]]; VIDEO_NEXT=p;VIDEO_NEXT=p;
-						p=video_clut[gate_mode1[1][b]]; VIDEO_NEXT=p;VIDEO_NEXT=p;
-						p=video_clut[gate_mode1[2][b]]; VIDEO_NEXT=p;VIDEO_NEXT=p;
-						p=video_clut[gate_mode1[3][b]]; VIDEO_NEXT=p;VIDEO_NEXT=p;
+						p=video_clut[gate_mode1[0][b=mem_ram[crtc_zz_char+1]]]; VIDEO_NEXT=p; VIDEO_NEXT=p;
+						p=video_clut[gate_mode1[1][b]]; VIDEO_NEXT=p; VIDEO_NEXT=p;
+						p=video_clut[gate_mode1[2][b]]; VIDEO_NEXT=p; VIDEO_NEXT=p;
+						p=video_clut[gate_mode1[3][b]]; VIDEO_NEXT=p; VIDEO_NEXT=p;
 					} break;
 					case 2: // MODE 2: 1:2px 1bit
 					{
@@ -738,11 +738,18 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 					case 3: // MODE 3: 4:2px 2bit
 					{
 						BYTE b; VIDEO_DATATYPE p;
-						p=video_clut[gate_mode1[0][b=mem_ram[crtc_zz_char+0]]]; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;VIDEO_NEXT=p;
-						p=video_clut[gate_mode1[1][b]]; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;VIDEO_NEXT=p;
+						p=video_clut[gate_mode1[0][b=mem_ram[crtc_zz_char+0]]]; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
+						p=video_clut[gate_mode1[1][b]]; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
 						video_clut[video_clut_index]=video_clut_value; // slow update
-						p=video_clut[gate_mode1[0][b=mem_ram[crtc_zz_char+1]]]; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;VIDEO_NEXT=p;
-						p=video_clut[gate_mode1[1][b]]; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;VIDEO_NEXT=p;
+						p=video_clut[gate_mode1[0][b=mem_ram[crtc_zz_char+1]]]; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
+						p=video_clut[gate_mode1[1][b]]; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
+					} break;
+					case 32 ... 255: // HSYNC + VSYNC
+					{
+						VIDEO_DATATYPE p=video_table[video_type][20]; // BLACK!
+						VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
+						VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
+						video_clut[video_clut_index]=video_clut_value; // slow update
 					} break;
 					default: // BORDER
 					{
@@ -828,7 +835,7 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 			crtc_prior_r2=crtc_table[2]; // average REG2!
 			if (crtc_status&CRTC_STATUS_VSYNC)
 				if ((crtc_count_r3y=(crtc_count_r3y+1)&15)==crtc_limit_r3y)
-					crtc_status&=~CRTC_STATUS_VSYNC; // VSYNC OFF
+					crtc_status&=~CRTC_STATUS_VSYNC,crtc_hi_decoding&=~128; // VSYNC OFF
 
 			if (crtc_count_r9==crtc_limit_r9) // new line?
 			{
@@ -862,7 +869,7 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 				if (crtc_count_r4==crtc_table[6])
 					crtc_hi_decoding|=4; // VDISP OFF
 				if (crtc_count_r4==crtc_table[7])
-					crtc_count_r3y=0,crtc_status|=CRTC_STATUS_VSYNC; // VSYNC ON!
+					crtc_count_r3y=0,crtc_status|=CRTC_STATUS_VSYNC,crtc_hi_decoding|=128; // VSYNC ON!
 			}
 			crtc_r4x_update();
 			crtc_count_r0=0;
@@ -952,11 +959,11 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 				crtc_status&=~CRTC_STATUS_HSYNC; // HSYNC OFF
 				// when HSYNC ends at the same time VSYNC begins ("ONESCREEN COLONIES" but not "IMPERIAL MAHJONG" or "SCROLL FACTORY")
 				// IRQs must be reset one scanline later than usual (i.e. reset happens after inc), but not on PLUS! ("BLACK SABBATH")
-				if (crtc_status&CRTC_STATUS_VSYNC&&crtc_count_r3y==!(plus_enabled||crtc_count_r0))
-					irq_delay=1,irq_timer-=crtc_count_r3y;
+				if (crtc_status&CRTC_STATUS_VSYNC&&crtc_limit_r4&&crtc_count_r3y==!(plus_enabled||crtc_count_r0)) // does it depend on VSYNC and nothing else?
+					irq_delay=1,irq_timer-=crtc_count_r3y; // '&&crtc_limit_r4' seems implied by CHAPELLE SIXTEEN, but it isn't enough :-(
 				if (++irq_timer>=52||(irq_delay&&++irq_delay>2))
 				{
-					if (irq_timer&32&&!plus_pri)
+					if (irq_timer&32&&!plus_pri) // irq_timer&32 is required by ONESCREEN COLONIES: part 1 must show "LEVEL-1" in red, not white!
 						gate_count_r3x=plus_enabled&&!(video_pos_x&8)?2:1; // PLUS ASIC: DEFAULT TIMER INTERRUPT
 					irq_delay=irq_timer=0;
 				}
@@ -1755,8 +1762,8 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 							z80_tape_fastload();
 					// VSYNC (0x01; CRTC2 MISSES IT DURING HORIZONTAL OVERFLOW!) + AMSTRAD MODEL (0x1E) + PRINTER IS OFFLINE (0x40) + TAPE SIGNAL (0x80)
 					b&=(crtc_status&CRTC_STATUS_VSYNC?
-						crtc_type!=2||crtc_table[2]+crtc_limit_r3x<crtc_table[0]||crtc_table[2]+crtc_limit_r3x>crtc_table[0]+1:
-						crtc_table[8]==3&&irq_timer<3&&video_pos_y>=VIDEO_LENGTH_Y*5/12&&video_pos_y<VIDEO_LENGTH_Y*7/12) // interlaced CRTC VSYNC!
+						/*video_pos_y<128&&*/(crtc_type!=2||crtc_table[2]+crtc_limit_r3x<crtc_table[0]||crtc_table[2]+crtc_limit_r3x>crtc_table[0]+1):
+						(crtc_table[8]==3&&irq_timer<3&&video_pos_y>=VIDEO_LENGTH_Y*5/12&&video_pos_y<VIDEO_LENGTH_Y*7/12)) // interlaced CRTC VSYNC!
 						+((tape_delay|tape_status)?0xDE:0x5E);
 				}
 				else
@@ -1871,7 +1878,7 @@ void z80_trap(WORD p,BYTE b)
 	}
 }
 
-#ifdef DEBUG
+#ifdef CONSOLE_DEBUGGER
 void z80_info(void) // prints a short hardware dump from the debugger
 {
 	char c,s[STRMAX],*t;
@@ -2179,7 +2186,7 @@ char bios_path[STRMAX]="";
 
 int bios_load(char *s) // load a cartridge file or a firmware ROM file. 0 OK, !0 ERROR
 {
-	if (globbing("*.ini",s,1)) // profile?
+	if (globbing("*.ini",s,1)&&(mem_xtr||(mem_xtr=malloc(257<<14)))) // profile?
 	{
 		char t[STRMAX],*tt,u[STRMAX],*uu;
 		strcpy(u,s); if (uu=strrchr(u,PATHCHAR)) ++uu; else uu=u; // make ROM files relative to INI path
@@ -3334,7 +3341,7 @@ int main(int argc,char *argv[])
 			),1;
 	if (bios_reload()||bdos_path_load("cpcados.rom"))
 		return printferror(txt_error_bios),1;
-	char *s="not enough memory"; if (!(mem_xtr=malloc(257<<14))||(s=session_create(session_menudata)))
+	char *s="not enough memory"; if (s=session_create(session_menudata))
 		return sprintf(session_scratch,"Cannot create session: %s!",s),printferror(session_scratch),1;
 	session_kbdreset();
 	session_kbdsetup(kbd_map_xlt,length(kbd_map_xlt)/2);
@@ -3345,7 +3352,7 @@ int main(int argc,char *argv[])
 	// it begins, "alea jacta est!"
 	while (!session_listen())
 	{
-		#ifdef DEBUG
+		#ifdef CONSOLE_DEBUGGER
 		while (!(session_signal&~SESSION_SIGNAL_DEBUG))
 		#else
 		while (!session_signal)
@@ -3420,6 +3427,7 @@ int main(int argc,char *argv[])
 	tape_close();
 	disc_close(0); disc_close(1);
 	psg_closelog();
+	if (mem_xtr) free(mem_xtr);
 	session_closewave();
 	if (f=fopen(session_configfile(),"w"))
 	{

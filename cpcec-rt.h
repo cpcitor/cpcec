@@ -278,13 +278,6 @@ INLINE void video_endscanlines(VIDEO_DATATYPE z) // call between frames
 				for (int x=0;x<VIDEO_PIXELS_X;++x)
 					*p++=zz; // render secondary scanlines only
 		}
-	/*if (!video_interlaces||!(video_scanline&2)) // vertical cross-hatching (!?)
-	{
-		VIDEO_DATATYPE *p=video_frame+VIDEO_OFFSET_X+(VIDEO_OFFSET_Y+1)*VIDEO_LENGTH_X;
-		for (int y=0;y<VIDEO_PIXELS_Y;++y,p+=VIDEO_LENGTH_X-VIDEO_PIXELS_X)
-			for (int x=0;x<VIDEO_PIXELS_X;x+=2)
-				*p=p[+VIDEO_LENGTH_X],++p,++p;
-	}*/
 }
 
 INLINE void audio_playframe(int q,AUDIO_DATATYPE *ao) // call between frames by the OS wrapper
@@ -297,17 +290,17 @@ INLINE void audio_playframe(int q,AUDIO_DATATYPE *ao) // call between frames by 
 		case 1:
 			for (int i=0;i<AUDIO_LENGTH_Z;++i)
 				aa=*ai++,*ao++=a0=(aa+a0+(aa>a0))/2,
-				aa=*ai++,*ao++=a1=(aa+a1+(aa>a1))/2; // hard filter
+				aa=*ai++,*ao++=a1=(aa+a1+(aa>a1))/2;
 			break;
 		case 2:
 			for (int i=0;i<AUDIO_LENGTH_Z;++i)
 				aa=*ai++,*ao++=a0=(aa+a0*3+(aa>a0)*3)/4,
-				aa=*ai++,*ao++=a1=(aa+a1*3+(aa>a1)*3)/4; // hard filter
+				aa=*ai++,*ao++=a1=(aa+a1*3+(aa>a1)*3)/4;
 			break;
 		case 3:
 			for (int i=0;i<AUDIO_LENGTH_Z;++i)
 				aa=*ai++,*ao++=a0=(aa+a0*7+(aa>a0)*7)/8,
-				aa=*ai++,*ao++=a1=(aa+a1*7+(aa>a1)*7)/8; // hard filter
+				aa=*ai++,*ao++=a1=(aa+a1*7+(aa>a1)*7)/8;
 			break;
 	}
 	#else
@@ -316,18 +309,15 @@ INLINE void audio_playframe(int q,AUDIO_DATATYPE *ao) // call between frames by 
 	{
 		case 1:
 			for (int i=0;i<AUDIO_LENGTH_Z;++i)
-				aa=*ai++,*ao++=az=(aa+az+(aa>az))/2; // hard filter
-				//aa=*ai++,*ao++=(aa+az+(aa>az))/2,az=aa; // soft filter
+				aa=*ai++,*ao++=az=(aa+az+(aa>az))/2;
 			break;
 		case 2:
 			for (int i=0;i<AUDIO_LENGTH_Z;++i)
-				aa=*ai++,*ao++=az=(aa+az*3+(aa>az)*3)/4; // hard filter
-				//aa=*ai++,*ao++=(aa+az*3+(aa>az)*2)/4,az=aa; // soft filter
+				aa=*ai++,*ao++=az=(aa+az*3+(aa>az)*3)/4;
 			break;
 		case 3:
 			for (int i=0;i<AUDIO_LENGTH_Z;++i)
-				aa=*ai++,*ao++=az=(aa+az*7+(aa>az)*7)/8; // hard filter
-				//aa=*ai++,*ao++=(aa+az*7+(aa>az)*4)/8,az=aa; // soft filter
+				aa=*ai++,*ao++=az=(aa+az*7+(aa>az)*7)/8;
 			break;
 	}
 	#endif
@@ -877,7 +867,7 @@ void onscreen_bool(int x,int y,int lx,int ly,int q) // draw dots
 	}
 }
 
-#ifdef DEBUG
+#ifdef CONSOLE_DEBUGGER
 #else
 
 char *debug_output,debug_search[STRMAX]=""; // output offset, string buffer, search buffer
@@ -950,7 +940,7 @@ void onscreen_debug(void) // rewrite debug texts
 			if (z&128)
 				q1=qq1,q0=qq0;
 			else
-				q1=qq0,q0=qq1;
+				q0=qq1,q1=qq0;
 			z=(y*DEBUG_LENGTH_X*DEBUG_LENGTH_Z+x)*8;
 			int yy=(8-DEBUG_LENGTH_Z-1)/2;
 			for (;yy<0;++yy)

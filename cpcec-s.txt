@@ -217,12 +217,13 @@ simula varios tipos de monitor) se refleja en las grabaciones igual que en la
 pantalla, y que cada modo tiene un impacto distinto en el rendimiento del
 programa: el modo normal consume más esfuerzo, y el entrelazado doble, menos.
 
-Los ficheros INI pueden definir un conjunto de ROMs extras para cargar por
-encima del firmware actual. Internamente son simples ficheros de texto donde
-cada línea es o bien LOWEST=nombrefichero (que define el contenido de ROM LOW) o
-HIGHxx=nombrefichero (que define el contenido de la enésima ranura de ROM HIGH,
-donde "n" es el valor hexadecimal de "xx"): por ejemplo HIGH07=PARADOS.ROM
-significa que la ranura 7 de HIGH ROM está ocupada por el fichero PARADOS.ROM.
+Los ficheros INI pueden definir un "perfil", un conjunto de ROMs extras para
+cargar por encima del firmware actual. Internamente son simples ficheros de
+texto donde cada línea es o bien LOWEST=nombrefichero (que define el contenido
+de ROM LOW) o HIGHxx=nombrefichero (que define el contenido de la enésima ranura
+de ROM HIGH, donde "n" es el valor hexadecimal de "xx"): por ejemplo
+HIGH07=PARADOS.ROM significa que la ranura 7 de HIGH ROM está ocupada por el
+fichero PARADOS.ROM.
 
 Los indicadores en pantalla muestran el estado de las unidades de disco (número
 de pista, actividad), la cinta (actividad) y el joystick.
@@ -715,3 +716,8 @@ separación de canales entre 0% (mono), 50% (envolvente) y 100% (estéreo).
 parche para acelerar las esperas iniciales (provocaba problemas). Varios cambios
 en SDL2 (menos "warnings", caché de unidades de disco en Win32) y en el debugger
 de Z80 (más contenido: 256 bytes en el volcado de memoria y 32 en la pila).
+- 20200622 -- parche menor que reduce el consumo de memoria (el espacio de ROMs
+extras se reserva solamente si el usuario carga un "perfil"), dibuja las señales
+SYNC en negro en lugar del color del borde y corrige la parte de los cilindros
+3D de "PhX" en CRTC1; los "gusanos de bolas" y el scroller final siguen mal en
+CRTC3 y CRTC4, sin embargo.

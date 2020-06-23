@@ -7,7 +7,7 @@
  // """"""  "    "   """"   """"""   """"    ----------------------- //
 
 #define MY_CAPTION "ZXSEC"
-#define MY_VERSION "20200616"//"1155"
+#define MY_VERSION "20200622"//"0955"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -826,7 +826,7 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 	return b;
 }
 
-#ifdef DEBUG
+#ifdef CONSOLE_DEBUGGER
 #define z80_info(q) printf("\n%ULAs: 48k $%02X / 128k $%02X / PLUS3 $%02X\n",ula_v1,ula_v2,ula_v3) // prints a short hardware dump from the debugger
 #else
 int z80_debug_hard_tab(char *t)
@@ -1930,7 +1930,7 @@ int main(int argc,char *argv[])
 	// it begins, "alea jacta est!"
 	while (!session_listen())
 	{
-		#ifdef DEBUG
+		#ifdef CONSOLE_DEBUGGER
 		while (!(session_signal&~SESSION_SIGNAL_DEBUG))
 		#else
 		while (!session_signal)

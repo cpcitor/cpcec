@@ -33,7 +33,7 @@ BYTE z80_flags_and[256],z80_flags_xor[256],z80_flags_bit[256]; // AND,XOR,OR,BIT
 
 WORD z80_break_stack=0xFFFF;
 BYTE z80_debug_peekpoke=0;
-#ifdef DEBUG
+#ifdef CONSOLE_DEBUGGER
 #define z80_debug_reset()
 #define z80_debug_close()
 #else
@@ -62,7 +62,7 @@ void z80_debug_close(void)
 }
 #endif
 
-#ifdef DEBUG
+#ifdef CONSOLE_DEBUGGER
 #else
 void z80_reset_breakpoints(void)
 {
@@ -72,7 +72,7 @@ void z80_reset_breakpoints(void)
 
 void z80_setup(void) // setup the Z80
 {
-	#ifdef DEBUG
+	#ifdef CONSOLE_DEBUGGER
 	#else
 		z80_reset_breakpoints();
 	#endif
@@ -1658,7 +1658,7 @@ WORD z80_dasm(char *r,WORD m) // disassembles instruction at address `m` into st
 
 #define PEEKW(x) (PEEK((WORD)(x))+(PEEK((WORD)(x+1))<<8))
 #define POKEW(x,w) (POKE((WORD)(x))=(w),POKE((WORD)(x+1))=(w)>>8)
-#ifdef DEBUG
+#ifdef CONSOLE_DEBUGGER
 char *z80_debug_scan(WORD *w,char *s)
 {
 	while (*s==' ')
@@ -1739,7 +1739,7 @@ WORD z80_debug_dump(char *t,WORD m)
 
 INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 {
-	#ifdef DEBUG
+	#ifdef CONSOLE_DEBUGGER
 	static WORD breakpoint=0xFFFF;
 	#endif
 	int z80_t=0; // clock tick counter
@@ -1747,7 +1747,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 	Z80_AUXILIARY;
 	do
 	{
-		#ifdef DEBUG
+		#ifdef CONSOLE_DEBUGGER
 		if (session_signal&SESSION_SIGNAL_DEBUG)
 		{
 			if (feof(stdin))
@@ -3767,7 +3767,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					break;
 			}
 		}
-		#ifdef DEBUG
+		#ifdef CONSOLE_DEBUGGER
 		if ((z80_pc.w==breakpoint)&&(breakpoint!=0xFFFF))
 			session_signal|=SESSION_SIGNAL_DEBUG,breakpoint=0xFFFF;
 		#else
@@ -3815,7 +3815,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 	z80_sync(z80_t); // flush accumulated T!
 }
 
-#ifdef DEBUG
+#ifdef CONSOLE_DEBUGGER
 	#define z80_debug_configread(i) (z80_debug_peekpoke=(i)) // store config
 	#define z80_debug_configwrite() (z80_debug_peekpoke) // restore config
 #else
@@ -3839,7 +3839,7 @@ void z80_debug_show(void) // redraw debug screen
 	z80_break_stack=0xFFFF; z80_breakpoints[z80_debug_volatile]&=~128; // reset volatile breakpoints
 	// DISASSEMBLY
 	m=z80_debug_pnl0_w;
-	for (y=0;y<16;++y)
+	for (y=0;y<length(z80_debug_cache);++y)
 	{
 		z80_debug_cache[y]=m;
 		debug_locate(0,y);
@@ -3885,8 +3885,8 @@ void z80_debug_show(void) // redraw debug screen
 		*debug_output^=128;
 	}
 	// MEMORY DUMP
-	m=(z80_debug_pnl2_w-((DEBUG_LENGTH_Y-16)/2)*16)&~15;
-	for (y=16;y<DEBUG_LENGTH_Y;++y)
+	m=(z80_debug_pnl2_w-((DEBUG_LENGTH_Y-length(z80_debug_cache))/2)*16)&~15;
+	for (y=length(z80_debug_cache);y<DEBUG_LENGTH_Y;++y)
 	{
 		debug_locate(0,y);
 		debug_printi("%04X:",m);
@@ -3904,7 +3904,7 @@ void z80_debug_show(void) // redraw debug screen
 	}
 	// STACK
 	m=z80_debug_pnl3_w;//z80_sp.w;
-	for (y=16;y<DEBUG_LENGTH_Y;++y)
+	for (y=length(z80_debug_cache);y<DEBUG_LENGTH_Y;++y)
 	{
 		debug_locate(-9,y);
 		debug_printi("%04X",m);
@@ -3918,11 +3918,8 @@ void z80_debug_show(void) // redraw debug screen
 		debug_locate(z80_debug_pnl3_x-4,17);
 		*debug_output^=128;
 	}
-	//for (y=0;y<DEBUG_LENGTH_X;++y) debug_locate(y,16),*debug_output=160;//'-';
-	//for (y=0;y<DEBUG_LENGTH_Y;++y) debug_locate(-10,y),*debug_output=160;//'|';
-	//debug_locate(-10,16),*debug_output='+';
 	z80_debug_hard(z80_debug_page,-9-1-20,0);
-	debug_locate(-9-1-20,16-1); debug_printi("(%03X,",video_pos_x&0xFFF); debug_printi("%03X) -- H: help",video_pos_y&0xFFF);
+	debug_locate(-9-1-20,length(z80_debug_cache)-1); debug_printi("(%03X,",video_pos_x&0xFFF); debug_printi("%03X) -- H: help",video_pos_y&0xFFF);
 	onscreen_debug();
 }
 
@@ -4192,8 +4189,8 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 					case 10: i=1; break;
 					case 28: z80_debug_pnl0_w=0,z80_debug_pnl0_x=0; break;
 					case 29: z80_debug_pnl0_w=z80_pc.w,z80_debug_pnl0_x=0; break;
-					case 31: i=1-16; break;
-					case 30: i=16-1; break;
+					case 31: i=1-length(z80_debug_cache); break;
+					case 30: i=length(z80_debug_cache)-1; break;
 					case 'G': if ((i=z80_debug_goto(z80_debug_pnl0_w))>=0)
 							z80_debug_pnl0_x=0,z80_debug_pnl0_w=i;
 						break;
@@ -4313,8 +4310,8 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 					case 11: z80_debug_pnl2_w-=16; break;
 					case 28: z80_debug_pnl2_x=0,z80_debug_pnl2_w=0; break;
 					case 29: z80_debug_pnl2_x=0,z80_debug_pnl2_w=z80_pc.w; break;
-					case 31: z80_debug_pnl2_w-=(DEBUG_LENGTH_Y-16)*16; break;
-					case 30: z80_debug_pnl2_w+=(DEBUG_LENGTH_Y-16)*16; break;
+					case 31: z80_debug_pnl2_w-=(DEBUG_LENGTH_Y-length(z80_debug_cache))*16; break;
+					case 30: z80_debug_pnl2_w+=(DEBUG_LENGTH_Y-length(z80_debug_cache))*16; break;
 					case 'G': if ((i=z80_debug_goto(z80_debug_pnl2_w))>=0) z80_debug_pnl2_x=0,z80_debug_pnl2_w=i; break;
 					default: k=0; break;
 				}
@@ -4341,8 +4338,8 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 					case 11: z80_debug_pnl3_w-=2; break;
 					case 28: z80_debug_pnl3_x=0,z80_debug_pnl3_w=0; break;
 					case 29: z80_debug_pnl3_x=0,z80_debug_pnl3_w=z80_sp.w; break;
-					case 31: z80_debug_pnl3_w-=2*(DEBUG_LENGTH_Y-16); break;
-					case 30: z80_debug_pnl3_w+=2*(DEBUG_LENGTH_Y-16); break;
+					case 31: z80_debug_pnl3_w-=2*(DEBUG_LENGTH_Y-length(z80_debug_cache)); break;
+					case 30: z80_debug_pnl3_w+=2*(DEBUG_LENGTH_Y-length(z80_debug_cache)); break;
 					case 'G': if ((i=z80_debug_goto(z80_debug_pnl3_w))>=0) z80_debug_pnl3_x=0,z80_debug_pnl3_w=i; break;
 					default: k=0; break;
 				}

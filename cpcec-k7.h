@@ -391,7 +391,7 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 								case 0x31: // *MESSAGE BLOCK
 									tape_fgetc(); // no `break`!
 								case 0x30: // *TEXT DESCRIPTION
-									#ifdef DEBUG
+									#ifdef CONSOLE_DEBUGGER
 									{
 										i=tape_fgetc();
 										int j;

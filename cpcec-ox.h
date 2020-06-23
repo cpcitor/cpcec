@@ -45,7 +45,7 @@
 #define WORD Uint16
 #define DWORD Uint32
 
-#ifdef DEBUG
+#ifdef CONSOLE_DEBUGGER
 #define logprintf(...) (fprintf(stdout,__VA_ARGS__))
 #else
 #define logprintf(...)
@@ -97,7 +97,7 @@ BYTE session_intzoom=0; int session_joybits=0;
 
 FILE *session_wavefile=NULL; // audio recording is done on each session update
 
-#ifndef DEBUG
+#ifndef CONSOLE_DEBUGGER
 	VIDEO_DATATYPE *debug_frame;
 	BYTE debug_buffer[DEBUG_LENGTH_X*DEBUG_LENGTH_Y]; // [0] can be a valid character, 128 (new redraw required) or 0 (redraw not required)
 	SDL_Surface *session_dbg_dib=NULL;
@@ -238,7 +238,7 @@ unsigned char kbd_map[256]; // key-to-key translation map
 // general engine functions and procedures -------------------------- //
 
 int session_user(int k); // handle the user's commands; 0 OK, !0 ERROR. Must be defined later on!
-#ifndef DEBUG
+#ifndef CONSOLE_DEBUGGER
 	void session_debug_show(void);
 	int session_debug_user(int k); // debug logic is a bit different: 0 UNKNOWN COMMAND, !0 OK
 #endif
@@ -337,7 +337,7 @@ void session_redraw(BYTE q)
 			SDL_BlitScaled(session_dib,&src,SDL_GetWindowSurface(session_hwnd),&session_ideal);
 		else
 			SDL_BlitSurface(session_dib,&src,SDL_GetWindowSurface(session_hwnd),&session_ideal);
-		#ifndef DEBUG
+		#ifndef CONSOLE_DEBUGGER
 		if (session_signal&SESSION_SIGNAL_DEBUG)
 			session_centre(session_dbg_dib,0);
 		#endif
@@ -1035,7 +1035,7 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	SDL_SetSurfaceBlendMode(session_dib,SDL_BLENDMODE_NONE);
 	video_frame=session_dib->pixels;
 
-	#ifndef DEBUG
+	#ifndef CONSOLE_DEBUGGER
 		session_dbg_dib=SDL_CreateRGBSurface(0,DEBUG_LENGTH_X*8,DEBUG_LENGTH_Y*DEBUG_LENGTH_Z,32,0xFF0000,0x00FF00,0x0000FF,0);
 		SDL_SetSurfaceBlendMode(session_dbg_dib,SDL_BLENDMODE_NONE);
 		debug_frame=session_dbg_dib->pixels;
@@ -1121,13 +1121,13 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 		config_signal=session_signal,session_dirtymenu=1;
 	if (session_dirtymenu)
 		session_dirtymenu=0,session_menuinfo();
-	#ifndef DEBUG
+	#ifndef CONSOLE_DEBUGGER
 	if (session_signal)
 	#else
 	if (session_signal&~SESSION_SIGNAL_DEBUG)
 	#endif
 	{
-		#ifndef DEBUG
+		#ifndef CONSOLE_DEBUGGER
 		if (session_signal&SESSION_SIGNAL_DEBUG)
 		{
 			if (*debug_buffer==128)
@@ -1158,7 +1158,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 				SDL_UpdateWindowSurface(session_hwnd);//session_redraw(1);//
 				break;
 			#endif
-			#ifndef DEBUG
+			#ifndef CONSOLE_DEBUGGER
 			case SDL_TEXTINPUT:
 				if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant for the debugger, see below
 					if ((session_event=event.text.text[0])&128)
@@ -1178,7 +1178,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 						session_event=0x8080; // show menu
 						break;
 					}
-					#ifndef DEBUG
+					#ifndef CONSOLE_DEBUGGER
 					if (session_signal&SESSION_SIGNAL_DEBUG)
 						switch (event.key.keysym.sym)
 						{
@@ -1201,7 +1201,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 					int k=session_key_n_joy(event.key.keysym.scancode);
 					if (k<128)
 					{
-						#ifndef DEBUG
+						#ifndef CONSOLE_DEBUGGER
 						if (!(session_signal&SESSION_SIGNAL_DEBUG))
 						#endif
 							kbd_bit_set(k);
@@ -1248,7 +1248,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 			q=1;
 		else if (session_event)
 		{
-			#ifndef DEBUG
+			#ifndef CONSOLE_DEBUGGER
 			if (!((session_signal&SESSION_SIGNAL_DEBUG)&&session_debug_user(session_event)))
 			#endif
 				q|=session_user(session_event);

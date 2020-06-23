@@ -205,12 +205,12 @@ of screen) mirrors itself on the recordings as well as on the screen, and that
 each mode has a different impact on the programme performance: the normal mode
 consumes the most processing power, and the double interlace, the least.
 
-INI files can be used to define a set of extra ROMs to load on top of the
-current firmware. Internally they're simple text files where each line is either
-LOWEST=filename (that sets the LOW ROM content) or HIGHxx=filename (that sets
-the n-th HIGH ROM slot content, where "n" is the hexadecimal value of "xx"): for
-example HIGH07=PARADOS.ROM means that slot 7 of HIGH ROM is occupied by the file
-PARADOS.ROM.
+INI files can be used to define a "profile", a set of extra ROMs to load on top
+of the current firmware. Internally they're simple text files where each line is
+either LOWEST=filename (that sets the LOW ROM content) or HIGHxx=filename (that
+sets the n-th HIGH ROM slot content, where "n" is the hexadecimal value of
+"xx"): for example HIGH07=PARADOS.ROM means that slot 7 of HIGH ROM is occupied
+by the file PARADOS.ROM.
 
 The onscreen indicators show the state of the disc drives (track number, busy or
 idle), the tape deck (busy or idle) and the joystick.
@@ -679,3 +679,7 @@ separation to 0% (mono), 50% (surround) or 100% (stereo).
 that shortened the initial delays (it caused problems). Several changes in SDL2
 (fewer warnings, disc drive cache in Win32) and in the Z80 debugger (more
 content: 256 bytes of memory dump and 32 bytes of stack).
+- 20200622 -- minor patch reducing memory footprint (extra ROM memory is only
+allocated if the user loads a "profile"), rendering SYNC signals as black rather
+than as the current border, and fixing the 3D cylinders part of "PhX" on CRTC1;
+the "ball worms" and the final scroller stay bad on CRTC3 and CRTC4, though.
