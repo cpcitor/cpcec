@@ -9,7 +9,7 @@
 // SDL2 is the second supported platform; compiling the emulator needs
 // "$(CC) -DSDL_MAIN_HANDLED -xc cpcec.c -lSDL2" for GCC, TCC et al.
 // Support for Unix-like systems is provided by providing different
-// snippets of code upon whether the symbol "__WIN32__" exists or not.
+// snippets of code upon whether the symbol "_WIN32" exists or not.
 
 // START OF SDL 2.0+ DEFINITIONS ==================================== //
 
@@ -22,7 +22,7 @@
 #endif
 
 #define strcasecmp SDL_strcasecmp
-#ifdef __WIN32__
+#ifdef _WIN32
 	#define STRMAX 256 // widespread in Windows
 	#define PATHCHAR '\\' // WIN32
 	#include <windows.h> // FindFirstFile...
@@ -38,25 +38,24 @@
 	#include <dirent.h> // opendir()...
 	#include <sys/stat.h> // stat()...
 	#include <unistd.h> // ftruncate(),fileno()...
-	#define fsetsize(f,l) ftruncate(fileno(f),(l))
+	#define fsetsize(f,l) (!ftruncate(fileno(f),(l)))
+	#define BYTE Uint8
+	#define WORD Uint16
+	#define DWORD Uint32
 #endif
-
-#define BYTE Uint8
-#define WORD Uint16
-#define DWORD Uint32
 
 #ifdef CONSOLE_DEBUGGER
 #define logprintf(...) (fprintf(stdout,__VA_ARGS__))
 #else
-#define logprintf(...)
+#define logprintf(...) 0
 #endif
 
 #define MESSAGEBOX_WIDETAB "\t\t"
 
 // general engine constants and variables --------------------------- //
 
-#define VIDEO_DATATYPE Uint32
-#define VIDEO1(x) (x)
+#define VIDEO_UNIT DWORD // 0x00RRGGBB style
+#define VIDEO1(x) (x) // no conversion required!
 
 #define VIDEO_FILTER_AVG(x,y) (((((x&0xFF00FF)*3+(y&0xFF00FF)+(x<y?0x30003:0))&0x3FC03FC)+(((x&0xFF00)*3+(y&0xFF00)+(x<y?0x300:0))&0x3FC00))>>2) // faster
 #define VIDEO_FILTER_STEP(r,x,y) r=VIDEO_FILTER_AVG(x,y),x=r // hard interpolation
@@ -66,22 +65,22 @@
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0x3F3F3F)*3+0x161616) // lighter
 
 #if 0 // 8 bits
-	#define AUDIO_DATATYPE unsigned char
+	#define AUDIO_UNIT unsigned char
 	#define AUDIO_BITDEPTH 8
 	#define AUDIO_ZERO 128
 	#define AUDIO1(x) (x)
 #else // 16 bits
-	#define AUDIO_DATATYPE signed short
+	#define AUDIO_UNIT signed short
 	#define AUDIO_BITDEPTH 16
 	#define AUDIO_ZERO 0
 	#define AUDIO1(x) (x)
 #endif // bitsize
 #define AUDIO_STEREO 1
 
-VIDEO_DATATYPE *video_frame; // video frame, allocated on runtime
-AUDIO_DATATYPE *audio_frame,audio_buffer[AUDIO_LENGTH_Z*(AUDIO_STEREO+1)]; // audio frame
-VIDEO_DATATYPE *video_target; // pointer to current video pixel
-AUDIO_DATATYPE *audio_target; // pointer to current audio sample
+VIDEO_UNIT *video_frame; // video frame, allocated on runtime
+AUDIO_UNIT *audio_frame,audio_buffer[AUDIO_LENGTH_Z*(AUDIO_STEREO+1)]; // audio frame
+VIDEO_UNIT *video_target; // pointer to current video pixel
+AUDIO_UNIT *audio_target; // pointer to current audio sample
 int video_pos_x,video_pos_y,audio_pos_z; // counters to keep pointers within range
 BYTE video_interlaced=0,video_interlaces=0,video_interlacez=0; // video scanline status
 char video_framelimit=0,video_framecount=0; // video frameskip counters; must be signed!
@@ -93,14 +92,14 @@ BYTE session_fast=0,session_wait=0,session_audio=1,session_blit=0; // timing and
 BYTE session_stick=1,session_shift=0,session_key2joy=0; // keyboard and joystick
 BYTE video_scanline=0,video_scanlinez=-1; // 0 = solid, 1 = scanlines, 2 = full interlace, 3 = half interlace
 BYTE video_filter=0,audio_filter=0; // interpolation flags
-BYTE session_intzoom=0; int session_joybits=0;
+BYTE session_intzoom=0,session_recording=0; int session_joybits=0;
 
 FILE *session_wavefile=NULL; // audio recording is done on each session update
 
 #ifndef CONSOLE_DEBUGGER
-	VIDEO_DATATYPE *debug_frame;
+	VIDEO_UNIT *debug_frame;
 	BYTE debug_buffer[DEBUG_LENGTH_X*DEBUG_LENGTH_Y]; // [0] can be a valid character, 128 (new redraw required) or 0 (redraw not required)
-	SDL_Surface *session_dbg_dib=NULL;
+	SDL_Surface *session_dbg_dib;
 #endif
 
 BYTE session_paused=0,session_signal=0;
@@ -241,8 +240,9 @@ int session_user(int k); // handle the user's commands; 0 OK, !0 ERROR. Must be 
 #ifndef CONSOLE_DEBUGGER
 	void session_debug_show(void);
 	int session_debug_user(int k); // debug logic is a bit different: 0 UNKNOWN COMMAND, !0 OK
+	int debug_xlat(int k); // translate debug keys into codes. Must be defined later on!
 #endif
-INLINE void audio_playframe(int q,AUDIO_DATATYPE *ao); // handle the sound filtering; is defined in CPCEC-RT.H!
+INLINE void audio_playframe(int q,AUDIO_UNIT *ao); // handle the sound filtering; is defined in CPCEC-RT.H!
 
 void session_please(void) // stop activity for a short while
 {
@@ -314,14 +314,10 @@ void session_centre(SDL_Surface *s,int q) // draw surface in centre with an opti
 	session_border(s,(t->w-s->w)/16,(t->h-s->h)/(2*SESSION_UI_HEIGHT),q);
 }
 
-void session_redraw(BYTE q)
+void session_blitit(SDL_Surface *s,int ox,int oy)
 {
-	SDL_Rect src;
-	src.x=VIDEO_OFFSET_X; src.w=VIDEO_PIXELS_X;
-	src.y=VIDEO_OFFSET_Y; src.h=VIDEO_PIXELS_Y;
-	SDL_Surface *surface=SDL_GetWindowSurface(session_hwnd);
-	int xx=surface->w,yy=surface->h;
-	if (xx>0&&yy>0) // don't redraw invalid windows
+	SDL_Surface *surface=SDL_GetWindowSurface(session_hwnd); int xx,yy; // calculate window area
+	if ((xx=surface->w)>0&&(yy=surface->h)>0) // don't redraw invalid windows!
 	{
 		if (xx>yy*VIDEO_PIXELS_X/VIDEO_PIXELS_Y) // window area is too wide?
 			xx=yy*VIDEO_PIXELS_X/VIDEO_PIXELS_Y;
@@ -333,17 +329,32 @@ void session_redraw(BYTE q)
 			yy=(yy/(VIDEO_PIXELS_Y*62/64))*VIDEO_PIXELS_Y; // 61/64 allows 200% on windowed 1920x1080
 		}
 		session_ideal.x=(surface->w-(session_ideal.w=xx))/2; session_ideal.y=(surface->h-(session_ideal.h=yy))/2;
-		if (SDL_GetWindowFlags(session_hwnd)&SDL_WINDOW_FULLSCREEN_DESKTOP)
-			SDL_BlitScaled(session_dib,&src,SDL_GetWindowSurface(session_hwnd),&session_ideal);
-		else
-			SDL_BlitSurface(session_dib,&src,SDL_GetWindowSurface(session_hwnd),&session_ideal);
-		#ifndef CONSOLE_DEBUGGER
-		if (session_signal&SESSION_SIGNAL_DEBUG)
-			session_centre(session_dbg_dib,0);
-		#endif
-		if (q)
-			SDL_UpdateWindowSurface(session_hwnd);
+		{
+			SDL_Rect src;
+			src.x=ox; src.w=VIDEO_PIXELS_X;
+			src.y=oy; src.h=VIDEO_PIXELS_Y;
+			if (SDL_GetWindowFlags(session_hwnd)&SDL_WINDOW_FULLSCREEN_DESKTOP)
+				SDL_BlitScaled(s,&src,SDL_GetWindowSurface(session_hwnd),&session_ideal);
+			else
+				SDL_BlitSurface(s,&src,SDL_GetWindowSurface(session_hwnd),&session_ideal);
+		}
 	}
+}
+void session_redraw(BYTE q)
+{
+	#ifndef CONSOLE_DEBUGGER
+	if (session_signal&SESSION_SIGNAL_DEBUG)
+		session_blitit(session_dbg_dib,0,0);
+	else
+	#endif
+		session_blitit(session_dib,VIDEO_OFFSET_X,VIDEO_OFFSET_Y);
+	if (q)
+		SDL_UpdateWindowSurface(session_hwnd);
+}
+#define session_clrscr() SDL_FillRect(SDL_GetWindowSurface(session_hwnd),NULL,0)
+void session_togglefullscreen(void)
+{
+	SDL_SetWindowFullscreen(session_hwnd,SDL_GetWindowFlags(session_hwnd)&SDL_WINDOW_FULLSCREEN_DESKTOP?0*SDL_WINDOW_BORDERLESS:SDL_WINDOW_FULLSCREEN_DESKTOP);
 }
 
 void session_ui_init(void) { memset(kbd_bit,0,sizeof(kbd_bit)); session_please(); }
@@ -359,20 +370,18 @@ int session_ui_exchange(void) // update window and wait for a keystroke
 		SDL_WaitEvent(&event);
 		switch (event.type)
 		{
-			//case SDL_WINDOWEVENT_FOCUS_GAINED: // force full redraw
-			#ifndef __WIN32__ // seemingly unavailable on Windows ???
-			case SDL_WINDOWEVENT_EXPOSED:
-				SDL_FillRect(SDL_GetWindowSurface(session_hwnd),NULL,0); // wipe leftovers
-				session_redraw(1);//SDL_UpdateWindowSurface(session_hwnd);//
-				break;
-			#endif
+			/*case SDL_WINDOWEVENT_FOCUS_GAINED: // force full redraw
+			case SDL_WINDOWEVENT_EXPOSED: // seemingly unavailable on Windows ???
+				session_clrscr(); // wipe leftovers
+				SDL_UpdateWindowSurface(session_hwnd);//session_redraw(1);//
+				break;*/
 			case SDL_TEXTINPUT:
 				session_ui_char=event.text.text[0];
-				if (session_ui_char&128)
+				if (session_ui_char&128) // UTF-8?
 					session_ui_char=128+(session_ui_char&1)*64+(event.text.text[1]&63);
 				return 0;
 			case SDL_KEYDOWN:
-				return event.key.keysym.scancode;
+				return event.key.keysym.mod&KMOD_ALT?0:event.key.keysym.scancode;
 			case SDL_QUIT:
 				return KBCODE_ESCAPE;
 		}
@@ -380,32 +389,32 @@ int session_ui_exchange(void) // update window and wait for a keystroke
 }
 void session_ui_printglyph(SDL_Surface *t,char z,int x,int y) // print one glyph
 {
-	BYTE const *r=&onscreen_chrs[((z-32)&127)*8];
-	VIDEO_DATATYPE q0,q1;
+	BYTE const *r=&onscreen_chrs[((z-32)&127)*onscreen_size];
+	VIDEO_UNIT q0,q1;
 	if (z&128)
 		q0=VIDEO1(0),q1=VIDEO1(-1);
 	else
 		q1=VIDEO1(0),q0=VIDEO1(-1);
 	BYTE yy=0;
-	while (yy<(SESSION_UI_HEIGHT-8)/2)
+	while (yy<(SESSION_UI_HEIGHT-onscreen_size)/2)
 	{
-		VIDEO_DATATYPE *p=(VIDEO_DATATYPE *)&((BYTE *)t->pixels)[(y*SESSION_UI_HEIGHT+yy)*t->pitch]; p=&p[x*8];
-		for (BYTE xx=0;xx<8;++xx)
+		VIDEO_UNIT *p=(VIDEO_UNIT *)&((BYTE *)t->pixels)[(y*SESSION_UI_HEIGHT+yy)*t->pitch]; p=&p[x*8];
+		for (int xx=0;xx<8;++xx)
 			*p++=q0;
 		++yy;
 	}
-	while (yy<(SESSION_UI_HEIGHT-8)/2+8)
+	while (yy<(SESSION_UI_HEIGHT-onscreen_size)/2+onscreen_size)
 	{
-		VIDEO_DATATYPE *p=(VIDEO_DATATYPE *)&((BYTE *)t->pixels)[(y*SESSION_UI_HEIGHT+yy)*t->pitch]; p=&p[x*8];
+		VIDEO_UNIT *p=(VIDEO_UNIT *)&((BYTE *)t->pixels)[(y*SESSION_UI_HEIGHT+yy)*t->pitch]; p=&p[x*8];
 		BYTE rr=*r++; rr|=rr>>1; // normal, not thin or bold
-		for (BYTE xx=0;xx<8;++xx)
+		for (int xx=0;xx<8;++xx)
 			*p++=(rr&(128>>xx))?q1:q0;
 		++yy;
 	}
 	while (yy<SESSION_UI_HEIGHT)
 	{
-		VIDEO_DATATYPE *p=(VIDEO_DATATYPE *)&((BYTE *)t->pixels)[(y*SESSION_UI_HEIGHT+yy)*t->pitch]; p=&p[x*8];
-		for (BYTE xx=0;xx<8;++xx)
+		VIDEO_UNIT *p=(VIDEO_UNIT *)&((BYTE *)t->pixels)[(y*SESSION_UI_HEIGHT+yy)*t->pitch]; p=&p[x*8];
+		for (int xx=0;xx<8;++xx)
 			*p++=q0;
 		++yy;
 	}
@@ -422,7 +431,7 @@ int session_ui_printasciz(SDL_Surface *t,char *s,int x,int y,int m,int q) // pri
 		{
 			++s;
 			if (m>0&&k>m&&l+2>=m) // string is too long
-				z='.';
+				z='.'; // ".."
 		}
 		if (q) z^=128;
 		session_ui_printglyph(t,z,x,y);
@@ -434,6 +443,7 @@ int session_ui_printasciz(SDL_Surface *t,char *s,int x,int y,int m,int q) // pri
 }
 
 BYTE session_ui_menudata[1<<12],session_ui_menusize; // encoded menu data
+SDL_Surface *session_ui_icon=NULL;
 
 void session_ui_menu(void) // show the menu and set session_event accordingly
 {
@@ -525,10 +535,12 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 			case KBCODE_HOME:
 					item=0;
 				break;
+			case KBCODE_PRIOR:
 			case KBCODE_LEFT:
 				if (--menu<0)
 					menu=menus-1;
 				break;
+			case KBCODE_NEXT:
 			case KBCODE_RIGHT:
 				if (++menu>=menus)
 					menu=0;
@@ -564,7 +576,7 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 	}
 }
 
-int session_ui_text(char *s,char *t) // see session_message
+int session_ui_text(char *s,char *t,char q) // see session_message
 {
 	if (!s||!t)
 		return -1;
@@ -575,7 +587,7 @@ int session_ui_text(char *s,char *t) // see session_message
 		++textw;
 	i=0;
 	m=s;
-	while (*m)
+	while (*m) // get full text width
 	{
 		if (*m=='\n')
 		{
@@ -596,18 +608,20 @@ int session_ui_text(char *s,char *t) // see session_message
 		textw=VIDEO_PIXELS_X/8-4;
 	if (i)
 		++texth;
+	if (q)
+		textw+=q=6; // 6: four characters, plus one extra char per side
 	SDL_Surface *htext=session_ui_alloc(textw,texth);
 	session_ui_printasciz(htext,t,0,0,textw,1);
 	i=j=0;
 	m=session_parmtr;
-	while (*s)
+	while (*s) // render text proper
 	{
 		int k=(*m++=*s++);
 		++j;
 		if (k=='\n')
 		{
 			m[-1]=j=0;
-			session_ui_printasciz(htext,m=session_parmtr,0,++i,textw,0);
+			session_ui_printasciz(htext,m=session_parmtr,q,++i,textw-q,0);
 		}
 		else if (k=='\t')
 		{
@@ -619,11 +633,18 @@ int session_ui_text(char *s,char *t) // see session_message
 	if (m!=session_parmtr)
 	{
 		*m=0;
-		session_ui_printasciz(htext,m=session_parmtr,0,++i,textw,0);
+		session_ui_printasciz(htext,m=session_parmtr,q,++i,textw-q,0);
+	}
+	if (q)
+	{
+		SDL_Rect r;
+		r.x=0; r.w=q*8; r.y=SESSION_UI_HEIGHT; r.h=(texth-1)*SESSION_UI_HEIGHT;
+		SDL_FillRect(htext,&r,0x00C0C0C0); // bright grey background
+		r.x=q*4-16; r.y=SESSION_UI_HEIGHT*2; r.w=r.h=32;
+		SDL_BlitSurface(session_ui_icon,NULL,htext,&r); // the icon!
 	}
 	session_centre(htext,1);//SDL_BlitSurface(htext,NULL,SDL_GetWindowSurface(session_hwnd),NULL);
 	for (;;)
-	{
 		switch (session_ui_exchange())
 		{
 			case KBCODE_ESCAPE:
@@ -634,7 +655,6 @@ int session_ui_text(char *s,char *t) // see session_message
 				session_ui_exit();
 				return 0;
 		}
-	}
 }
 
 int session_ui_list(int item,char *s,char *t,void x(void)) // see session_list
@@ -860,7 +880,7 @@ void session_ui_filedialog_tabkey(void)
 int session_ui_filedialog_stat(char *s) // -1 = not exist, 0 = file, 1 = directory
 {
 	if (!s||!*s) return -1; // not even a valid path!
-	#ifdef __WIN32__
+	#ifdef _WIN32
 	int i=GetFileAttributes(s); return i<0?-1:i&FILE_ATTRIBUTE_DIRECTORY?1:0;
 	#else
 	struct stat a; return stat(s,&a)<0?-1:S_ISDIR(a.st_mode)?1:0;
@@ -874,7 +894,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 		i=m[1],m[1]=0,strcpy(basepath,r),m[1]=i,strcpy(pastname,&m[1]);
 	else
 		*basepath=0,strcpy(pastname,r);
-	#ifdef __WIN32__
+	#ifdef _WIN32
 	long int w32drives=0,z; char drives[]="::\\"; ;
 	for (drives[0]='A';drives[0]<='Z';++drives[0]) // scan drives just once
 		if (GetDriveType(drives)>1&&GetDiskFreeSpace(drives,&z,&z,&z,&z))
@@ -884,7 +904,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 	{
 		i=0; m=session_scratch;
 
-		#ifdef __WIN32__
+		#ifdef _WIN32
 		if (session_ui_filedialog_stat(basepath)<1) // ensure that basepath exists and is a valid directory
 		{
 			GetCurrentDirectory(STRMAX,basepath); // fall back to current directory
@@ -894,7 +914,10 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 		for (drives[0]='A';drives[0]<='Z';++drives[0])
 			if (w32drives&(1<<(drives[0]-'A')))
 				++i,m=&half[sortedinsert(half,m-half,drives)];
-		*m++=*m++='.'; *m++=PATHCHAR; *m++=0; // always before the directories!
+		if (basepath[3]) // not root directory?
+		{
+			*m++='.';*m++='.'; *m++=PATHCHAR; *m++=0; // always before the directories!
+		}
 		half=m;
 		WIN32_FIND_DATA wfd; HANDLE h; strcpy(basefind,basepath); strcat(basefind,"*");
 		if ((h=FindFirstFile(basefind,&wfd))!=INVALID_HANDLE_VALUE)
@@ -920,10 +943,13 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 		DIR *d; struct dirent *e;
 		if (session_ui_filedialog_stat(basepath)<1) // ensure that basepath exists and is a valid directory
 		{
-			getcwd(basepath,STRMAX); // fall back to current directory
-			session_ui_filedialog_sanitizepath(basepath);
+			if (getcwd(basepath,STRMAX)) // fall back to current directory
+				session_ui_filedialog_sanitizepath(basepath);
 		}
-		*m++=*m++='.'; *m++=PATHCHAR; *m++=0; // always before the directories!
+		if (basepath[1]) // not root directory?
+		{
+			*m++='.';*m++='.'; *m++=PATHCHAR; *m++=0; // always before the directories!
+		}
 		char *half=m;
 		if (d=opendir(basepath))
 		{
@@ -958,7 +984,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 		if (m[-1]==PATHCHAR) // the user chose a directory
 		{
 			strcat(strcpy(session_scratch,basepath),session_parmtr);
-			#ifdef __WIN32__
+			#ifdef _WIN32
 			if (session_parmtr[1]==':')
 				*pastname=0,strcpy(basepath,session_parmtr);
 			else
@@ -986,7 +1012,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 				else
 					*pastname=0;
 			}
-			realpath(session_scratch,basepath); // realpath() requires the target to be at least 4096 bytes long in Linux 4.10.0-38-generic, Linux 4.15.0-96-generic...!
+			!realpath(session_scratch,basepath); // realpath() requires the target to be at least 4096 bytes long in Linux 4.10.0-38-generic, Linux 4.15.0-96-generic...!
 			#endif
 			session_ui_filedialog_sanitizepath(basepath);
 		}
@@ -997,16 +1023,19 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 				*session_parmtr=0;
 				if (session_ui_input(session_parmtr,t)>0)
 				{
-					m=session_parmtr; n=s; // append default extension
-					while (*m) // go to end of string
-						++m;
-					while (*n!='*') // look for asterisks
-						++n;
-					while (*n=='*') // skip all asterisks
-						++n;
-					while (*n&&*n!=';') // copy till end of extension
-						*m++=*n++;
-					*m=0;
+					if (multiglobbing(s,session_parmtr,1)!=1) // not the first extension?
+					{
+						m=session_parmtr; n=s;
+						while (*m) // go to end of target string
+							++m;
+						while (*n!='*') // look for asterisks in source
+							++n;
+						while (*n=='*') // skip all asterisks
+							++n;
+						while (*n&&*n!=';') // copy till end of extension
+							*m++=*n++;
+						*m=0; // and so we append the default extension
+					}
 				}
 				else
 					return 0; // failure, quit!
@@ -1036,7 +1065,7 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	video_frame=session_dib->pixels;
 
 	#ifndef CONSOLE_DEBUGGER
-		session_dbg_dib=SDL_CreateRGBSurface(0,DEBUG_LENGTH_X*8,DEBUG_LENGTH_Y*DEBUG_LENGTH_Z,32,0xFF0000,0x00FF00,0x0000FF,0);
+		session_dbg_dib=SDL_CreateRGBSurface(0,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,32,0xFF0000,0x00FF00,0x0000FF,0);
 		SDL_SetSurfaceBlendMode(session_dbg_dib,SDL_BLENDMODE_NONE);
 		debug_frame=session_dbg_dib->pixels;
 	#endif
@@ -1063,54 +1092,77 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	}
 	session_timer=SDL_GetTicks();
 
+	session_ui_icon=SDL_CreateRGBSurfaceFrom(session_icon32xx16,32,32,16,32*2,0xF00,0xF0,0xF,0xF000);
+	#ifndef _WIN32
+	SDL_SetWindowIcon(session_hwnd,session_ui_icon); // SDL already handles WIN32 icons alone!
+	#endif
+
 	// translate menu data into custom format
 	BYTE *t=session_ui_menudata; session_ui_menusize=0;
 	while (*s)
 	{
-		// menu header
+		// scan and generate menu header
 		while ((*t++=*s++)!='\n')
 			++session_ui_menusize;
 		session_ui_menusize+=2;
 		t[-1]=0;
-		// items
+		// first scan: maximum item width
+		char *r=s; int mxx=0;
+		for (;;)
+		{
+			if (*r=='=')
+				while (*r++!='\n')
+					;
+			else if (*r=='0')
+			{
+				while (*r++!=' ')
+					;
+				int n=0;
+				while (*r++>=' ')
+					++n;
+				if (mxx<n)
+					mxx=n;
+				--r;
+				while (*r++!='\n')
+					;
+			}
+			else
+				break;
+		}
+		// second scan: generate items
 		for (;;)
 			if (*s=='=')
 			{
-				*t++=0x80; *t++=*t++=0; // fake DROP code!
+				*t++=0x80; *t++=0;*t++=0; // fake DROP code!
 				while (*s++!='\n')
 					;
 			}
 			else if (*s=='0')
 			{
 				int i=strtol(s,&s,0); // allow either hex or decimal
-				*t++=i>>8; *t++=i; *t++=*t++=' ';
-				++s; int h=0;
+				*t++=i>>8; *t++=i; *t++=' ';*t++=' ';
+				++s; int h=-2; // spaces between body and shortcut
 				while ((i=(*t++=*s++))!='\n')
-					if (i==9)
+					if (i=='\t') // keyboard shortcut?
 					{
-						h=1;
-						t[-1]=' ';
-						*t++='(';
-					}
-					else if (i=='_')
 						--t;
-				if (h)
-					t++[-1]=')';
+						for (int n=h;n<mxx;++n)
+							*t++=' ';
+					}
+					else if (i=='_') // string shortcut?
+						--t;
+					else
+						++h;
 				t[-1]=0;
 			}
 			else
 				break;
-		*t++=*t++=0;
+		*t++=0;*t++=0;
 	}
 	*t=0;
 	SDL_StartTextInput();
 	session_please();
 	return NULL;
-}
-
-void session_togglefullscreen(void)
-{
-	SDL_SetWindowFullscreen(session_hwnd,SDL_GetWindowFlags(session_hwnd)&SDL_WINDOW_FULLSCREEN_DESKTOP?0*SDL_WINDOW_BORDERLESS:SDL_WINDOW_FULLSCREEN_DESKTOP);
 }
 
 void session_menuinfo(void); // set the current menu flags. Must be defined later on!
@@ -1151,18 +1203,17 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 	{
 		switch (event.type)
 		{
-			//case SDL_WINDOWEVENT_FOCUS_GAINED: // force full redraw
-			#ifndef __WIN32__ // seemingly unavailable on Windows ???
-			case SDL_WINDOWEVENT_EXPOSED:
-				SDL_FillRect(SDL_GetWindowSurface(session_hwnd),NULL,0); // wipe leftovers
+			/*case SDL_WINDOWEVENT_FOCUS_GAINED: // force full redraw
+			case SDL_WINDOWEVENT_EXPOSED: // seemingly unavailable on Windows ???
+				session_clrscr(); // wipe leftovers
 				SDL_UpdateWindowSurface(session_hwnd);//session_redraw(1);//
-				break;
-			#endif
+				break;*/
 			#ifndef CONSOLE_DEBUGGER
 			case SDL_TEXTINPUT:
 				if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant for the debugger, see below
-					if ((session_event=event.text.text[0])&128)
-						session_event=128+(session_event&31)*64+(event.text.text[1]&63);
+					if (event.text.text[0]>32) // exclude SPACE and non-visible codes!
+						if ((session_event=event.text.text[0])&128) // UTF-8?
+							session_event=128+(session_event&31)*64+(event.text.text[1]&63);
 				break;
 			#endif
 			case SDL_KEYDOWN: //if (event.key.state==SDL_PRESSED)
@@ -1180,23 +1231,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 					}
 					#ifndef CONSOLE_DEBUGGER
 					if (session_signal&SESSION_SIGNAL_DEBUG)
-						switch (event.key.keysym.sym)
-						{
-							case SDLK_LEFT: session_event=8; break;
-							case SDLK_RIGHT: session_event=9; break;
-							case SDLK_DOWN: session_event=10; break;
-							case SDLK_UP: session_event=11; break;
-							case SDLK_RETURN: session_event=13; break;
-							case SDLK_ESCAPE: session_event=27; break;
-							case SDLK_HOME: session_event=28; break;
-							case SDLK_END: session_event=29; break;
-							case SDLK_PAGEDOWN: session_event=30; break;
-							case SDLK_PAGEUP: session_event=31; break;
-							case SDLK_SPACE: if (session_shift) session_event=160; break; // special case unlike WM_CHAR
-							case SDLK_BACKSPACE: session_event=session_shift?9:8; break;
-							case SDLK_TAB: session_event=session_shift?7:12; break;
-							default: session_event=0; break;
-						}
+						session_event=debug_xlat(event.key.keysym.scancode);
 					#endif
 					int k=session_key_n_joy(event.key.keysym.scancode);
 					if (k<128)
@@ -1260,7 +1295,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 	return q;
 }
 
-INLINE void session_writewave(AUDIO_DATATYPE *t); // save the current sample frame. Must be defined later on!
+INLINE void session_writewave(AUDIO_UNIT *t); // save the current sample frame. Must be defined later on!
 INLINE void session_render(void) // update video, audio and timers
 {
 	int i,j;
@@ -1294,7 +1329,7 @@ INLINE void session_render(void) // update video, audio and timers
 		j=1000/VIDEO_PLAYBACK-(i-session_timer);
 		if (j>0)
 			SDL_Delay(j>1000/VIDEO_PLAYBACK?1+1000/VIDEO_PLAYBACK:j);
-		else if (j<0)
+		else if (j<0&&!session_recording)
 			video_framecount=-2; // automatic frameskip!
 		session_timer+=1000/VIDEO_PLAYBACK;
 	}
@@ -1308,10 +1343,13 @@ INLINE void session_render(void) // update video, audio and timers
 		j=SDL_GetQueuedAudioSize(session_audio);
 		if (j<=sizeof(audio_buffer)*AUDIO_N_FRAMES) // buffer full?
 		{
+			/*audio_disabled&=~8*/; // buffer is ready!
 			SDL_QueueAudio(session_audio,audio_buffer,sizeof(audio_buffer));
 			if (j<=sizeof(audio_buffer)*AUDIO_N_FRAMES/2) // buffer not full enough?
 				i+=500/VIDEO_PLAYBACK; // force speedup by mangling the timer!
 		}
+		else
+			/*audio_disabled|=8*/; // buffer is full, no need to write the next frame!
 	}
 
 	if (session_wait) // resume activity after a pause
@@ -1337,8 +1375,14 @@ INLINE void session_byebye(void) // delete video+audio devices
 	if (session_ji)
 		SDL_JoystickClose(session_ji);
 	SDL_StopTextInput();
-	SDL_FreeSurface(session_dib);
 	SDL_DestroyWindow(session_hwnd);
+	#ifndef _WIN32
+	SDL_FreeSurface(session_ui_icon);
+	#endif
+	SDL_FreeSurface(session_dib);
+	#ifndef CONSOLE_DEBUGGER
+	SDL_FreeSurface(session_dbg_dib);
+	#endif
 	SDL_Quit();
 }
 
@@ -1353,7 +1397,13 @@ void session_detectpath(char *s) // detects session path
 }
 char *session_configfile(void) // returns path to configuration file
 {
-	return strcat(strcpy(session_parmtr,session_path),MY_CAPTION ".INI");
+	return strcat(strcpy(session_parmtr,session_path),
+	#ifdef _WIN32
+	my_caption ".ini"
+	#else
+	"." my_caption "rc"
+	#endif
+	);
 }
 
 void session_writebitmap(FILE *f) // write current bitmap into a BMP file
@@ -1365,14 +1415,14 @@ void session_writebitmap(FILE *f) // write current bitmap into a BMP file
 		for (int j=0;j<VIDEO_PIXELS_X;++j) // turn ARGB (32 bits) into RGB (24 bits)
 		{
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
-			s++; // skip A
-			*t++=*s++; // copy R
-			*t++=*s++; // copy G
-			*t++=*s++; // copy B
+			*t++=s[3]; // copy B
+			*t++=s[2]; // copy G
+			*t++=s[1]; // copy R
+			s+=4; // skip A
 #else
 			*t++=*s++; // copy B
-			*t++=*s++; // copy R
 			*t++=*s++; // copy G
+			*t++=*s++; // copy R
 			s++; // skip A
 #endif
 		}
@@ -1382,15 +1432,14 @@ void session_writebitmap(FILE *f) // write current bitmap into a BMP file
 
 // menu item functions ---------------------------------------------- //
 
-void session_menucheck(int id,int q) // set option `id`state as `q`
+void session_menucheck(int id,int q) // set the state of option `id` as `q`
 {
-	BYTE *m=session_ui_menudata;
+	BYTE *m=session_ui_menudata; int j;
 	while (*m) // scan menu data for items
 	{
 		while (*m++) // skip menu name
 			;
-		int j;
-		while (j=*m++<<8,j+=*m++,j)
+		while (j=*m++<<8,j+=*m++)
 		{
 			if (j==id)
 				*m=q?'*':' ';
@@ -1399,15 +1448,14 @@ void session_menucheck(int id,int q) // set option `id`state as `q`
 		}
 	}
 }
-void session_menuradio(int id,int a,int z) // select option `id` in the range `a-z`
+void session_menuradio(int id,int a,int z) // set the option `id` in the range `a-z`
 {
-	BYTE *m=session_ui_menudata;
+	BYTE *m=session_ui_menudata; int j;
 	while (*m) // scan menu data for items
 	{
 		while (*m++) // skip menu name
 			;
-		int j;
-		while (j=*m++<<8,j+=*m++,j)
+		while (j=*m++<<8,j+=*m++)
 		{
 			if (j>=a&&j<=z)
 				*m=j==id?'>':' ';
@@ -1419,8 +1467,8 @@ void session_menuradio(int id,int a,int z) // select option `id` in the range `a
 
 // message box ------------------------------------------------------ //
 
-int session_message(char *s,char *t) { return session_ui_text(s,t); } // show multi-lined text `s` under caption `t`
-int session_aboutme(char *s,char *t) { return session_ui_text(s,t); } // special case: "About.."
+int session_message(char *s,char *t) { return session_ui_text(s,t,0); } // show multi-lined text `s` under caption `t`
+int session_aboutme(char *s,char *t) { return session_ui_text(s,t,1); } // special case: "About.."
 
 // input dialog ----------------------------------------------------- //
 
@@ -1444,12 +1492,12 @@ char *session_getfilereadonly(char *r,char *s,char *t,int q) // "Open a File" wi
 
 // OS-dependant composite funcions ---------------------------------- //
 
+//#define mgetc(x) (*(x))
+//#define mputc(x,y) (*(x)=(y))
 // 'i' = lil-endian (Intel), 'm' = big-endian (Motorola)
 
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
 
-//#define mgetc(x) (*(x))
-//#define mputc(x,y) (*(x)=(y))
 int  mgetii(unsigned char *x) { return (x[1]<<8)+*x; }
 void mputii(unsigned char *x,int y) { x[1]=y>>8; *x=y; }
 int  mgetiiii(unsigned char *x) { return (x[3]<<24)+(x[2]<<16)+(x[1]<<8)+*x; }
@@ -1458,6 +1506,11 @@ void mputiiii(unsigned char *x,int y) { x[3]=y>>24; x[2]=y>>16; x[1]=y>>8; *x=y;
 #define mgetmmmm(x) (*(DWORD*)(x))
 #define mputmm(x,y) ((*(WORD*)(x))=(y))
 #define mputmmmm(x,y) ((*(DWORD*)(x))=(y))
+
+#define equalsmm(x,i) (*(WORD*)(x)==(i))
+#define equalsmmmm(x,i) (*(DWORD*)(x)==(i))
+int equalsii(unsigned char *x,unsigned int i) { return (x[1]<<8)+*x==i; }
+int equalsiiii(unsigned char *x,unsigned int i) { return (x[3]<<24)+(x[2]<<16)+(x[1]<<8)+*x==i; }
 
 int fgetii(FILE *f) { int i=fgetc(f); return i+(fgetc(f)<<8); } // common lil-endian 16-bit fgetc()
 int fputii(int i,FILE *f) { fputc(i,f); return fputc(i>>8,f); } // common lil-endian 16-bit fputc()
@@ -1470,8 +1523,6 @@ int fputmmmm(int i,FILE *f) { return (fwrite(&i,1,4,f)!=4)?EOF:i; } // native li
 
 #else
 
-//#define mgetc(x) (*(x))
-//#define mputc(x,y) (*(x)=(y))
 #define mgetii(x) (*(WORD*)(x))
 #define mgetiiii(x) (*(DWORD*)(x))
 #define mputii(x,y) ((*(WORD*)(x))=(y))
@@ -1480,6 +1531,11 @@ int  mgetmm(unsigned char *x) { return (*x<<8)+x[1]; }
 void mputmm(unsigned char *x,int y) { *x=y>>8; x[1]=y; }
 int  mgetmmmm(unsigned char *x) { return (*x<<24)+(x[1]<<16)+(x[2]<<8)+x[3]; }
 void mputmmmm(unsigned char *x,int y) { *x=y>>24; x[1]=y>>16; x[2]=y>>8; x[3]=y; }
+
+#define equalsii(x,i) (*(WORD*)(x)==(i))
+#define equalsiiii(x,i) (*(DWORD*)(x)==(i))
+int equalsmm(unsigned char *x,unsigned int i) { return (*x<<8)+x[1]==i; }
+int equalsmmmm(unsigned char *x,unsigned int i) { return (*x<<24)+(x[1]<<16)+(x[2]<<8)+x[3]==i; }
 
 int fgetii(FILE *f) { int i=0; return (fread(&i,1,2,f)!=2)?EOF:i; } // native lil-endian 16-bit fgetc()
 int fputii(int i,FILE *f) { return (fwrite(&i,1,2,f)!=2)?EOF:i; } // native lil-endian 16-bit fputc()

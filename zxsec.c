@@ -7,7 +7,8 @@
  // """"""  "    "   """"   """"""   """"    ----------------------- //
 
 #define MY_CAPTION "ZXSEC"
-#define MY_VERSION "20200622"//"0955"
+#define my_caption "zxsec"
+#define MY_VERSION "20201010"//"1155"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -42,7 +43,7 @@ Contact information: <mailto:cngsoft@gmail.com> */
 // ZX Spectrum metrics and constants defined as general types ------- //
 
 #define MAIN_FRAMESKIP_FULL 25
-#define MAIN_FRAMESKIP_MASK 31
+#define MAIN_FRAMESKIP_MASK 31 // lowest (2**n)-1 that fits
 #define VIDEO_PLAYBACK 50
 #define VIDEO_LENGTH_X (56<<4)
 #define VIDEO_LENGTH_Y (39<<4)
@@ -60,7 +61,45 @@ Contact information: <mailto:cngsoft@gmail.com> */
 #define session_debug_show z80_debug_show
 #define session_debug_user z80_debug_user
 
-// The ZX Spectrum 48K keyboard; later models add combinations, f.e. BREAK = CAPS SHIFT + SPACE
+#if defined(SDL2) || defined(SDL_MAIN_HANDLED) || !defined(_WIN32) // SDL2?
+short session_icon32xx16[32*32] = {
+	0x0000, 0x0000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 	0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0x0000, 0x0000,
+	0x0000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 	0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0x0000,
+	0xf000, 0xf000, 0xf000, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xff00, 0xf800, 0xf000, 0xff80, 	0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xfff0, 0xff80, 0xf000, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xf800, 0xff00, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xff00, 0xf800, 0xf000, 0xff80, 0xffff, 	0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xfff0, 0xff80, 0xf000, 0xf080, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xf800, 0xf800, 0xff00, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xff00, 0xf800, 0xf000, 0xff80, 0xffff, 0xffff, 	0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xfff0, 0xff80, 0xf000, 0xf080, 0xffff, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xf800, 0xf800, 0xf800, 0xff00, 0xffff, 0xffff, 0xffff, 0xff00, 0xf800, 0xf000, 0xff80, 0xffff, 0xffff, 0xffff, 	0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xfff0, 0xff80, 0xf000, 0xf080, 0xffff, 0xffff, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xf800, 0xf800, 0xf800, 0xf800, 0xff00, 0xff00, 0xf800, 0xf800, 0xf000, 0xff80, 0xffff, 0xfff0, 0xfff0, 0xfff0, 	0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xff80, 0xff80, 0xf000, 0xf080, 0xffff, 0xffff, 0xffff, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xf800, 0xf800, 0xf800, 0xf800, 0xff00, 0xf800, 0xf800, 0xf000, 0xff80, 0xffff, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 	0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xff80, 0xff80, 0xf000, 0xf080, 0xffff, 0xffff, 0xffff, 0xffff, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xf800, 0xf800, 0xf800, 0xf800, 0xf800, 0xf800, 0xf000, 0xff80, 0xffff, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 	0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xff80, 0xff80, 0xf000, 0xf080, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xf800, 0xf800, 0xf800, 0xf800, 0xf800, 0xf000, 0xff80, 0xffff, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 	0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xff80, 0xff80, 0xf000, 0xf080, 0xffff, 0xf0f0, 0xffff, 0xffff, 0xffff, 0xffff, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xf800, 0xf800, 0xf800, 0xf800, 0xf000, 0xff80, 0xffff, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 	0xfff0, 0xfff0, 0xfff0, 0xff80, 0xff80, 0xf000, 0xf080, 0xffff, 0xf0f0, 0xf0f0, 0xffff, 0xffff, 0xffff, 0xffff, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xf800, 0xf800, 0xf800, 0xf000, 0xff80, 0xffff, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 	0xfff0, 0xfff0, 0xff80, 0xff80, 0xf000, 0xf080, 0xffff, 0xf0f0, 0xf0f0, 0xf0f0, 0xffff, 0xffff, 0xffff, 0xffff, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xf800, 0xf800, 0xf000, 0xff80, 0xffff, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 	0xfff0, 0xff80, 0xff80, 0xf000, 0xf080, 0xffff, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xffff, 0xffff, 0xffff, 0xffff, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xf800, 0xf000, 0xff80, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 	0xff80, 0xff80, 0xf000, 0xf080, 0xffff, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xffff, 0xffff, 0xffff, 0xffff, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xf000, 0xff80, 0xfff0, 0xff80, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xff80, 	0xff80, 0xf000, 0xf080, 0xffff, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xffff, 0xffff, 0xffff, 0xffff, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xff80, 0xfff0, 0xff80, 0xff80, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xff80, 0xff80, 	0xf000, 0xf080, 0xffff, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xffff, 0xffff, 0xffff, 0xf0f0, 0xf000, 0xf000,
+
+	0xf000, 0xf000, 0xfff0, 0xff80, 0xff80, 0xff80, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xff80, 0xff80, 0xf000, 	0xf080, 0xffff, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xffff, 0xffff, 0xf0f0, 0xf080, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xff80, 0xff80, 0xff80, 0xff80, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xff80, 0xff80, 0xf000, 0xf080, 	0xffff, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xffff, 0xf0f0, 0xf080, 0xf000, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xff80, 0xff80, 0xff80, 0xff80, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xff80, 0xff80, 0xf000, 0xf080, 0xffff, 	0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf080, 0xf000, 0xf08f, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xff80, 0xff80, 0xff80, 0xff80, 0xfff0, 0xfff0, 0xfff0, 0xfff0, 0xff80, 0xff80, 0xf000, 0xf080, 0xffff, 0xf0f0, 	0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf080, 0xf080, 0xf000, 0xf08f, 0xffff, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xff80, 0xff80, 0xff80, 0xff80, 0xfff0, 0xfff0, 0xfff0, 0xff80, 0xff80, 0xf000, 0xf080, 0xffff, 0xf0f0, 0xf0f0, 	0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf080, 0xf080, 0xf000, 0xf08f, 0xffff, 0xffff, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xff80, 0xff80, 0xff80, 0xff80, 0xfff0, 0xfff0, 0xff80, 0xff80, 0xf000, 0xf080, 0xffff, 0xf0f0, 0xf0f0, 0xf0f0, 	0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf080, 0xf080, 0xf000, 0xf08f, 0xffff, 0xffff, 0xffff, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xff80, 0xff80, 0xff80, 0xff80, 0xfff0, 0xff80, 0xff80, 0xf000, 0xf080, 0xffff, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 	0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf080, 0xf080, 0xf000, 0xf08f, 0xffff, 0xffff, 0xffff, 0xffff, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xff80, 0xff80, 0xff80, 0xff80, 0xff80, 0xff80, 0xf000, 0xf080, 0xffff, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 	0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf080, 0xf080, 0xf000, 0xf08f, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xff80, 0xff80, 0xff80, 0xff80, 0xff80, 0xf000, 0xf080, 0xffff, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 	0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf080, 0xf080, 0xf000, 0xf08f, 0xffff, 0xf0ff, 0xffff, 0xffff, 0xffff, 0xffff, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xff80, 0xff80, 0xff80, 0xff80, 0xf000, 0xf080, 0xffff, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 0xf0f0, 	0xf0f0, 0xf0f0, 0xf0f0, 0xf080, 0xf080, 0xf000, 0xf08f, 0xffff, 0xf0ff, 0xf0ff, 0xffff, 0xffff, 0xffff, 0xffff, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xff80, 0xff80, 0xff80, 0xf000, 0xf080, 0xf0f0, 0xf080, 0xf080, 0xf080, 0xf080, 0xf080, 0xf080, 0xf080, 0xf080, 	0xf080, 0xf080, 0xf080, 0xf080, 0xf000, 0xf08f, 0xf0ff, 0xf08f, 0xf08f, 0xf08f, 0xf0ff, 0xffff, 0xffff, 0xffff, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xff80, 0xff80, 0xf000, 0xf080, 0xf0f0, 0xf080, 0xf080, 0xf080, 0xf080, 0xf080, 0xf080, 0xf080, 0xf080, 0xf080, 	0xf080, 0xf080, 0xf080, 0xf000, 0xf08f, 0xf0ff, 0xf08f, 0xf08f, 0xf08f, 0xf08f, 0xf08f, 0xf0ff, 0xffff, 0xffff, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xff80, 0xf000, 0xf080, 0xf0f0, 0xf080, 0xf080, 0xf080, 0xf080, 0xf080, 0xf080, 0xf080, 0xf080, 0xf080, 0xf080, 	0xf080, 0xf080, 0xf000, 0xf08f, 0xf0ff, 0xf08f, 0xf08f, 0xf08f, 0xf08f, 0xf08f, 0xf08f, 0xf08f, 0xf0ff, 0xffff, 0xf000, 0xf000,
+	0xf000, 0xf000, 0xf000, 0xf080, 0xf0f0, 0xf080, 0xf080, 0xf080, 0xf080, 0xf080, 0xf080, 0xf080, 0xf080, 0xf080, 0xf080, 0xf080, 	0xf080, 0xf000, 0xf08f, 0xf0ff, 0xf08f, 0xf08f, 0xf08f, 0xf08f, 0xf08f, 0xf08f, 0xf08f, 0xf08f, 0xf08f, 0xf000, 0xf000, 0xf000,
+	0x0000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 	0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0x0000,
+	0x0000, 0x0000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 	0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0x0000, 0x0000,
+	};
+#endif
+
+// The Spectrum 48K keyboard; later models add pairs such as BREAK = CAPS SHIFT + SPACE
 // +---------------------------------------------------------------------+
 // | 1 18 | 2 19 | 3 1A | 4 1B | 5 1C | 6 24 | 7 23 | 8 22 | 9 21 | 0 20 |
 // +---------------------------------------------------------------------+
@@ -72,7 +111,7 @@ Contact information: <mailto:cngsoft@gmail.com> */
 // +---------------------------------------------------------------------+ - = SYMBOL SHIFT
 
 /*const*/ unsigned char kbd_joy[]= // ATARI norm: up, down, left, right, fire1, fire2...
-	{ 0,0,0,0,0 };
+	{ 0,0,0,0,0 }; // variable instead of constant, there are several joystick types
 
 #include "cpcec-os.h" // OS-specific code!
 #include "cpcec-rt.h" // OS-independent code!
@@ -114,7 +153,7 @@ const unsigned char kbd_map_xlt[]=
 	//KBCODE_INSERT	,0x61, // CAPS SHIFT FLAG (0x40) + "9" (0x21) GRAPH?
 };
 
-const VIDEO_DATATYPE video_table[][16]= // colour table, 0xRRGGBB style
+const VIDEO_UNIT video_table[][16]= // colour table, 0xRRGGBB style
 {
 	// monochrome - black and white // =(b+r*3+g*9+13/2)/13;
 	{
@@ -165,7 +204,16 @@ BYTE *mmu_ram[4],*mmu_rom[4]; // memory is divided in 16k pages
 
 BYTE type_id=3; // 0=48k, 1=128k, 2=PLUS2, 3=PLUS3
 BYTE video_type=length(video_table)/2; // 0 = monochrome, 1=darkest colour, etc.
-VIDEO_DATATYPE video_clut[17]; // precalculated colour palette, 16 attr + border
+VIDEO_UNIT video_clut[17]; // precalculated colour palette, 16 attr + border
+
+// Z80 registers: the hardware and the debugger must be allowed to "spy" on them!
+
+Z80W z80_af,z80_bc,z80_de,z80_hl; // Accumulator+Flags, BC, DE, HL
+Z80W z80_af2,z80_bc2,z80_de2,z80_hl2,z80_ix,z80_iy; // AF', BC', DE', HL', IX, IY
+Z80W z80_pc,z80_sp,z80_iff,z80_ir; // Program Counter, Stack Pointer, Interrupt Flip-Flops, IR pair
+BYTE z80_imd; // Interrupt Mode
+BYTE z80_r7; // low 7 bits of R, required by several `IN X,(Y)` operations
+int z80_turbo=0,z80_multi=1; // overclocking options
 
 // 0x??FE,0x7FFD,0x1FFD: ULA 48K,128K,PLUS3 ------------------------- //
 
@@ -266,7 +314,7 @@ void video_clut_update(void) // precalculate palette following `video_type`
 	ula_v1_send(ula_v1);
 }
 
-BYTE z80_irq;
+int z80_irq,z80_halted=0; // internal HALT flag: <0 EXPECT NMI!, 0 IGNORE IRQS, >0 ACCEPT IRQS, >1 EXPECT IRQ!
 int irq_delay=0,ula_limit_x=0,ula_limit_y=0; // IRQ counter, horizontal+vertical limits
 
 void ula_reset(void) // reset the ULA
@@ -292,7 +340,7 @@ void ula_reset(void) // reset the ULA
 #define PSG_KHZ_CLOCK 1750
 #define PSG_MAIN_EXTRABITS 0
 #if AUDIO_STEREO
-int psg_stereo[3][2]; const int psg_stereos[3][3]={{0,0,0},{+256,-256,0},{+128,-128,0}}; // A left, C middle, B right
+int psg_stereo[3][2]; const int psg_stereos[][3]={{0,0,0},{+256,-256,0},{+128,-128,0},{+64,-64,0}}; // A left, C middle, B right
 #endif
 
 #include "cpcec-ay.h"
@@ -312,11 +360,12 @@ int tape_enabled=0; // tape motor and delay
 #define DISC_TIMER_BYTE ( 2<<6) // rough approximation, too
 #define DISC_WIRED_MODE 0 // Plus3 FDC is unwired, like the CPC; "HATE.DSK" proves it.
 #define DISC_PER_FRAME (312<<6) // = 1 MHz / 50 Hz ; compare with TICKS_PER_FRAME
+#define DISC_CURRENT_PC z80_pc.w
 
 #define DISC_NEW_SIDES 1
 #define DISC_NEW_TRACKS 40
 #define DISC_NEW_SECTORS 9
-char DISC_NEW_SECTOR_IDS[]={0xC1,0xC6,0xC2,0xC7,0xC3,0xC8,0xC4,0xC9,0xC5};
+BYTE DISC_NEW_SECTOR_IDS[]={0xC1,0xC6,0xC2,0xC7,0xC3,0xC8,0xC4,0xC9,0xC5};
 #define DISC_NEW_SECTOR_SIZE_FDC 2
 #define DISC_NEW_SECTOR_GAPS 82
 #define DISC_NEW_SECTOR_FILL 0xE5
@@ -325,11 +374,12 @@ char DISC_NEW_SECTOR_IDS[]={0xC1,0xC6,0xC2,0xC7,0xC3,0xC8,0xC4,0xC9,0xC5};
 
 // CPU-HARDWARE-VIDEO-AUDIO INTERFACE =============================== //
 
+int audio_dirty,audio_queue=0; // used to clump audio updates together to gain speed
+
 BYTE ula_temp; // Spectrum hardware before PLUS3 "forgets" cleaning the data bus
 int ula_flash,ula_count_x=0,ula_count_y=0; // flash+horizontal+vertical counters
 int ula_pos_x=0,ula_pos_y=0,ula_scr_x,ula_scr_y=0; // screen bitmap counters
 int ula_snow_disabled=0,ula_snow_z,ula_snow_a;
-
 BYTE ula_clash_attrib[32];//,ula_clash_bitmap[32];
 int ula_clash_alpha=0;
 
@@ -343,7 +393,7 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 		if (irq_delay&&(irq_delay-=4)<=0)
 			z80_irq=irq_delay=0; // IRQs are lost after few microseconds
 		if (!ula_clash_alpha++)
-			MEMLOAD(ula_clash_attrib,ula_attrib);//,MEMLOAD(ula_clash_bitmap,ula_bitmap); // freeze the VRAM when "racing the beam" is over
+			MEMLOAD(ula_clash_attrib,ula_attrib);//,MEMLOAD(ula_clash_bitmap,ula_bitmap); // half kludge, half cache: freeze the VRAM before "racing the beam" is over
 		int q;
 		if (q=(ula_pos_y>=0&&ula_pos_y<192&&ula_pos_x>=0&&ula_pos_x<32))
 			a=ula_clash_attrib[ula_pos_x],b=ula_bitmap[ula_pos_x];//b=ula_clash_bitmap[ula_pos_x];
@@ -362,7 +412,7 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 				{
 					if ((a&128)&&(ula_flash&16))
 						b=~b;
-					VIDEO_DATATYPE p, v1=video_clut[(a&7)+((a&64)>>3)],v0=video_clut[(a&120)>>3];
+					VIDEO_UNIT p, v1=video_clut[(a&7)+((a&64)>>3)],v0=video_clut[(a&120)>>3];
 					p=b&128?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
 					p=b&64?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
 					p=b&32?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
@@ -375,7 +425,7 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 			}
 			else // BORDER
 			{
-				VIDEO_DATATYPE p=video_clut[16];
+				VIDEO_UNIT p=video_clut[16];
 				VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
 				VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
 			}
@@ -386,10 +436,8 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 		++ula_pos_x;
 		if (++ula_count_x>=ula_limit_x)
 		{
-			if (!video_framecount)
-				video_drawscanline();
-			video_pos_y+=2;
-			video_target+=VIDEO_LENGTH_X*2-video_pos_x;
+			if (!video_framecount) video_drawscanline();
+			video_pos_y+=2,video_target+=VIDEO_LENGTH_X*2-video_pos_x;
 			video_pos_x=0;
 			ula_count_x=0,ula_pos_x=-4; // characters of BORDER before the leftmost byte
 			++ula_count_y;
@@ -402,14 +450,13 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 		}
 		if (ula_pos_x==0&&ula_count_y>=ula_limit_y)
 		{
-			if (!video_framecount)
-				video_endscanlines(video_table[video_type][0]);
+			if (!video_framecount) video_endscanlines(video_table[video_type][0]);
 			video_newscanlines(video_pos_x,(312-ula_limit_y)*2); // 128K screen is one line shorter, but begins one line later than 48K
 			ula_attrib=&(ula_bitmap=ula_screen)[0x1800];
 			++ula_flash;
 			ula_count_y=0,ula_pos_y=248-ula_limit_y; // lines of BORDER before the top byte
 			z80_irq=1; irq_delay=(type_id?33:32); // 128K/+3 VS 48K "early"
-			session_signal|=SESSION_SIGNAL_FRAME; // end of frame!
+			++video_pos_z; session_signal|=SESSION_SIGNAL_FRAME; // end of frame!
 		}
 	}
 	ula_temp=a; // ditto! required for "Cobra" and "Arkanoid"!
@@ -417,13 +464,13 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 
 void audio_main(int t) // render audio output for `t` clock ticks; t is always nonzero!
 {
-	AUDIO_DATATYPE *z=audio_target;
+	AUDIO_UNIT *z=audio_target;
 	psg_main(t);
 	if (z<audio_target)
 	{
 		// ULA MIXER: tape input (BIT 2) + beeper (BIT 4) + tape output (BIT 3; "Manic Miner" song, "Cobra's Arc" speech)
-		AUDIO_DATATYPE k=((tape_status<<4)+((ula_v1&16)<<2)+((ula_v1&8)<<0))<<(AUDIO_BITDEPTH-8);
-		static AUDIO_DATATYPE j=0;
+		AUDIO_UNIT k=((tape_status<<4)+((ula_v1&16)<<2)+((ula_v1&8)<<0))<<(AUDIO_BITDEPTH-8);
+		static AUDIO_UNIT j=0;
 		while (z<audio_target)
 			#if AUDIO_STEREO
 			*z++-=j=((k+j+(k>j))/2),
@@ -436,6 +483,7 @@ void audio_main(int t) // render audio output for `t` clock ticks; t is always n
 
 // autorun runtime logic -------------------------------------------- //
 
+BYTE snap_done; // avoid accidents with ^F2, see all_reset()
 char autorun_path[STRMAX]="",autorun_line[STRMAX];
 int autorun_mode=0,autorun_t=0;
 BYTE autorun_kbd[16]; // automatic keypresses
@@ -502,13 +550,6 @@ INLINE void autorun_next(void)
 
 // Z80-hardware procedures ------------------------------------------ //
 
-Z80W z80_af,z80_bc,z80_de,z80_hl; // Accumulator+Flags, BC, DE, HL
-Z80W z80_af2,z80_bc2,z80_de2,z80_hl2,z80_ix,z80_iy; // AF', BC', DE', HL', IX, IY
-Z80W z80_pc,z80_sp,z80_iff,z80_ir; // Program Counter, Stack Pointer, Interrupt Flip-Flops, IR pair
-BYTE z80_imd; // Interrupt Mode
-BYTE z80_r7; // low 7 bits of R, required by several `IN X,(Y)` operations
-int z80_turbo=0,z80_multi=1; // overclocking options
-
 // the Spectrum hands the Z80 a mainly empty data bus value
 #define z80_irq_bus 0xFF
 // the Spectrum lacks special cases where RETI and RETN matter
@@ -516,22 +557,26 @@ int z80_turbo=0,z80_multi=1; // overclocking options
 // the Spectrum doesn't obey the Z80 IRQ ACK signal
 #define z80_irq_ack()
 
+DWORD main_t=0;
+
 void z80_sync(int t) // the Z80 asks the hardware/video/audio to catch up
 {
-	static int r=0; r+=t;
+	static int r=0; r+=t; main_t+=t;
 	int tt=r/z80_multi; // calculate base value of `t`
 	r-=(t=tt*z80_multi); // adjust `t` and keep remainder
 	if (t)
 	{
-		if (type_id==3&&!disc_disabled)
+		if (type_id==3/*&&!disc_disabled*/)
 			disc_main(t);
 		if (tape_enabled)
-			tape_main(t);
+			tape_main(t),audio_dirty|=(int)tape; // echo the tape signal thru sound!
 		if (tt)
 		{
 			video_main(tt);
-			if (!audio_disabled)
-				audio_main(tt);
+			//if (!audio_disabled) audio_main(tt);
+			audio_queue+=tt;
+			if (audio_dirty&&!audio_disabled)
+				audio_main(audio_queue),audio_dirty=audio_queue=0;
 		}
 	}
 }
@@ -570,6 +615,8 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 				{
 					ula_v2_send(b);
 					session_dirtymenu|=b&32; // show memory change on window
+					if (z80_pc.w==(type_id==3?0x0119:0x00D1)) // warm reset?
+						snap_done=0;
 				}
 			case 4: // 0x9FFD: ???
 				break;
@@ -590,7 +637,7 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 // * tape_skipload controls the physical method (disabling realtime, raising frameskip, etc. during tape operation)
 // * tape_fastload controls the logical method (detecting tape loaders and feeding them data straight from the tape)
 
-BYTE tape_fastload=1,tape_skipload=1,tape_fastskip=0,tape_feedskip=0;
+BYTE /*tape_fastfeed=1,*/tape_fastload=1,tape_skipload=1,tape_fastskip=0,tape_feedskip=0;
 BYTE z80_tape_fastindices[1<<16]; // full Z80 16-bit cache
 
 const BYTE z80_tape_fastdumper[][24]=
@@ -623,9 +670,11 @@ const BYTE z80_tape_fastfeeder[][24]=
 	/*  3 */ {   +0,   3,0x30,0x11,0x3E,  +1,   4,0xB8,0xCB,0x15,0x06,  +1,   1,0xD2 }, // BLEEPLOAD
 	/*  4 */ {   +0,   5,0xCA,0x3E,0x81,0x7B,0xFE,  +1,   5,0x3F,0xCB,0x15,0x30,0xDB }, // ABADIA
 	/*  5 */ {   +0,   2,0xD0,0x3E,  +1,   4,0xB8,0xCB,0x15,0x06,  +1,   2,0x30,0xF3 }, // TIMING TESTS 48K
+	/*  6 */ {   +0,   1,0x30,  +1,   5,0x90,0xCB,0x15,0x30,0xF1 }, // TINYTAPE/MINILOAD
 };
 int z80_tape_fastfeed(WORD p)
 {
+	//if (!tape_fastfeed) return -1;
 	int i=z80_tape_fastindices[p]-128;
 	if (i<0||i>length(z80_tape_fastfeeder)) // already in the cache?
 	{
@@ -688,6 +737,7 @@ INLINE void z80_tape_fastload(void)
 	{
 		case  1: // ZX SPECTRUM SETUP
 			z80_pc.w+=23; // skip delay
+			z80_bc.b.l=2; // border colour
 			tape_enabled|=15; // abridge setup
 			break;
 		case 11: // SPEEDLOCK 3 SETUP 2?
@@ -710,6 +760,8 @@ INLINE void z80_tape_fastload(void)
 							z80_hl.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de.b.l;
 					j=fasttape_feed(),tape_feedskip=z80_hl.b.l=128+(j>>1),z80_bc.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc.b.l>>5,59);
 				}
+				else if (z80_tape_spystack()<=0x0585)
+					fasttape_skipbits(); // if the ROM is expecting the PILOT, throw BYTES and PAUSE away!
 				else
 					z80_r7+=fasttape_add8(z80_bc.b.l>>5,59,&z80_bc.b.h,1)*9;
 				break;
@@ -738,7 +790,10 @@ INLINE void z80_tape_fastload(void)
 					z80_r7+=fasttape_add8(z80_bc.b.l>>5,54,&z80_bc.b.h,1)*8;
 				break;
 			case  4: // TINYTAPE/MINILOAD ("JUSTIN") : (4+5+7+11+4+7+12+2)/4=13
-				fasttape_add8(z80_bc.b.l>>6,50,&z80_bc.b.h,1);
+				if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_fastfeed(z80_tape_spystack())==6)
+					j=fasttape_feed(),tape_feedskip=z80_hl.b.l=128+(j>>1),z80_bc.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc.b.l>>6,50);
+				else
+					fasttape_add8(z80_bc.b.l>>6,50,&z80_bc.b.h,1);
 				break;
 			case  5: // MULTILOAD ("FINAL MATRIX") : (4+5+7+11+4+7+5+4+12+2)/4=15
 				fasttape_add8(z80_bc.b.l>>6,59,&z80_bc.b.h,1);
@@ -843,8 +898,9 @@ void z80_debug_hard(int q,int x,int y)
 	t=s+sprintf(s,"ULA:                ""    %04X:%02X %02X",(WORD)(ula_bitmap-mem_ram),(BYTE)ula_temp,ula_v1);
 	t+=z80_debug_hard1(t,type_id,ula_v2);
 	t+=z80_debug_hard1(t,type_id==3,ula_v3);
-	t+=sprintf(t,"    %04i  T: %05i:%c",
-		1000*(ula_clash_mreq[0]!=ula_clash[0])+100*(ula_clash_mreq[1]!=ula_clash[0])+10*(ula_clash_mreq[2]!=ula_clash[0])+(ula_clash_mreq[3]!=ula_clash[0]),
+	#define Z80_DEBUG_HARD_ULA_CLASH(x) (ula_clash_mreq[x]!=ula_clash[0]?'*':'-')
+	t+=sprintf(t,"    %c%c%c%c  T: %05i:%c",
+		Z80_DEBUG_HARD_ULA_CLASH(0),Z80_DEBUG_HARD_ULA_CLASH(1),Z80_DEBUG_HARD_ULA_CLASH(2),Z80_DEBUG_HARD_ULA_CLASH(3),
 		ula_clash_z,48+ula_clash_mreq[4][(WORD)ula_clash_z]);
 	int i;
 	t+=sprintf(t,"PSG:                ""%02X: ",psg_index);
@@ -864,6 +920,62 @@ void z80_debug_hard(int q,int x,int y)
 		t+=20;
 	}
 }
+#define ONSCREEN_GRAFX_RATIO 8
+void onscreen_grafx_step(VIDEO_UNIT *t,BYTE b)
+{
+	*  t=b&128?VIDEO1(0xFFFFFF):VIDEO1(0);
+	*++t=b& 64?VIDEO1(0xFFFFFF):VIDEO1(0);
+	*++t=b& 32?VIDEO1(0xFFFFFF):VIDEO1(0);
+	*++t=b& 16?VIDEO1(0xFFFFFF):VIDEO1(0);
+	*++t=b&  8?VIDEO1(0xFFFFFF):VIDEO1(0);
+	*++t=b&  4?VIDEO1(0xFFFFFF):VIDEO1(0);
+	*++t=b&  2?VIDEO1(0xFFFFFF):VIDEO1(0);
+	*++t=b&  1?VIDEO1(0xFFFFFF):VIDEO1(0);
+}
+WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
+{
+	WORD s=onscreen_grafx_addr; if (!q)
+	{
+		int xx=0,lx=onscreen_grafx_size;
+		if (lx*=8)
+			while (xx+lx<=mx)
+			{
+				for (int y=0;y<my;++y)
+					for (int x=0;x<lx;x+=8)
+						onscreen_grafx_step(&v[xx+x+y*ww],PEEK(s)),++s;
+				xx+=lx;
+			}
+		// fill remainders
+		for (int y=0;y<my;++y)
+		{
+			v+=xx;
+			for (int x=xx;x<mx;++x)
+				*v++=VIDEO1(0x808080);
+			v+=ww-mx;
+		}
+	}
+	else
+	{
+		int yy=0,ly=onscreen_grafx_size;
+		if (ly)
+			while (yy+ly<=my)
+			{
+				for (int x=0;x<mx;x+=8)
+					for (int y=0;y<ly;++y)
+						onscreen_grafx_step(&v[x+(yy+y)*ww],PEEK(s)),++s;
+				yy+=ly;
+			}
+		// fill remainders
+		v+=yy*ww;
+		for (int y=yy;y<my;++y)
+		{
+			for (int x=0;x<mx;++x)
+				*v++=VIDEO1(0x808080);
+			v+=ww-mx;
+		}
+	}
+	return s;
+}
 #endif
 
 // CPU: ZILOG Z80 MICROPROCESSOR ==================================== //
@@ -875,7 +987,7 @@ void z80_debug_hard(int q,int x,int y)
 #define Z80_PRAE_RECV(w) do{ Z80_IORQ(1,w); if (w&1) Z80_IORQ_1X(3,w); else Z80_MREQ_PAGE(3,4); Z80_SYNC_IO(0); }while(0)
 #define Z80_RECV z80_recv
 #define Z80_POST_RECV(w)
-#define Z80_PRAE_SEND(w) ( Z80_IORQ(1,w), Z80_SYNC_IO(2) ) // the ULA reacts 2 T after the OUT: 0 breaks ULA128, 1 breaks SCROLL17, 3 breaks ULA48!
+#define Z80_PRAE_SEND(w,b) do{ if (((w+1)&3)>=2) audio_dirty=1; Z80_IORQ(1,w), Z80_SYNC_IO(2); }while(0) // the ULA reacts 2 T after the OUT: 0 breaks ULA128, 1 breaks SCROLL17, 3 breaks ULA48!
 #define Z80_SEND z80_send
 #define Z80_POST_SEND(w) do{ if (w&1) Z80_IORQ_1X(3,w); else Z80_MREQ_PAGE(3,4); }while(0)
 // fine timings
@@ -930,7 +1042,6 @@ void all_setup(void) // setup everything!
 	psg_setup();
 	z80_setup();
 }
-BYTE snap_done; // avoid accidents with ^F2, see below
 void all_reset(void) // reset everything!
 {
 	MEMZERO(autorun_kbd);
@@ -970,7 +1081,7 @@ int bios_load(char *s) // load ROM. `s` path; 0 OK, !0 ERROR
 	fread1(mem_rom,sizeof(mem_rom),f);
 	puff_fclose(f);
 	#if 0//1 // fast tape hack!!
-	if (mgetiiii(&mem_rom[i-0x4000+0x0571])==0x10041521)
+	if (equalsiiii(&mem_rom[i-0x4000+0x0571],0x10041521))
 		mem_rom[i-0x4000+0x0571+2]/=2;//mputii(&mem_rom[i-0x4000+0x0571+1],1); // HACK: reduced initial tape reading delay!
 	#endif
 	if (i<(1<<15))
@@ -1009,7 +1120,7 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 	FILE *f=fopen(s,"wb");
 	if (!f)
 		return 1;
-	int i=z80_sp.w; BYTE header[27],q=snap_extended&&!z80_iff.b.l; // no need to save extended 48K snapshots if the stack is safe
+	int i=z80_sp.w; BYTE header[27],q=snap_extended&&!z80_iff.b.l&&z80_pc.w>=0x5B00; // limit extended 48K snapshots to unsafe cases
 	if (!q&&(ula_v2&32)) // strict and 48k!?
 	{
 		i=(WORD)(i-1); POKE(i)=z80_pc.b.h;
@@ -1114,7 +1225,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 		z80_af2.b.l=header[22];
 		SNAP_LOAD_Z80W(23,z80_iy);
 		SNAP_LOAD_Z80W(25,z80_ix);
-		z80_iff.w=header[27]?0x0101:0;
+		z80_iff.w=header[27]?257:0;
 		z80_imd=header[29]&3;
 		if (header[12]!=255&&!z80_pc.w) // HEADER V2+
 		{
@@ -1204,7 +1315,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 		SNAP_LOAD_Z80W(13,z80_bc);
 		SNAP_LOAD_Z80W(15,z80_iy);
 		SNAP_LOAD_Z80W(17,z80_ix);
-		z80_iff.w=(header[19]&4)?0x0101:0;
+		z80_iff.w=(header[19]&4)?257:0;
 		z80_ir.b.l=header[20];
 		SNAP_LOAD_Z80W(21,z80_af);
 		SNAP_LOAD_Z80W(23,z80_sp);
@@ -1217,8 +1328,8 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 		{
 			SNAP_LOAD_Z80W(0,z80_pc);
 			ula_v2_send(header[2]); // set 128k mode
-			if (!(header[2]&32))
-				ula_v3_send(header[3]); // this is unreliable! most emulators don't handle Plus3!
+			if (!(header[2]&32)&&header[3]&&header[3]!=4&&type_id<3&&snap_extended)
+				type_id=3,bios_reload(),ula_v3_send(header[3]); // this is unreliable! most emulators don't handle Plus3!
 			MEMNCPY(&mem_ram[(ula_v2&7)<<14],&mem_ram[0x00000],1<<14); // move bank 0 to active bank
 			for (i=0;i<8;++i)
 				if (i!=5&&i!=2&&i!=(ula_v2&7))
@@ -1227,13 +1338,13 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 		}
 		else // old snapshot type, 48k only: perform a RET
 		{
-			z80_pc.b.l=PEEK(z80_sp.w); /*POKE(z80_sp.w)=0;*/ ++z80_sp.w;
-			z80_pc.b.h=PEEK(z80_sp.w); /*POKE(z80_sp.w)=0;*/ ++z80_sp.w;
+			z80_pc.b.l=PEEK(z80_sp.w); ++z80_sp.w;
+			z80_pc.b.h=PEEK(z80_sp.w); ++z80_sp.w;
 			for (i=8;i<11;++i)
 				psg_table_select(i),psg_table_send(0); // mute channels
 		}
 	}
-	z80_irq=z80_iff0=z80_halted=0; // avoid nasty surprises!
+	z80_irq=z80_halted=0; // avoid nasty surprises!
 	mmu_update(); // adjust RAM and ULA models
 	psg_all_update();
 	z80_debug_reset();
@@ -1282,9 +1393,9 @@ BYTE onscreen_flag=1;
 BYTE joy1_type=2;
 BYTE joy1_types[][5]={
 	{ 0x43,0x42,0x41,0x40,0x44 }, // Kempston
-	{ 0x1B,0x1A,0x18,0x19,0x1C }, // Sinclair 1
-	{ 0x21,0x22,0x24,0x23,0x20 }, // Sinclair 2, Interface II
-	{ 0x23,0x24,0x1C,0x22,0x20 }, // Cursor, Protek, AGF
+	{ 0x1B,0x1A,0x18,0x19,0x1C }, // 4312+5: Sinclair 1
+	{ 0x21,0x22,0x24,0x23,0x20 }, // 9867+0: Interface II, Sinclair 2
+	{ 0x23,0x24,0x1C,0x22,0x20 }, // 7658+0: Cursor, Protek, AGF
 	{ 0x10,0x08,0x29,0x28,0x38 }, // QAOP+Space
 };
 
@@ -1331,6 +1442,7 @@ char session_menudata[]=
 	"=\n"
 	"0x0900 Tape speed-up\tCtrl+F9\n"
 	"0x4900 Tape analysis\tCtrl+Shift+F9\n"
+	//"0x4901 Tape analysis+cheating\n"
 	"0x0901 Tape auto-rewind\n"
 	"0x0400 Virtual joystick\tCtrl+F4\n"
 	"Settings\n"
@@ -1342,11 +1454,14 @@ char session_menudata[]=
 	"=\n"
 	"0x8510 Disc controller\n"
 	"0x8511 Memory contention\n"
-	"0x8512 ULA video noise\n"
+	"0x8512 ULA 48K video noise\n"
 	"0x8513 Strict SNA files\n"
 	"Video\n"
+	"0x8A00 Full screen\tAlt+Return\n"
+	"0x8A01 Zoom to integer\n"
+	"=\n"
 	"0x8901 Onscreen status\tShift+F9\n"
-	"0x8904 Filtering\n"
+	"0x8904 Interpolation\n"
 	"0x8903 X-Masking\n"
 	"0x8902 Y-Masking\n"
 	"=\n"
@@ -1371,11 +1486,14 @@ char session_menudata[]=
 	"0x9400 No frameskip\tNum./\n"
 	"=\n"
 	"0x8C00 Save screenshot\tF12\n"
+	"0xCC00 Record XRF film\tShift+F12\n"
+	"0x8C01 Hi-res XRF mode\n"
+	"0x8C02 Hi-speed XRF mode\n"
 	"Audio\n"
 	"0x8400 Sound playback\tF4\n"
 	#if AUDIO_STEREO
-	//"0xC400 Enable stereo\tShift+F4\n"
 	"0xC401 0% stereo\n"
+	"0xC404 25% stereo\n"
 	"0xC403 50% stereo\n"
 	"0xC402 100% stereo\n"
 	"=\n"
@@ -1399,6 +1517,9 @@ void session_menuinfo(void)
 	session_menucheck(0x8400,!(audio_disabled&1));
 	session_menuradio(0x8401+audio_filter,0x8401,0x8404);
 	session_menucheck(0x8600,!(session_fast&1));
+	session_menucheck(0x8C01,session_filmscale==1);
+	session_menucheck(0x8C02,session_filmtimer==1);
+	session_menucheck(0xCC00,!!session_filmfile);
 	session_menucheck(0x0C00,!!session_wavefile);
 	session_menucheck(0x4C00,!!psg_logfile);
 	session_menucheck(0x8700,!!disc[0]);
@@ -1411,6 +1532,7 @@ void session_menuinfo(void)
 	session_menucheck(0x0900,tape_skipload);
 	session_menucheck(0x0901,tape_rewind);
 	session_menucheck(0x4900,tape_fastload);
+	//session_menucheck(0x4901,tape_fastfeed);
 	session_menucheck(0x0400,session_key2joy);
 	session_menuradio(0x0601+z80_turbo,0x0601,0x0604);
 	session_menuradio(0x8501+joy1_type,0x8501,0x8505);
@@ -1419,6 +1541,7 @@ void session_menuinfo(void)
 	session_menucheck(0x8512,!(ula_snow_disabled));
 	session_menucheck(0x8513,!(snap_extended));
 	session_menucheck(0x8901,onscreen_flag);
+	session_menucheck(0x8A01,session_intzoom);
 	session_menuradio(0x8B01+video_type,0x8B01,0x8B05);
 	session_menuradio(0x0B01+video_scanline,0x0B01,0x0B04);
 	session_menucheck(0x8902,video_filter&VIDEO_FILTER_Y_MASK);
@@ -1426,14 +1549,12 @@ void session_menuinfo(void)
 	session_menucheck(0x8904,video_filter&VIDEO_FILTER_SMUDGE);
 	MEMLOAD(kbd_joy,joy1_types[joy1_type]);
 	#if AUDIO_STEREO
-	//session_menucheck(0xC400,audio_channels);
-	audio_channels=audio_channels<1?0:audio_channels>1?2:audio_channels;
-	session_menuradio(0xC401+audio_channels,0xC401,0xC403);
-	for (int i=0;i<length(psg_stereo);++i)
+	session_menuradio(0xC401+audio_channels,0xC401,0xC404);
+	for (int i=0;i<3;++i)
 		psg_stereo[i][0]=256+psg_stereos[audio_channels][i],psg_stereo[i][1]=256-psg_stereos[audio_channels][i];
 	#endif
 	z80_multi=1+z80_turbo; // setup overclocking
-	sprintf(session_info,"%i:%s ULAv%c %gMHz"//" | disc %s | tape %s | %s"
+	sprintf(session_info,"%i:%s ULAv%c %0.1fMHz"//" | disc %s | tape %s | %s"
 		,(!type_id||(ula_v2&32))?48:128,type_id?(type_id!=1?(type_id!=2?(!disc_disabled?"Plus3":"Plus2A"):"Plus2"):"128K"):"48K",ula_clash_disabled?'0':type_id?type_id>2?'3':'2':'1',3.5*z80_multi);
 }
 int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
@@ -1479,6 +1600,8 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 				"\t(shift: view status)\t"
 				"\t(shift: ..fast load)" // "\t"
 				"\n"
+				"F10\tMenu"
+				"\n"
 				"F11\tNext palette" MESSAGEBOX_WIDETAB
 				"^F11\tNext scanlines" // "\t"
 				"\n"
@@ -1513,15 +1636,18 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 			break;
 		case 0x8200: // F2: SAVE SNAPSHOT..
 			if (s=puff_session_newfile(snap_path,snap_pattern,"Save snapshot"))
+			{
 				if (snap_save(s))
 					session_message(txt_error_snap_save,txt_error);
+				else if (autorun_path!=s) strcpy(autorun_path,s);
+			}
 			break;
 		case 0x0200: // ^F2: RESAVE SNAPSHOT
 			if (*snap_path&&snap_done)
 				if (snap_save(snap_path))
 					session_message(txt_error_snap_save,txt_error);
 			break;
-		case 0x8300: // F3: LOAD ANY FILE..
+		case 0x8300: // F3: LOAD ANY FILE.. // LOAD SNAPSHOT..
 			if (puff_session_getfile(session_shift?snap_path:autorun_path,session_shift?"*.sna;*.z80":"*.sna;*.z80;*.rom;*.dsk;*.tap;*.tzx;*.csw;*.wav",session_shift?"Load snapshot":"Load file"))
 		case 0x8000: // DRAG AND DROP
 			if (any_load(session_parmtr,!session_shift))
@@ -1683,7 +1809,16 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 				tape_skipload=!tape_skipload;
 			break;
 		case 0x0901:
-			tape_rewind=!tape_rewind;
+			//if (session_shift) tape_fastfeed=!tape_fastfeed; else
+				tape_rewind=!tape_rewind;
+			break;
+		case 0x8A00: // FULL SCREEN
+			session_togglefullscreen();
+			session_clrscr();
+			break;
+		case 0x8A01: // ZOOM TO INTEGER
+			session_intzoom=!session_intzoom;
+			session_clrscr();
 			break;
 		case 0x8B01:
 		case 0x8B02:
@@ -1709,8 +1844,19 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 			else
 				video_scanline=(video_scanline+1)&3;
 			break;
-		case 0x8C00: // F12: SAVE SCREENSHOT
-			session_savebitmap();
+		case 0x8C01:
+			if (!session_recording)
+				session_filmscale=3-session_filmscale; // toggle 1 and 2
+			break;
+		case 0x8C02:
+			if (!session_recording)
+				session_filmtimer=3-session_filmtimer; // toggle 1 and 2
+			break;
+		case 0x8C00: // F12: SAVE SCREENSHOT OR RECORD XRF FILM
+			if (!session_shift)
+				session_savebitmap();
+			else if (session_closefilm())
+					session_createfilm();
 			break;
 		case 0x0C00: // ^F12: RECORD WAVEFILE OR YM FILE
 			if (session_shift)
@@ -1722,8 +1868,6 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 			else if (session_closewave()) // toggles recording
 				session_createwave();
 			break;
-		//case 0x8A00: // ^F10
-		//case 0x0A00: // F10
 		case 0x8F00: // ^PAUSE
 		case 0x0F00: // PAUSE
 			if (!(session_signal&SESSION_SIGNAL_DEBUG))
@@ -1773,7 +1917,7 @@ void session_configwritemore(FILE *f)
 		,type_id,joy1_type,snap_extended,autorun_path,snap_path,tape_path,disc_path,bios_path,onscreen_flag,video_type,tape_rewind,z80_debug_configwrite());
 }
 
-#if defined(DEBUG) || defined(SDL_MAIN_HANDLED)
+#if defined(CONSOLE_DEBUGGER) || defined(SDL_MAIN_HANDLED)
 void printferror(char *s) { printf("error: %s!\n",s); }
 #define printfusage(s) printf(MY_CAPTION " " MY_VERSION " " MY_LICENSE "\n" s)
 #else
@@ -1805,14 +1949,14 @@ int main(int argc,char *argv[])
 			{
 				switch (argv[i][j++])
 				{
-					case 'c':
-						video_scanline=(BYTE)(argv[i][j++]-'0');
-						if (video_scanline<0||video_scanline>3)
-							i=argc; // help!
-						break;
 					case 'C':
 						video_type=(BYTE)(argv[i][j++]-'0');
 						if (video_type<0||video_type>4)
+							i=argc; // help!
+						break;
+					case 'c':
+						video_scanline=(BYTE)(argv[i][j++]-'0');
+						if (video_scanline<0||video_scanline>3)
 							i=argc; // help!
 						break;
 					case 'd':
@@ -1823,17 +1967,17 @@ int main(int argc,char *argv[])
 						if (joy1_type<0||joy1_type>=length(joy1_types))
 							i=argc; // help!
 						break;
-					case 'j':
-						session_key2joy=1;
-						break;
-					case 'J':
-						session_stick=0;
-						break;
 					case 'I':
 						ula_v1_issue=~0;
 						break;
 						;
 						;
+					case 'J':
+						session_stick=0;
+						break;
+					case 'j':
+						session_key2joy=1;
+						break;
 					case 'K':
 						psg_disabled=1;
 						break;
@@ -1845,13 +1989,13 @@ int main(int argc,char *argv[])
 					case 'O':
 						onscreen_flag=0;
 						break;
+					case 'R':
+						session_fast=1;
+						break;
 					case 'r':
 						video_framelimit=(BYTE)(argv[i][j++]-'0');
 						if (video_framelimit<0||video_framelimit>9)
 							i=argc; // help!
-						break;
-					case 'R':
-						session_fast=1;
 						break;
 					case 'S':
 						session_audio=0;
@@ -1939,8 +2083,8 @@ int main(int argc,char *argv[])
 				z80_multi*( // clump Z80 instructions together to gain speed...
 				tape_fastskip?ula_limit_x*4: // tape loading ignores most events and heavy clumping is feasible, although some sync is still needed
 					irq_delay?irq_delay:(ula_pos_y<-1?(-ula_pos_y-1)*ula_limit_x*4:ula_pos_y<192?(ula_limit_x-ula_pos_x+ula_clash_delta)*4:
-					ula_count_y<ula_limit_y-1?(ula_limit_y-ula_count_y-1)*ula_limit_x*4:4 // the safest way to handle the fastest interrupt countdown possible (ULA SYNC)
-				)<<(session_fast&~1)) // ...without missing any IRQ and ULA deadlines!
+					ula_count_y<ula_limit_y-1?(ula_limit_y-ula_count_y-1)*ula_limit_x*4:0 // the safest way to handle the fastest interrupt countdown possible (ULA SYNC)
+				)<<(session_fast>>1)) // ...without missing any IRQ and ULA deadlines!
 			);
 		if (session_signal&SESSION_SIGNAL_FRAME) // end of frame?
 		{
@@ -1975,7 +2119,6 @@ int main(int argc,char *argv[])
 					onscreen_bool(-6,-5,1,3,kbd_bit_tst(kbd_joy[2]));
 					onscreen_bool(-2,-5,1,3,kbd_bit_tst(kbd_joy[3]));
 					onscreen_bool(-4,-4,1,1,kbd_bit_tst(kbd_joy[4]));
-					;
 				}
 			}
 			// update session and continue
@@ -1983,8 +2126,9 @@ int main(int argc,char *argv[])
 				autorun_next();
 			if (!audio_disabled)
 				audio_main(TICKS_PER_FRAME); // fill sound buffer to the brim!
-			psg_writelog();
-			ula_snow_a=(type_id<2&&z80_ir.b.h>=0x40&&z80_ir.b.h<0x80&&!ula_snow_disabled)?27:0;
+			audio_queue=0; // wipe audio queue and force a reset
+			psg_writelog(); session_writefilm();
+			ula_snow_a=(!(type_id|ula_snow_disabled)&&z80_ir.b.h>=0x40&&z80_ir.b.h<0x80)?27:0; // 48K only
 			ula_clash_z=(ula_clash_z&3)+(ula_count_y*ula_limit_x+ula_pos_x)*4;
 			if (tape_type<0&&tape&&!z80_iff.b.l) // tape is recording?
 				tape_enabled|=4;
@@ -1993,6 +2137,8 @@ int main(int argc,char *argv[])
 			if (tape_closed)
 				tape_closed=0,session_dirtymenu=1; // tag tape as closed
 			tape_fastskip=tape_feedskip=audio_pos_z=0;
+			;
+			;
 			if (tape&&tape_skipload&&tape_enabled)
 				session_fast|=6,video_framelimit|=(MAIN_FRAMESKIP_MASK+1),video_interlaced|=2,audio_disabled|=2; // abuse binary logic to reduce activity
 			else
@@ -2001,16 +2147,13 @@ int main(int argc,char *argv[])
 		}
 	}
 	// it's over, "acta est fabula"
-	z80_debug_close();
+	z80_close();
 	tape_close();
 	disc_close(0); disc_close(1);
-	psg_closelog();
+	psg_closelog(); session_closefilm();
 	session_closewave();
 	if (f=fopen(session_configfile(),"w"))
-	{
-		session_configwritemore(f),session_configwrite(f);
-		fclose(f);
-	}
+		session_configwritemore(f),session_configwrite(f),fclose(f);
 	return puff_byebye(),session_byebye(),0;
 }
 

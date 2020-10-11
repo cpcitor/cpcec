@@ -26,21 +26,22 @@ in the file GPL.TXT within the package.
 
 The default build of CPCEC requires a Microsoft Windows 2000 operating system or
 later, while the SDL2 build requires any operating system supported by the SDL2
-library. The minimal hardware requirements are those fitting the operating
-system, and it's advised that the main microprocessor runs at 400 MHz at least.
-Screen resolution in pixels must be 800x600 at least. A sound card is optional.
-Using a joystick is optional, too.
+library [http://www.libsdl.org/] from version 2.0.4 or higher. The minimal
+hardware requirements are those fitting the operating system, and it's advised
+that the main microprocessor runs at 400 MHz at least. Screen resolution in
+pixels must be 800x600 at least. A sound card is optional, as well as equipping
+a joystick.
 
-The emulator spans several files: the runnable binaries CPCEC.EXE and ZXSEC.EXE
-for Windows, CPCEC.ELF and ZXSEC.ELF for GNU/Linux, and the firmware files
-CPC464.ROM, CPC664.ROM, CPC6128.ROM, CPCADOS.ROM, CPCPLUS.ROM, SPEC128K.ROM,
-SPEC-P-2.ROM, SPEC-P-3.ROM and SPECTRUM.ROM. All these files must be copied in a
-single directory, ideally created to host the emulator.
+The emulator spans several files: the runnable binaries (by default CPCEC.EXE
+and ZXSEC.EXE for Windows) and the firmware files CPC464.ROM, CPC664.ROM,
+CPC6128.ROM, CPCADOS.ROM, CPCPLUS.ROM, SPEC128K.ROM, SPEC-P-2.ROM, SPEC-P-3.ROM
+and SPECTRUM.ROM. All these files must be copied in a single directory, ideally
+created to host the emulator.
 
 The binaries can be compiled from the source files by following the instructions
-in the next paragraphs. GCC 4.9.2, GCC 5.1.0, Pelles 4.50.113 and TCC 0.9.27
-work correctly; GCC 4.7.1 makes severe mistakes in compilation and generates
-invalid binaries.
+in the next paragraphs. GCC 4.9.2, GCC 5.1.0, Pelles 4.50.113, TCC 0.9.27 and
+Clang 3.7.1 work correctly; GCC 4.7.1 makes severe mistakes in compilation and
+can generate invalid binaries.
 
 The Windows binaries can be compiled from GCC (or compatible) through the
 following commands:
@@ -62,12 +63,12 @@ them from the Win32 SDK.
 
 The binaries for operating systems supported by SDL2 need different commands:
 
-	gcc -DSDL_MAIN_HANDLED -O2 -xc cpcec.c -lSDL2 -ocpcec.elf
+	gcc -DSDL2 -O2 -xc cpcec.c -lSDL2 -ocpcec
 
-	gcc -DSDL_MAIN_HANDLED -O2 -xc zxsec.c -lSDL2 -ozxsec.elf
+	gcc -DSDL2 -O2 -xc zxsec.c -lSDL2 -ozxsec
 
-(besides, the filenames must be in lower case: the contents of the ZIP archive
-must be extracted with "unzip -LL cpcec-20XXXXXX.zip")
+Besides, the filenames must be in lower case: the contents of the ZIP archive
+may need to be extracted with "unzip -LL cpcec-20XXXXXX.zip".
 
 ## Configuration and files ##
 
@@ -124,6 +125,8 @@ of a magnetic tape used to store and distribute data and software.
 magnetic floppy disc able to contain data and software.
 * SNA: "snapshots", integral copies of the state of an emulated system that make
 possible resuming in a later time said state of emulation.
+* ROM and CPR: firmwares and cartridges. The firmware contains the BIOS and the
+BASIC interpreter; cartridges were used by the Amstrad Plus series.
 
 Tape playback relies on two methods (enabled by default) to improve the user
 experience by shortening a procedure that was originally very slow: a typical
@@ -143,7 +146,7 @@ that is often specified in the software instructions, or be simply DISC or DISK)
 in the emulated system and pressing RETURN. In case of doubt, the command CAT
 shows the list of files stored inside the disc.
 
-## Function keys ##
+## Functions ##
 
 Once it's running, CPCEC shows the screen of the emulated system and obeys the
 user's commands, that besides those belonging to said system (control and
@@ -161,12 +164,17 @@ doubt, key F1 shows a short index of these function keys.
 * F4+Control: enable (or disable) the keyboard-emulated joystick;
 * F5: choose the emulated CPC firmware, that can be a ROM file, an INI file or a
 CPR-formatted cartridge;
+* F5+Shift: insert Dandanator cartridge; bear in mind that these cartridges are
+internally different to the CPC firmwares and thus must be handled separately;
 * F5+Control: reset the emulation;
+* F5+Control+Shift: remove Dandanator cartridge;
 * F6: enable (or disable) realtime emulation;
 * F6+Control: raise the speed of the emulated Z80 from 4 MHz to 8, 12 and 16
 MHz;
 * F6+Control+Shift: lower its speed to 12, 8 and 4 MHz;
-* F7: insert a disc file into the virtual disc drive A;
+* F7: insert a disc file into the virtual disc drive A; notice that the access
+mode is read-only unless the user explicitly enables read-write access on the
+file selection dialog;
 * F7+Shift: insert a disc file into the virtual disc drive B;
 * F7+Control: remove the disc from the virtual disc drive A;
 * F7+Control+Shift: remove the disc from the virtual disc drive B;
@@ -185,6 +193,7 @@ levels;
 interlace;
 * F11+Control+Shift: ditto in reverse, from double interlace to half scanlines;
 * F12: record the content of the screen into a BMP file;
+* F12+Mays: record a video in the temporary format XRF;
 * F12+Control: start recording (or stop) the sound into a WAV file;
 * F12+Control+Shift: start recording (or stop) the sound into a YM file;
 * Pause: stop (or resume) emulation;
@@ -226,7 +235,9 @@ power, or 2.- the user needs to speed the emulation up for a while.
 * Num./ : sets the value of frameskip to the minimum, 0.
 
 The menu also includes several additional options (for example CRTC type) as
-well as actions such as browsing the contents of the current tape.
+well as actions such as flipping the sides of inserted discs, browsing the
+contents of the current tape or enabiling the hardware extensions Dandanator and
+Playcity, disabled by default.
 
 CPCEC supports drag-and-drop. Dropped files will be automatically loaded (as F3
 does) unless the Shift key is down; in this case they will be inserted as F7 and
@@ -250,9 +261,11 @@ notation.
 * Cursors, Page Up and Page Down move the cursor within the current panel;
 * Tab (or Shift+Tab) move the cursor to the next (or previous) panel;
 * Digits from 0 to 9 and letters from A to F modify the value under the cursor;
+* Stop (".") creates or deletes a breakpoint in the current cursor location in
+the disassembly;
 * G ("go to") requests an address (in hexadecimal) and moves the cursor to its
 location in the disassembly or the memory dump;
-* H shows a short help;
+* H ("help") shows a short help;
 * I ("input") requests a filename and loads its contents onto memory starting
 from the current location of the cursor;
 * J ("jump to") sets the PC to the location under the cursor in the disassembly;
@@ -268,6 +281,9 @@ can write (RAM only; the separator is `\`);
 with a memory dump starting from the current location of the cursor;
 * P ("print") requests a length in bytes and a filename, and creates a file with
 a disassembly starting from the current location of the cursor;
+* Q toggles the behavior of illegal opcode $EDFF, either as in normal mode
+("EDFF-") where it does nothing special or in development mode ("EDFF+") where
+its a breakpoint;
 * R ("run to") runs the emulation until reaching the operation under the cursor
 in the disassembly;
 * S ("search") requests either an ASCII string (case insensitive) or a
@@ -276,12 +292,14 @@ searches the memory for it since the current location until the last valid
 address. If it finds the string it moves the cursor next to it in either the
 disassembly or the memory dump;
 	+ N ("next") searches again the memory for the same string;
-* T ("toggle") creates or deletes a breakpoint in the current cursor location in
-the disassembly;
+* T ("timer") resets the timer; its value increases as emulaton goes on;
 * U ("return") resumes the emulation until reaching the current call's return
 address;
-* V changes the debugger appearance, toggling black or white colours and thin or
-bold characters;
+* V ("view") changes the debugger appearance, toggling black or white colours
+and thin or bold characters;
+* W ("watch") toggles between the emulation debugger and the graphics viewer;
+the cursors, Page Up/Down and key "G" browse the memory, Home and End shrink and
+expand the graphics width, and Tab toggles between horizontal and vertical mode;
 * X toggles the classic/Plus hardware information panel;
 * Z deletes all breakpoints;
 * Space ("step into") runs exactly one operation and stops on the next
@@ -292,6 +310,29 @@ It behaves differently from SPACE if the current instruction performs a call;
 * Escape stops the debugger and resumes the emulation.
 
 Usage of upper and lower case is unimportant; the debugger isn't case sensitive.
+
+## Videos ##
+
+Videos are recorded as XRF files, a middle step (low compression, low CPU usage)
+previous to the generation of conventional video files.
+
+The included tool XRF turns a XRF-type file into an AVI-type file. It works in
+two different ways, one is exclusive of Windows, the other one is general.
+
+When compiling the tool for Windows (it needs the system library AVIFIL32: "gcc
+-lavifil32 -xc xrf.c -oxrf.exe") and running it with the syntax "xrf source.xrf
+target.avi ABCD" it will read the file "source.xrf" and generate a file named
+"target.avi" with the help of the codec ABCD, if it's available. It's advised to
+install and use the codec ZMBV developed by the Dosbox project because it
+provides the best performance in pixellated recordings like these.
+
+In other systems XRF cannot directly use any codec, so the outcome is an AVI
+file without any compression (image is RGB 24 bpp, sound is stereo PCM);
+fortunately, it can generate it through the console by specifying "-" instead of
+"target.avi" and feed this way a video encoding tool, for example FFMPEG: the
+command line "xrf source.xrf - | ffmpeg -i - target.avi" will delegate on FFMPEG
+the task of encoding the AVI file. Read the documentation of FFMPEG on this
+matter.
 
 ## ZXSEC ##
 
@@ -625,16 +666,16 @@ corresponding cartridges.
 "Synergy 4" (top left sprites disappear after few seconds, though) and adding
 the command Shift+Space (skip scanline) to the debugger.
 - 20200404 -- minor patch fixing the DMA handler (all commands but LOAD can be
-combined together) and removing several "kludges" for PLUS but the one for
+combined together) and removing several "kludges" for Plus but the one for
 "Black Sabbath": thanks to Norecess464 for locating the bug. Also, -C now
 becomes -C0..4.
-- 20200406 -- minor patch adding partially multiplexed PLUS sprite rendering:
+- 20200406 -- minor patch adding partially multiplexed Plus sprite rendering:
 "Synergy 4" recovers its top left sprites.
 - 20200418 -- minor patch with improvements in the interrupt counter (it starts
 with the first HSYNC fall after the VSYNC rise -"Onescreen Colonies"- unless on
-PLUS where it can start when the VSYNC rise happens together with the HSYNC
+Plus where it can start when the VSYNC rise happens together with the HSYNC
 fall: "Black Sabbath"), the hardware ports (PIO port A returns zero when reading
-it in write mode unless on PLUS where it returns 255 -"Tire au Flan"-, PIO port
+it in write mode unless on Plus where it returns 255 -"Tire au Flan"-, PIO port
 B must set VSYNC in the middle of the screen when the CRTC requests it -"Chany
 Dream End Megademo"- and the Gate Array's 0-191 byte range requires a more rigid
 port logic -"Overflow Preview 3"-) and the debugger: disassembly parameters are
@@ -667,7 +708,7 @@ CPC PIO (the read-only mode of port A allowed writing), another bug in the tape
 analysis (CPCEC: the algorithm for TITUS caused trouble in "The Blues Brothers";
 ZXSEC: Speedlock5 didn't recognize the heading noise; both systems add patches
 to shorten the initial delays), another one in the loading of CPC snapshots (a
-snapshot saved on PLUS hardware without the "CPC+" block showed a completely
+snapshot saved on Plus hardware without the "CPC+" block showed a completely
 black palette), another one in the Z80 debugger (the command 'P0 could generate
 an infinite disassembly), another one on tape handling (reading a WAV file must
 use >128 as reference instead of >=128) and some problems in Win32 (the screen
@@ -683,3 +724,19 @@ content: 256 bytes of memory dump and 32 bytes of stack).
 allocated if the user loads a "profile"), rendering SYNC signals as black rather
 than as the current border, and fixing the 3D cylinders part of "PhX" on CRTC1;
 the "ball worms" and the final scroller stay bad on CRTC3 and CRTC4, though.
+- 20201010 -- eighteenth public release. Fully rewritten CRTC logic, with an
+internal event system that extends demo compatibility (for example "Chapelle
+Sixteen", "Madness Demo" and "S&KOH" for CRTC1) and a fully multiplexed Plus
+sprite renderer. More disc protections (ERE, UBI) are supported, WRITE DELETED
+DATA updates the corresponding flag in the sector table. New Dandanator support,
+read-only ("Sword of Ianna"). Preliminary Playcity support, limited to the two
+extra PSG and the NMI trigger. New video recording based on an intermediary
+format XRF, and including a tool allowing to convert it into AVI files.
+Improvements in the SDL interface, with a bigger font (12px rather than 8px) and
+vertical alignment in menu keyboard shortcuts. Added new debugging functions
+(looking at graphics in memory with key "W", trapping the opcode $EDFF as a
+breakpoint, etc.) and moved breakpoints from "T" to "." . Removed CPCEC.ELF and
+ZXSEC.ELF as they're bound to a single OS (Linux Mint 18 32bit) and the user
+must compile the binaries anyway. Moved the configuration files in non-Windows
+systems from CPCEC.INI and ZXSEC.INI to .cpcecrc and .zxsecrc as customary on
+Unix. Tweaks for CLANG compatibility.

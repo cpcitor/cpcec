@@ -23,7 +23,7 @@ BYTE disc_change[4],disc_motor,disc_action,disc_track[4],disc_flip[4],disc_canwr
 // as a result, we must assign each drive a set of data structures.
 
 BYTE disc_index_table[4][256]; // "MV - CPC" disc header - one for each drive
-BYTE disc_track_table[8][256]; // current track info - one for each drive AND side, because one SEEK TRACK enables access to BOTH sides of said track!
+BYTE disc_track_table[8][512]; // current track info - one for each drive AND side, because one SEEK TRACK enables access to BOTH sides of said track!
 int disc_track_offset[8]; // current tracks' file offsets - one for each drive and side
 #define disc_track_reset(d) (MEMZERO(disc_track_table[d]),MEMZERO(disc_track_table[d+4])) // invalidate drive `d` tracks
 
@@ -63,8 +63,9 @@ int disc_open(char *s,int drive,int canwrite) // open a disc file. `s` path, `dr
 	if (!(disc[drive]=puff_fopen(s,(disc_canwrite[drive]=canwrite)?"rb+":"rb")))
 		return 1; // cannot open disc!
 	int q=1; // error flag
-	if (fread(disc_index_table[drive],1,256,disc[drive])==256)
-		if (disc_index_table[drive][0x30]<110&&disc_index_table[drive][0x31]>0&&disc_index_table[drive][0x31]<3&&!disc_index_table[drive][0x32]&&(!memcmp("MV - CPC",disc_index_table[drive],8)||!memcmp("EXTENDED",disc_index_table[drive],8)))
+	if (fread(disc_index_table[drive],1,256,disc[drive])==256
+		&&disc_index_table[drive][0x30]<110&&disc_index_table[drive][0x31]>0&&disc_index_table[drive][0x31]<3
+		&&(!memcmp("MV - CPC",disc_index_table[drive],8)||!memcmp("EXTENDED",disc_index_table[drive],8)))
 			q=0; // ID and fields are valid
 	disc_track_reset(drive);
 	if (q)
@@ -74,7 +75,7 @@ int disc_open(char *s,int drive,int canwrite) // open a disc file. `s` path, `dr
 	return q;
 }
 
-char disc_scratch[256]; // we don't want to touch buffers that might be active
+BYTE disc_scratch[256]; // we don't want to touch buffers that might be active
 char disc_header_text[]="EXTENDED Disk-File\015\012" MY_CAPTION " " MY_VERSION "\015\012\032";
 char disc_tracks_text[]="Track-Info\015\012";
 
@@ -152,7 +153,7 @@ int disc_track_load(int d,int c) // setup track `c` from drive `d`; 0 OK, !0 ERR
 	}
 	fseek(disc[d],disc_track_offset[d]=i,SEEK_SET);
 	if (k>1) // tracks without a body are equivalent to empty tracks!
-		fread(disc_track_table[d],1,256,disc[d]);
+		fread1(disc_track_table[d],512,disc[d]); // tracks with >29 sectors use 512 bytes rather than just the first 256 bytes
 	if (disc_index_table[d][0x31]>1) // is it a two-sided disc?
 	{
 		if (disc_index_table[d][0]=='M') // old style
@@ -164,7 +165,7 @@ int disc_track_load(int d,int c) // setup track `c` from drive `d`; 0 OK, !0 ERR
 		}
 		fseek(disc[d],disc_track_offset[d+4]=i,SEEK_SET);
 		if (k>1)
-			fread(disc_track_table[d+4],1,256,disc[d]);
+			fread1(disc_track_table[d+4],512,disc[d]);
 	}
 	if (disc_index_table[d][0]=='M') // old style discs lack the explicit size field and thus require calculation
 		for (k=d;k<8;k+=4) // check both sides
@@ -200,13 +201,14 @@ int disc_sector_find(int d) // look for sector `CHRN` in disc_parmtr[2..5] in tr
 		//logprintf("{%02X%02X%02X%02X} ",disc_track_table[d][disc_sector_last*8+0x18],disc_track_table[d][disc_sector_last*8+0x19],disc_track_table[d][disc_sector_last*8+0x1A],disc_track_table[d][disc_sector_last*8+0x1B]);
 	}
 	if (disc_parmtr[4]==0xFF&&disc_parmtr[5]==0x00&&disc_parmtr[6]==0xFF)
-		disc_sector_last=-1; // kludge to please TCOPY3 (that performs 46 00,00,00,FF,00,FF,00,80 before the first READ ID) without breaking neither DALEY TOC, 5KB DEMO 3 or DESIGN DESIGN games!
+		disc_sector_last=-1; // kludge: satisfy TCOPY3 (that performs 46 00,00,00,FF,00,FF,00,80 before the first READ ID) without hurting neither DALEY TOC, 5KB DEMO 3 or DESIGN DESIGN games!
 	return 1; // sector not found!
 }
+int disc_skew_length,disc_skew_filler; // required when READ SECTOR with N > physical size forces inserting inter-sector bytes
 void disc_sector_seek(int d,int z) // seek sector `z` (usually `disc_sector_last`) in current track at unit+side `d`; 0 OK, !0 ERROR
 {
 	disc_offset=0; // reset buffer
-	int i=256,j; // track header must be skipped
+	int i=disc_track_table[d][0x15]>29?512:256,j; // track header must be skipped
 	for (j=0;j<z;++j)
 		i+=disc_sector_size(d,j);
 	disc_length=128<<(disc_track_table[d][j*8+0x1B]&15); // sector size is defined by the sector's own N, but value isn't always reliable; see below.
@@ -215,9 +217,18 @@ void disc_sector_seek(int d,int z) // seek sector `z` (usually `disc_sector_last
 	// an inconvenient in the definition of the format is that extra copies of the sector can be stored (i.e. "weak sectors") as well as the bytes kept in the GAP between sectors ("READ TRACK" reveals them)
 	// but the definition itself isn't clear on how to tell apart whether extra bytes are meant to be extra copies, GAP bytes, or even both. Hence the following heuristics:
 	if (disc_length>=disc_lengthfull) // explicit size is smaller than implicit size?
-		disc_length=disc_lengthfull; // clip the size accordingly!
-	else //if (disc_track_table[d][j*8+0x1B]<7) // is the size legal? when N is 7 or higher the sector is completely nonstandard and is dumped whole as a single piece
 	{
+		if (disc_length==0x0800&&disc_lengthfull==0x0100)/*&&disc_track_table[d][j*8+0x1C]==0x20*/ // ERE SOFTWARE (is this used elsewhere?)
+			disc_skew_length=32,disc_skew_filler=disc_track_table[d][0x22],logprintf("(ERE!:%02X) ",disc_skew_filler); // this is where the 0x44 comes from; it's part of a complex header but it works
+		else if (disc_length==0x2000&&disc_lengthfull<0x0900) // the educational "REUSSIR..." series
+			disc_skew_length=disc_length-disc_lengthfull,disc_skew_filler=disc_buffer[511]/*0xCB*/,logprintf("(REU!:%02X) ",disc_skew_filler); // this is what the strange filler byte is compared against
+		else
+			disc_skew_length=0;
+		disc_length=disc_lengthfull; // clip the size accordingly!
+	}
+	else //if (disc_track_table[d][j*8+0x1B]<7) // is the size legal? when N is 7 or higher the sector is completely nonstandard and is dumped in a single piece
+	{
+		disc_skew_length=0;
 		if (disc_track_table[d][j*8+0x1D]&32) // CRC ERROR (0x20) bit is on?
 		{
 			if (++disc_sector_weak>=(disc_lengthfull/disc_length)) // out of copies?
@@ -277,18 +288,22 @@ void disc_sector_loadgaps(void) // used by READ TRACK
 	if (disc_sector_last>=disc_track_table[disc_trueunithead][0x15])
 		disc_sector_last=0; // wrap to first sector in track
 	disc_sector_seek(disc_trueunithead,disc_sector_last);
-	/* // Batman the Movie (Spectrum +3) dislikes padding (!?)
-	if (disc_length>=disc_lengthfull) // pad the length with FORMAT bytes?
+	fread1(disc_buffer,disc_lengthfull,disc[disc_trueunit]); // normal case
+	// UBI SOFT's discs need padding, but Batman the Movie (Spectrum +3) rejects it (?): parameter 2 is nonzero when padding must be skipped (!)
+	if (disc_length==disc_lengthfull&&!disc_parmtr[2]) // pad the length with inter-sector bytes?
 	{
-		int i=6+disc_track_table[disc_trueunithead][0x16]; // size of padding
-		//logprintf("[PAD %02X] ",i);
-		memset(&disc_buffer[disc_lengthfull=disc_length],disc_track_table[disc_trueunithead][0x17],i);
-		disc_length+=i;
+		int i=2+disc_track_table[disc_trueunithead][0x16]+12+3+7+(disc_sector_last+1==disc_track_table[disc_trueunithead][0x15]?374:22); // size of padding
+		disc_length=disc_lengthfull;
+		logprintf("(GAP!:%04X) ",i);
+		memset(&disc_buffer[disc_length],0x4E,i); // first layer: enough to satisfy "Conspiration de l'an III"
+		memset(&disc_buffer[disc_length+i-12-3-7-22],0,12); // second layer: required by "E.X.I.T." and "Le Nécromancien"
+		//memset(&disc_buffer[disc_length+i-3-7-22],0xA1,3); // third layer, it happens always, but not sure if necessary
+		disc_lengthfull=disc_length+=i;
 	}
-	*/
+	else
+		disc_length=disc_lengthfull; // clip! Batman the Movie for Spectrum doesn't want any inter-sector data!
 	disc_action|=1;
-	fread(disc_buffer,1,disc_length=disc_lengthfull,disc[disc_trueunit]); // normal case
-	disc_delay=disc_phase=3;
+	disc_delay=1,disc_phase=3;
 	disc_timer=DISC_TIMER_INIT;
 }
 void disc_sector_load(void) // read a sector and set the status flags accordingly
@@ -331,8 +346,8 @@ void disc_sector_load(void) // read a sector and set the status flags accordingl
 				disc_sector_seek(disc_trueunithead,disc_sector_last);
 				logprintf("[RD %04X] ",disc_length);
 				disc_action|=1;
-				fread(disc_buffer,1,disc_length,disc[disc_trueunit]);
-				disc_delay=disc_phase=3;
+				fread1(disc_buffer,disc_length,disc[disc_trueunit]);
+				disc_delay=1,disc_phase=3;
 				disc_timer=DISC_TIMER_INIT*disc_sector_timer;
 			}
 		}
@@ -474,7 +489,7 @@ void disc_data_send(BYTE b) // DATA I/O
 {
 	if (disc_phase==0) // IDLE?
 	{
-		logprintf("FDC: %02X ",b);
+		logprintf("FDC %08X: %02X ",DISC_CURRENT_PC,b);
 		disc_offset=disc_phase=1;
 		switch ((disc_parmtr[0]=b)&31)
 		{
@@ -575,7 +590,7 @@ void disc_data_send(BYTE b) // DATA I/O
 					{
 						if (disc_length=disc_parmtr[5]>=7?0:(128<<disc_parmtr[5])) // reject invalid sizes
 						{
-							disc_delay=disc_phase=2;
+							disc_delay=1,disc_phase=2;
 							disc_timer=DISC_TIMER_INIT;
 						}
 						else // invalid size
@@ -597,7 +612,7 @@ void disc_data_send(BYTE b) // DATA I/O
 					{
 						if ((disc_length=disc_parmtr[3]*4)&&disc_length<=224)
 						{
-							disc_delay=disc_phase=2;
+							disc_delay=1,disc_phase=2;
 							disc_timer=DISC_TIMER_INIT;
 						}
 						else
@@ -627,7 +642,7 @@ void disc_data_send(BYTE b) // DATA I/O
 					}
 					else // disc is ready, track is valid
 					{
-						disc_sector_last=0,disc_sector_loadgaps();
+						disc_sector_last=equalsii(&disc_track_table[disc_trueunithead][0x20],0x0401),disc_sector_loadgaps(); // kludge: "Le Nécromancien" expects READ TRACK to begin at the second sector in track 0
 					}
 					break;
 				case 0x06: // READ DATA
@@ -675,7 +690,7 @@ void disc_data_send(BYTE b) // DATA I/O
 						}
 					}
 					disc_length=7;
-					disc_delay=disc_phase=4;
+					disc_delay=mgetii(&disc_track_table[disc_trueunithead][0x1E])*2,disc_phase=4; // crude delay that satisfies Ubi Soft's "La Chose de Grotemburg"
 					break;
 				case 0x04: // SENSE DRIVE STATUS
 					disc_result[0]=(disc_parmtr[1]&7)|(disc_initstate()?0:0x20)|(disc_track[disc_trueunit]?0:0x10); // 0x20: Ready; 0x10: Track 0
@@ -692,7 +707,7 @@ void disc_data_send(BYTE b) // DATA I/O
 					disc_parmtr[2]=0; // no `break`! `recalibrate` equals to `seek track 0`
 				case 0x0F: // SEEK
 					disc_status|=1<<DISC_PARMTR_UNIT; // tag drive as busy!
-					disc_initstate();
+					disc_initstate(); disc_result[0]&=~0x48; // remove 0x48 because it doesn't matter here (fixes "Basun")
 					disc_track_load(disc_trueunit,disc_track[disc_trueunit]=disc_parmtr[2]); // even if there's trouble, the head must move anyway (fixes "Dark Century")
 					// kludge: -1 fixes DALEY TOC and DESIGN DESIGN games but breaks 5KB DEMO 3 (that expects 0) while TCOPY3 expects -1 rather than 0!
 					disc_sector_last=(disc_parmtr[2]==0&&disc_track_table[disc_trueunithead][0x1A]==0x41&&disc_track_table[disc_trueunithead][0x22]==0xC1&&disc_track_table[disc_trueunithead][0x2A]==0xC6)?0:-1;
@@ -733,7 +748,19 @@ void disc_data_send(BYTE b) // DATA I/O
 						logprintf("[WR %04X] ",disc_length);
 						disc_action|=2;
 						if (disc_canwrite[disc_trueunit])
+						{
 							fwrite(disc_buffer,1,disc_length,disc[disc_trueunit]); // warning: this silently fails if the file mode is "rb" instead of "rb+"
+							// WRITE DATA (05) and WRITE DELETED DATA (09) reset and set the DELETED flag:
+							// we check whether the track header needs updating
+							int oldtag=disc_track_table[disc_trueunithead][disc_sector_last*8+0x1D],
+								newtag=disc_parmtr[0]&8?oldtag|0x40:oldtag&~0x40;
+							if (oldtag!=newtag)
+							{
+								disc_track_table[disc_trueunithead][disc_sector_last*8+0x1D]=newtag;
+								fseek(disc[disc_trueunit],disc_track_offset[disc_trueunithead],SEEK_SET);
+								fwrite(disc_track_table[disc_trueunithead],1,disc_track_table[disc_trueunithead][0x15]>29?512:256,disc[disc_trueunit]); // warning: this silently fails if the file mode is "rb" instead of "rb+" (again)
+							}
+						}
 						//else
 							//disc_result[1]|=0x02; // 0x02: Not Writeable // warning: this is a cheap way to fool software into writing data
 						if ((disc_parmtr[4]==disc_parmtr[6])||((disc_result[1]|disc_result[2])&0x3F)) // is it the last requested sector? did any fatal errors happen?
@@ -745,7 +772,7 @@ void disc_data_send(BYTE b) // DATA I/O
 						else // flags are valid
 						{
 							++disc_parmtr[4]; // move on
-							disc_delay=disc_phase=2;
+							disc_delay=1,disc_phase=2;
 							disc_timer=DISC_TIMER_INIT;
 						}
 					}
@@ -810,6 +837,11 @@ BYTE disc_data_recv(void) // DATA I/O
 						disc_length=7;
 						disc_phase=4;
 					}
+					else if (disc_skew_length) // catch special case where inter-sector bytes must be improvised
+					{
+						memset(disc_buffer,disc_skew_filler,disc_length=disc_skew_length); // extremely crude inter-sector padding
+						disc_overrun=disc_skew_length=0;
+					}
 					else if ((disc_parmtr[4]==disc_parmtr[6])||((disc_result[1]|disc_result[2])&0x3F)) // is it the last requested sector? did any fatal errors happen?
 					{
 						disc_exitstate();
@@ -844,11 +876,12 @@ BYTE disc_data_info(void) // STATUS
 	if (disc_phase) // is the FDC busy at all? (any phases but 0)
 	{
 		i+=0x10; // bit 4: Busy
-		if (disc_phase&2) // is the FDC performing reads or writes (phases 2 and 3)
+		//if (disc_phase&2) // is the FDC performing reads or writes (phases 2 and 3)
 		{
 			if (disc_delay)
-				disc_delay=0,i=0x10; // bit 4 minus bit 7
+				--disc_delay,i=0x10; // bit 4 minus bit 7
 			else
+			if (disc_phase&2) // is the FDC performing reads or writes (phases 2 and 3)
 				i+=0x20; // bit 5: Reading or Writing
 		}
 		if (disc_phase>2) // is the FDC sending bytes to the CPU? (phases 3 and 4)

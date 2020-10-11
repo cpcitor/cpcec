@@ -26,22 +26,22 @@ License v3, como se ve en el fichero GPL.TXT adjunto al paquete.
 
 La versión normal de CPCEC requiere un sistema operativo Microsoft Windows 2000
 o posterior, mientras que la versión para SDL2 necesita cualquier sistema
-operativo que disponga de la librería SDL2. El hardware mínimo es el propio de
-dichos sistemas operativos, y se recomienda que el microprocesador central
-funcione a 400 MHz por lo menos. La resolución de pantalla en píxeles debe ser
-800x600 como mínimo. Una tarjeta de sonido es opcional, así como emplear un
-joystick.
+operativo que disponga de la librería SDL2 [http://www.libsdl.org/] desde la
+versión 2.0.4 o superior. El hardware mínimo es el propio de dichos sistemas
+operativos, y se recomienda que el microprocesador central funcione a 400 MHz
+por lo menos. La resolución de pantalla en píxeles debe ser 800x600 como mínimo.
+Una tarjeta de sonido es opcional, así como emplear un joystick.
 
-El emulador se compone de varios ficheros: los binarios ejecutables CPCEC.EXE y
-ZXSEC.EXE para Windows, CPCEC.ELF y ZXSEC.ELF para GNU/Linux, y los ficheros de
-firmware CPC464.ROM, CPC664.ROM, CPC6128.ROM, CPCADOS.ROM, CPCPLUS.ROM,
-SPEC128K.ROM, SPEC-P-2.ROM, SPEC-P-3.ROM y SPECTRUM.ROM. Todos ellos deben ser
-copiados en un mismo directorio, idealmente creado para alojar el emulador.
+El emulador se compone de varios ficheros: los binarios ejecutables (por defecto
+CPCEC.EXE y ZXSEC.EXE para Windows) y los ficheros de firmware CPC464.ROM,
+CPC664.ROM, CPC6128.ROM, CPCADOS.ROM, CPCPLUS.ROM, SPEC128K.ROM, SPEC-P-2.ROM,
+SPEC-P-3.ROM y SPECTRUM.ROM. Todos ellos deben ser copiados en un mismo
+directorio, idealmente creado para alojar el emulador.
 
 Los binarios pueden ser compilados a partir de los ficheros fuente siguiendo las
-instrucciones incluidas a continuación. GCC 4.9.2, GCC 5.1.0, Pelles 4.50.113 y
-TCC 0.9.27 funcionan correctamente; GCC 4.7.1 comete fallos graves en la
-compilación y genera binarios inválidos.
+instrucciones incluidas a continuación. GCC 4.9.2, GCC 5.1.0, Pelles 4.50.113,
+TCC 0.9.27 y Clang 3.7.1 funcionan correctamente; GCC 4.7.1 comete fallos graves
+en la compilación y puede generar binarios inválidos.
 
 Los binarios para Windows pueden ser compilados desde GCC (o compatibles)
 mediante los siguientes comandos:
@@ -64,12 +64,12 @@ COMDLG32 y SHELL32, todas ellas del SDK de Win32.
 Los binarios para sistemas operativos con soporte SDL2 necesitan comandos
 distintos:
 
-	gcc -DSDL_MAIN_HANDLED -O2 -xc cpcec.c -lSDL2 -ocpcec.elf
+	gcc -DSDL2 -O2 -xc cpcec.c -lSDL2 -ocpcec
 
-	gcc -DSDL_MAIN_HANDLED -O2 -xc zxsec.c -lSDL2 -ozxsec.elf
+	gcc -DSDL2 -O2 -xc zxsec.c -lSDL2 -ozxsec
 
-(además, los nombres de fichero deben estar en minúsculas: el contenido del
-archivo ZIP debe extraerse con "unzip -LL cpcec-20XXXXXX.zip")
+Además, los nombres de fichero deben estar en minúsculas: el contenido del
+archivo ZIP pueden necesitar extraerse con "unzip -LL cpcec-20XXXXXX.zip".
 
 ## Configuración y ficheros ##
 
@@ -124,7 +124,7 @@ intentará cargar y ejecutar los ficheros especificados. Gracias a ello CPCEC
 puede ser vinculado a las extensiones de fichero CDT, CPR, CSW, DSK y SNA para
 cargar dichos ficheros automáticamente.
 
-Los tipos de fichero admitidos por el emulador se dividen en tres tipos:
+Los tipos de fichero admitidos por el emulador se dividen en cuatro tipos:
 
 * WAV, CSW y CDT: ficheros de cinta, es decir volcados digitales de los
 contenidos de una cinta magnética utilizada para almacenar y distribuir datos y
@@ -133,6 +133,8 @@ software.
 contenidos de un disco flexible magnético capaz de contener datos y software.
 * SNA: instantáneas o "snapshots", copias integrales del estado de un sistema
 emulado que hacen posible reanudar más tarde dicho estado de emulación.
+* ROM y CPR: firmwares y cartuchos. El firmware contiene la BIOS y el intérprete
+de BASIC; los cartuchos eran utilizados por la serie Amstrad Plus.
 
 La lectura de cintas emplea dos métodos (habilitados por defecto) para mejorar
 la experiencia de usuario abreviando un proceso que entonces era muy lento: un
@@ -153,7 +155,7 @@ software, o ser simplemente DISC o DISK) en el sistema emulado y pulsando
 RETURN. En caso de duda, la orden CAT muestra la lista de ficheros contenidos en
 el disco.
 
-## Teclas de función ##
+## Funciones ##
 
 Una vez en funcionamiento, CPCEC muestra la pantalla del sistema emulado y
 obedece a las órdenes del usuario, que además de las pertinentes a dicho sistema
@@ -173,11 +175,17 @@ cartucho;
 * F4+Control: habilitar (o deshabilitar) el joystick por teclado;
 * F5: elegir el firmware del CPC emulado, que puede ser un fichero ROM, un
 fichero INI o un cartucho de formato CPR;
+* F5+Shift: insertar cartucho de Dandanator; nótese que estos cartuchos tienen
+un formato diferente al de los firmwares de CPC y por ello deben ser manipulados
+separadamente;
 * F5+Control: reiniciar la emulación;
+* F5+Control+Shift: extraer cartucho de Dandanator;
 * F6: habilitar (o deshabilitar) la emulación en tiempo real;
 * F6+Control: elevar la velocidad del Z80 emulado de 4 MHz a 8, 12 y 16 MHz;
 * F6+Control+Mays: reducir su velocidad a 12, 8 y 4 MHz;
-* F7: insertar un fichero de disco en la disquetera virtual A;
+* F7: insertar un fichero de disco en la disquetera virtual A; nótese que el
+modo de acceso es sólo-lectura a menos que el usuario explícitamente elija
+lectura-escritura en el diálogo de selección de ficheros;
 * F7+Mays: insertar un fichero de disco en la disquetera virtual B;
 * F7+Control: extraer el disco de la disquetera virtual A;
 * F7+Control+Mays: extraer el disco de la disquetera virtual B;
@@ -197,6 +205,7 @@ doble;
 * F11+Control+Mays: ídem en sentido contrario, de entrelazado doble a scanlines
 medios;
 * F12: grabar el contenido de la pantalla en un fichero BMP;
+* F12+Mays: grabar un vídeo en formato intermedio XRF;
 * F12+Control: comenzar a grabar (o terminar) el sonido en un fichero WAV;
 * F12+Control+Mays: comenzar a grabar (o terminar) el sonido en un fichero YM;
 * Pausa: detener (o reanudar) la emulación;
@@ -240,7 +249,9 @@ acelerar la emulación durante un tiempo.
 * Num./ : establece el valor de "frameskip" al mínimo, 0.
 
 El menú también incluye algunas opciones adicionales (por ejemplo el tipo de
-CRTC) además de acciones tales como recorrer los contenidos de la cinta actual.
+CRTC) además de acciones tales como cambiar los lados de los discos insertados,
+examinar los contenidos de la cinta actual o habilitar las extensiones de
+hardware Dandanator y Playcity, desactivadas por defecto.
 
 CPCEC permite arrastrar y soltar ficheros. Éstos serán automáticamente
 ejecutados (como con F3) a menos que la tecla Mays esté pulsada, en cuyo caso
@@ -265,9 +276,11 @@ los parámetros de las órdenes emplean notación hexadecimal.
 * Los cursors, Re.Pág. y Av.Pág. mueven el cursor dentro del panel actual;
 * Tab (o Mays+Tab) mueve el cursor al panel siguiente (o anterior);
 * Dígitos del 0 al 9 y letras de la A a la F modifican el valor bajo el cursor;
+* Punto (".") crea o destruye un punto de ruptura o "breakpoint" en la posición
+actual del cursor en el desensamblado;
 * G ("go to") solicita una dirección (en hexadecimal) y envía el cursor a su
 lugar correspondiente en el desensamblado o el volcado de memoria;
-* H muestra una ayuda breve;
+* H ("help") muestra una ayuda breve;
 * I ("input") solicita un nombre de fichero y carga su contenido en memoria a
 partir de la dirección actual del cursor;
 * J ("jump to") asigna la dirección actual del cursor al registro PC del Z80:
@@ -285,6 +298,9 @@ fichero con un volcado de memoria que comienza en la dirección actual del
 cursor;
 * P ("print") solicita una longitud en bytes y un nombre de fichero, y crea un
 fichero con un desensamblado que comienza en la dirección actual del cursor;
+* Q conmuta el comportamiento del código ilegal $EDFF, bien en modo normal
+("EDFF-") donde no hace nada especial o en modo de desarrollo ("EDFF+") donde es
+un breakpoint;
 * R ("run to") ejecuta la emulación hasta alcanzar la operación actualmente bajo
 el cursor en el desensamblado;
 * S ("search") solicita una cadena bien ASCII (sin importar las mayúsculas),
@@ -293,12 +309,16 @@ la busca en la memoria a partir de la dirección actual hasta la última direcci
 válida. Si encuentra la cadena ubica el cursor en ella en el desensamblado o el
 volcado de memoria;
 	+ N ("next") vuelve a buscar la misma cadena;
-* T ("toggle") crea o destruye un breakpoint en la posición actual del cursor en
-el desensamblado;
+* T ("timer") limpia el cronómetro; su valor se incrementa a medida de la
+emulación;
 * U ("return") reanuda la emulación hasta alcanzar la dirección de regreso de la
 llamada en curso;
-* V cambia la apariencia del debugger, cambiando los colores blanco y negro y
-los caracteres finos y gruesos;
+* V ("view") cambia la apariencia del debugger, cambiando los colores blanco y
+negro y los caracteres finos y gruesos;
+* W ("watch") conmuta entre el debugger de la emulación y el visor de gráficos;
+los cursores, Re.Pág., Av.Pág y la tecla "G" recorren la memoria, Inicio/Fin
+reducen y aumentan la anchura de los gráficos, y Tab conmuta entre el modo
+horizontal y el vertical;
 * X conmuta el panel de información de hardware clásico/Plus;
 * Z elimina todos los breakpoints;
 * Espacio ("step into") ejecuta exactamente una instrucción y se detiene en la
@@ -311,6 +331,30 @@ instrucción actual es una llamada;
 
 El uso de mayúsculas y minúsculas no es importante: el debugger no hace
 distinciones.
+
+## Vídeos ##
+
+Los vídeos se graban como ficheros XRF, un paso intermedio (compresión baja,
+consumo de CPU bajo) previo a la generación de ficheros de vídeo convencionales.
+
+La herramienta adjunta XRF convierte un fichero de tipo XRF en un fichero de
+tipo AVI. Funciona de dos formas diferentes, una exclusiva de Windows y otra
+general.
+
+Al compilarla en Windows (necesita la librería de sistema AVIFIL32: "gcc
+-lavifil32 -xc xrf.c -oxrf.exe") y ejecutarla con la sintaxis "xrf fuente.xrf
+destino.avi ABCD" leerá el fichero "fuente.xrf" y generará un fichero llamado
+"destino.avi" mediante el códec ABCD, de estar instalado. Se recomienda instalar
+y utilizar el códec ZMBV realizado por el proyecto Dosbox porque es el que mejor
+rendimiento proporciona en grabaciones pixeladas como éstas.
+
+En otros sistemas XRF no puede usar ningún códec directamente, así que el
+resultado es un fichero AVI sin comprimir (imagen RGB de 24 bpp, sonido PCM
+estéreo); afortunadamente es capaz de generarlo a través de la consola
+especificando "-" en lugar de "destino.avi" y alimentar así un programa de
+codificación de vídeo, por ejemplo FFMPEG: la línea "xrf fuente.xrf - | ffmpeg
+-i - destino.avi" delega en FFMPEG la tarea de codificar el fichero AVI. Lea la
+documentación de FFMPEG al respecto.
 
 ## ZXSEC ##
 
@@ -656,16 +700,16 @@ demos "CRTC3" y "Eerie Forest" para Amstrad Plus.
 tras pocos segundos) y la nueva odren Mays+Espacio (saltar "scanline") al
 debugger.
 - 20200404 -- parche menor que corrige el controlador del DMA (todos los
-comandos menos LOAD pueden combinarse) y elimina varios "apaños" para PLUS menos
+comandos menos LOAD pueden combinarse) y elimina varios "apaños" para Plus menos
 el de "Black Sabbath": gracias a Norecess464 por ubicar el error. Además -C pasa
 a ser -C0..4.
 - 20200406 -- parche menor que añade multiplexación parcial de los sprites de
-PLUS: "Synergy 4" recupera los sprites de arriba a la izquierda.
+Plus: "Synergy 4" recupera los sprites de arriba a la izquierda.
 - 20200418 -- parche menor con mejoras en el contador de interrupciones (que
 empieza con el primer final de HSYNC después del principio de VSYNC -"Onescreen
-Colonies"- excepto en PLUS donde puede empezar cuando el principio de VSYNC
+Colonies"- excepto en Plus donde puede empezar cuando el principio de VSYNC
 coincide con el final de HSYNC -"Black Sabbath"-), los puertos de hardware (el
-puerto A del PIO devuelve 0 al leerlo en modo de escritura excepto en PLUS donde
+puerto A del PIO devuelve 0 al leerlo en modo de escritura excepto en Plus donde
 devuelve 255 -"Tire au Flan"-, el puerto B debe activar VSYNC en medio de la
 pantalla si el CRTC se lo pide -"Chany Dream End Megademo"- y el intervalo de
 bytes 0-191 del Gate Array necesita una lógica de puertos más rígida -"Overflow
@@ -702,7 +746,7 @@ bug en el PIO de CPC (el modo de sólo-lectura del puerto A permitía escrituras
 otro en el análisis de cintas (CPCEC: el algoritmo para TITUS provocaba
 problemas en "The Blues Brothers"; ZXSEC: Speedlock5 no reconocía el ruido
 inicial; ambos sistemas añaden parches para reducir las esperas iniciales), otro
-en la carga de snapshots de CPC (cargar un snapshot grabado en hardware PLUS sin
+en la carga de snapshots de CPC (cargar un snapshot grabado en hardware Plus sin
 el bloque "CPC+" mostraba una paleta totalmente negra), otro en el debugger de
 Z80 (la orden 'P' podía generar un desensamblado infinito), otro en la gestión
 de cinta (leer un fichero WAV debe usar >128 como referencia, no >=128) y
@@ -721,3 +765,21 @@ extras se reserva solamente si el usuario carga un "perfil"), dibuja las señale
 SYNC en negro en lugar del color del borde y corrige la parte de los cilindros
 3D de "PhX" en CRTC1; los "gusanos de bolas" y el scroller final siguen mal en
 CRTC3 y CRTC4, sin embargo.
+- 20201010 -- decimooctava versión pública. Lógica de CRTC reescrita por
+completo, con un sistema interno de eventos que aumenta la compatibilidad de
+demos (por ejemplo "Chapelle Sixteen", "Madness Demo" y "S&KOH" para CRTC1) y un
+dibujador de sprites de Plus completamente multiplexado. Más protecciones de
+disco (ERE, UBI) funcionan, WRITE DELETED DATA pone al día la bandera
+correspondiente en la tabla de sectores. Nuevo soporte de Dandanator, de sólo
+lectura ("Sword of Ianna"). Soporte preliminar de Playcity, limitado a los dos
+chips PSG extras y el disparador NMI. Nueva grabación de vídeo basada en un
+formato intermedio XRF, incluyendo una herramienta que permite convertirlo en
+ficheros AVI. Mejoras en el interfaz SDL, con una fuente mayor (12px en lugar de
+8px) y alineamiento vertical en los atajos de teclado del menú. Añadidas nuevas
+funciones de depuración (examinar los gráficos en la memoria con la tecla "W",
+interceptar el código $EDFF como un breakpoint con "Q", etc.) y trasladados los
+breakpoints de "T" a ".". Eliminados CPCEC.ELF y ZXSEC.ELF porque están unidos a
+un sistema operativo concreto (Linux Mint 18 32bit) y el usuario debía compilar
+los binarios de todas formas. Trasladados los ficheros de configuración en
+sistemas distintos de Windows de CPCEC.INI y ZXSEC.INI a .cpcecrc y .zxsecrc
+como es costumbre en Unix. Retoques de compatibilidad para CLANG.

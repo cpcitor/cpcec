@@ -18,7 +18,7 @@
 
 const BYTE psg_valid[16]={-1,15,-1,15,-1,15,31,63,31,31,31,-1,-1,15,-1,-1}; // bit masks
 BYTE psg_index,psg_table[16]; // index and table
-BYTE psg_hard_new=9,psg_hard_log=0xFF; // default mode: drop and stay
+BYTE psg_hard_log=0xFF; // default mode: drop and stay
 int psg_r7_filter; // safety delay to filter ultrasounds away, cfr. "Terminus" and "Robocop"
 
 // frequencies (or more properly, wave lengths) are handled as counters
@@ -31,14 +31,9 @@ void psg_reg_update(int c)
 {
 	switch (c)
 	{
-		case 0:
-		case 2:
-		case 4:
-		case 1:
-		case 3:
-		case 5:
-			if (!(psg_tone_limit[c/2]=(psg_table[c&-2]+(psg_table[(c&-2)+1]<<8))))
-				psg_tone_limit[c/2]=1;
+		case 0: case 2: case 4:
+		case 1: case 3: case 5:
+			psg_tone_limit[c/2]=psg_table[c&-2]+(psg_table[(c&-2)+1]<<8);
 			break;
 		case 6:
 			if (!(psg_noise_limit=(psg_table[6]&31)*2))
@@ -59,10 +54,9 @@ void psg_reg_update(int c)
 			if (!(psg_hard_limit=(psg_table[11]+(psg_table[12]<<8))*2))
 				psg_hard_limit=1*2; // hard envelope, ditto
 			break;
-		case 13: // if (psg_hard_new) // did the hard envelope change?
-			c=psg_table[13]; psg_hard_log=psg_hard_new=c<4?9:(c<8?15:c); // remove redundancies!
-			psg_hard_flag2=((psg_hard_style=psg_hard_new)&4)?0:15;
-			psg_hard_new=psg_hard_count=psg_hard_level=psg_hard_flag0=0;
+		case 13:
+			c=psg_table[13]; psg_hard_count=psg_hard_level=psg_hard_flag0=0;
+			psg_hard_flag2=(psg_hard_log=psg_hard_style=c<4?9:c<8?15:c)&4?0:15; // unify styles!
 			break;
 	}
 }
@@ -89,11 +83,55 @@ INLINE void psg_table_sendto(BYTE x,BYTE i)
 
 #define psg_setup()
 
+// The PlayCity extension requires its own logic as it isn't just an extra pair of AY chips!
+
+#ifdef PSG_PLAYCITY
+int playcity_clock=0; BYTE playcity_table[2][16],playcity_index[2],playcity_hard_new[2];
+int playcity_hard_style[2],playcity_hard_count[2],playcity_hard_level[2],playcity_hard_flag0[2],playcity_hard_flag2[2];
+#if AUDIO_STEREO
+int playcity_stereo[2][2];
+#endif
+void playcity_set_config(BYTE b)
+{
+	if (b<16)
+		playcity_clock=b;
+}
+#define playcity_get_config() (playcity_clock)
+void playcity_select(BYTE x,BYTE b)
+{
+	if (x<2)
+		if (b<16)
+			playcity_index[x]=b;
+}
+void playcity_send(BYTE x,BYTE b)
+{
+	if (x<2)
+	{
+		int y=playcity_index[x];
+		playcity_table[x][y]=(b&=psg_valid[y]);
+		if (y==13)
+		{
+			playcity_hard_count[x]=playcity_hard_level[x]=playcity_hard_flag0[x]=0;
+			playcity_hard_flag2[x]=(playcity_hard_style[x]=b<4?9:b<8?15:b)&4?0:15;
+		}
+	}
+}
+void playcity_reset(void)
+{
+	playcity_clock=0; MEMZERO(playcity_table);
+	playcity_table[0][7]=playcity_table[1][7]=0x3F; // 2 MHz, channels+noise off
+}
+#endif
+
 void psg_reset(void) // reset the PSG AY-3-8910
 {
 	psg_index=0;
 	MEMZERO(psg_table);
+	psg_table[7]=0x38; // all channels enabled, all noise disabled
 	psg_all_update();
+	#ifdef PSG_PLAYCITY
+	playcity_reset();
+	#endif
 }
 
 // YM3 file logging ------------------------------------------------- //
@@ -176,7 +214,7 @@ void psg_main(int t) // render audio output for `t` clock ticks
 		psg_tone_catch[c]=psg_tone_mixer[c]|((psg_tone_limit[c]<=(PSG_KHZ_CLOCK/225)&&!psg_r7_filter)?7*1:0); // safe margin? (200-250)
 	if ((psg_r7_filter-=r/PSG_TICK_STEP)<0)
 		psg_r7_filter=0;
-	while (r>=PSG_TICK_STEP)
+	while (r>=PSG_TICK_STEP) // not 0, see r%=... below
 	{
 		r-=PSG_TICK_STEP;
 		if (--psg_noise_count<=0) // update noise
@@ -220,14 +258,14 @@ void psg_main(int t) // render audio output for `t` clock ticks
 			++n;
 			p-=TICKS_PER_SECOND/PSG_TICK_STEP;
 		}
-		if (n>=(1<<PSG_MAIN_EXTRABITS)) // enough data to write a sample? (n will rarely be >1)
+		if (n>=(1<<PSG_MAIN_EXTRABITS)) // enough data to write a sample? (TODO: can `n` be >1<<N ???)
 		{
 			#if AUDIO_STEREO
-			*audio_target++=(((o0+n/2)/n)>>(24-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average (left)
-			*audio_target++=(((o1+n/2)/n)>>(24-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average (right)
+			*audio_target++=(o0+n/2)/(n<<(24-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average (left)
+			*audio_target++=(o1+n/2)/(n<<(24-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average (right)
 			o0=o1=n=0;//%=1<<PSG_MAIN_EXTRABITS; // reset output averaging variables
 			#else
-			*audio_target++=(((o+n/2)/n)>>(16-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average
+			*audio_target++=(o+n/2)/(n<<(16-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average
 			o=n=0;//%=1<<PSG_MAIN_EXTRABITS; // reset output averaging variables
 			#endif
 			if (++audio_pos_z>=AUDIO_LENGTH_Z)
@@ -238,5 +276,105 @@ void psg_main(int t) // render audio output for `t` clock ticks
 		}
 	}
 }
+
+// Again, the PlayCity extension requires its own logic, as it "piggybacks" on top of the central AY chip;
+// notice how there are several differences in the timing (configurable), the mixing and the streamlining.
+
+#ifdef PSG_PLAYCITY
+void playcity_main(AUDIO_UNIT *t,int l)
+{
+	 if ((playcity_table[0][7]&playcity_table[1][7])==0x3F||l<=0||!t)
+		return; // disabled chips? no buffer?
+	int playcity_tone_limit[2][3],playcity_tone_power[2][3],playcity_tone_mixer[2][3],playcity_noise_limit[2],playcity_hard_limit[2];
+	static int playcity_tone_count[2][3],playcity_tone_state[2][3]={{0,0,0},{0,0,0}},playcity_noise_state[2],playcity_noise_count[2],playcity_noise_trash[2]={1,1},playcity_hard_power[2];
+	for (int x=0;x<2;++x)
+	{
+		for (int c=0;c<3;++c) // preload channel limits
+		{
+			playcity_tone_limit[x][c]=playcity_table[x][c*2+0]+playcity_table[x][c*2+1]*256;
+			playcity_tone_power[x][c]=playcity_table[x][c*1+8];
+			playcity_tone_mixer[x][c]=playcity_table[x][7]>>c;
+		}
+		if (!(playcity_noise_limit[x]=playcity_table[x][6]*2)) // noise limits
+			playcity_noise_limit[x]=2; // half the rate
+		if (!(playcity_hard_limit[x]=(playcity_table[x][11]+playcity_table[x][12]*256)*2)) // hard envelope limits
+			playcity_hard_limit[x]=2; // half, ditto
+	}
+	#if AUDIO_STEREO
+	static int n=0,o0=0,o1=0,p=0;
+	#else
+	static int n=0,o=0,p=0;
+	#endif
+	int playcity_clock_hi=(playcity_clock?playcity_clock*2-1:2)*125000,playcity_clock_lo=(playcity_clock?playcity_clock:1)*AUDIO_PLAYBACK;
+	for (;;)
+	{
+		p+=playcity_clock_hi;
+		while (p>=0)
+		{
+			for (int x=0;x<2;++x) // update all chips
+			{
+				if (--playcity_noise_count[x]<=0) // update noises
+					playcity_noise_count[x]=playcity_noise_limit[x],
+					playcity_noise_state[x]=(playcity_noise_state[x]^playcity_noise_trash[x])&1,
+					playcity_noise_trash[x]=(playcity_noise_trash[x]>>1)+((playcity_noise_trash[x]^(playcity_noise_trash[x]>>3))<<16);
+				playcity_hard_power[x]=playcity_hard_level[x]^playcity_hard_flag2[x]^((playcity_hard_style[x]&2)?playcity_hard_flag0[x]:0); // update hard envelopes
+				if (--playcity_hard_count[x]<=0)
+				{
+					playcity_hard_count[x]=playcity_hard_limit[x];
+					if (++playcity_hard_level[x]>15) // end of hard envelope?
+					{
+						if (playcity_hard_style[x]&1)
+							playcity_hard_level[x]=15,playcity_hard_flag0[x]=15; // stop!
+						else
+							playcity_hard_level[x]=0,playcity_hard_flag0[x]^=15; // loop!
+					}
+				}
+				for (int c=0;c<3;++c) // update channels
+				{
+					if (--playcity_tone_count[x][c]<=0)
+						playcity_tone_count[x][c]=playcity_tone_limit[x][c],
+						playcity_tone_state[x][c]=~playcity_tone_state[x][c];
+				/*}
+			}
+			for (int x=0;x<2;++x) // generate outputs
+			{
+				for (int c=0;c<3;++c)
+				{*/
+					if (playcity_tone_state[x][c]|(playcity_tone_mixer[x][c]&1)) // active channel?
+						if (playcity_noise_state[x]|(playcity_tone_mixer[x][c]&8)) // noisy channel?
+						{
+							int z=playcity_tone_power[x][c];
+							if (z&16)
+								z=playcity_hard_power[x];
+							if ((z-=2)>0) // each channel in Playcity plays at half the normal intensity
+								#if AUDIO_STEREO
+								o0+=audio_table[z]*playcity_stereo[x][0],
+								o1+=audio_table[z]*playcity_stereo[x][1];
+								#else
+								o+=audio_table[z];
+								#endif
+						}
+				}
+			}
+			++n;
+			p-=playcity_clock_lo;
+		}
+		// generate samples, negative (-50% x2) to avoid overflows against the central AY chip (+100%)
+		if (n>=(1<<PSG_MAIN_EXTRABITS)) // enough data to write a sample? (TODO: can `n` be >1<<N ???)
+		{
+			#if AUDIO_STEREO
+			*t++-=(o0+n/2)/(n<<(24-AUDIO_BITDEPTH));
+			*t++-=(o1+n/2)/(n<<(24-AUDIO_BITDEPTH));
+			n=o0=o1=0;
+			#else
+			*t++-=(o+n/2)/(n<<(16-AUDIO_BITDEPTH));
+			n=o=0;
+			#endif
+			if (!--l)
+				break;
+		}
+	}
+}
+#endif
 
 // =================================== END OF PSG AY-3-8910 EMULATION //

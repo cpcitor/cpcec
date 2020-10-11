@@ -58,7 +58,10 @@ void tape_seek(int i) // seek to byte `i`
 		tape_offset=tape_length=0; // reset buffer!
 	}
 }
-#define tape_skip(i) tape_seek(tape_filetell+(i)) // skip `i` bytes
+INLINE void tape_skip(int i) // skip `i` bytes; using a macro led to "gotchas" (cfr. CLANG 3.7.1)
+{
+	tape_seek(i+tape_filetell);
+}
 INLINE void tape_fputc(int i) // writes one byte on tape.
 {
 	tape_buffer[tape_offset]=i;
@@ -115,7 +118,7 @@ void tape_close(void) // close tape file
 		puff_fclose(tape);
 	}
 	tape=NULL;
-	tape_filesize=tape_filetell=tape_type=tape_status=0;
+	tape_filesize=tape_filetell=tape_mask=tape_type=tape_status=0;
 }
 
 int tape_endoftape(void) // rewind tape, if possible; 0 OK, !0 ERROR
@@ -394,15 +397,14 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 									#ifdef CONSOLE_DEBUGGER
 									{
 										i=tape_fgetc();
-										int j;
 										char blah[STRMAX];
-										for (j=0;j<i;++j)
+										int j; for (j=0;j<i;++j)
 											blah[j]=tape_fgetc();
 										blah[j]=0;
 										logprintf("TZX: '%s'\n",blah);
 									}
 									#else
-									tape_skip(tape_fgetc());
+									tape_skip(tape_fgetc()); // avoid macro gotcha, cfr. CLANG 3.7.1
 									#endif
 									break;
 								case 0x32: // *ARCHIVE INFO
@@ -432,7 +434,7 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 					else if (!(tape_pilots|tape_syncs|tape_bits|tape_hold))
 					{
 						tape_half=tape_mask=0;
-						tape_hold=2*1000;
+						tape_hold=2*1000; // 2-second gap
 						tape_bits=tape_fgetcc()<<3;
 						//logprintf("<%04X> ",tape_bits>>3);
 						tape_pilots=(tape_fgetc()&128)?3223:8063;
@@ -628,7 +630,7 @@ void tape_select(int i) // caller must provide a valid offset
 	if (!tape||tape_type<0)
 		return;
 	tape_seek(i);
-	tape_hold=2*1000,tape_count=tape_pilots=tape_syncs=tape_bits=tape_wave=0; // reset counter and playback
+	tape_count=tape_pilots=tape_syncs=tape_bits=tape_wave=0,tape_hold=2*1000; // reset counter and playback // 2-second gap
 }
 
 // tape speed-up hacks ---------------------------------------------- //
@@ -670,7 +672,7 @@ int fasttape_sub8(int q,int tape_step,BYTE *counter8,int step) // idem, but nega
 		*counter8-=step,tape_main(tape_step),++n;
 	return n;
 }
-void fasttape_skip(int q,int x) // ignore the signal until it changes
+void fasttape_skip(int q,int x) // skip the signal in steps of `x` until it changes
 {
 	q&=1;
 	while (q==tape_status&&(tape||tape_hold))
@@ -698,8 +700,27 @@ BYTE fasttape_feed(void) // get a byte from the stream, aligned or not, and leav
 	while ((b<<=1)<128);
 	return tape_mask<<=1,i>>=8;
 }
-#define FASTTAPE_CAN_FEED() (!(tape_pilots|tape_syncs|tape_half)&&tape_mask&&tape_bits>7) // general purpose loader handling
-#define FASTTAPE_CAN_FEEDX() (!(tape_pilots|tape_syncs)&&tape_mask&&tape_bits>7) // polarity-dependent loaders may need this
+#define FASTTAPE_CAN_FEED() (tape_mask&&!(tape_pilots|tape_syncs|tape_half)&&tape_bits>7) // general purpose loader handling
+#define FASTTAPE_CAN_FEEDX() (tape_mask&&!(tape_pilots|tape_syncs)&&tape_bits>7) // polarity-dependent loaders may need this
 #define FASTTAPE_FEED_END(x,y) fasttape_skip((x),(y))
+
+void fasttape_skipbits(void) // skips the current block if the PILOT and SYNCS are already over
+{
+	if (/*tape_mask&&*/!(tape_pilots|tape_syncs|tape_half)&&(tape_bits|tape_wave|tape_hold))
+	{
+		if (tape_bits>8)
+		{
+			tape_skip(tape_bits/8);
+			tape_bits-=(tape_bits/8)*8;
+		}
+		else if (tape_wave>8)
+		{
+			tape_skip(tape_wave/8);
+			tape_wave-=(tape_wave/8)*8;
+		}
+		else if (tape_hold!=1&&tape_hold&&!(tape_bits|tape_wave))
+			tape_hold=1;
+	}
+}
 
 // ============================================== END OF TAPE SUPPORT //
