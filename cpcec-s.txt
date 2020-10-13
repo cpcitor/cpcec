@@ -213,9 +213,16 @@ medios;
 la ventana mediante estas teclas.
 
 Las versiones para SDL2 son ligeramente distintas en la medida en que
-proporcionan su propio interfaz gráfico; el menú aparece al pulsar la tecla F10,
-y para cambiar el modo de acceso de ficheros de disco hay que pulsar TAB dentro
-del diálogo de selección de ficheros mostrado por F7 ó F7+Mays.
+proporcionan su propio interfaz gráfico; el menú aparece al pulsar la tecla F10
+del teclado o el botón derecho del ratón, y para cambiar el modo de acceso de
+ficheros de disco hay que pulsar TAB dentro del diálogo de selección de ficheros
+mostrado por F7 ó F7+Mays. Los diálogos se manipulan con las teclas y el ratón:
+en los menús, tocar un botón sobre un elemento del menú sirve para elegirlo,
+mientras que en los demás diálogos se elige un elemento tocando un botón del
+ratón sobre dicho elemento (si no está visible la lista se desplaza para
+mostrarlo) y se acepta este elemento tocando el botón otra vez. Todos los
+diálogos se abandonan tocando un botón del ratón mientras éste apunta fuera del
+diálogo.
 
 Los ficheros BMP y WAV son los ficheros de imagen y sonido estándares homónimos.
 Los ficheros YM son volcados del estado del chip de sonido, que por haber sido
@@ -783,3 +790,5 @@ un sistema operativo concreto (Linux Mint 18 32bit) y el usuario debía compilar
 los binarios de todas formas. Trasladados los ficheros de configuración en
 sistemas distintos de Windows de CPCEC.INI y ZXSEC.INI a .cpcecrc y .zxsecrc
 como es costumbre en Unix. Retoques de compatibilidad para CLANG.
+- 20201012 -- parche menor que añade uso del ratón al interfaz de usuario propio
+de SDL2.

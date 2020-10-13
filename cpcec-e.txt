@@ -201,9 +201,14 @@ interlace;
 maximizing the window with these keys.
 
 SDL2-based versions are slightly different because they provide their own
-graphical interface; the menu shows up when the user presses F10, and to change
-the disc file access mode the user must press TAB within the file selection
-dialog shown by F7 or F7+Shift.
+graphical interface; the menu shows up when the user presses F10 on the keyboard
+or right click on the mouse, and to change the disc file access mode the user
+must press TAB within the file selection dialog shown by F7 or F7+Shift. The
+user can handle the dialogs with the keyboard or the mouse: in the menus,
+clicking on a menu item will select it, while in other dialogs an item is
+selected by clicking on it (if it isn't visible the list will scroll to reveal
+it) and accepted by clicking on it again. All dialogs can be left by clicking
+the mouse while it lies outside the dialog.
 
 Files BMP and WAV are the namesake standard files of image and sound. YM files
 are dumps of the sound chip states, that because of their usage in other
@@ -740,3 +745,5 @@ ZXSEC.ELF as they're bound to a single OS (Linux Mint 18 32bit) and the user
 must compile the binaries anyway. Moved the configuration files in non-Windows
 systems from CPCEC.INI and ZXSEC.INI to .cpcecrc and .zxsecrc as customary on
 Unix. Tweaks for CLANG compatibility.
+- 20201012 -- minor patch adding mouse support to the custom user interface for
+SDL2.

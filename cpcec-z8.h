@@ -161,6 +161,7 @@ enum { // list of opcodes and parameters used by the dictionnaries (cfr. infra)
 	Z80_DASM_R	,	Z80_DASM_S	,	Z80_DASM_SP	,	Z80_DASM_V	,
 	Z80_DASM_XH	,	Z80_DASM_XL	,	Z80_DASM_Z	,	Z80_DASM_0	,
 	Z80_DASM_1	,	Z80_DASM_2	,	Z80_DASM_DIV8	,	Z80_DASM_R_PC	,
+	Z80_DASM_EDFF	,
 };
 const char z80_dasm_lex[][5]= // SAME ORDER AS ABOVE ENUM!!
 {
@@ -192,6 +193,7 @@ const char z80_dasm_lex[][5]= // SAME ORDER AS ABOVE ENUM!!
 	"R"	,	"S"	,	"SP"	,	"V"	,
 	"%H"	,	"%L"	,	"Z"	,	"0"	,
 	"1"	,	"2"	,	"\007"	,	"\010"	,
+	"*BRK"	,
 };
 
 typedef const char Z80_DASM_DICT[256][4]; // abridged dictionnaries made of the above lexical components
@@ -1018,7 +1020,7 @@ Z80_DASM_DICT z80_dasm_table_ed=
 	{Z80_DASM_SKIP	},
 	{Z80_DASM_SKIP	},
 	{Z80_DASM_SKIP	},
-	{Z80_DASM_SKIP	},
+	{Z80_DASM_EDFF	},
 };
 Z80_DASM_DICT z80_dasm_table_xy= // IX and IY are handled together
 {

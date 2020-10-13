@@ -284,6 +284,8 @@ SDL_Rect session_ideal;
 SDL_Surface *session_ui_alloc(int w,int h) { return ((w+=2)*h)?SDL_CreateRGBSurface(0,w*8,h*SESSION_UI_HEIGHT,32,0xFF0000,0x00FF00,0x0000FF,0):NULL; }
 void session_ui_free(SDL_Surface *s) { if (s) SDL_FreeSurface(s); }
 
+int session_ui_base_x,session_ui_base_y,session_ui_size_x,session_ui_size_y; // used to calculate mouse clicks relative to widget
+
 void session_border(SDL_Surface *s,int x,int y,int q) // draw surface with an optional border
 {
 	SDL_Surface *t=SDL_GetWindowSurface(session_hwnd);
@@ -311,7 +313,8 @@ void session_border(SDL_Surface *s,int x,int y,int q) // draw surface with an op
 void session_centre(SDL_Surface *s,int q) // draw surface in centre with an optional border
 {
 	SDL_Surface *t=SDL_GetWindowSurface(session_hwnd);
-	session_border(s,(t->w-s->w)/16,(t->h-s->h)/(2*SESSION_UI_HEIGHT),q);
+	session_ui_size_x=s->w/8; session_ui_size_y=s->h/SESSION_UI_HEIGHT;
+	session_border(s,session_ui_base_x=(t->w-s->w)/16,session_ui_base_y=(t->h-s->h)/(2*SESSION_UI_HEIGHT),q);
 }
 
 void session_blitit(SDL_Surface *s,int ox,int oy)
@@ -360,6 +363,7 @@ void session_togglefullscreen(void)
 void session_ui_init(void) { memset(kbd_bit,0,sizeof(kbd_bit)); session_please(); }
 void session_ui_exit(void) { session_redraw(1); }
 
+int session_ui_clickx,session_ui_clicky; // mouse X+Y, when the "key" is -1
 int session_ui_char; // ASCIZ interpretation of the latest keystroke
 int session_ui_exchange(void) // update window and wait for a keystroke
 {
@@ -375,6 +379,9 @@ int session_ui_exchange(void) // update window and wait for a keystroke
 				session_clrscr(); // wipe leftovers
 				SDL_UpdateWindowSurface(session_hwnd);//session_redraw(1);//
 				break;*/
+			case SDL_MOUSEBUTTONDOWN:
+				session_ui_clickx=event.button.x/8-session_ui_base_x,session_ui_clicky=event.button.y/SESSION_UI_HEIGHT-session_ui_base_y;
+				return -1;
 			case SDL_TEXTINPUT:
 				session_ui_char=event.text.text[0];
 				if (session_ui_char&128) // UTF-8?
@@ -451,129 +458,150 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 		return;
 	session_ui_init();
 	SDL_Surface *hmenu,*hitem=NULL;
+	int menuxs[64],events[64]; // more than 64 menus, or 64 items in a menu? overkill!!!
 	int menu=0,menus=0,menuz=-1,item=0,items=0,itemz=-1,itemx=0,itemw=0;
 	char *zz,*z;
 	hmenu=session_ui_alloc(session_ui_menusize-2,1);
 	//session_ui_printasciz(hmenu,"",0,0,VIDEO_PIXELS_X/8-4,0);//SDL_FillRect(,NULL,VIDEO1(0xFFFFFF));
-	for (;;) // redraw menus and items as required, then obey the user
+	int done,ox=(session_ideal.x+(session_ideal.w-VIDEO_PIXELS_X)/2)/8,
+		oy=(session_ideal.y+(session_ideal.h-VIDEO_PIXELS_Y)/2)/SESSION_UI_HEIGHT;
+	session_ui_base_x=ox+1; session_ui_base_y=oy+1;
+	session_event=0x8000;
+	while (session_event==0x8000) // empty menu items must be ignored
 	{
-		int ox=(session_ideal.x+(session_ideal.w-VIDEO_PIXELS_X)/2)/8,
-			oy=(session_ideal.y+(session_ideal.h-VIDEO_PIXELS_Y)/2)/SESSION_UI_HEIGHT;
-		if (menuz!=menu)
+		done=0;
+		while (!done) // redraw menus and items as required, then obey the user
 		{
-			menuz=menu;
-			itemz=-1;
-			item=items=0;
-			int menux=menus=0;
-			BYTE *m=session_ui_menudata;
-			while (*m) // scan menu data for menus
+			if (menuz!=menu)
 			{
-				if (menus==menu)
+				menuz=menu;
+				itemz=-1;
+				item=items=0;
+				int menux=menus=0;
+				BYTE *m=session_ui_menudata;
+				while (*m) // scan menu data for menus
 				{
-					itemx=menux;
-					menux+=session_ui_printasciz(hmenu,m,menux,0,-1,1);
-				}
-				else
-					menux+=session_ui_printasciz(hmenu,m,menux,0,-1,0);
-				int i=0,j=0,k=0;
-				while (*m++) // skip menu name
-					++j;
-				while (*m++|*m++) // skip menu items
-				{
-					++k; i=0;
-					while (*m++) // skip item name
-						++i;
-					if (j<i)
-						j=i;
-				}
-				if (menus==menu)
-					itemw=j,items=k;
-				++menus;
-			}
-			session_redraw(0); // build background, delay refresh
-			session_border(hmenu,1+ox,1+oy,1);
-			session_ui_free(hitem);
-			hitem=session_ui_alloc(itemw,items);
-		}
-		if (itemz!=item)
-		{
-			itemz=item;
-			int i=0;
-			BYTE *m=session_ui_menudata;
-			while (*m) // scan menu data for items
-			{
-				while (*m++) // skip menu name
-					;
-				int j,k=0;
-				if (i==menu)
-					zz=m;
-				while (j=*m++<<8,j+=*m++,j)
-				{
-					if (i==menu)
+					if (menus==menu)
 					{
-						if (item==k)
-							z=&m[-2],session_event=j;
-						session_ui_printasciz(hitem,m,0,k,itemw,item==k);
+						itemx=menux;
+						menux+=session_ui_printasciz(hmenu,m,menux,0,-1,1);
 					}
-					++k;
-					while (*m++) // skip item name
+					else
+						menux+=session_ui_printasciz(hmenu,m,menux,0,-1,0);
+					int i=0,j=0,k=0;
+					while (*m++) // skip menu name
+						++j;
+					while (*m++|*m++) // skip menu items
+					{
+						++k; i=0;
+						while (*m++) // skip item name
+							++i;
+						if (j<i)
+							j=i;
+					}
+					if (menus==menu)
+						itemw=j,items=k;
+					menuxs[menus++]=menux;
+				}
+				session_redraw(0); // build background, delay refresh
+				session_border(hmenu,1+ox,1+oy,1);
+				session_ui_free(hitem);
+				hitem=session_ui_alloc(itemw,items);
+			}
+			if (itemz!=item)
+			{
+				itemz=item;
+				int i=0;
+				BYTE *m=session_ui_menudata;
+				while (*m) // scan menu data for items
+				{
+					while (*m++) // skip menu name
 						;
-				}
-				++i;
-			}
-			session_border(hitem,itemx+1+ox,2+oy,1);
-		}
-		switch (session_ui_exchange())
-		{
-			case KBCODE_UP:
-				if (--item<0)
-			case KBCODE_END:
-					item=items-1;
-				break;
-			case KBCODE_DOWN:
-				if (++item>=items)
-			case KBCODE_HOME:
-					item=0;
-				break;
-			case KBCODE_PRIOR:
-			case KBCODE_LEFT:
-				if (--menu<0)
-					menu=menus-1;
-				break;
-			case KBCODE_NEXT:
-			case KBCODE_RIGHT:
-				if (++menu>=menus)
-					menu=0;
-				break;
-			case KBCODE_ESCAPE:
-			case KBCODE_F10:
-				session_event=0;
-			case KBCODE_X_ENTER:
-			case KBCODE_ENTER:
-				session_shift=!!(session_event&0x4000);
-				session_event&=0xBFFF; // cfr.shift
-				if (session_event!=0x8000)
-				{
-					session_ui_free(hmenu);
-					session_ui_free(hitem);
-					session_ui_exit();
-					return;
-				}
-			default:
-				if (session_ui_char>=32&&session_ui_char<=128)
-					for (int o=lcase(session_ui_char),n=items;n;--n)
+					int j,k=0;
+					if (i==menu)
+						zz=m;
+					while (j=*m++<<8,j+=*m++,j)
 					{
-						++z,++z; // skip ID
-						while (*z++)
+						if (i==menu)
+						{
+							if (item==k)
+								z=&m[-2],session_event=j;
+							session_ui_printasciz(hitem,m,0,k,itemw,item==k);
+							events[k++]=j;
+						}
+						while (*m++) // skip item name
 							;
-						if (++item>=items)
-							item=0,z=zz;
-						if (lcase(z[4])==o)
-							break;
 					}
-				break;
+					++i;
+				}
+				session_border(hitem,itemx+1+ox,2+oy,1);
+			}
+			switch (session_ui_exchange())
+			{
+				case KBCODE_UP:
+					if (--item<0)
+				case KBCODE_END:
+						item=items-1;
+					break;
+				case KBCODE_DOWN:
+					if (++item>=items)
+				case KBCODE_HOME:
+						item=0;
+					break;
+				case KBCODE_PRIOR:
+				case KBCODE_LEFT:
+					if (--menu<0)
+						menu=menus-1;
+					break;
+				case KBCODE_NEXT:
+				case KBCODE_RIGHT:
+					if (++menu>=menus)
+						menu=0;
+					break;
+				case KBCODE_ESCAPE:
+				case KBCODE_F10:
+					done=-1;
+					break;
+				case KBCODE_X_ENTER:
+				case KBCODE_ENTER:
+					//if (session_event!=0x8000) // gap?
+						done=1;
+					break;
+				case -1: // mouse click
+					if (!session_ui_clicky&&session_ui_clickx>=0&&session_ui_clickx<session_ui_menusize) // select menu?
+					{
+						menu=menus; while (session_ui_clickx<menuxs[menu-1])
+							--menu;
+					}
+					else if (session_ui_clicky>0&&session_ui_clicky<=items&&session_ui_clickx>=itemx&&session_ui_clickx<itemx+itemw+2) // select item?
+						session_event=events[session_ui_clicky-1],done=1;
+					else // quit?
+						session_event=0,done=1;
+					break;
+				default:
+					if (session_ui_char>=32&&session_ui_char<=128)
+						for (int o=lcase(session_ui_char),n=items;n;--n)
+						{
+							++z,++z; // skip ID
+							while (*z++)
+								;
+							if (++item>=items)
+								item=0,z=zz;
+							if (lcase(z[4])==o)
+								break;
+						}
+					break;
+			}
 		}
 	}
+	session_ui_free(hmenu);
+	session_ui_free(hitem);
+	session_ui_exit();
+	if (done<0)
+		session_event=0;
+	else
+		session_shift=!!(session_event&0x4000),session_event&=0xBFFF; // cfr.shift
+	return;
 }
 
 int session_ui_text(char *s,char *t,char q) // see session_message
@@ -647,6 +675,9 @@ int session_ui_text(char *s,char *t,char q) // see session_message
 	for (;;)
 		switch (session_ui_exchange())
 		{
+			case -1: // mouse click
+				if (session_ui_clickx>=0&&session_ui_clickx<session_ui_size_x&&session_ui_clicky>=0&&session_ui_clicky<session_ui_size_y)
+					break;
 			case KBCODE_ESCAPE:
 			case KBCODE_SPACE:
 			case KBCODE_X_ENTER:
@@ -680,7 +711,8 @@ int session_ui_list(int item,char *s,char *t,void x(void)) // see session_list
 	listh=items+1<VIDEO_PIXELS_Y/SESSION_UI_HEIGHT-2?items+1:VIDEO_PIXELS_Y/SESSION_UI_HEIGHT-2;
 	SDL_Surface *hlist=session_ui_alloc(listw,listh);
 	session_ui_printasciz(hlist,t,0,0,listw,1);
-	for (;;)
+	int done=0;
+	while (!done)
 	{
 		if (listz>item)
 			if ((listz=item)<0)
@@ -723,17 +755,42 @@ int session_ui_list(int item,char *s,char *t,void x(void)) // see session_list
 				if (x)
 					x();
 				break;
+			case -1: // mouse click
+				if (session_ui_clickx<0||session_ui_clickx>=session_ui_size_x)
+					item=-1,done=1; // quit!
+				else if (session_ui_clicky<1) // scroll up?
+				{
+					if ((item-=listh-2)<0)
+						item=0;
+				}
+				else if (session_ui_clicky>=session_ui_size_y) // scroll down?
+				{
+					if ((item+=listh-2)>=items)
+						item=items-1;
+				}
+				else // select an item?
+				{
+					int button=listz+session_ui_clicky-1;
+					if (button==item) // same item? (=double click)
+						done=1;
+					else // different item!
+					{
+						item=button;
+						if (item<0)
+							item=0;
+						else if (item>=items)
+							item=items-1;
+					}
+				}
+				break;
 			case KBCODE_ESCAPE:
 			case KBCODE_F10:
 				item=-1;
-				z=NULL;
+				//break;
 			case KBCODE_X_ENTER:
 			case KBCODE_ENTER:
-				if (item>=0)
-					strcpy(session_parmtr,z);
-				session_ui_free(hlist);
-				session_ui_exit();
-				return item;
+				done=1;
+				break;
 			default:
 				if (session_ui_char>=32&&session_ui_char<=128)
 				{
@@ -759,6 +816,11 @@ int session_ui_list(int item,char *s,char *t,void x(void)) // see session_list
 				break;
 		}
 	}
+	if (item>=0)
+		strcpy(session_parmtr,z);
+	session_ui_free(hlist);
+	session_ui_exit();
+	return item;
 }
 
 int session_ui_input(char *s,char *t) // see session_input
@@ -769,7 +831,8 @@ int session_ui_input(char *s,char *t) // see session_input
 	session_ui_init();
 	SDL_Surface *htext=session_ui_alloc(textw,2);
 	session_ui_printasciz(htext,t,0,0,textw,1);
-	for (;;)
+	int done=0;
+	while (!done)
 	{
 		if (first)
 		{
@@ -804,15 +867,25 @@ int session_ui_input(char *s,char *t) // see session_input
 					i=j;
 				first=0;
 				break;
+			case -1: // mouse click
+				if (session_ui_clickx<0||session_ui_clickx>=session_ui_size_x||session_ui_clicky<0||session_ui_clicky>=session_ui_size_y)
+					j=-1,done=1; // quit!
+				else if (session_ui_clicky==1)
+				{
+					first=0;
+					if ((i=session_ui_clickx-1)>j)
+						i=j;
+					else if (i<0)
+						i=0;
+				}
+				break;
 			case KBCODE_ESCAPE:
 				j=-1;
+				//break;
 			case KBCODE_X_ENTER:
 			case KBCODE_ENTER:
-				if (j>=0)
-					strcpy(s,session_parmtr);
-				session_ui_free(htext);
-				session_ui_exit();
-				return j;
+				done=1;
+				break;
 			case KBCODE_BKSPACE:
 				if (first)
 					*session_parmtr=i=j=0;
@@ -852,6 +925,11 @@ int session_ui_input(char *s,char *t) // see session_input
 				break;
 		}
 	}
+	if (j>=0)
+		strcpy(s,session_parmtr);
+	session_ui_free(htext);
+	session_ui_exit();
+	return j;
 }
 
 int multiglobbing(char *w,char *t,int q); // multi-pattern globbing; must be defined later on!
@@ -1208,6 +1286,10 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 				session_clrscr(); // wipe leftovers
 				SDL_UpdateWindowSurface(session_hwnd);//session_redraw(1);//
 				break;*/
+			case SDL_MOUSEBUTTONDOWN:
+				if (event.button.button==SDL_BUTTON_RIGHT)
+					session_event=0x8080; // show menu
+				break;
 			#ifndef CONSOLE_DEBUGGER
 			case SDL_TEXTINPUT:
 				if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant for the debugger, see below
