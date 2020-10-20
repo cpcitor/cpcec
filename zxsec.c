@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20201012"//"2555"
+#define MY_VERSION "20201020"//"1755"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -907,9 +907,9 @@ void z80_debug_hard(int q,int x,int y)
 	for (i=0;i<8;++i)
 		t+=sprintf(t,"%02X",psg_table[i]);
 	t+=z80_debug_hard_tab(t);
-	for (;i<16;++i)
+	for (;i<14;++i)
 		t+=sprintf(t,"%02X",psg_table[i]);
-	t+=sprintf(t,"FDC:  %02X - %04X:%04X""    %c ",disc_parmtr[0],(WORD)disc_offset,(WORD)disc_length,48+disc_phase);
+	t+=sprintf(t,"----" "FDC:  %02X - %04X:%04X""    %c ",disc_parmtr[0],(WORD)disc_offset,(WORD)disc_length,48+disc_phase);
 	for (i=0;i<7;++i)
 		t+=sprintf(t,"%02X",disc_result[i]);
 	char *r=t;

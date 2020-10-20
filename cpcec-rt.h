@@ -111,7 +111,7 @@ int multiglobbing(char *w,char *t,int q) // like globbing(), but with multiple p
 	return 0;
 }
 
-// the following algorithms are weak, but proper binary search is difficult to perform on packed lists; fortunately, items are likely to be sorted beforehand
+// the following algorithms are weak, but proper binary search is difficult to perform on packed lists; fortunately, items are likely to be partially sorted beforehand
 int sortedinsert(char *t,int z,char *s) // insert string 's' in its alphabetical order within the packed list of strings 't' of length 'l'; returns the list's new length
 {
 	int m=z,n; while (m>0)
@@ -179,8 +179,15 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 					*vo++=*vi++;
 				break;
 			case 0+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK:
-				if (video_interlacez) ++vi;
-				// no `break` here!
+				if (!video_interlacez)
+				{
+					if (video_pos_y&2) vi+=2;
+					while (vi<vl)
+						vt=*vi,*vi=VIDEO_FILTER_X1(vt),
+						vi+=4;
+					break;
+				}
+				// no `break`!
 			case 0+VIDEO_FILTER_X_MASK:
 				while (vi<vl)
 					vt=*vi,
@@ -188,9 +195,22 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 					vi+=2;
 				break;
 			case 8+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK:
-				while (vi<vl)
-					*vo++=vt=*vi,*vi++=VIDEO_FILTER_X1(vt),
-					vt=*vi++,*vo++=VIDEO_FILTER_X1(vt);
+				if (video_pos_y&2)
+					while (vi<vl)
+					{
+						vt=*vi++,*vo++=VIDEO_FILTER_X1(vt);
+						*vo++=*vi++;
+						vt=*vi,*vi++=*vo++=VIDEO_FILTER_X1(vt);
+						*vo++=*vi++;
+					}
+				else
+					while (vi<vl)
+					{
+						vt=*vi,*vi++=*vo++=VIDEO_FILTER_X1(vt);
+						*vo++=*vi++;
+						vt=*vi++,*vo++=VIDEO_FILTER_X1(vt);
+						*vo++=*vi++;
+					}
 				break;
 			case 8+VIDEO_FILTER_SMUDGE:
 				vz=*(vp=(vi+2));
@@ -234,7 +254,21 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 				/*VIDEO_FILTER_STEP(vt,vz,vz),*/*vo++=*vi++=vt;
 				break;
 			case 0+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
-				if (video_interlacez) ++vi;
+				if (!video_interlacez)
+				{
+					vz=*(vp=(vi+2));
+					if (video_pos_y&2)
+						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=vt,
+						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=vt;
+					while (vp<vl)
+						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=VIDEO_FILTER_X1(vt),
+						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=vt,
+						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=vt,
+						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=vt;
+					VIDEO_FILTER_STEP(vt,vz,vz),*vi++=VIDEO_FILTER_X1(vt);
+					/*VIDEO_FILTER_STEP(vt,vz,vz),*/*vi++=vt;
+					break;
+				}
 				// no `break` here!
 			case 0+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
 				vz=*(vp=(vi+2));
@@ -246,11 +280,26 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 				break;
 			case 8+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
 				vz=*(vp=(vi+2));
-				while (vp<vl)
-					va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vo++=vt,*vi++=VIDEO_FILTER_X1(vt),
-					va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=vt,*vo++=VIDEO_FILTER_X1(vt);
-				VIDEO_FILTER_STEP(vt,vz,vz),*vo++=vt,*vi++=VIDEO_FILTER_X1(vt);
-				/*VIDEO_FILTER_STEP(vt,vz,vz),*/*vi++=vt,*vo++=VIDEO_FILTER_X1(vt);
+				if (video_pos_y&2)
+				{
+					while (vp<vl)
+						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=vt,*vo++=VIDEO_FILTER_X1(vt),
+						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=*vo++=vt,
+						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=*vo++=VIDEO_FILTER_X1(vt),
+						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=*vo++=vt;
+					VIDEO_FILTER_STEP(vt,vz,vz),*vo++=vt,*vi++=VIDEO_FILTER_X1(vt);
+					/*VIDEO_FILTER_STEP(vt,vz,vz),*/*vi++=vt,*vo++=VIDEO_FILTER_X1(vt);
+				}
+				else
+				{
+					while (vp<vl)
+						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=*vo++=VIDEO_FILTER_X1(vt),
+						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=*vo++=vt,
+						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=vt,*vo++=VIDEO_FILTER_X1(vt),
+						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=*vo++=vt;
+					VIDEO_FILTER_STEP(vt,vz,vz),*vo++=vt,*vi++=VIDEO_FILTER_X1(vt);
+					/*VIDEO_FILTER_STEP(vt,vz,vz),*/*vi++=vt,*vo++=VIDEO_FILTER_X1(vt);
+				}
 				break;
 		}
 	}
@@ -951,10 +1000,10 @@ void onscreen_clear(void) // get a copy of the visible screen
 		memcpy(&debug_frame[y*VIDEO_PIXELS_X],&video_frame[(VIDEO_OFFSET_Y+y)*VIDEO_LENGTH_X+VIDEO_OFFSET_X],sizeof(VIDEO_UNIT)*VIDEO_PIXELS_X);
 	if (video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-1)
 		for (int x=0,z=((video_pos_y&-2)-VIDEO_OFFSET_Y)*VIDEO_PIXELS_X;x<VIDEO_PIXELS_X;++x,++z)
-			debug_frame[z]=debug_frame[z+VIDEO_PIXELS_X]=x&16?VIDEO1(0xFFFFFF):VIDEO1(0);
+			debug_frame[z]=debug_frame[z+VIDEO_PIXELS_X]^=x&16?VIDEO1(0x00FFFF):VIDEO1(0xFF0000);
 	if (video_pos_x>=VIDEO_OFFSET_X&&video_pos_x<VIDEO_OFFSET_X+VIDEO_PIXELS_X-1)
 		for (int y=0,z=(video_pos_x&-2)-VIDEO_OFFSET_X;y<VIDEO_PIXELS_Y;++y,z+=VIDEO_PIXELS_X)
-			debug_frame[z]=debug_frame[z+1]=y&2?VIDEO1(0xFFFFFF):VIDEO1(0);
+			debug_frame[z]=debug_frame[z+1]^=y&2?VIDEO1(0x00FFFF):VIDEO1(0xFF0000);
 }
 WORD onscreen_grafx_addr=0; BYTE onscreen_grafx_size=1;
 WORD onscreen_grafx(int q,VIDEO_UNIT *v,int w,int x,int y); // defined later!

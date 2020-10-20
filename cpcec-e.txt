@@ -61,14 +61,16 @@ libraries required for the compiling procedure (if the compiler doesn't
 recognize them on its own) are USER32, GDI32, WINMM, COMDLG32 and SHELL32, all
 them from the Win32 SDK.
 
-The binaries for operating systems supported by SDL2 need different commands:
+The binaries for operating systems supported by SDL2 need different commands.
+Some systems may require an additional parameter -DSDL2_DOUBLE_QUEUE if the
+sound becomes choppy due to the default buffer being too short.
 
 	gcc -DSDL2 -O2 -xc cpcec.c -lSDL2 -ocpcec
 
 	gcc -DSDL2 -O2 -xc zxsec.c -lSDL2 -ozxsec
 
 Besides, the filenames must be in lower case: the contents of the ZIP archive
-may need to be extracted with "unzip -LL cpcec-20XXXXXX.zip".
+may need to be extracted with "unzip -L cpcec-20XXXXXX.zip".
 
 ## Configuration and files ##
 
@@ -747,3 +749,10 @@ systems from CPCEC.INI and ZXSEC.INI to .cpcecrc and .zxsecrc as customary on
 Unix. Tweaks for CLANG compatibility.
 - 20201012 -- minor patch adding mouse support to the custom user interface for
 SDL2.
+- 20201020 -- minor patch fixing a bug in the Dandanator support (the "LD
+(IY+n),A/B/C" operations must work with any "n" value, instead of just 0: thanks
+to Spirax for the report) and another one in the CRTC (counter HCC is 8 bits
+long: "Camembert Meeting 4 Demo" stops showing a line of garbage between the top
+and the middle panels), adding SDL2_DOUBLE_QUEUE as an optional SDL2 compilation
+flag (some systems need an audio buffer longer than the default 8 frames) and
+using a different pixel pattern when both X-Masking and Y-Masking are enabled.

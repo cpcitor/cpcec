@@ -3233,7 +3233,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							case 0x70: // LD (IX+$XX),B
 								Z80_WZ_XY_1X(5); Z80_POKE(z80_wz,z80_bc.b.h);
 								#ifdef Z80_CPC_DANDANATOR
-									if (dandanator_trap==z80_pc.w&&z80_wz==z80_iy.w&&!(dandanator_config[1]&32)) // "FDFDFD7000"
+									if (dandanator_trap==z80_pc.w&&!(dandanator_config[1]&32)) // "FDFDFD70"
 									{
 										dandanator_config[2]=z80_bc.b.h;
 										if (!(dandanator_config[1]&64)) // RET trap is off?
@@ -3244,7 +3244,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							case 0x71: // LD (IX+$XX),C
 								Z80_WZ_XY_1X(5); Z80_POKE(z80_wz,z80_bc.b.l);
 								#ifdef Z80_CPC_DANDANATOR
-									if (dandanator_trap==z80_pc.w&&z80_wz==z80_iy.w&&!(dandanator_config[1]&32)) // "FDFDFD7100"
+									if (dandanator_trap==z80_pc.w&&!(dandanator_config[1]&32)) // "FDFDFD71"
 									{
 										dandanator_config[3]=z80_bc.b.l;
 										if (!(dandanator_config[1]&64)) // RET trap is off?
@@ -3267,7 +3267,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							case 0x77: // LD (IX+$XX),A
 								Z80_WZ_XY_1X(5); Z80_POKE(z80_wz,z80_af.b.h);
 								#ifdef Z80_CPC_DANDANATOR
-									if (dandanator_trap==z80_pc.w&&z80_wz==z80_iy.w&&!(dandanator_config[1]&32)) // "FDFDFD7700"
+									if (dandanator_trap==z80_pc.w&&!(dandanator_config[1]&32)) // "FDFDFD77"
 									{
 										if (z80_af.b.h&128)
 											dandanator_config[1]=z80_af.b.h;

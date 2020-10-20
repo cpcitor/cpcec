@@ -31,30 +31,27 @@ void psg_reg_update(int c)
 {
 	switch (c)
 	{
-		case 0: case 2: case 4:
-		case 1: case 3: case 5:
+		case 0: case 2: case 4: // LO wavelengths
+		case 1: case 3: case 5: // HI wavelengths
 			psg_tone_limit[c/2]=psg_table[c&-2]+(psg_table[(c&-2)+1]<<8);
 			break;
-		case 6:
+		case 6: // noise wavelength
 			if (!(psg_noise_limit=(psg_table[6]&31)*2))
 				psg_noise_limit=1*2; // noise runs at half the rate
 			break;
-		case 7:
+		case 7: // mixer bits
 			for (c=0;c<3;++c)
 				psg_tone_mixer[c]=psg_table[7]&((1+8)<<c); // 8+1, 16+2, 32+4
 			break;
-		case 8:
-		case 9:
-		case 10:
+		case 8: case 9: case 10: // amplitudes
 			if ((psg_tone_power[c-8]=psg_table[c])&~15) // hard envelope?
 				psg_tone_power[c-8]=16;
 			break;
-		case 11:
-		case 12:
+		case 11: case 12: // envelope wavelength
 			if (!(psg_hard_limit=(psg_table[11]+(psg_table[12]<<8))*2))
 				psg_hard_limit=1*2; // hard envelope, ditto
 			break;
-		case 13:
+		case 13: // envelope bits
 			c=psg_table[13]; psg_hard_count=psg_hard_level=psg_hard_flag0=0;
 			psg_hard_flag2=(psg_hard_log=psg_hard_style=c<4?9:c<8?15:c)&4?0:15; // unify styles!
 			break;

@@ -364,7 +364,7 @@ void session_ui_init(void) { memset(kbd_bit,0,sizeof(kbd_bit)); session_please()
 void session_ui_exit(void) { session_redraw(1); }
 
 int session_ui_clickx,session_ui_clicky; // mouse X+Y, when the "key" is -1
-int session_ui_char; // ASCIZ interpretation of the latest keystroke
+int session_ui_char,session_ui_shift; // ASCII+Shift of the latest keystroke
 int session_ui_exchange(void) // update window and wait for a keystroke
 {
 	session_ui_char=0; SDL_Event event;
@@ -388,6 +388,7 @@ int session_ui_exchange(void) // update window and wait for a keystroke
 					session_ui_char=128+(session_ui_char&1)*64+(event.text.text[1]&63);
 				return 0;
 			case SDL_KEYDOWN:
+				session_ui_shift=!!(event.key.keysym.mod&KMOD_SHIFT);
 				return event.key.keysym.mod&KMOD_ALT?0:event.key.keysym.scancode;
 			case SDL_QUIT:
 				return KBCODE_ESCAPE;
@@ -688,7 +689,7 @@ int session_ui_text(char *s,char *t,char q) // see session_message
 		}
 }
 
-int session_ui_list(int item,char *s,char *t,void x(void)) // see session_list
+int session_ui_list(int item,char *s,char *t,void x(void),int q) // see session_list
 {
 	int i,items=0,listw=0,listh,listz=0;
 	char *m=t,*z=NULL;
@@ -752,7 +753,20 @@ int session_ui_list(int item,char *s,char *t,void x(void)) // see session_list
 					item=items-1;
 				break;
 			case KBCODE_TAB:
-				if (x)
+				if (q) // browse items if `q` is true
+				{
+					if (session_ui_shift)
+					{
+						if (--item<0) // prev?
+							item=items-1; // wrap
+					}
+					else
+					{
+						if (++item>=items) // next?
+							item=0; // wrap
+					}
+				}
+				else if (x) // special context widget
 					x();
 				break;
 			case -1: // mouse click
@@ -771,8 +785,8 @@ int session_ui_list(int item,char *s,char *t,void x(void)) // see session_list
 				else // select an item?
 				{
 					int button=listz+session_ui_clicky-1;
-					if (button==item) // same item? (=double click)
-						done=1;
+					if (q||item==button) // `q` (single click, f.e. "YES"/"NO") or same item? (=double click)
+						item=button,done=1;
 					else // different item!
 					{
 						item=button;
@@ -951,7 +965,7 @@ char *session_ui_filedialog_sanitizepath(char *s) // restore PATHCHAR at the end
 void session_ui_filedialog_tabkey(void)
 {
 	char *l={"Read/Write\000Read-Only\000\000"};
-	int i=session_ui_list(session_ui_fileflags&1,l,"File access",NULL);
+	int i=session_ui_list(session_ui_fileflags&1,l,"File access",NULL,0);
 	if (i>=0)
 		session_ui_fileflags=i;
 }
@@ -1053,7 +1067,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 		else
 			*m=0,half=session_scratch,i=sortedsearch(half,m-half,pastname); // look for past name, if any
 
-		if (session_ui_list(i,session_scratch,t,q?session_ui_filedialog_tabkey:NULL)<0)
+		if (session_ui_list(i,session_scratch,t,q?session_ui_filedialog_tabkey:NULL,0)<0)
 			return 0; // user closed the dialog!
 
 		m=session_parmtr;
@@ -1122,7 +1136,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 			strcpy(session_parmtr,session_scratch); // copy to target, but keep the source...
 			if (q||f||session_ui_filedialog_stat(session_parmtr)<0)
 				return 1; // the user succesfully chose a file, either extant for reading or new for writing!
-			if (session_ui_list(0,"YES\000NO\000\000","Overwrite?",NULL)==0)
+			if (session_ui_list(0,"YES\000NO\000\000","Overwrite?",NULL,1)==0)
 				return strcpy(session_parmtr,session_scratch),1; // ...otherwise session_parmtr would hold "YES"!
 		}
 	}
@@ -1329,7 +1343,6 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 				break;
 			case SDL_KEYUP: //if (event.key.state==SDL_RELEASED)
 				{
-					session_shift=!!(event.key.keysym.mod&KMOD_SHIFT);
 					int k=session_key_n_joy(event.key.keysym.scancode);
 					if (k<128)
 						kbd_bit_res(k);
@@ -1416,6 +1429,12 @@ INLINE void session_render(void) // update video, audio and timers
 		session_timer+=1000/VIDEO_PLAYBACK;
 	}
 
+	#ifdef SDL2_DOUBLE_QUEUE // workaround (f.e. SlITaz v5)
+		#define AUDIO_N_FRAMEZ (AUDIO_N_FRAMES*2)
+	#else
+		#define AUDIO_N_FRAMEZ AUDIO_N_FRAMES
+	#endif
+
 	if (session_audio)
 	{
 		static BYTE s=1;
@@ -1423,11 +1442,11 @@ INLINE void session_render(void) // update video, audio and timers
 			if (s=audio_disabled) // silent mode needs cleanup
 				memset(audio_buffer,AUDIO_ZERO,sizeof(audio_buffer));
 		j=SDL_GetQueuedAudioSize(session_audio);
-		if (j<=sizeof(audio_buffer)*AUDIO_N_FRAMES) // buffer full?
+		if (j<=sizeof(audio_buffer)*AUDIO_N_FRAMEZ) // buffer full?
 		{
 			/*audio_disabled&=~8*/; // buffer is ready!
 			SDL_QueueAudio(session_audio,audio_buffer,sizeof(audio_buffer));
-			if (j<=sizeof(audio_buffer)*AUDIO_N_FRAMES/2) // buffer not full enough?
+			if (j<=sizeof(audio_buffer)*AUDIO_N_FRAMEZ/2) // buffer not full enough?
 				i+=500/VIDEO_PLAYBACK; // force speedup by mangling the timer!
 		}
 		else
@@ -1558,7 +1577,7 @@ int session_input(char *s,char *t) { return session_ui_input(s,t); } // `s` is t
 
 // list dialog ------------------------------------------------------ //
 
-int session_list(int i,char *s,char *t) { return session_ui_list(i,s,t,NULL); } // `s` is a list of ASCIZ entries, `i` is the default chosen item, `t` is the caption; returns -1 on error or 0..n-1 on success
+int session_list(int i,char *s,char *t) { return session_ui_list(i,s,t,NULL,0); } // `s` is a list of ASCIZ entries, `i` is the default chosen item, `t` is the caption; returns -1 on error or 0..n-1 on success
 
 // file dialog ------------------------------------------------------ //
 

@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20201012"//"2555"
+#define MY_VERSION "20201020"//"1755"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -455,7 +455,7 @@ INLINE void crtc_table_send(BYTE i)
 		switch (crtc_table[crtc_index]=i,crtc_index)
 		{
 			case 0:
-				if (i<31&&!crtc_table[7]) // tell apart between "Chapelle Sixteen" and "Onescreen Colonies" (for example)
+				if (crtc_table[7]?i==7:i<31) // tell apart between "Chapelle Sixteen" and "Onescreen Colonies" (for example) ... or "Chany Dream" (part 4)
 					video_threshold=VIDEO_LENGTH_X*5/8; // harder HSYNC threshold
 				if (crtc_limit_r2!=i)
 					crtc_count_r3x=crtc_limit_r3x-1; // "S&KOH" relies on this to cut HSYNC!
@@ -1170,7 +1170,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 		}
 		else
 		{
-			if ((crtc_count_r0=(crtc_count_r0+1)&127)==crtc_table[0])
+			if ((crtc_count_r0=(crtc_count_r0+1))==crtc_table[0]) // "CAMEMBERT MEETING" expects &255 rather than "&127"
 				crtc_status|=CRTC_STATUS_R0_OK;
 			if ((crtc_screen+=2)&2048)
 				crtc_screen+=crtc_double-2048; // go to next 16k
@@ -2288,9 +2288,9 @@ void z80_debug_hard(int q,int x,int y)
 		for (i=0;i<8;++i)
 			t+=sprintf(t,"%02X",psg_table[i]);
 		t+=z80_debug_hard_tab(t);
-		for (;i<16;++i)
+		for (;i<14;++i)
 			t+=sprintf(t,"%02X",psg_table[i]);
-		t+=sprintf(t,"    PIO: %02X:%02X:%02X:%02X",pio_port_a,pio_port_b,pio_port_c,pio_control);
+		t+=sprintf(t,"----" "    PIO: %02X:%02X:%02X:%02X",pio_port_a,pio_port_b,pio_port_c,pio_control);
 		t+=sprintf(t,"FDC:  %02X - %04X:%04X""    %c ",disc_parmtr[0],(WORD)disc_offset,(WORD)disc_length,48+disc_phase);
 		for (i=0;i<7;++i)
 			t+=sprintf(t,"%02X",disc_result[i]);
@@ -3952,6 +3952,8 @@ int main(int argc,char *argv[])
 					onscreen_bool(-3,-6,2,1,kbd_bit_tst(kbd_joy[3]));
 					onscreen_bool(-6,-2,2,1,kbd_bit_tst(kbd_joy[4]));
 					onscreen_bool(-3,-2,2,1,kbd_bit_tst(kbd_joy[5]));
+					if (video_threshold>VIDEO_LENGTH_X/4)
+						onscreen_bool(-4,-6,1,1,0);
 				}
 			}
 			video_threshold=VIDEO_LENGTH_X/4; // softer HSYNC threshold
