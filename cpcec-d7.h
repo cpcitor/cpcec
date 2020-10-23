@@ -45,6 +45,7 @@ BYTE disc_trueunit,disc_trueunithead; // current unit+head after flipping sides 
 int disc_delay; // several operations need a short delay between command and action.
 int disc_timer; // overrun timer: if nonzero, it decreases.
 int disc_overrun; // set if disc_timer dropped to zero!
+int disc_tolerant=1; // set whether disc write errors are strict or relaxed
 
 // disc file handling operations ------------------------------------ //
 
@@ -696,8 +697,8 @@ void disc_data_send(BYTE b) // DATA I/O
 					disc_result[0]=(disc_parmtr[1]&7)|(disc_initstate()?0:0x20)|(disc_track[disc_trueunit]?0:0x10); // 0x20: Ready; 0x10: Track 0
 					if (disc_change[disc_trueunit])
 						disc_result[0]|=0x40,disc_change[disc_trueunit]=0; // disc changed!
-					//if (!disc_canwrite[disc_trueunit])
-						//disc_result[0]|=0x40; // 0x40: Write protected
+					if (!disc_canwrite[disc_trueunit])
+						if (!disc_tolerant) disc_result[0]|=0x40; // 0x40: Write protected
 					if (!(disc_index_table[disc_trueunit][0x31]&1))
 						disc_result[0]|=0x08; // 0x08: Two-sided drive
 					disc_length=1;
@@ -761,8 +762,8 @@ void disc_data_send(BYTE b) // DATA I/O
 								fwrite(disc_track_table[disc_trueunithead],1,disc_track_table[disc_trueunithead][0x15]>29?512:256,disc[disc_trueunit]); // warning: this silently fails if the file mode is "rb" instead of "rb+" (again)
 							}
 						}
-						//else
-							//disc_result[1]|=0x02; // 0x02: Not Writeable // warning: this is a cheap way to fool software into writing data
+						else if (!disc_tolerant)
+							disc_result[1]|=0x02; // 0x02: Not Writeable // warning: this is a cheap way to fool software into writing data
 						if ((disc_parmtr[4]==disc_parmtr[6])||((disc_result[1]|disc_result[2])&0x3F)) // is it the last requested sector? did any fatal errors happen?
 						{
 							disc_exitstate();

@@ -21,6 +21,7 @@ INLINE int ucase(int i) { return i>='a'&&i<='z'?i-32:i; }
 INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 
 unsigned char session_scratch[1<<18]; // at least 256k!
+#define AUDIO_N_FRAMES 8 // safe on Windows and other systems
 
 #include "cpcec-a7.h" //unsigned char *onscreen_chrs;
 #define onscreen_size (sizeof(onscreen_chrs)/95)

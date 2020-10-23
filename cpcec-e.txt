@@ -243,8 +243,8 @@ power, or 2.- the user needs to speed the emulation up for a while.
 
 The menu also includes several additional options (for example CRTC type) as
 well as actions such as flipping the sides of inserted discs, browsing the
-contents of the current tape or enabiling the hardware extensions Dandanator and
-Playcity, disabled by default.
+contents of the current tape, enabling the hardware extensions Dandanator and
+Playcity (disabled by default), etc.
 
 CPCEC supports drag-and-drop. Dropped files will be automatically loaded (as F3
 does) unless the Shift key is down; in this case they will be inserted as F7 and
@@ -739,16 +739,15 @@ DATA updates the corresponding flag in the sector table. New Dandanator support,
 read-only ("Sword of Ianna"). Preliminary Playcity support, limited to the two
 extra PSG and the NMI trigger. New video recording based on an intermediary
 format XRF, and including a tool allowing to convert it into AVI files.
-Improvements in the SDL interface, with a bigger font (12px rather than 8px) and
-vertical alignment in menu keyboard shortcuts. Added new debugging functions
+Improvements in the SDL2 interface, with a bigger font (12px rather than 8px)
+and vertical alignment in menu keyboard shortcuts. Added new debugging functions
 (looking at graphics in memory with key "W", trapping the opcode $EDFF as a
 breakpoint, etc.) and moved breakpoints from "T" to "." . Removed CPCEC.ELF and
 ZXSEC.ELF as they're bound to a single OS (Linux Mint 18 32bit) and the user
 must compile the binaries anyway. Moved the configuration files in non-Windows
 systems from CPCEC.INI and ZXSEC.INI to .cpcecrc and .zxsecrc as customary on
 Unix. Tweaks for CLANG compatibility.
-- 20201012 -- minor patch adding mouse support to the custom user interface for
-SDL2.
+- 20201012 -- minor patch adding mouse support to the user interface for SDL2.
 - 20201020 -- minor patch fixing a bug in the Dandanator support (the "LD
 (IY+n),A/B/C" operations must work with any "n" value, instead of just 0: thanks
 to Spirax for the report) and another one in the CRTC (counter HCC is 8 bits
@@ -756,3 +755,6 @@ long: "Camembert Meeting 4 Demo" stops showing a line of garbage between the top
 and the middle panels), adding SDL2_DOUBLE_QUEUE as an optional SDL2 compilation
 flag (some systems need an audio buffer longer than the default 8 frames) and
 using a different pixel pattern when both X-Masking and Y-Masking are enabled.
+- 20201022 -- minor patch adding mouse wheel support to the SDL2 user interface
+and an option to set whether disc write conflicts in CPCEC and ZXSEC are strict
+(they raise errors) or relaxed (they do nothing).

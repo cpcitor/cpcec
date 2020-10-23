@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20201020"//"1755"
+#define MY_VERSION "20201022"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -53,7 +53,6 @@ Contact information: <mailto:cngsoft@gmail.com> */
 #define VIDEO_PIXELS_Y (30<<4)
 #define AUDIO_PLAYBACK 44100 // 22050, 24000, 44100, 48000
 #define AUDIO_LENGTH_Z (AUDIO_PLAYBACK/VIDEO_PLAYBACK) // division must be exact!
-#define AUDIO_N_FRAMES 8
 
 #define DEBUG_LENGTH_X 64
 #define DEBUG_LENGTH_Y 32
@@ -62,7 +61,7 @@ Contact information: <mailto:cngsoft@gmail.com> */
 #define session_debug_user z80_debug_user
 
 #if defined(SDL2) || defined(SDL_MAIN_HANDLED) || !defined(_WIN32) // SDL2?
-short session_icon32xx16[32*32] = {
+unsigned short session_icon32xx16[32*32] = {
 	0x0000, 0x0000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 	0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0x0000, 0x0000,
 	0x0000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 	0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0x0000,
 	0xf000, 0xf000, 0xf000, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xff00, 0xf800, 0xf000, 0xff80, 	0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xfff0, 0xff80, 0xf000, 0xf000, 0xf000,
@@ -1453,6 +1452,7 @@ char session_menudata[]=
 	"0x8505 QAOP+Space joystick\n"
 	"=\n"
 	"0x8510 Disc controller\n"
+	"0x8590 Strict disc writes\n"
 	"0x8511 Memory contention\n"
 	"0x8512 ULA 48K video noise\n"
 	"0x8513 Strict SNA files\n"
@@ -1536,6 +1536,7 @@ void session_menuinfo(void)
 	session_menucheck(0x0400,session_key2joy);
 	session_menuradio(0x0601+z80_turbo,0x0601,0x0604);
 	session_menuradio(0x8501+joy1_type,0x8501,0x8505);
+	session_menucheck(0x8590,!disc_tolerant);
 	session_menucheck(0x8510,!(disc_disabled&1));
 	session_menucheck(0x8511,!(ula_clash_disabled));
 	session_menucheck(0x8512,!(ula_snow_disabled));
@@ -1690,7 +1691,10 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 		case 0x8505:
 			joy1_type=(k&15)-1; // 0,1,2,3,4
 			break;
-		case 0x8510:
+		case 0x8590: // STRICT DISC WRITES
+			disc_tolerant=!disc_tolerant;
+			break;
+		case 0x8510: // DISC CONTROLLER
 			disc_disabled^=1;
 			break;
 		case 0x8511:
@@ -1906,6 +1910,7 @@ void session_configreadmore(char *s)
 	else if (!strcasecmp(session_parmtr,"tape")) strcpy(tape_path,s);
 	else if (!strcasecmp(session_parmtr,"disc")) strcpy(disc_path,s);
 	else if (!strcasecmp(session_parmtr,"card")) strcpy(bios_path,s);
+	else if (!strcasecmp(session_parmtr,"xfdc")) disc_tolerant=*s&1;
 	else if (!strcasecmp(session_parmtr,"info")) onscreen_flag=*s&1;
 	else if (!strcasecmp(session_parmtr,"palette")) { if ((i=*s&15)<length(video_table)) video_type=i; }
 	else if (!strcasecmp(session_parmtr,"autorewind")) tape_rewind=*s&1;
@@ -1913,8 +1918,10 @@ void session_configreadmore(char *s)
 }
 void session_configwritemore(FILE *f)
 {
-	fprintf(f,"type %i\njoy1 %i\nxsna %i\nfile %s\nsnap %s\ntape %s\ndisc %s\ncard %s\ninfo %i\npalette %i\nautorewind %i\ndebug %i\n"
-		,type_id,joy1_type,snap_extended,autorun_path,snap_path,tape_path,disc_path,bios_path,onscreen_flag,video_type,tape_rewind,z80_debug_configwrite());
+	fprintf(f,"type %i\njoy1 %i\nxsna %i\nxfdc %i\nfile %s\nsnap %s\ntape %s\ndisc %s\ncard %s\n"
+		"info %i\npalette %i\nautorewind %i\ndebug %i\n"
+		,type_id,joy1_type,snap_extended,disc_tolerant,autorun_path,snap_path,tape_path,disc_path,bios_path,
+		onscreen_flag,video_type,tape_rewind,z80_debug_configwrite());
 }
 
 #if defined(CONSOLE_DEBUGGER) || defined(SDL_MAIN_HANDLED)

@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20201020"//"1755"
+#define MY_VERSION "20201022"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -57,7 +57,6 @@ Contact information: <mailto:cngsoft@gmail.com> */
 #define VIDEO_VSYNC_HI (44<<4)
 #define AUDIO_PLAYBACK 44100 // 22050, 24000, 44100, 48000
 #define AUDIO_LENGTH_Z (AUDIO_PLAYBACK/VIDEO_PLAYBACK) // division must be exact!
-#define AUDIO_N_FRAMES 8
 
 #define DEBUG_LENGTH_X 64
 #define DEBUG_LENGTH_Y 32
@@ -66,7 +65,7 @@ Contact information: <mailto:cngsoft@gmail.com> */
 #define session_debug_user z80_debug_user
 
 #if defined(SDL2) || defined(SDL_MAIN_HANDLED) || !defined(_WIN32) // SDL2?
-short session_icon32xx16[32*32] = {
+unsigned short session_icon32xx16[32*32] = {
 	0x0000, 0x0000, 0x0000, 0x0000, 0xf000, 0xf000, 0xf000, 0xf000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0xf000, 0xf000, 	0xf000, 0xf000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0xf000, 0xf000, 0xf000, 0xf000, 0x0000, 0x0000, 0x0000, 0x0000,
 	0x0000, 0x0000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0x0000, 0x0000, 0xf000, 0xf000, 0xf000, 0xf000, 	0xf000, 0xf000, 0xf000, 0xf000, 0x0000, 0x0000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0x0000, 0x0000,
 	0x0000, 0xf000, 0xf000, 0xf000, 0xf800, 0xf800, 0xf800, 0xf800, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf080, 0xf080, 	0xf080, 0xf080, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf000, 0xf008, 0xf008, 0xf008, 0xf008, 0xf000, 0xf000, 0xf000, 0x0000,
@@ -3228,6 +3227,7 @@ char session_menudata[]=
 	"0x8520 PlayCity extension\n"
 	#endif
 	"0x8510 Disc controller\n"
+	"0x8590 Strict disc writes\n"
 	"Video\n"
 	"0x8A00 Full screen\tAlt+Return\n"
 	"0x8A01 Zoom to integer\n"
@@ -3308,6 +3308,7 @@ void session_menuinfo(void)
 	session_menuradio(0x0601+z80_turbo,0x0601,0x0604);
 	session_menuradio(0x8501+crtc_type,0x8501,0x8505);
 	session_menuradio(0x8509+(crtc_hold<0?0:!crtc_hold?1:2),0x8509,0x850B);
+	session_menucheck(0x8590,!disc_tolerant);
 	session_menucheck(0x8510,!(disc_disabled&1));
 	#ifdef Z80_CPC_DANDANATOR
 	session_menucheck(0xC500,!!mem_dandanator);
@@ -3482,6 +3483,9 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 		case 0x850A:
 		case 0x850B:
 			crtc_hold=(k&7)-2; crtc_syncs_update(); crtc_invis_update(); // -1,0,+1
+			break;
+		case 0x8590: // STRICT DISC WRITES
+			disc_tolerant=!disc_tolerant;
 			break;
 		case 0x8510: // DISC CONTROLLER
 			disc_disabled^=1;
@@ -3731,6 +3735,7 @@ void session_configreadmore(char *s)
 	#ifdef Z80_CPC_DANDANATOR
 	else if (!strcasecmp(session_parmtr,"dntr")) strcpy(dandanator_path,s);
 	#endif
+	else if (!strcasecmp(session_parmtr,"xfdc")) disc_tolerant=*s&1;
 	else if (!strcasecmp(session_parmtr,"info")) onscreen_flag=*s&1;
 	else if (!strcasecmp(session_parmtr,"palette")) { if ((i=*s&15)<length(video_table)) video_type=i; }
 	else if (!strcasecmp(session_parmtr,"autorewind")) tape_rewind=*s&1;
@@ -3738,12 +3743,12 @@ void session_configreadmore(char *s)
 }
 void session_configwritemore(FILE *f)
 {
-	fprintf(f,"type %i\ncrtc %i\nbank %i\nfile %s\nsnap %s\ntape %s\ndisc %s\ncard %s\n"
+	fprintf(f,"type %i\ncrtc %i\nbank %i\nxfdc %i\nfile %s\nsnap %s\ntape %s\ndisc %s\ncard %s\n"
 	#ifdef Z80_CPC_DANDANATOR
 		"dntr %s\n"
 	#endif
 		"info %i\npalette %i\nautorewind %i\ndebug %i\n"
-		,type_id,crtc_type,gate_ram_depth,autorun_path,snap_path,tape_path,disc_path,bios_path,
+		,type_id,crtc_type,gate_ram_depth,disc_tolerant,autorun_path,snap_path,tape_path,disc_path,bios_path,
 	#ifdef Z80_CPC_DANDANATOR
 		dandanator_path,
 	#endif

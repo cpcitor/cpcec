@@ -382,10 +382,19 @@ int session_ui_exchange(void) // update window and wait for a keystroke
 			case SDL_MOUSEBUTTONDOWN:
 				session_ui_clickx=event.button.x/8-session_ui_base_x,session_ui_clicky=event.button.y/SESSION_UI_HEIGHT-session_ui_base_y;
 				return -1;
+			case SDL_MOUSEWHEEL:
+				{
+					int i=event.wheel.y;
+					if (!i) return 0;
+					if (event.wheel.direction==SDL_MOUSEWHEEL_FLIPPED) i=-i;
+					return i>0?KBCODE_PRIOR:KBCODE_NEXT;
+				}
 			case SDL_TEXTINPUT:
 				session_ui_char=event.text.text[0];
 				if (session_ui_char&128) // UTF-8?
 					session_ui_char=128+(session_ui_char&1)*64+(event.text.text[1]&63);
+			case SDL_MOUSEBUTTONUP: // a cheap way...
+			case SDL_KEYUP: // ...to request a redraw
 				return 0;
 			case SDL_KEYDOWN:
 				session_ui_shift=!!(event.key.keysym.mod&KMOD_SHIFT);
@@ -978,6 +987,9 @@ int session_ui_filedialog_stat(char *s) // -1 = not exist, 0 = file, 1 = directo
 	struct stat a; return stat(s,&a)<0?-1:S_ISDIR(a.st_mode)?1:0;
 	#endif
 }
+#ifdef _WIN32
+int session_ui_drives=0; char session_ui_drive[]="::\\";
+#endif
 int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_filedialog; q here means TAB is available or not, and f means the starting TAB value (q) or whether we're reading (!q)
 {
 	int i; char *m,*n,basepath[8<<9],pastname[STRMAX],basefind[STRMAX]; // realpath() is an exception, see below
@@ -986,12 +998,6 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 		i=m[1],m[1]=0,strcpy(basepath,r),m[1]=i,strcpy(pastname,&m[1]);
 	else
 		*basepath=0,strcpy(pastname,r);
-	#ifdef _WIN32
-	long int w32drives=0,z; char drives[]="::\\"; ;
-	for (drives[0]='A';drives[0]<='Z';++drives[0]) // scan drives just once
-		if (GetDriveType(drives)>1&&GetDiskFreeSpace(drives,&z,&z,&z,&z))
-			w32drives|=1<<(drives[0]-'A');
-	#endif
 	for (;;)
 	{
 		i=0; m=session_scratch;
@@ -1003,9 +1009,9 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 			session_ui_filedialog_sanitizepath(basepath);
 		}
 		char *half=m;
-		for (drives[0]='A';drives[0]<='Z';++drives[0])
-			if (w32drives&(1<<(drives[0]-'A')))
-				++i,m=&half[sortedinsert(half,m-half,drives)];
+		for (session_ui_drive[0]='A';session_ui_drive[0]<='Z';++session_ui_drive[0])
+			if (session_ui_drives&(1<<(session_ui_drive[0]-'A')))
+				++i,m=&half[sortedinsert(half,m-half,session_ui_drive)];
 		if (basepath[3]) // not root directory?
 		{
 			*m++='.';*m++='.'; *m++=PATHCHAR; *m++=0; // always before the directories!
@@ -1185,7 +1191,12 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	session_timer=SDL_GetTicks();
 
 	session_ui_icon=SDL_CreateRGBSurfaceFrom(session_icon32xx16,32,32,16,32*2,0xF00,0xF0,0xF,0xF000);
-	#ifndef _WIN32
+	#ifdef _WIN32
+	long int z;
+	for (session_ui_drive[0]='A';session_ui_drive[0]<='Z';++session_ui_drive[0]) // scan session_ui_drive just once
+		if (GetDriveType(session_ui_drive)>1&&GetDiskFreeSpace(session_ui_drive,&z,&z,&z,&z))
+			session_ui_drives|=1<<(session_ui_drive[0]-'A');
+	#else
 	SDL_SetWindowIcon(session_hwnd,session_ui_icon); // SDL already handles WIN32 icons alone!
 	#endif
 
@@ -1429,12 +1440,11 @@ INLINE void session_render(void) // update video, audio and timers
 		session_timer+=1000/VIDEO_PLAYBACK;
 	}
 
-	#ifdef SDL2_DOUBLE_QUEUE // workaround (f.e. SlITaz v5)
+	#ifdef SDL2_DOUBLE_QUEUE // audio buffer workaround (f.e. SlITaz v5)
 		#define AUDIO_N_FRAMEZ (AUDIO_N_FRAMES*2)
 	#else
 		#define AUDIO_N_FRAMEZ AUDIO_N_FRAMES
 	#endif
-
 	if (session_audio)
 	{
 		static BYTE s=1;

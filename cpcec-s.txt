@@ -259,8 +259,8 @@ acelerar la emulación durante un tiempo.
 
 El menú también incluye algunas opciones adicionales (por ejemplo el tipo de
 CRTC) además de acciones tales como cambiar los lados de los discos insertados,
-examinar los contenidos de la cinta actual o habilitar las extensiones de
-hardware Dandanator y Playcity, desactivadas por defecto.
+examinar los contenidos de la cinta actual, habilitar las extensiones de
+hardware Dandanator y Playcity (desactivadas por defecto), etc.
 
 CPCEC permite arrastrar y soltar ficheros. Éstos serán automáticamente
 ejecutados (como con F3) a menos que la tecla Mays esté pulsada, en cuyo caso
@@ -783,17 +783,17 @@ correspondiente en la tabla de sectores. Nuevo soporte de Dandanator, de sólo
 lectura ("Sword of Ianna"). Soporte preliminar de Playcity, limitado a los dos
 chips PSG extras y el disparador NMI. Nueva grabación de vídeo basada en un
 formato intermedio XRF, incluyendo una herramienta que permite convertirlo en
-ficheros AVI. Mejoras en el interfaz SDL, con una fuente mayor (12px en lugar de
-8px) y alineamiento vertical en los atajos de teclado del menú. Añadidas nuevas
-funciones de depuración (examinar los gráficos en la memoria con la tecla "W",
-interceptar el código $EDFF como un breakpoint con "Q", etc.) y trasladados los
-breakpoints de "T" a ".". Eliminados CPCEC.ELF y ZXSEC.ELF porque están unidos a
-un sistema operativo concreto (Linux Mint 18 32bit) y el usuario debía compilar
-los binarios de todas formas. Trasladados los ficheros de configuración en
-sistemas distintos de Windows de CPCEC.INI y ZXSEC.INI a .cpcecrc y .zxsecrc
+ficheros AVI. Mejoras en el interfaz SDL2, con una fuente mayor (12px en lugar
+de 8px) y alineamiento vertical en los atajos de teclado del menú. Añadidas
+nuevas funciones de depuración (examinar los gráficos en la memoria con la tecla
+"W", interceptar el código $EDFF como un breakpoint con "Q", etc.) y trasladados
+los breakpoints de "T" a ".". Eliminados CPCEC.ELF y ZXSEC.ELF porque están
+unidos a un sistema operativo concreto (Linux Mint 18 32bit) y el usuario debía
+compilar los binarios de todas formas. Trasladados los ficheros de configuración
+en sistemas distintos de Windows de CPCEC.INI y ZXSEC.INI a .cpcecrc y .zxsecrc
 como es costumbre en Unix. Retoques de compatibilidad para CLANG.
-- 20201012 -- parche menor que añade uso del ratón al interfaz de usuario propio
-de SDL2.
+- 20201012 -- parche menor que añade uso del ratón al interfaz de usuario de
+SDL2.
 - 20201015 -- parche menor que corrige un error en el soporte de Dandanator (las
 operaciones "LD (IY+n),A/B/C" deben funcionar con cualquier valor de "n", en
 lugar de solamente 0: gracias a Spirax por informarme) y otro en el CRTC (el
@@ -802,3 +802,6 @@ de basuras entre el panel superior y el central), añade SDL2_DOUBLE_QUEUE como
 una opción de compilación de SDL2 (algunos sistemas necesitan un de audio mayor
 que los 8 frames por defecto) y emplea un patrón de píxeles distinto cuando
 X-Masking y Y-Masking están activos a la vez.
+- 20201022 -- parche menor que añade soporte de la rueda de ratón al interfaz de
+usuario de SDL2 y una opción para elegir en CPCEC y ZXSEC entre conflictos de
+escritura de disco estrictos (provocan errores) o relajados (no hacen nada).
