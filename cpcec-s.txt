@@ -805,3 +805,6 @@ X-Masking y Y-Masking están activos a la vez.
 - 20201022 -- parche menor que añade soporte de la rueda de ratón al interfaz de
 usuario de SDL2 y una opción para elegir en CPCEC y ZXSEC entre conflictos de
 escritura de disco estrictos (provocan errores) o relajados (no hacen nada).
+- 20201024 -- parche menor que resuelve un problema en el evento
+SDL_WINDOWEVENT_EXPOSED, invierte los bits blanco/negro en el visor de gráficos
+de ZXSEC y apunta el visor de CPCEC a la RAM en vez de la ROM.

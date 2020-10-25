@@ -374,11 +374,10 @@ int session_ui_exchange(void) // update window and wait for a keystroke
 		SDL_WaitEvent(&event);
 		switch (event.type)
 		{
-			/*case SDL_WINDOWEVENT_FOCUS_GAINED: // force full redraw
-			case SDL_WINDOWEVENT_EXPOSED: // seemingly unavailable on Windows ???
-				session_clrscr(); // wipe leftovers
-				SDL_UpdateWindowSurface(session_hwnd);//session_redraw(1);//
-				break;*/
+			case SDL_WINDOWEVENT:
+				if (event.window.event==SDL_WINDOWEVENT_EXPOSED)
+					return 0; // dummy command, force full redraw
+				break;
 			case SDL_MOUSEBUTTONDOWN:
 				session_ui_clickx=event.button.x/8-session_ui_base_x,session_ui_clicky=event.button.y/SESSION_UI_HEIGHT-session_ui_base_y;
 				return -1;
@@ -393,8 +392,6 @@ int session_ui_exchange(void) // update window and wait for a keystroke
 				session_ui_char=event.text.text[0];
 				if (session_ui_char&128) // UTF-8?
 					session_ui_char=128+(session_ui_char&1)*64+(event.text.text[1]&63);
-			case SDL_MOUSEBUTTONUP: // a cheap way...
-			case SDL_KEYUP: // ...to request a redraw
 				return 0;
 			case SDL_KEYDOWN:
 				session_ui_shift=!!(event.key.keysym.mod&KMOD_SHIFT);
@@ -1153,7 +1150,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 INLINE char* session_create(char *s) // create video+audio devices and set menu; 0 OK, !0 ERROR
 {
 	SDL_SetMainReady();
-	if (SDL_Init(SDL_INIT_VIDEO|SDL_INIT_AUDIO|SDL_INIT_TIMER|SDL_INIT_JOYSTICK)<0)
+	if (SDL_Init(SDL_INIT_EVENTS|SDL_INIT_VIDEO|SDL_INIT_AUDIO|SDL_INIT_TIMER|SDL_INIT_JOYSTICK)<0)
 		return (char *)SDL_GetError();
 	if (!(session_hwnd=SDL_CreateWindow(caption_version,SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,0*SDL_WINDOW_BORDERLESS)))
 		return SDL_Quit(),(char *)SDL_GetError();
@@ -1306,11 +1303,10 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 	{
 		switch (event.type)
 		{
-			/*case SDL_WINDOWEVENT_FOCUS_GAINED: // force full redraw
-			case SDL_WINDOWEVENT_EXPOSED: // seemingly unavailable on Windows ???
-				session_clrscr(); // wipe leftovers
-				SDL_UpdateWindowSurface(session_hwnd);//session_redraw(1);//
-				break;*/
+			case SDL_WINDOWEVENT:
+				if (event.window.event==SDL_WINDOWEVENT_EXPOSED)
+					session_clrscr(),session_redraw(1);//SDL_UpdateWindowSurface(session_hwnd); // clear and redraw
+				break;
 			case SDL_MOUSEBUTTONDOWN:
 				if (event.button.button==SDL_BUTTON_RIGHT)
 					session_event=0x8080; // show menu
@@ -1325,12 +1321,13 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 			#endif
 			case SDL_KEYDOWN: //if (event.key.state==SDL_PRESSED)
 				{
-					session_shift=!!(event.key.keysym.mod&KMOD_SHIFT);
-					if (event.key.keysym.mod&KMOD_ALT&&event.key.keysym.sym==SDLK_RETURN)
+					if (event.key.keysym.mod&KMOD_ALT)
 					{
-						session_togglefullscreen();
+						if (event.key.keysym.sym==SDLK_RETURN)
+							session_togglefullscreen();
 						break;
 					}
+					session_shift=!!(event.key.keysym.mod&KMOD_SHIFT);
 					if (event.key.keysym.sym==SDLK_F10)
 					{
 						session_event=0x8080; // show menu
@@ -1405,7 +1402,7 @@ INLINE void session_writewave(AUDIO_UNIT *t); // save the current sample frame. 
 INLINE void session_render(void) // update video, audio and timers
 {
 	int i,j;
-	static int performance_t=0,performance_f=0,performance_b=0; ++performance_f;
+	static int performance_t=-9999,performance_f=0,performance_b=0; ++performance_f;
 	if (!video_framecount) // do we need to hurry up?
 	{
 		if ((video_interlaces=!video_interlaces)||!video_interlaced)

@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20201022"//"2555"
+#define MY_VERSION "20201024"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -922,14 +922,14 @@ void z80_debug_hard(int q,int x,int y)
 #define ONSCREEN_GRAFX_RATIO 8
 void onscreen_grafx_step(VIDEO_UNIT *t,BYTE b)
 {
-	*  t=b&128?VIDEO1(0xFFFFFF):VIDEO1(0);
-	*++t=b& 64?VIDEO1(0xFFFFFF):VIDEO1(0);
-	*++t=b& 32?VIDEO1(0xFFFFFF):VIDEO1(0);
-	*++t=b& 16?VIDEO1(0xFFFFFF):VIDEO1(0);
-	*++t=b&  8?VIDEO1(0xFFFFFF):VIDEO1(0);
-	*++t=b&  4?VIDEO1(0xFFFFFF):VIDEO1(0);
-	*++t=b&  2?VIDEO1(0xFFFFFF):VIDEO1(0);
-	*++t=b&  1?VIDEO1(0xFFFFFF):VIDEO1(0);
+	*  t=b&128?VIDEO1(0):VIDEO1(0xFFFFFF);
+	*++t=b& 64?VIDEO1(0):VIDEO1(0xFFFFFF);
+	*++t=b& 32?VIDEO1(0):VIDEO1(0xFFFFFF);
+	*++t=b& 16?VIDEO1(0):VIDEO1(0xFFFFFF);
+	*++t=b&  8?VIDEO1(0):VIDEO1(0xFFFFFF);
+	*++t=b&  4?VIDEO1(0):VIDEO1(0xFFFFFF);
+	*++t=b&  2?VIDEO1(0):VIDEO1(0xFFFFFF);
+	*++t=b&  1?VIDEO1(0):VIDEO1(0xFFFFFF);
 }
 WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 {

@@ -649,7 +649,7 @@ INLINE void session_writewave(AUDIO_UNIT *t); // save the current sample frame. 
 INLINE void session_render(void) // update video, audio and timers
 {
 	int i,j;
-	static int performance_t=0,performance_f=0,performance_b=0; ++performance_f;
+	static int performance_t=-9999,performance_f=0,performance_b=0; ++performance_f;
 	if (!video_framecount) // do we need to hurry up?
 	{
 		if ((video_interlaces=!video_interlaces)||!video_interlaced)

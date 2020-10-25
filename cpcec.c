@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20201022"//"2555"
+#define MY_VERSION "20201024"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -2328,9 +2328,9 @@ WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 					for (int x=0;x<lx;x+=4)
 					{
 						if (gate_status&1)
-							onscreen_grafx_step1(&v[xx+x+y*ww],PEEK(s));
+							onscreen_grafx_step1(&v[xx+x+y*ww],POKE(s));
 						else
-							onscreen_grafx_step0(&v[xx+x+y*ww],PEEK(s));
+							onscreen_grafx_step0(&v[xx+x+y*ww],POKE(s));
 						++s;
 					}
 				xx+=lx;
@@ -2354,9 +2354,9 @@ WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 					for (int y=0;y<ly;++y)
 					{
 						if (gate_status&1)
-							onscreen_grafx_step1(&v[x+(yy+y)*ww],PEEK(s));
+							onscreen_grafx_step1(&v[x+(yy+y)*ww],POKE(s));
 						else
-							onscreen_grafx_step0(&v[x+(yy+y)*ww],PEEK(s));
+							onscreen_grafx_step0(&v[x+(yy+y)*ww],POKE(s));
 						++s;
 					}
 				yy+=ly;

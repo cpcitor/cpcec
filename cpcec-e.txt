@@ -758,3 +758,6 @@ using a different pixel pattern when both X-Masking and Y-Masking are enabled.
 - 20201022 -- minor patch adding mouse wheel support to the SDL2 user interface
 and an option to set whether disc write conflicts in CPCEC and ZXSEC are strict
 (they raise errors) or relaxed (they do nothing).
+- 20201024 -- minor patch solving a problem in the SDL_WINDOWEVENT_EXPOSED
+event, inverting the black/white bits in ZXSEC's graphics viewer and pointing
+CPCEC's viewer at RAM rather than ROM.
