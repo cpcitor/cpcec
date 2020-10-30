@@ -808,3 +808,6 @@ escritura de disco estrictos (provocan errores) o relajados (no hacen nada).
 - 20201024 -- parche menor que resuelve un problema en el evento
 SDL_WINDOWEVENT_EXPOSED, invierte los bits blanco/negro en el visor de gráficos
 de ZXSEC y apunta el visor de CPCEC a la RAM en vez de la ROM.
+- 20201028 -- parche menor que mejora la emulación de Issue-2 en Spectrum 48K:
+"Abu Simbel Profanation" y "Rasputin 48K" funcionan en 48K Issue 2 y fallan en
+los demás modelos, como debe ser.

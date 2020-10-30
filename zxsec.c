@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20201024"//"2555"
+#define MY_VERSION "20201028"//"1955"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -217,7 +217,7 @@ int z80_turbo=0,z80_multi=1; // overclocking options
 // 0x??FE,0x7FFD,0x1FFD: ULA 48K,128K,PLUS3 ------------------------- //
 
 BYTE ula_v1,ula_v2,ula_v3; // 48k, 128k and PLUS3 respectively
-BYTE disc_disabled=0,psg_disabled=0,ula_v1_issue=~64; // auxiliar ULA variables
+BYTE disc_disabled=0,psg_disabled=0,ula_v1_issue=1,ula_v1_cache=0; // auxiliar ULA variables
 BYTE *ula_screen,*ula_bitmap,*ula_attrib; // VRAM pointers
 
 BYTE ula_clash[4][1<<16],*ula_clash_mreq[5],*ula_clash_iorq[5]; // the fifth entry stands for constant clashing
@@ -446,6 +446,13 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 				ula_bitmap=&ula_screen[((ula_pos_y>>6)<<11)+((ula_pos_y<<2)&224)+((ula_pos_y&7)<<8)];
 				ula_attrib=&ula_screen[0x1800+((ula_pos_y>>3)<<5)];
 			}
+			// for lack of a more precise timer, the scanline is used to refresh the ULA's unstable input bit 6 when there's no tape inside:
+			// - Issue 2 systems (the first batch of 48K) make the bit depend on ULA output bits 3 and 4
+			// - Issue 3 systems (later batches of 48K) make the bit depend on ULA output bit 4
+			// - Whatever the issue ID, 48K doesn't update the unstable bit at once; it takes a while.
+			// - 128K and later always mask the bit out when no tape is playing
+			ula_v1_cache=type_id?64:ula_v1&(ula_v1_issue?16:24)?0:64;
+			// "Abu Simbel Profanation" (menu doesn't obey keys; in-game is stuck jumping to the right) and "Rasputin" (menu fails to play the music) rely on this on 48K.
 		}
 		if (ula_pos_x==0&&ula_count_y>=ula_limit_y)
 		{
@@ -856,7 +863,7 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 				b&=~64; // bit 6: tape input state
 		}
 		else
-			b&=type_id?~64:ula_v1_issue; // 128k and later always show 0 when no tape is playing. Old versions of "Abu Simbel Profanation" require 1.
+			b^=ula_v1_cache; // Issue 2/3 difference, see above
 	}
 	else if ((p&15)==13) // 0x??FD, MULTIPLE DEVICES
 		switch (p>>12)
@@ -1455,7 +1462,8 @@ char session_menudata[]=
 	"0x8590 Strict disc writes\n"
 	"0x8511 Memory contention\n"
 	"0x8512 ULA 48K video noise\n"
-	"0x8513 Strict SNA files\n"
+	"0x8513 ULA 48K Issue 2\n"
+	"0x851F Strict SNA files\n"
 	"Video\n"
 	"0x8A00 Full screen\tAlt+Return\n"
 	"0x8A01 Zoom to integer\n"
@@ -1540,7 +1548,8 @@ void session_menuinfo(void)
 	session_menucheck(0x8510,!(disc_disabled&1));
 	session_menucheck(0x8511,!(ula_clash_disabled));
 	session_menucheck(0x8512,!(ula_snow_disabled));
-	session_menucheck(0x8513,!(snap_extended));
+	session_menucheck(0x8513,!(ula_v1_issue));
+	session_menucheck(0x851F,!(snap_extended));
 	session_menucheck(0x8901,onscreen_flag);
 	session_menucheck(0x8A01,session_intzoom);
 	session_menuradio(0x8B01+video_type,0x8B01,0x8B05);
@@ -1705,6 +1714,9 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 			ula_snow_disabled=!ula_snow_disabled;
 			break;
 		case 0x8513:
+			ula_v1_issue=!ula_v1_issue;
+			break;
+		case 0x851F:
 			snap_extended=!snap_extended;
 			break;
 		case 0x8500: // F5: LOAD FIRMWARE..
@@ -1975,7 +1987,7 @@ int main(int argc,char *argv[])
 							i=argc; // help!
 						break;
 					case 'I':
-						ula_v1_issue=~0;
+						ula_v1_issue=0;
 						break;
 						;
 						;
