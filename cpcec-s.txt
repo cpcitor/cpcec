@@ -811,3 +811,5 @@ de ZXSEC y apunta el visor de CPCEC a la RAM en vez de la ROM.
 - 20201028 -- parche menor que mejora la emulación de Issue-2 en Spectrum 48K:
 "Abu Simbel Profanation" y "Rasputin 48K" funcionan en 48K Issue 2 y fallan en
 los demás modelos, como debe ser.
+- 20201111 -- parche menor que añade seguimiento del ratón en el interfaz de
+SDL2 y hace que la grabación de ficheros XRF consuma menos memoria.

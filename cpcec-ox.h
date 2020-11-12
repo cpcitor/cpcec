@@ -283,7 +283,7 @@ SDL_Rect session_ideal;
 #define SESSION_UI_HEIGHT 14 // DEBUG_LENGTH_Z
 SDL_Surface *session_ui_alloc(int w,int h) { return ((w+=2)*h)?SDL_CreateRGBSurface(0,w*8,h*SESSION_UI_HEIGHT,32,0xFF0000,0x00FF00,0x0000FF,0):NULL; }
 void session_ui_free(SDL_Surface *s) { if (s) SDL_FreeSurface(s); }
-
+int session_ui_dirty=0; // reduce video thrashing
 int session_ui_base_x,session_ui_base_y,session_ui_size_x,session_ui_size_y; // used to calculate mouse clicks relative to widget
 
 void session_border(SDL_Surface *s,int x,int y,int q) // draw surface with an optional border
@@ -309,6 +309,7 @@ void session_border(SDL_Surface *s,int x,int y,int q) // draw surface with an op
 		tmp.x=tgt.x+tgt.w;
 		SDL_FillRect(t,&tmp,0x00808080);
 	}
+	session_ui_dirty=1;
 }
 void session_centre(SDL_Surface *s,int q) // draw surface in centre with an optional border
 {
@@ -363,12 +364,13 @@ void session_togglefullscreen(void)
 void session_ui_init(void) { memset(kbd_bit,0,sizeof(kbd_bit)); session_please(); }
 void session_ui_exit(void) { session_redraw(1); }
 
-int session_ui_clickx,session_ui_clicky; // mouse X+Y, when the "key" is -1
+int session_ui_clickx,session_ui_clicky; // mouse X+Y, when the "key" is -1 (click) or -2 (move)
 int session_ui_char,session_ui_shift; // ASCII+Shift of the latest keystroke
 int session_ui_exchange(void) // update window and wait for a keystroke
 {
 	session_ui_char=0; SDL_Event event;
-	SDL_UpdateWindowSurface(session_hwnd);
+	if (session_ui_dirty)
+		SDL_UpdateWindowSurface(session_hwnd),session_ui_dirty=0;
 	for (;;)
 	{
 		SDL_WaitEvent(&event);
@@ -376,11 +378,12 @@ int session_ui_exchange(void) // update window and wait for a keystroke
 		{
 			case SDL_WINDOWEVENT:
 				if (event.window.event==SDL_WINDOWEVENT_EXPOSED)
-					return 0; // dummy command, force full redraw
+					SDL_UpdateWindowSurface(session_hwnd); // fast redraw
 				break;
+			case SDL_MOUSEMOTION:
 			case SDL_MOUSEBUTTONDOWN:
 				session_ui_clickx=event.button.x/8-session_ui_base_x,session_ui_clicky=event.button.y/SESSION_UI_HEIGHT-session_ui_base_y;
-				return -1;
+				return event.type==SDL_MOUSEBUTTONDOWN?-1:-2;
 			case SDL_MOUSEWHEEL:
 				{
 					int i=event.wheel.y;
@@ -574,11 +577,18 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 					//if (session_event!=0x8000) // gap?
 						done=1;
 					break;
+				case -2: // mouse move
+					if (!session_ui_clicky&&session_ui_clickx>=0&&session_ui_clickx<session_ui_menusize) // select menu?
+					{
+						menu=menus; while (session_ui_clickx<menuxs[menu-1]) --menu;
+					}
+					else if (session_ui_clicky>0&&session_ui_clicky<=items&&session_ui_clickx>=itemx&&session_ui_clickx<itemx+itemw+2) // select item?
+						item=session_ui_clicky-1;
+					break;
 				case -1: // mouse click
 					if (!session_ui_clicky&&session_ui_clickx>=0&&session_ui_clickx<session_ui_menusize) // select menu?
 					{
-						menu=menus; while (session_ui_clickx<menuxs[menu-1])
-							--menu;
+						//menu=menus; while (session_ui_clickx<menuxs[menu-1]) --menu; // already done above
 					}
 					else if (session_ui_clicky>0&&session_ui_clicky<=items&&session_ui_clickx>=itemx&&session_ui_clickx<itemx+itemw+2) // select item?
 						session_event=events[session_ui_clicky-1],done=1;
@@ -697,7 +707,7 @@ int session_ui_text(char *s,char *t,char q) // see session_message
 
 int session_ui_list(int item,char *s,char *t,void x(void),int q) // see session_list
 {
-	int i,items=0,listw=0,listh,listz=0;
+	int i,dblclk=0,items=0,itemz=-2,listw=0,listh,listz=0;
 	char *m=t,*z=NULL;
 	while (*m++)
 		++listw;
@@ -721,25 +731,29 @@ int session_ui_list(int item,char *s,char *t,void x(void),int q) // see session_
 	int done=0;
 	while (!done)
 	{
-		if (listz>item)
-			if ((listz=item)<0)
-				listz=0; // allow index -1
-		if (listz<item-listh+2)
-			listz=item-listh+2;
-		m=s; i=0;
-		while (*m&&i<listz+listh-1)
+		if (itemz!=item)
 		{
-			if (i>=listz)
+			itemz=item;
+			if (listz>item)
+				if ((listz=item)<0)
+					listz=0; // allow index -1
+			if (listz<item-listh+2)
+				listz=item-listh+2;
+			m=s; i=0;
+			while (*m&&i<listz+listh-1)
 			{
-				if (i==item)
-					z=m;
-				session_ui_printasciz(hlist,m,0,1+i-listz,listw,i==item);
+				if (i>=listz)
+				{
+					if (i==item)
+						z=m;
+					session_ui_printasciz(hlist,m,0,1+i-listz,listw,i==item);
+				}
+				if (*m) while (*m++)
+					;
+				++i;
 			}
-			if (*m) while (*m++)
-				;
-			++i;
+			session_centre(hlist,1);
 		}
-		session_centre(hlist,1);
 		switch (session_ui_exchange())
 		{
 			case KBCODE_PRIOR:
@@ -749,6 +763,7 @@ int session_ui_list(int item,char *s,char *t,void x(void),int q) // see session_
 				if (--item<0)
 			case KBCODE_HOME:
 					item=0;
+				dblclk=0;
 				break;
 			case KBCODE_NEXT:
 			case KBCODE_RIGHT:
@@ -757,6 +772,7 @@ int session_ui_list(int item,char *s,char *t,void x(void),int q) // see session_
 				if (++item>=items)
 			case KBCODE_END:
 					item=items-1;
+				dblclk=0;
 				break;
 			case KBCODE_TAB:
 				if (q) // browse items if `q` is true
@@ -773,7 +789,11 @@ int session_ui_list(int item,char *s,char *t,void x(void),int q) // see session_
 					}
 				}
 				else if (x) // special context widget
-					x();
+					x(),dblclk=0;
+				break;
+			case -2: // mouse move
+				if (q&&session_ui_clickx>=0&&session_ui_clickx<session_ui_size_x&&session_ui_clicky>0&&session_ui_clicky<=items) // single click mode?
+					item=session_ui_clicky<2?0:1;
 				break;
 			case -1: // mouse click
 				if (session_ui_clickx<0||session_ui_clickx>=session_ui_size_x)
@@ -782,20 +802,22 @@ int session_ui_list(int item,char *s,char *t,void x(void),int q) // see session_
 				{
 					if ((item-=listh-2)<0)
 						item=0;
+					dblclk=0;
 				}
 				else if (session_ui_clicky>=session_ui_size_y) // scroll down?
 				{
 					if ((item+=listh-2)>=items)
 						item=items-1;
+					dblclk=0;
 				}
 				else // select an item?
 				{
 					int button=listz+session_ui_clicky-1;
-					if (q||item==button) // `q` (single click, f.e. "YES"/"NO") or same item? (=double click)
+					if (q||(item==button&&dblclk)) // `q` (single click mode, f.e. "YES"/"NO") or same item? (=double click)
 						item=button,done=1;
 					else // different item!
 					{
-						item=button;
+						item=button; dblclk=1;
 						if (item<0)
 							item=0;
 						else if (item>=items)
@@ -832,6 +854,7 @@ int session_ui_list(int item,char *s,char *t,void x(void),int q) // see session_
 					}
 					if (!n)
 						item=itemz; // allow rewinding to -1
+					dblclk=0;
 				}
 				break;
 		}
@@ -845,7 +868,7 @@ int session_ui_list(int item,char *s,char *t,void x(void),int q) // see session_
 
 int session_ui_input(char *s,char *t) // see session_input
 {
-	int i,j,first,textw=VIDEO_PIXELS_X/8-4;
+	int i,j,first,dirty=1,textw=VIDEO_PIXELS_X/8-4;
 	if ((i=j=first=strlen(strcpy(session_parmtr,s)))>=textw)
 		return -1; // error!
 	session_ui_init();
@@ -854,25 +877,29 @@ int session_ui_input(char *s,char *t) // see session_input
 	int done=0;
 	while (!done)
 	{
-		if (first)
+		if (dirty)
 		{
-			char *m=session_parmtr; while (*m) *m^=128,++m; // inverse video for all text
-			session_ui_printasciz(htext,session_parmtr,0,1,textw,0);
-			m=session_parmtr; while (*m) *m^=128,++m; // restore video
+			if (first)
+			{
+				char *m=session_parmtr; while (*m) *m^=128,++m; // inverse video for all text
+				session_ui_printasciz(htext,session_parmtr,0,1,textw,0);
+				m=session_parmtr; while (*m) *m^=128,++m; // restore video
+			}
+			else if (i<j)
+			{
+				session_parmtr[i]^=128; // inverse video
+				session_ui_printasciz(htext,session_parmtr,0,1,textw,0);
+				session_parmtr[i]^=128; // restore video
+			}
+			else
+			{
+				session_parmtr[i]=160; session_parmtr[i+1]=0; // inverse space
+				session_ui_printasciz(htext,session_parmtr,0,1,textw,0);
+				session_parmtr[i]=0; // end of string
+			}
+			session_centre(htext,1);
+			dirty=0;
 		}
-		else if (i<j)
-		{
-			session_parmtr[i]^=128; // inverse video
-			session_ui_printasciz(htext,session_parmtr,0,1,textw,0);
-			session_parmtr[i]^=128; // restore video
-		}
-		else
-		{
-			session_parmtr[i]=160; session_parmtr[i+1]=0; // inverse space
-			session_ui_printasciz(htext,session_parmtr,0,1,textw,0);
-			session_parmtr[i]=0; // end of string
-		}
-		session_centre(htext,1);
 		switch (session_ui_exchange())
 		{
 			case KBCODE_LEFT:
@@ -880,12 +907,14 @@ int session_ui_input(char *s,char *t) // see session_input
 			case KBCODE_HOME:
 					i=0;
 				first=0;
+				dirty=1;
 				break;
 			case KBCODE_RIGHT:
 				if (first||++i>j)
 			case KBCODE_END:
 					i=j;
 				first=0;
+				dirty=1;
 				break;
 			case -1: // mouse click
 				if (session_ui_clickx<0||session_ui_clickx>=session_ui_size_x||session_ui_clicky<0||session_ui_clicky>=session_ui_size_y)
@@ -898,6 +927,7 @@ int session_ui_input(char *s,char *t) // see session_input
 					else if (i<0)
 						i=0;
 				}
+				dirty=1;
 				break;
 			case KBCODE_ESCAPE:
 				j=-1;
@@ -915,6 +945,7 @@ int session_ui_input(char *s,char *t) // see session_input
 					--i; --j;
 				}
 				first=0;
+				dirty=1;
 				break;
 			case KBCODE_DELETE:
 				if (first)
@@ -925,6 +956,7 @@ int session_ui_input(char *s,char *t) // see session_input
 					--j;
 				}
 				first=0;
+				dirty=1;
 				break;
 			default:
 				if (session_ui_char>=32&&session_ui_char<=128&&j<textw-1)
@@ -941,6 +973,7 @@ int session_ui_input(char *s,char *t) // see session_input
 						++i; ++j;
 					}
 					first=0;
+					dirty=1;
 				}
 				break;
 		}

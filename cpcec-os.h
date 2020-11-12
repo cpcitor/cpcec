@@ -24,7 +24,7 @@ unsigned char session_scratch[1<<18]; // at least 256k!
 #define AUDIO_N_FRAMES 8 // safe on Windows and other systems
 
 #include "cpcec-a7.h" //unsigned char *onscreen_chrs;
-#define onscreen_size (sizeof(onscreen_chrs)/95)
+#define onscreen_size (sizeof(onscreen_chrs)/96)
 
 char caption_version[]=MY_CAPTION " " MY_VERSION;
 

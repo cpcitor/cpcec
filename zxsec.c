@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20201028"//"1955"
+#define MY_VERSION "20201111"//"2155"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -854,7 +854,7 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 			}
 		}
 		b=~j;
-		if (tape/*&&!z80_iff.b.l*/) // does any tape loader enable interrupts at all???
+		if (tape&&!z80_iff.b.l) // does any tape loader enable interrupts at all???
 			//if (tape_fastload) // call always, although not always for speedup
 				z80_tape_fastload();
 		if (tape&&tape_enabled)

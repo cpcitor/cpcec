@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20201028"//"2555"
+#define MY_VERSION "20201111"//"2155"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -2092,7 +2092,7 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 			case 0x0100: // 0xF500, PIO PORT B
 				if (pio_control&2||plus_enabled) // PLUS ASIC CRTC3 has a PIO bug!
 				{
-					if (tape&&!z80_iff.b.l) // does any tape loader enable interrupts at all???
+					if (tape)//&&!z80_iff.b.l) // at least one tape loader enables interrupts!!!
 						if (tape_fastload) // call only when this flag is on
 							z80_tape_fastload();
 					// VSYNC (0x01; CRTC2 MISSES IT DURING HORIZONTAL OVERFLOW!)

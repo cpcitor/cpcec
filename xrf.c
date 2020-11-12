@@ -7,7 +7,7 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "XRF"
-#define MY_VERSION "20201010"//"1155"
+#define MY_VERSION "20201111"//"2155"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -66,9 +66,7 @@ int video_x,video_y,audio_z,clock_z,flags_z,count_z; // dimensions and features 
 // open and read a XRF file ----------------------------------------- //
 
 FILE *xrf_file=NULL; int xrf_length,xrf_cursor,xrf_count,xrf_dummy;
-BYTE xrf_bitmap[MAXVIDEOBYTES],xrf_shadow[MAXVIDEOBYTES];
-
-BYTE *xrf_chunk=NULL;
+BYTE *xrf_bitmap=NULL,*xrf_shadow=NULL,*xrf_chunk=NULL; // buffers
 #define XRF_CHUNKSIZE ((MAXVIDEOBYTES+MAXAUDIOBYTES)*9/8+32)
 #define xrf_decode0() !(a>>=1)&&(b=*w++,a=128)
 #define xrf_decode1() (xrf_decode0(),(b&a)?*w++:0)
@@ -108,9 +106,14 @@ int fread1(BYTE *t,int l,FILE *f) { int i=0,j; while (i<l&&(j=fread(&t[i],1,l-i,
 
 int xrf_open(char *s) // opens a XRF file and sets the common parameters up; !0 ERROR
 {
-	if (xrf_file) return 1;
+	if (!xrf_bitmap&&!(xrf_bitmap=malloc(MAXVIDEOBYTES)))
+		return 1; // cannot allocate video buffer!
+	if (!xrf_shadow&&!(xrf_shadow=malloc(MAXVIDEOBYTES)))
+		return 1; // cannot allocate audio buffer!
 
+	if (xrf_file) return 1; // already open!
 	if (!(xrf_file=fopen(s,"rb"))) return 1;
+
 	fseek(xrf_file,0,SEEK_END);
 	xrf_length=ftell(xrf_file);
 	fseek(xrf_file,0,SEEK_SET);
@@ -185,6 +188,8 @@ int xrf_read(void) // reads a XRF chunk and decodes the current video and audio 
 }
 int xrf_close(void) // close and clean up; always 0 OK
 {
+	if (xrf_bitmap) free(xrf_bitmap),xrf_bitmap=NULL;
+	if (xrf_shadow) free(xrf_shadow),xrf_shadow=NULL;
 	if (xrf_chunk) free(xrf_chunk),xrf_chunk=NULL;
 	if (xrf_file) fclose(xrf_file),xrf_file=NULL;
 	return 0;

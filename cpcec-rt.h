@@ -1078,10 +1078,11 @@ void onscreen_debug(int q) // rewrite debug texts
 
 FILE *session_filmfile=NULL; unsigned int session_nextfilm=1,session_filmfreq,session_filmcount;
 BYTE session_filmflag,session_filmscale=2,session_filmtimer=2,session_filmalign; // format options
-VIDEO_UNIT session_filmvideo[VIDEO_PIXELS_X*VIDEO_PIXELS_Y]; // copy of the previous video frame
-AUDIO_UNIT session_filmaudio[AUDIO_LENGTH_Z*2*(AUDIO_STEREO+1)]; // copies of TWO audio frames
+#define SESSION_FILMVIDEO_LENGTH (VIDEO_PIXELS_X*VIDEO_PIXELS_Y) // copy of the previous video frame
+#define SESSION_FILMAUDIO_LENGTH (AUDIO_LENGTH_Z*2*(AUDIO_STEREO+1)) // copies of TWO audio frames
+VIDEO_UNIT *session_filmvideo=NULL; AUDIO_UNIT session_filmaudio[SESSION_FILMAUDIO_LENGTH];
+BYTE *xrf_chunk=NULL; // this buffer contains one video frame and two audio frames AFTER encoding
 
-BYTE *xrf_chunk=NULL;
 #define xrf_encode1(n) ((n)&&(*z++=(n),a+=b),!(b>>=1)&&(*y=a,y=z++,a=0,b=128)) // write "0" (zero) or "1nnnnnnnn" (nonzero)
 int xrf_encode(BYTE *t,BYTE *s,int l,int x) // terribly hacky encoder based on an 8-bit RLE and a pseudo Huffman filter!
 {
@@ -1118,6 +1119,12 @@ int session_createfilm(void) // start recording video and audio; !0 ERROR
 		return 1; // improperly configured scale!
 	if (session_filmtimer<1||session_filmtimer>2)
 		return 1; // improperly configured timer!
+
+	if (!session_filmvideo&&!(session_filmvideo=malloc(sizeof(VIDEO_UNIT)*SESSION_FILMVIDEO_LENGTH)))
+		return 1; // cannot allocate buffer!
+	if (!xrf_chunk&&!(xrf_chunk=malloc((sizeof(VIDEO_UNIT)*SESSION_FILMVIDEO_LENGTH+sizeof(AUDIO_UNIT)*SESSION_FILMAUDIO_LENGTH)*9/8+4*8))) // maximum pathological length!
+		return 1; // cannot allocate memory!
+
 	if (!(session_nextfilm=session_savenext("%s%08i.xrf",session_nextfilm))) // "Xor-Rle Film"
 		return 1; // too many files!
 	if (!(session_filmfile=fopen(session_parmtr,"wb")))
@@ -1135,10 +1142,6 @@ int session_createfilm(void) // start recording video and audio; !0 ERROR
 void session_writefilm(void) // record one frame of video and audio
 {
 	if (!session_filmfile) return; // file not open!
-
-	if (!xrf_chunk)
-		if (!(xrf_chunk=malloc((sizeof(session_filmvideo)+sizeof(session_filmaudio))*9/8+4*8))) // maximum pathological length!
-			return; // cannot allocate memory!
 
 	BYTE *z=xrf_chunk; static BYTE dirty=0;
 	if (!video_framecount)
@@ -1226,10 +1229,12 @@ void session_writefilm(void) // record one frame of video and audio
 }
 int session_closefilm(void) // stop recording video and audio; !0 ERROR
 {
-	if (!session_filmfile)
-		return 1;
+	if (session_filmvideo)
+		free(session_filmvideo),session_filmvideo=NULL;
 	if (xrf_chunk)
 		free(xrf_chunk),xrf_chunk=NULL;
+	if (!session_filmfile)
+		return 1;
 	fseek(session_filmfile,16,SEEK_SET);
 	fputmmmm(session_filmcount/session_filmtimer,session_filmfile); // number of frames
 	fclose(session_filmfile);

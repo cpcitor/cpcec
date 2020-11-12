@@ -764,3 +764,5 @@ CPCEC's viewer at RAM rather than ROM.
 - 20201028 -- minor patch improving Issue-2 emulation on Spectrum 48K: "Abu
 Simbel Profanation" and "Rasputin 48K" work on 48K Issue 2 and fail on the other
 models, as expected.
+- 20201111 -- minor patch adding mouse tracking to the SDL2 interface and making
+XRF file recording less memory-consuming.
