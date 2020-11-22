@@ -7,13 +7,17 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 // SDL2 is the second supported platform; compiling the emulator needs
-// "$(CC) -DSDL_MAIN_HANDLED -xc cpcec.c -lSDL2" for GCC, TCC et al.
+// "$(CC) -DSDL2 -xc cpcec.c -lSDL2" for GCC, TCC et al.
 // Support for Unix-like systems is provided by providing different
 // snippets of code upon whether the symbol "_WIN32" exists or not.
 
 // START OF SDL 2.0+ DEFINITIONS ==================================== //
 
-#include <SDL2/SDL.h> // requires defining the symbol SDL_MAIN_HANDLED!
+#ifndef SDL_MAIN_HANDLED
+#define SDL_MAIN_HANDLED // required!
+#endif
+
+#include <SDL2/SDL.h>
 
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
 	typedef union { unsigned short w; struct { unsigned char h,l; } b; } Z80W; // big-endian: PPC, ARM...
@@ -1041,11 +1045,9 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 		char *half=m;
 		for (session_ui_drive[0]='A';session_ui_drive[0]<='Z';++session_ui_drive[0])
 			if (session_ui_drives&(1<<(session_ui_drive[0]-'A')))
-				++i,m=&half[sortedinsert(half,m-half,session_ui_drive)];
+				++i,m+=sortedinsert(m,0,session_ui_drive); // append, already sorted
 		if (basepath[3]) // not root directory?
-		{
-			*m++='.';*m++='.'; *m++=PATHCHAR; *m++=0; // always before the directories!
-		}
+			++i,m+=sortedinsert(m,0,"..\\"); // ".." + PATHCHAR
 		half=m;
 		WIN32_FIND_DATA wfd; HANDLE h; strcpy(basefind,basepath); strcat(basefind,"*");
 		if ((h=FindFirstFile(basefind,&wfd))!=INVALID_HANDLE_VALUE)
@@ -1075,9 +1077,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 				session_ui_filedialog_sanitizepath(basepath);
 		}
 		if (basepath[1]) // not root directory?
-		{
-			*m++='.';*m++='.'; *m++=PATHCHAR; *m++=0; // always before the directories!
-		}
+			++i,m+=sortedinsert(m,0,"../"); // ".." + PATHCHAR
 		char *half=m;
 		if (d=opendir(basepath))
 		{
@@ -1099,7 +1099,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 		#endif
 
 		if (!q&&!f)
-			++i,memcpy(m,"*NEW*\000",7); // point at "*" by default on SAVE
+			memcpy(m,"*NEW*\000",7); // point at "*" by default on SAVE, rather than on any past names
 		else
 			*m=0,half=session_scratch,i=sortedsearch(half,m-half,pastname); // look for past name, if any
 

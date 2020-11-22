@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20201111"//"2155"
+#define MY_VERSION "20201122"//"1955"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -2318,7 +2318,7 @@ void onscreen_grafx_step1(VIDEO_UNIT *t,BYTE b)
 WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 {
 	VIDEO_UNIT *vv=v;
-	WORD s=onscreen_grafx_addr; if (!q)
+	WORD s=onscreen_grafx_addr; if (!(q&1))
 	{
 		int xx=0,lx=onscreen_grafx_size;
 		if (lx*=4)

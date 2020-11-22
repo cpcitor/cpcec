@@ -3925,7 +3925,7 @@ char z80_debug_pnl2_x=0; // X position (byte nibble)
 WORD z80_debug_pnl2_w=0; // dump byte
 char z80_debug_pnl3_x=0; // X position (word nibble)
 WORD z80_debug_cache[16]; // used when scrolling down
-BYTE z80_debug_grfx=0;
+BYTE z80_debug_grfx=0,z80_debug_grfxmode=0; // must be BYTE (unsigned char)!
 int z80_debug_peek(int q,WORD m)
 {
 	return q?POKE(m):PEEK(m);
@@ -4021,7 +4021,7 @@ void z80_debug_show(void) // redraw debug screen
 	debug_locate(6,length(z80_debug_cache)-1);
 	debug_printi("... EDFF%c",z80_debug_edfftrap?'+':'-'); debug_printi(" Timer: %010i",main_t);
 	debug_printi(" (%03X,",video_pos_x&0xFFF); debug_printi("%03X) -- H: help",video_pos_y&0xFFF);
-	onscreen_debug(z80_debug_grfx?z80_debug_panel&1:-1);
+	onscreen_debug(z80_debug_grfx?z80_debug_grfxmode:-1);
 }
 
 int z80_debug_hex(char c) // 0..15 OK, <0 ERROR!
@@ -4151,9 +4151,17 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 			k=video_pos_z; do z80_main(1); while (k==video_pos_z); // slow
 			session_signal|=SESSION_SIGNAL_DEBUG,z80_debug_reset(); break;
 		case KBDBG_TAB_S: // SHIFT+TAB
-			z80_debug_panel=(z80_debug_panel-1)&3; break;
+			if (z80_debug_grfx)
+				--z80_debug_grfxmode;
+			else
+				z80_debug_panel=(z80_debug_panel-1)&3;
+			break;
 		case KBDBG_TAB: // TAB
-			z80_debug_panel=(z80_debug_panel+1)&3; break;
+			if (z80_debug_grfx)
+				++z80_debug_grfxmode;
+			else
+				z80_debug_panel=(z80_debug_panel+1)&3;
+			break;
 		case 'S': // SEARCH
 			if (!z80_debug_grfx&&(z80_debug_panel==0||z80_debug_panel==2))
 			{
@@ -4261,7 +4269,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 			break;
 		default: if (z80_debug_grfx)
 		{
-			z80_debug_pnl2_x=0;
+			//z80_debug_pnl2_x=0;
 			switch(ucase(k))
 			{
 				case KBDBG_LEFT : --onscreen_grafx_addr; break;

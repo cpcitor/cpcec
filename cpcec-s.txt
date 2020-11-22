@@ -813,3 +813,6 @@ de ZXSEC y apunta el visor de CPCEC a la RAM en vez de la ROM.
 los demás modelos, como debe ser.
 - 20201111 -- parche menor que añade seguimiento del ratón en el interfaz de
 SDL2 y hace que la grabación de ficheros XRF consuma menos memoria.
+- 20201122 -- parche menor que corrige un cuelgue cuando se usa el interfaz de
+SDL2 para guardar un fichero en el directorio raíz, y que detecta
+automáticamente SDL2 en tiempo de compilación.

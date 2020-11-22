@@ -32,20 +32,13 @@ char caption_version[]=MY_CAPTION " " MY_VERSION;
 #define WIN32_LEAN_AND_MEAN 1 // low dependencies
 #endif
 
-#ifdef SDL2 // alias
-#ifndef SDL_MAIN_HANDLED
-#define SDL_MAIN_HANDLED // fallback
-#endif
-#endif
-
-#if defined(SDL_MAIN_HANDLED) || !defined(_WIN32) // SDL2?
-
+#ifndef _WIN32
 #ifndef SDL2
-#define SDL2 // fallback
+#define SDL2 // fallback!
 #endif
-#ifndef SDL_MAIN_HANDLED
-#define SDL_MAIN_HANDLED // fallback
 #endif
+
+#ifdef SDL2
 
 #include "cpcec-ox.h"
 

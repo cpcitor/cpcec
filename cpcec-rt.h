@@ -117,13 +117,12 @@ int sortedinsert(char *t,int z,char *s) // insert string 's' in its alphabetical
 	int m=z,n; while (m>0)
 	{
 		n=m;
-		do --n; while (n>0&&t[n-1]);
+		do --n; while (n>0&&t[n-1]); // backwards search is more convenient on partially sorted lists
 		if (strcasecmp(s,&t[n])>=0)
 			break;
 		m=n;
 	}
-	n=strlen(s)+1;
-	if (z>m)
+	n=strlen(s)+1; if (z>m)
 		memmove(&t[m+n],&t[m],z-m);
 	return memcpy(&t[m],s,n),z+n;
 }
@@ -601,8 +600,8 @@ INLINE int puff_static(void) // generates default Huffman codes and expands bloc
 	for (;i<280;++i) t[i]=7;
 	for (;i<288;++i) t[i]=8;
 	for (;i<288+32;++i) t[i]=5;
-	puff_tables(&puff_lcode,t,288); // MUST BE 288!!
-	puff_tables(&puff_ocode,t+288,32); // CAN BE 30?
+	puff_tables(&puff_lcode,t,288); // THERE MUST BE EXACTLY 288 LENGTH CODES!!
+	puff_tables(&puff_ocode,t+288,32); // CAN THERE BE AS FEW AS 30 OFFSET CODES??
 	return puff_expand(&puff_lcode,&puff_ocode);
 }
 INLINE int puff_dynamic(void) // generates custom Huffman codes and expands block from source to target; !0 ERROR
@@ -762,13 +761,13 @@ FILE *puff_fopen(char *s,char *m) // mimics fopen(), so NULL on error, *FILE oth
 {
 	if (!s||!m)
 		return NULL; // wrong parameters!
-	char *z;
-	if (!(z=strrstr(s,PUFFCHAR))||!strchr(m,'r'))
-		return fopen(s,m); // normal file logic
 	if (puff_ffile&&!strcmp(puff_path,s))
 		return fseek(puff_ffile,0,SEEK_SET),puff_ffile; // recycle last file!
 	// TODO: handle more than one puff_ffile at once so the file caching is smart
 	//if (puff_ffile) fclose(puff_ffile),puff_ffile=NULL; // it's a new file, destroy old one and start anew
+	char *z;
+	if (!(z=strrstr(s,PUFFCHAR))||!strchr(m,'r'))
+		return fopen(s,m); // normal file logic
 	strcpy(puff_path,s);
 	puff_path[z++-s]=0;
 	if (puff_open(puff_path))
@@ -1028,7 +1027,7 @@ void onscreen_ascii(int x,int y,int z)
 		for (int w=0;w<8;++w)
 			debug_frame[z++]=q0;
 }
-void onscreen_debug(int q) // rewrite debug texts
+void onscreen_debug(int q) // rewrite debug texts or redraw graphics
 {
 	static int videox=-1,videoy=-1,videoz=-1;
 	if (videox!=video_pos_x||videoy!=video_pos_y||videoz!=video_pos_z)
@@ -1061,7 +1060,7 @@ void onscreen_debug(int q) // rewrite debug texts
 	{
 		int z=onscreen_grafx(q,&debug_frame[VIDEO_PIXELS_X*(VIDEO_PIXELS_Y-DEBUG_LENGTH_Y*DEBUG_LENGTH_Z)/2+(VIDEO_PIXELS_X-DEBUG_LENGTH_X*8)/2],
 			VIDEO_PIXELS_X,DEBUG_LENGTH_X*8,DEBUG_LENGTH_Y*DEBUG_LENGTH_Z);
-		sprintf(t,"%04X...%04X %c%03iH: help  W: exit",onscreen_grafx_addr&0xFFFF,z&0xFFFF,q?'V':'H',onscreen_grafx_size);
+		sprintf(t,"%04X...%04X %c%03iH: help  W: exit",onscreen_grafx_addr&0xFFFF,z&0xFFFF,(q&1)?'V':'H',onscreen_grafx_size);
 		int w=strlen(t)/2;
 		for (int y=-2;y<0;++y)
 			for (int x=-w;x<0;++x)
