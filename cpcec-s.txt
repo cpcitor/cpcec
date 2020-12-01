@@ -236,12 +236,21 @@ pantalla, y que cada modo tiene un impacto distinto en el rendimiento del
 programa: el modo normal consume más esfuerzo, y el entrelazado doble, menos.
 
 Los ficheros INI pueden definir un "perfil", un conjunto de ROMs extras para
-cargar por encima del firmware actual. Internamente son simples ficheros de
-texto donde cada línea es o bien LOWEST=nombrefichero (que define el contenido
-de ROM LOW) o HIGHxx=nombrefichero (que define el contenido de la enésima ranura
-de ROM HIGH, donde "n" es el valor hexadecimal de "xx"): por ejemplo
-HIGH07=PARADOS.ROM significa que la ranura 7 de HIGH ROM está ocupada por el
-fichero PARADOS.ROM.
+superponer al firmware actual. Internamente son simples ficheros de texto donde
+cada línea define un atributo o una ROM:
+
+* type = 0..3 : elige el tipo de firmware (por ejemplo 0 significa CPC464) de
+igual forma que los parámetros de línea de comandos -m0..3;
+* bank = 0..4 : elige el tamaño de RAM (por ejemplo 0 significa 64k) de igual
+forma que los parámetros -k0..4;
+* crtc = 0..4 : elige el tipo de CRTC de igual forma que los parámetros -g0..4;
+* fddc = 0..1 : elige si el controlador de unidad de disco está presente (1) o
+ausente (0);
+* lowest=nombrefichero : define el contenido de ROM LOW; el fichero ROM debe
+estar ubicado en el mismo directorio del perfil;
+* highXX=nombrefichero : define el contenido de la ranura XX de HIGH ROM, donde
+XX es un número hexadecimal de dos cifras: "00" es 0, "0A" es 10, "10" es 16,
+etc. por ejemplo HIGH07=PARADOS.ROM cargaría PARADOS.ROM en la ranura 7.
 
 Los indicadores en pantalla muestran el estado de las unidades de disco (número
 de pista, actividad), la cinta (actividad) y el joystick.
@@ -816,3 +825,7 @@ SDL2 y hace que la grabación de ficheros XRF consuma menos memoria.
 - 20201122 -- parche menor que corrige un cuelgue cuando se usa el interfaz de
 SDL2 para guardar un fichero en el directorio raíz, y que detecta
 automáticamente SDL2 en tiempo de compilación.
+- 20201124 -- parche menor que añade detección de cabeceras AMSDOS al cargador
+de perfiles de ROM, según una idea de Sid.
+- 20201130 -- parche menor que da más campos a los perfiles de ROM: type, bank,
+crtc, fddc.

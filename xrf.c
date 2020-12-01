@@ -7,7 +7,7 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "XRF"
-#define MY_VERSION "20201111"//"2155"
+#define MY_VERSION "20201130"//"2145"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -498,7 +498,7 @@ int main(int argc,char *argv[])
 			#else
 			"usage: xrf source.xrf target.avi\n"
 			#endif
-			"       xrf source.xrf - | ffmpeg -i - .. -o target ..\n"
+			"       xrf source.xrf - | ffmpeg [filters] -i - [options] target\n"
 			"\n"
 			"This program comes with ABSOLUTELY NO WARRANTY; for more details" "\n" \
 			"please read the GNU General Public License. This is free software" "\n" \

@@ -82,7 +82,7 @@ int globbing(char *w,char *t,int q) // wildcard pattern *w against string *t; q 
 				return 1; // end of pattern, succeed!
 			tt=t,ww=w; // remember wildcard and continue
 		}
-		else if (k!='?'&&(q?ucase(k)!=ucase(c):k!=c)) // compare character
+		else if (k!='?'&&(q?lcase(k)!=lcase(c):k!=c)) // compare character
 		{
 			if (!ww)
 				return 0; // no past wildcards, fail!
@@ -1115,9 +1115,9 @@ int session_createfilm(void) // start recording video and audio; !0 ERROR
 	if (session_filmfile) // file already open!
 		return 1;
 	if (session_filmscale<1||session_filmscale>2)
-		return 1; // improperly configured scale!
+		return 1; // improper scale value!
 	if (session_filmtimer<1||session_filmtimer>2)
-		return 1; // improperly configured timer!
+		return 1; // improper timer value!
 
 	if (!session_filmvideo&&!(session_filmvideo=malloc(sizeof(VIDEO_UNIT)*SESSION_FILMVIDEO_LENGTH)))
 		return 1; // cannot allocate buffer!
@@ -1211,8 +1211,8 @@ void session_writefilm(void) // record one frame of video and audio
 				z+=xrf_encode(z,&s[1],l,2); // m
 				z+=xrf_encode(z,&s[0],l,2); // M
 				#else
-				z+=xrf_encode(z,&s[0],l,2); // M
-				z+=xrf_encode(z,&s[1],l,2); // m
+				z+=xrf_encode(z,&s[0],l,2); // m
+				z+=xrf_encode(z,&s[1],l,2); // M
 				#endif
 			#else
 				z+=xrf_encode(z,&s[0],l,1); // M

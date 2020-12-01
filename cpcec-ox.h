@@ -697,8 +697,7 @@ int session_ui_text(char *s,char *t,char q) // see session_message
 		switch (session_ui_exchange())
 		{
 			case -1: // mouse click
-				if (session_ui_clickx>=0&&session_ui_clickx<session_ui_size_x&&session_ui_clicky>=0&&session_ui_clicky<session_ui_size_y)
-					break;
+				//if (session_ui_clickx>=0&&session_ui_clickx<session_ui_size_x&&session_ui_clicky>=0&&session_ui_clicky<session_ui_size_y) break; // click anywhere, it doesn't matter
 			case KBCODE_ESCAPE:
 			case KBCODE_SPACE:
 			case KBCODE_X_ENTER:
@@ -1007,7 +1006,7 @@ char *session_ui_filedialog_sanitizepath(char *s) // restore PATHCHAR at the end
 }
 void session_ui_filedialog_tabkey(void)
 {
-	char *l={"Read/Write\000Read-Only\000\000"};
+	char *l={"Read/Write\000Read-Only\000"};
 	int i=session_ui_list(session_ui_fileflags&1,l,"File access",NULL,0);
 	if (i>=0)
 		session_ui_fileflags=i;
@@ -1099,9 +1098,10 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 		#endif
 
 		if (!q&&!f)
-			memcpy(m,"*NEW*\000",7); // point at "*" by default on SAVE, rather than on any past names
+			m=&m[sortedinsert(m,0,"*NEW*")]; // point at "*" by default on SAVE, rather than on any past names
 		else
-			*m=0,half=session_scratch,i=sortedsearch(half,m-half,pastname); // look for past name, if any
+			half=session_scratch,i=sortedsearch(half,m-half,pastname); // look for past name, if any
+		*m=0; // end of list
 
 		if (session_ui_list(i,session_scratch,t,q?session_ui_filedialog_tabkey:NULL,0)<0)
 			return 0; // user closed the dialog!
@@ -1172,7 +1172,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 			strcpy(session_parmtr,session_scratch); // copy to target, but keep the source...
 			if (q||f||session_ui_filedialog_stat(session_parmtr)<0)
 				return 1; // the user succesfully chose a file, either extant for reading or new for writing!
-			if (session_ui_list(0,"YES\000NO\000\000","Overwrite?",NULL,1)==0)
+			if (session_ui_list(0,"YES\000NO\000","Overwrite?",NULL,1)==0)
 				return strcpy(session_parmtr,session_scratch),1; // ...otherwise session_parmtr would hold "YES"!
 		}
 	}

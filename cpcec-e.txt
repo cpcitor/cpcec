@@ -119,7 +119,7 @@ It's also possible to add file names to the command line: the emulator will try
 opening and running the specified files. Thanks to it CPCEC can be linked to the
 file extensions CDT, CPR, CSW, DSK and SNA to automatically load said files.
 
-The file types supported by the emulator are divided in three types:
+The file types supported by the emulator are divided in four types:
 
 * WAV, CSW and CDT: tape files, or more properly digital dumps of the contents
 of a magnetic tape used to store and distribute data and software.
@@ -222,11 +222,21 @@ each mode has a different impact on the programme performance: the normal mode
 consumes the most processing power, and the double interlace, the least.
 
 INI files can be used to define a "profile", a set of extra ROMs to load on top
-of the current firmware. Internally they're simple text files where each line is
-either LOWEST=filename (that sets the LOW ROM content) or HIGHxx=filename (that
-sets the n-th HIGH ROM slot content, where "n" is the hexadecimal value of
-"xx"): for example HIGH07=PARADOS.ROM means that slot 7 of HIGH ROM is occupied
-by the file PARADOS.ROM.
+of the current firmware. Internally they're simple text files where each line
+defines an attribute or a ROM:
+
+* type = 0..3 : sets the firmware type (for example 0 stands for CPC464) as seen
+in the command line parameters -m0..3;
+* bank = 0..4 : sets the RAM size (for example 0 stands for 64k) as seen in the
+parameters -k0..4;
+* crtc = 0..4 : sets the CRTC type, as seen in the parameters -g0..4;
+* fddc = 0..1 : sets whether the floppy disc drive controller is enabled (1) or
+disabled (0);
+* lowest=filename : sets the LOW ROM content; the ROM file must be located in
+the same directory where the profile is;
+* highXX=filename : sets the content of HIGH ROM slot XX, where XX is a
+two-digit hexadecimal number: "00" is 0, "0A" is 10, "10" is 16, etc. for
+example HIGH07=PARADOS.ROM would place PARADOS.ROM in slot 7.
 
 The onscreen indicators show the state of the disc drives (track number, busy or
 idle), the tape deck (busy or idle) and the joystick.
@@ -768,3 +778,7 @@ models, as expected.
 XRF file recording less memory-consuming.
 - 20201122 -- minor patch fixing a crash when using the SDL2 interface to save a
 file in the root path, and enabling automatic SDL2 detection on compile time.
+- 20201124 -- minor patch adding AMSDOS header detection to ROM profile loading,
+following an idea from Sid.
+- 20201130 -- minor patch further extending ROM profile loading with four new
+fields: "type", "bank", "crtc" and "fddc".

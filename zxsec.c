@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20201122"//"1955"
+#define MY_VERSION "20201130"//"2145"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -575,7 +575,7 @@ void z80_sync(int t) // the Z80 asks the hardware/video/audio to catch up
 		if (type_id==3/*&&!disc_disabled*/)
 			disc_main(t);
 		if (tape_enabled)
-			tape_main(t),audio_dirty|=(int)tape; // echo the tape signal thru sound!
+			tape_main(t),audio_dirty|=(size_t)tape; // echo the tape signal thru sound!
 		if (tt)
 		{
 			video_main(tt);
@@ -1527,11 +1527,11 @@ void session_menuinfo(void)
 	session_menucheck(0x8600,!(session_fast&1));
 	session_menucheck(0x8C01,session_filmscale==1);
 	session_menucheck(0x8C02,session_filmtimer==1);
-	session_menucheck(0xCC00,!!session_filmfile);
-	session_menucheck(0x0C00,!!session_wavefile);
-	session_menucheck(0x4C00,!!psg_logfile);
-	session_menucheck(0x8700,!!disc[0]);
-	session_menucheck(0xC700,!!disc[1]);
+	session_menucheck(0xCC00,(size_t)session_filmfile);
+	session_menucheck(0x0C00,(size_t)session_wavefile);
+	session_menucheck(0x4C00,(size_t)psg_logfile);
+	session_menucheck(0x8700,(size_t)disc[0]);
+	session_menucheck(0xC700,(size_t)disc[1]);
 	session_menucheck(0x0701,disc_flip[0]);
 	session_menucheck(0x4701,disc_flip[1]);
 	session_menucheck(0x8800,tape_type>=0&&tape);

@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20201122"//"1955"
+#define MY_VERSION "20201130"//"2145"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -1392,7 +1392,7 @@ void z80_sync(int t) // the Z80 asks the hardware/video/audio to catch up
 			if ((tape_delay-=t)<0)
 				tape_delay=0;
 			if (tape_delay<=TICKS_PER_SECOND/15) // reject accidental "clicks" (cfr. "RUN THE GAUNTLET")
-				tape_main(t),audio_dirty|=(int)tape; // echo the tape signal thru sound!
+				tape_main(t),audio_dirty|=(size_t)tape; // echo the tape signal thru sound!
 		}
 		else // delay later readings
 		{
@@ -2598,11 +2598,26 @@ BYTE biostype_id=-1; // keeper of the latest loaded BIOS type
 char bios_system[][13]={"cpc464.rom","cpc664.rom","cpc6128.rom","cpcplus.rom"};
 char bios_path[STRMAX]="";
 
+void bios_ignore_amsdos(FILE *f) // just in case some ROM files still include AMSDOS headers (i.e. the first 128 bytes)
+{
+	#if 0 // the simple way
+	fseek(f,0,SEEK_END); int i=ftell(f); fseek(f,i&128,SEEK_SET);
+	#else // the proper way
+	unsigned char bios_amsdos[128]; fread1(bios_amsdos,128,f);
+	int checksum=0;
+	for (int i=0;i<67;++i) checksum+=bios_amsdos[i];
+	if (((checksum&255)==bios_amsdos[67]&&(checksum>>8)==bios_amsdos[68])&&bios_amsdos[18]==2)
+		logprintf("ROM with AMSDOS header, checksum %04X.\n",checksum); // it's AMSDOS, ignore
+	else
+		fseek(f,0,SEEK_SET); // not AMSDOS, restore
+	#endif
+}
+
 int bios_load(char *s) // load a cartridge file or a firmware ROM file. 0 OK, !0 ERROR
 {
 	if (globbing("*.ini",s,1)&&(mem_xtr||(mem_xtr=malloc(257<<14)))) // profile?
 	{
-		char t[STRMAX],*tt,u[STRMAX],*uu;
+		unsigned char t[STRMAX],*tt,u[STRMAX],*uu;
 		strcpy(u,s); if (uu=strrchr(u,PATHCHAR)) ++uu; else uu=u; // make ROM files relative to INI path
 		MEMZERO(mmu_xtr);
 		FILE *f,*ff;
@@ -2610,23 +2625,40 @@ int bios_load(char *s) // load a cartridge file or a firmware ROM file. 0 OK, !0
 		{
 			while (fgets(t,STRMAX,f))
 			{
-				tt=t; while (*tt>=' ') ++tt;
-					*tt=0;
-				if ((tt=strchr(t,'='))&&*++tt)
+				tt=t; while (*tt>=' ') ++tt; *tt=0; // CR,LF... -> EOL
+				if (*t>' '&&(tt=strchr(t,'='))&&tt[1]) // "name[blank]=[blank]value"?
 				{
-					strcpy(uu,tt);
-					if (globbing("LOWEST*",t,1))
+					BYTE *rr=tt; while (*++rr==' ') ; strcpy(uu,rr); // trim right, copy
+					while (*--tt==' ') ; tt[1]=0; // trim left, keep the name
+					if (!strcasecmp("lowest",t))
 					{
 						if (ff=puff_fopen(u,"rb"))
-							fread1(&mem_xtr[0],0x4000,ff),puff_fclose(ff),mmu_xtr[0]=1;
+							bios_ignore_amsdos(ff),fread1(&mem_xtr[0],0x4000,ff),puff_fclose(ff),mmu_xtr[0]=1;
 					}
-					else if (globbing("HIGH*",t,1))
+					else if (globbing("high*",t,1))
 					{
 						int i=strtol(&t[4],NULL,16);
 						if (i>=0&&i<length(mmu_xtr)-1)
 							if (ff=puff_fopen(u,"rb"))
-								fread1(&mem_xtr[0x4000+(i<<14)],0x4000,ff),puff_fclose(ff),mmu_xtr[i+1]=1;
+								bios_ignore_amsdos(ff),fread1(&mem_xtr[0x4000+(i<<14)],0x4000,ff),puff_fclose(ff),mmu_xtr[i+1]=1;
 					}
+					else if (!strcasecmp("type",t))
+					{
+						type_id=(*uu)&3;
+						bios_load(strcat(strcpy(session_substr,session_path),bios_system[type_id])); // not a big fan of recursive calls...
+					}
+					else if (!strcasecmp("crtc",t))
+					{
+						if ((crtc_type=(*uu)&7)>4)
+							crtc_type=4;
+					}
+					else if (!strcasecmp("bank",t))
+					{
+						if ((gate_ram_depth=(*uu)&7)>4)
+							gate_ram_depth=4;
+					}
+					else if (!strcasecmp("fddc",t))
+						disc_disabled=(disc_disabled&-2)+1-((*uu)&1);
 				}
 			}
 			puff_fclose(f);
@@ -3291,11 +3323,11 @@ void session_menuinfo(void)
 	session_menucheck(0x8600,!(session_fast&1));
 	session_menucheck(0x8C01,session_filmscale==1);
 	session_menucheck(0x8C02,session_filmtimer==1);
-	session_menucheck(0xCC00,!!session_filmfile);
-	session_menucheck(0x0C00,!!session_wavefile);
-	session_menucheck(0x4C00,!!psg_logfile);
-	session_menucheck(0x8700,!!disc[0]);
-	session_menucheck(0xC700,!!disc[1]);
+	session_menucheck(0xCC00,(size_t)session_filmfile);
+	session_menucheck(0x0C00,(size_t)session_wavefile);
+	session_menucheck(0x4C00,(size_t)psg_logfile);
+	session_menucheck(0x8700,(size_t)disc[0]);
+	session_menucheck(0xC700,(size_t)disc[1]);
 	session_menucheck(0x0701,disc_flip[0]);
 	session_menucheck(0x4701,disc_flip[1]);
 	session_menucheck(0x8800,tape_type>=0&&tape);
@@ -3311,7 +3343,7 @@ void session_menuinfo(void)
 	session_menucheck(0x8590,!disc_tolerant);
 	session_menucheck(0x8510,!(disc_disabled&1));
 	#ifdef Z80_CPC_DANDANATOR
-	session_menucheck(0xC500,!!mem_dandanator);
+	session_menucheck(0xC500,(size_t)mem_dandanator);
 	#endif
 	#ifdef PSG_PLAYCITY
 	session_menucheck(0x8520,!playcity_disabled);
