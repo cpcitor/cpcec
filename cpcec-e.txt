@@ -53,6 +53,9 @@ following commands:
 	windres zxsec.rc -Ocoff -ozxsec.res
 	gcc -m32 -mwindows zxsec.res -O2 -xc zxsec.c -luser32 -lgdi32 -lwinmm
 -lcomdlg32 -lshell32 -ozxsec.exe
+	
+Optional DirectDraw support can be achieved by appending `-DDDRAW -lddraw` to
+the `gcc ...` commands.
 
 Pelles C and other visual compilers can define the whole project from the source
 files CPCEC.C and ZXSEC.C and the resource files CPCEC.RC and ZXSEC.RC, and
@@ -62,7 +65,7 @@ recognize them on its own) are USER32, GDI32, WINMM, COMDLG32 and SHELL32, all
 them from the Win32 SDK.
 
 The binaries for operating systems supported by SDL2 need different commands.
-Some systems may require an additional parameter -DSDL2_DOUBLE_QUEUE if the
+Some systems may require an additional parameter `-DSDL2_DOUBLE_QUEUE` if the
 sound becomes choppy due to the default buffer being too short.
 
 	gcc -DSDL2 -O2 -xc cpcec.c -lSDL2 -ocpcec
@@ -113,7 +116,7 @@ differ in the amount of RAM, the disc controller and the keyboard);
 * -X : disable emulation of disc drives (by default enabled);
 * -Y : disable tape analysis (by default enabled; see below);
 * -Z : disable tape acceleration (by default enabled);
-* -! : hide menu and make the emulation fully keyboard-driven.
+* -! : disable video hardware acceleration.
 
 It's also possible to add file names to the command line: the emulator will try
 opening and running the specified files. Thanks to it CPCEC can be linked to the
@@ -318,6 +321,8 @@ and thin or bold characters;
 the cursors, Page Up/Down and key "G" browse the memory, Home and End shrink and
 expand the graphics width, and Tab toggles between horizontal and vertical mode;
 * X toggles the classic/Plus hardware information panel;
+* Y requests a length in bytes and an 8-bit value, then fills the memory with
+said value starting from the current location of the cursor;
 * Z deletes all breakpoints;
 * Space ("step into") runs exactly one operation and stops on the next
 operation;
@@ -337,11 +342,13 @@ The included tool XRF turns a XRF-type file into an AVI-type file. It works in
 two different ways, one is exclusive of Windows, the other one is general.
 
 When compiling the tool for Windows (it needs the system library AVIFIL32: "gcc
--lavifil32 -xc xrf.c -oxrf.exe") and running it with the syntax "xrf source.xrf
-target.avi ABCD" it will read the file "source.xrf" and generate a file named
-"target.avi" with the help of the codec ABCD, if it's available. It's advised to
-install and use the codec ZMBV developed by the Dosbox project because it
-provides the best performance in pixellated recordings like these.
+-lavifil32 -lvfw32 -xc xrf.c -oxrf.exe") and running it (the syntax is "xrf
+source.xrf target.avi ABCD") it will read the file "source.xrf" and generate a
+file named "target.avi" with the help of the codec ABCD, if it's available.
+Running the tool without parameters shows the help and the list of available
+codecs. It's advised to install and use the codec ZMBV developed by the Dosbox
+project because it provides the best performance in pixellated recordings like
+these.
 
 In other systems XRF cannot directly use any codec, so the outcome is an AVI
 file without any compression (image is RGB 24 bpp, sound is stereo PCM);
@@ -782,3 +789,13 @@ file in the root path, and enabling automatic SDL2 detection on compile time.
 following an idea from Sid.
 - 20201130 -- minor patch further extending ROM profile loading with four new
 fields: "type", "bank", "crtc" and "fddc".
+- 20201212 -- nineteenth public release. The Windows version can use DirectDraw
+instead of GDI, and the SDL2 version uses Textures instead of Surfaces:
+performance rises when hardware acceleration is available. Just in case,
+however, command line parameter `-!` and the menu option "Video: Software
+render" can be used to disable the hardware acceleration in systems where it's
+missing or performs worse than pure software. CPC bugfix: PSG handles register
+14 separately, as expected by "Gremlins (v1)". Spectrum bugfix: 128K ghost ports
+are properly emulated, the demo "Tiratok" plays music at last. New debug command
+"Y": fill memory with byte. XRF lists the available codecs on Windows when
+launched without parameters.

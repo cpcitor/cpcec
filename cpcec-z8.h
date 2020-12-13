@@ -1662,7 +1662,7 @@ WORD z80_dasm(char *r,WORD m) // disassembles instruction at address `m` into st
 // optional Z80-based ROM extension Dandanator ---------------------- //
 
 #ifdef Z80_CPC_DANDANATOR
-WORD dandanator_trap=-1,dandanator_temp;
+WORD dandanator_trap=0,dandanator_temp;
 
 int dandanator_insert(char *s)
 {
@@ -1725,7 +1725,7 @@ WORD z80_debug_dump(char *t,WORD m)
 #define Z80_INC_R ++r7
 #define Z80_DEC_R --r7
 #define Z80_GET_R8 ((z80_ir.b.l&0x80)+(r7&0x7F)) // rebuild R from R7
-#define Z80_FETCH Z80_PEEKX(z80_pc.w)
+#define Z80_FETCH Z80_PEEKPC(z80_pc.w)
 #define Z80_RD_PC Z80_PEEK(z80_pc.w)
 #define Z80_WZ_PC z80_wz=Z80_RD_PC; ++z80_pc.w; z80_wz+=Z80_RD_PC<<8 // read WZ from WORD[PC++]
 #define Z80_RD_HL BYTE b=Z80_PEEK(z80_hl.w)
@@ -2966,7 +2966,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 				case 0xE3: // EX HL,(SP)
 					z80_wz=Z80_PEEK(z80_sp.w);
 					++z80_sp.w;
-					z80_wz+=Z80_PEEKX(z80_sp.w)<<8;
+					z80_wz+=Z80_PEEKPC(z80_sp.w)<<8;
 					Z80_POKE1(z80_sp.w,z80_hl.b.h);
 					--z80_sp.w;
 					Z80_POKE2(z80_sp.w,z80_hl.b.l);
@@ -3449,7 +3449,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							case 0xE3: // EX IX,(SP)
 								z80_wz=Z80_PEEK(z80_sp.w);
 								++z80_sp.w;
-								z80_wz+=Z80_PEEKX(z80_sp.w)<<8;
+								z80_wz+=Z80_PEEKPC(z80_sp.w)<<8;
 								Z80_POKE1(z80_sp.w,xy->b.h);
 								--z80_sp.w;
 								Z80_POKE2(z80_sp.w,xy->b.l);
@@ -3630,7 +3630,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							Z80_WR2(z80_hl.b);
 							break;
 						case 0x73: // LD ($NNNN),SP
-							Z80_WR2(z80_sp.b); Z80_Q_RST();
+							Z80_WR2(z80_sp.b); // `Z80_Q_RST();` is overkill
 							break;
 						case 0x4B: // LD BC,($NNNN)
 							Z80_RD2(z80_bc.b);
@@ -4034,12 +4034,21 @@ int z80_debug_hex(char c) // 0..15 OK, <0 ERROR!
 		return c-'a'+10;
 	return -1;
 }
+int z80_debug_dec(char c) // 0..9 OK, <0 ERROR!
+{
+	if (c>='0'&&c<='9')
+		return c-'0';
+	return -1;
+}
 int z80_debug_hexs(char *s)
 {
-	char c;
-	int i=0;
-	while ((c=z80_debug_hex(*s))>=0)
-		i=(i<<4)+c,++s;
+	int c,i=0;
+	if (*s=='.') // decimal?
+		while ((c=z80_debug_dec(*++s))>=0)
+			i=(i*10)+c;
+	else
+		while ((c=z80_debug_hex(*s))>=0)
+			i=(i<<4)+c,++s;
 	return i;
 }
 int z80_debug_goto(int i) // <0 ERROR, >=0 OK
@@ -4215,6 +4224,20 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 							}
 			}
 			break;
+		case 'Y': // FILL WITH BYTE
+			if (!z80_debug_grfx&&((i=z80_debug_pnl0_w,z80_debug_panel==0)||(i=z80_debug_pnl2_w,z80_debug_panel==2)))
+			{
+				WORD w=i; BYTE b;
+				if (session_parmtr[0]=0,session_input(session_parmtr,"Fill length")>=0)
+					if (i=(WORD)z80_debug_hexs(session_parmtr))
+						if (session_parmtr[0]=0,session_input(session_parmtr,"Filler byte")>=0)
+						{
+							b=z80_debug_hexs(session_parmtr);
+							while (i--)
+								POKE(w)=b,++w;
+						}
+			}
+			break;
 		case 'X': // EXTENDED HARDWARE INFO
 			++z80_debug_page;
 			break;
@@ -4230,25 +4253,25 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 		case 'H': // HELP
 			session_message(
 				"Cursors\tNavigate panel\n"
-				"Tab\tNext panel (shift: previous)\n"
+				"Tab\tNext panel (shift: previous panel)\n"
 				"0-9,A-F\tEdit hexadecimal value\n"
-				"G\tGo to ADDRESS\n"
+				"G\tGo to ADDRESS ('.'+number: decimal)\n"
 				"H\tHelp..\n"
 				"I\tInput all bytes from FILE\n"
 				"J\tJump to..\n"
-				"K\tClose log file\n"
+				"K\tClose log file (see L)\n"
 				"L\tLog 8-bit REGISTER into FILE\n"
 				#if Z80_DEBUG_MMU
-				"M\tToggle memory dump R/W map\n"
+				"M\tToggle memory dump R/W mapping\n"
 				#else
 				//"M\t-\n"
 				#endif
-				"N\tNext search\n"
+				"N\tNext search (see S)\n"
 				"O\tOutput LENGTH bytes into FILE\n"
 				"P\tPrint disassembly of LENGTH bytes into FILE\n"
-				"Q\tToggle EDFF opcode trapping\n"
+				"Q\tToggle $EDFF opcode trapping\n"
 				"R\tRun to..\n"
-				"S\tSearch for STRING ($+string: hexadecimal)\n"
+				"S\tSearch for STRING ('$'+string: hexadecimal)\n"
 				"T\tReset timer\n"
 				"U\tReturn from..\n"
 				"V\tToggle debugger appearance\n"
@@ -4258,11 +4281,11 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 				#else
 				//"X\t-\n"
 				#endif
-				//"Y\t-\n"
+				"Y\tFill LENGTH bytes with BYTE\n"
 				"Z\tDelete all breakpoints\n"
 				".\tToggle breakpoint\n"
-				"Space\tStep into..\n"
-				"Return\tStep over..\n"
+				"Space\tStep into.. (shift: skip scanline)\n"
+				"Return\tStep over.. (shift: skip frame)\n"
 				"Escape\tExit\n"
 				,"Debugger help"
 				);
@@ -4305,7 +4328,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 					case KBDBG_DOWN : i=1; break;
 					case KBDBG_HOME : z80_debug_pnl0_w=0,z80_debug_pnl0_x=0; break;
 					case KBDBG_END  : z80_debug_pnl0_w=z80_pc.w,z80_debug_pnl0_x=0; break;
-					case KBDBG_PRIOR: i=1-length(z80_debug_cache); break;
+					case KBDBG_PRIOR: i=1-(int)length(z80_debug_cache); break;
 					case KBDBG_NEXT : i=length(z80_debug_cache)-1; break;
 					case 'G': if ((i=z80_debug_goto(z80_debug_pnl0_w))>=0)
 							z80_debug_pnl0_x=0,z80_debug_pnl0_w=i;

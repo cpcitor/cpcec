@@ -7,7 +7,7 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "XRF"
-#define MY_VERSION "20201130"//"2145"
+#define MY_VERSION "20201212"//"2355"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -202,7 +202,7 @@ BYTE *avi_canvas=NULL; // ARGB32 canvas
 
 #ifdef _WIN32
 
-char avi_fourcc[5]=""; // uncompressed "DIB " is even than RGB24: it's ARGB32!
+char avi_fourcc[5]=""; // uncompressed "DIB " is even worse than RGB24: it's ARGB32!
 PAVIFILE vfw_file=NULL; IAVIStream *vfw_video,*vfw_codec,*vfw_audio;
 
 int vfw_create(char *s) // !0 ERROR
@@ -491,7 +491,8 @@ int main(int argc,char *argv[])
 	#else
 	if (argc!=3)
 	#endif
-		return printf(MY_CAPTION " " MY_VERSION " " MY_LICENSE "\n"
+	{
+		printf(MY_CAPTION " " MY_VERSION " " MY_LICENSE "\n"
 			"\n"
 			#ifdef _WIN32
 			"usage: xrf source.xrf target.avi [fourcc]\n"
@@ -503,7 +504,16 @@ int main(int argc,char *argv[])
 			"This program comes with ABSOLUTELY NO WARRANTY; for more details" "\n" \
 			"please read the GNU General Public License. This is free software" "\n" \
 			"and you are welcome to redistribute it under certain conditions." // GPL_3_INFO
-			"\n"),1;
+			"\n");
+			#ifdef _WIN32
+			printf("\nfourcc codes:");
+			ICINFO lpicinfo; ICInfo(0,-1,&lpicinfo); int n=lpicinfo.fccHandler;
+			for (int i=0;i<n;++i)
+				ICInfo(0,i,&lpicinfo),printf(" %c%c%c%c",lpicinfo.fccHandler&255,(lpicinfo.fccHandler>>8)&255,(lpicinfo.fccHandler>>16)&255,(lpicinfo.fccHandler>>24)&255);
+			printf("\n");
+			#endif
+		return 1;
+	}
 	if (xrf_open(argv[1]))
 		return xrf_close(),fprintf(stderr,"error: cannot open source!\n"),1;
 	#ifdef _WIN32

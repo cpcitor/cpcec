@@ -19,12 +19,6 @@
 
 #include <SDL2/SDL.h>
 
-#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-	typedef union { unsigned short w; struct { unsigned char h,l; } b; } Z80W; // big-endian: PPC, ARM...
-#else
-	typedef union { unsigned short w; struct { unsigned char l,h; } b; } Z80W; // lil-endian: i86, x64...
-#endif
-
 #define strcasecmp SDL_strcasecmp
 #ifdef _WIN32
 	#define STRMAX 256 // widespread in Windows
@@ -81,7 +75,7 @@
 #endif // bitsize
 #define AUDIO_STEREO 1
 
-VIDEO_UNIT *video_frame; // video frame, allocated on runtime
+VIDEO_UNIT *video_frame,*menus_frame; // video and UI frames, allocated on runtime
 AUDIO_UNIT *audio_frame,audio_buffer[AUDIO_LENGTH_Z*(AUDIO_STEREO+1)]; // audio frame
 VIDEO_UNIT *video_target; // pointer to current video pixel
 AUDIO_UNIT *audio_target; // pointer to current audio sample
@@ -92,25 +86,18 @@ BYTE audio_disabled=0,audio_channels=1,audio_session=0; // audio status and coun
 unsigned char session_path[STRMAX],session_parmtr[STRMAX],session_tmpstr[STRMAX],session_substr[STRMAX],session_info[STRMAX]="";
 
 int session_timer,session_event=0; // timing synchronisation and user command
-BYTE session_fast=0,session_wait=0,session_audio=1,session_blit=0; // timing and devices
+BYTE session_fast=0,session_wait=0,session_audio=1,session_softblit=1,session_hardblit; // timing and devices ; software blitting is enabled by default because it's safer
 BYTE session_stick=1,session_shift=0,session_key2joy=0; // keyboard and joystick
-BYTE video_scanline=0,video_scanlinez=-1; // 0 = solid, 1 = scanlines, 2 = full interlace, 3 = half interlace
+BYTE video_scanline=0,video_scanlinez=8; // 0 = solid, 1 = scanlines, 2 = full interlace, 3 = half interlace
 BYTE video_filter=0,audio_filter=0; // interpolation flags
 BYTE session_intzoom=0,session_recording=0; int session_joybits=0;
 
 FILE *session_wavefile=NULL; // audio recording is done on each session update
 
-#ifndef CONSOLE_DEBUGGER
-	VIDEO_UNIT *debug_frame;
-	BYTE debug_buffer[DEBUG_LENGTH_X*DEBUG_LENGTH_Y]; // [0] can be a valid character, 128 (new redraw required) or 0 (redraw not required)
-	SDL_Surface *session_dbg_dib;
-#endif
-
 BYTE session_paused=0,session_signal=0;
 #define SESSION_SIGNAL_FRAME 1
 #define SESSION_SIGNAL_DEBUG 2
 #define SESSION_SIGNAL_PAUSE 4
-
 BYTE session_dirtymenu=1; // to force new status text
 
 #define kbd_bit_set(k) (kbd_bit[k/8]|=1<<(k%8))
@@ -279,53 +266,28 @@ int session_key_n_joy(int k) // handle some keys as joystick motions
 
 SDL_Joystick *session_ji=NULL;
 SDL_Window *session_hwnd=NULL;
-SDL_Surface *session_dib=NULL;
 
-// extremely tiny graphical user interface: SDL2 provides no widgets! //
+// unlike Windows, where the user interface is internally provided by the system and as well as the compositing work,
+// we must provide our own UI here, and this means we must use one canvas for the emulation and another one for the UI.
+// we show the first canvas during normal operation, but switch to the second one when the UI is active.
+// the graphical debugger effectively behaves as a temporary substitute of the emulation canvas.
+// notice that SDL_Texture, unlike SDL_Surface, doesn't rely on anything like SDL_GetWindowSurface()
 
-SDL_Rect session_ideal;
-#define SESSION_UI_HEIGHT 14 // DEBUG_LENGTH_Z
-SDL_Surface *session_ui_alloc(int w,int h) { return ((w+=2)*h)?SDL_CreateRGBSurface(0,w*8,h*SESSION_UI_HEIGHT,32,0xFF0000,0x00FF00,0x0000FF,0):NULL; }
-void session_ui_free(SDL_Surface *s) { if (s) SDL_FreeSurface(s); }
-int session_ui_dirty=0; // reduce video thrashing
-int session_ui_base_x,session_ui_base_y,session_ui_size_x,session_ui_size_y; // used to calculate mouse clicks relative to widget
+#ifndef CONSOLE_DEBUGGER
+	VIDEO_UNIT *debug_frame;
+	BYTE debug_buffer[DEBUG_LENGTH_X*DEBUG_LENGTH_Y]; // [0] can be a valid character, 128 (new redraw required) or 0 (redraw not required)
+	SDL_Texture *session_dbg=NULL;
+#endif
 
-void session_border(SDL_Surface *s,int x,int y,int q) // draw surface with an optional border
+SDL_Texture *session_dib=NULL,*session_gui_dib=NULL; SDL_Renderer *session_blitter=NULL;
+SDL_Rect session_ideal; // used for calculations, see below
+
+void session_backup(VIDEO_UNIT *t); // make a clipped copy of the current screen. Must be defined later on!
+void session_redraw(BYTE q)
 {
-	SDL_Surface *t=SDL_GetWindowSurface(session_hwnd);
-	SDL_Rect tgt,tmp;
-	tgt.x=x*8; tgt.w=s->w;
-	tgt.y=y*SESSION_UI_HEIGHT; tgt.h=s->h;
-	SDL_SetSurfaceBlendMode(s,SDL_BLENDMODE_NONE);
-	SDL_BlitSurface(s,NULL,t,&tgt);
-	if (q)
-	{
-		// top border
-		tmp.x=tgt.x-2; tmp.y=tgt.y-2;
-		tmp.w=tgt.w+4; tmp.h=2; SDL_FillRect(t,&tmp,0x00C0C0C0);
-		// bottom border
-		tmp.y=tgt.y+tgt.h;
-		SDL_FillRect(t,&tmp,0x00404040);
-		// left border
-		tmp.y=tgt.y-1;
-		tmp.w=2; tmp.h=tgt.h+2; SDL_FillRect(t,&tmp,0x00808080);
-		// right border
-		tmp.x=tgt.x+tgt.w;
-		SDL_FillRect(t,&tmp,0x00808080);
-	}
-	session_ui_dirty=1;
-}
-void session_centre(SDL_Surface *s,int q) // draw surface in centre with an optional border
-{
-	SDL_Surface *t=SDL_GetWindowSurface(session_hwnd);
-	session_ui_size_x=s->w/8; session_ui_size_y=s->h/SESSION_UI_HEIGHT;
-	session_border(s,session_ui_base_x=(t->w-s->w)/16,session_ui_base_y=(t->h-s->h)/(2*SESSION_UI_HEIGHT),q);
-}
-
-void session_blitit(SDL_Surface *s,int ox,int oy)
-{
-	SDL_Surface *surface=SDL_GetWindowSurface(session_hwnd); int xx,yy; // calculate window area
-	if ((xx=surface->w)>0&&(yy=surface->h)>0) // don't redraw invalid windows!
+	int xx,yy; // calculate window area
+	SDL_GetRendererOutputSize(session_blitter,&session_ideal.w,&session_ideal.h);
+	if ((xx=session_ideal.w)>0&&(yy=session_ideal.h)>0) // don't redraw invalid windows!
 	{
 		if (xx>yy*VIDEO_PIXELS_X/VIDEO_PIXELS_Y) // window area is too wide?
 			xx=yy*VIDEO_PIXELS_X/VIDEO_PIXELS_Y;
@@ -336,45 +298,146 @@ void session_blitit(SDL_Surface *s,int ox,int oy)
 			xx=(xx/(VIDEO_PIXELS_X*62/64))*VIDEO_PIXELS_X; // the MM/NN factor is a tolerance margin:
 			yy=(yy/(VIDEO_PIXELS_Y*62/64))*VIDEO_PIXELS_Y; // 61/64 allows 200% on windowed 1920x1080
 		}
-		session_ideal.x=(surface->w-(session_ideal.w=xx))/2; session_ideal.y=(surface->h-(session_ideal.h=yy))/2;
+		session_ideal.x=(session_ideal.w-xx)/2; session_ideal.w=xx;
+		session_ideal.y=(session_ideal.h-yy)/2; session_ideal.h=yy;
+		SDL_Texture *s; VIDEO_UNIT *t; int ox,oy;
+		if (!q)
+			s=session_gui_dib,ox=0,oy=0;
+		#ifndef CONSOLE_DEBUGGER
+		else if (session_signal&SESSION_SIGNAL_DEBUG)
+			s=session_dbg,ox=0,oy=0;
+		#endif
+		else
+			s=session_dib,ox=VIDEO_OFFSET_X,oy=VIDEO_OFFSET_Y;
+		SDL_Rect r;
+		r.x=ox; r.w=VIDEO_PIXELS_X;
+		r.y=oy; r.h=VIDEO_PIXELS_Y;
+		SDL_UnlockTexture(s); // prepare for sending
+		SDL_RenderCopy(session_blitter,s,&r,&session_ideal); // send!
+		SDL_RenderPresent(session_blitter); // update window!
+		int dummy; SDL_LockTexture(s,NULL,(void**)&t,&dummy); // allow editing again
+		if (!q)
+			menus_frame=t;
+		#ifndef CONSOLE_DEBUGGER
+		else if (session_signal&SESSION_SIGNAL_DEBUG)
+			debug_frame=t;
+		#endif
+		else
 		{
-			SDL_Rect src;
-			src.x=ox; src.w=VIDEO_PIXELS_X;
-			src.y=oy; src.h=VIDEO_PIXELS_Y;
-			if (SDL_GetWindowFlags(session_hwnd)&SDL_WINDOW_FULLSCREEN_DESKTOP)
-				SDL_BlitScaled(s,&src,SDL_GetWindowSurface(session_hwnd),&session_ideal);
-			else
-				SDL_BlitSurface(s,&src,SDL_GetWindowSurface(session_hwnd),&session_ideal);
+			dummy=video_target-video_frame; // the old cursor...
+			video_frame=t;
+			video_target=video_frame+dummy; // ...may need to move!
 		}
 	}
 }
-void session_redraw(BYTE q)
-{
-	#ifndef CONSOLE_DEBUGGER
-	if (session_signal&SESSION_SIGNAL_DEBUG)
-		session_blitit(session_dbg_dib,0,0);
-	else
-	#endif
-		session_blitit(session_dib,VIDEO_OFFSET_X,VIDEO_OFFSET_Y);
-	if (q)
-		SDL_UpdateWindowSurface(session_hwnd);
-}
-#define session_clrscr() SDL_FillRect(SDL_GetWindowSurface(session_hwnd),NULL,0)
+
+#define session_clrscr() 0 //SDL_RenderClear(session_blitter) // defaults to black
+int session_fullscreen=0;
 void session_togglefullscreen(void)
 {
-	SDL_SetWindowFullscreen(session_hwnd,SDL_GetWindowFlags(session_hwnd)&SDL_WINDOW_FULLSCREEN_DESKTOP?0*SDL_WINDOW_BORDERLESS:SDL_WINDOW_FULLSCREEN_DESKTOP);
+	SDL_SetWindowFullscreen(session_hwnd,session_fullscreen=((SDL_GetWindowFlags(session_hwnd)&SDL_WINDOW_FULLSCREEN_DESKTOP)?0:SDL_WINDOW_FULLSCREEN_DESKTOP));
+	//session_clrscr(); // not really necessary, SDL2 cleans up
+	session_dirtymenu=1; // update "Full screen" option (if any)
 }
 
-void session_ui_init(void) { memset(kbd_bit,0,sizeof(kbd_bit)); session_please(); }
-void session_ui_exit(void) { session_redraw(1); }
+// extremely tiny graphical user interface: SDL2 provides no widgets! //
 
-int session_ui_clickx,session_ui_clicky; // mouse X+Y, when the "key" is -1 (click) or -2 (move)
+#define SESSION_UI_HEIGHT 14
+
+BYTE session_ui_menudata[1<<12],session_ui_menusize; // encoded menu data
+#ifdef _WIN32
+int session_ui_drives=0; char session_ui_drive[]="::\\";
+#else
+SDL_Surface *session_ui_icon=NULL; // the window icon
+#endif
+
+void session_fillrect(int rx,int ry,int rw,int rh,VIDEO_UNIT a)
+{
+	for (int y=0;y<rh;++y)
+	{
+		VIDEO_UNIT *p=&menus_frame[(y+ry)*VIDEO_PIXELS_X+rx];
+		for (int x=0;x<rw;++x)
+			p[x]=a;
+	}
+}
+#define session_ui_fillrect(x,y,w,h,a) session_fillrect((x)*8,(y)*SESSION_UI_HEIGHT,(w)*8,(h)*SESSION_UI_HEIGHT,(a))
+
+void session_ui_drawframes(int x,int y,int w,int h)
+{
+	x*=8; w*=8; y*=SESSION_UI_HEIGHT; h*=SESSION_UI_HEIGHT;
+	int rx,ry,rw,rh;
+	// top border
+	rx=x-2; ry=y-2;
+	rw=w+4; rh=2; session_fillrect(rx,ry,rw,rh,VIDEO1(0x00C0C0C0));
+	// bottom border
+	ry=y+h; session_fillrect(rx,ry,rw,rh,VIDEO1(0x00404040));
+	// left border
+	ry=y-1;
+	rw=2; rh=h+2; session_fillrect(rx,ry,rw,rh,VIDEO1(0x00808080));
+	// right border
+	rx=x+w; session_fillrect(rx,ry,rw,rh,VIDEO1(0x00808080));
+}
+int session_ui_printglyph(VIDEO_UNIT *p,BYTE z)
+{
+	BYTE const *r=&onscreen_chrs[((z-32)&127)*onscreen_size];
+	VIDEO_UNIT q0,q1;
+	if (z&128)
+		q0=VIDEO1(0),q1=VIDEO1(0x00FFFFFF);
+	else
+		q1=VIDEO1(0),q0=VIDEO1(0x00FFFFFF);
+	BYTE yy=0;
+	while (yy<(SESSION_UI_HEIGHT-onscreen_size)/2)
+	{
+		for (int xx=0;xx<8;++xx)
+			*p++=q0;
+		++yy; p+=VIDEO_PIXELS_X-8;
+	}
+	while (yy<(SESSION_UI_HEIGHT-onscreen_size)/2+onscreen_size)
+	{
+		BYTE rr=*r++; rr|=rr>>1; // normal, not thin or bold
+		for (int xx=0;xx<8;++xx)
+			*p++=(rr&(128>>xx))?q1:q0;
+		++yy; p+=VIDEO_PIXELS_X-8;
+	}
+	while (yy<SESSION_UI_HEIGHT)
+	{
+		for (int xx=0;xx<8;++xx)
+			*p++=q0;
+		++yy; p+=VIDEO_PIXELS_X-8;
+	}
+	return 8; // pixel width
+}
+int session_ui_printasciz(char *s,int x,int y,int prae,int w,int post,int q)
+{
+	if (q) q=128; if (w<0) w=strlen(s);
+	int n=prae+w+post; // remember for later
+	VIDEO_UNIT *t=&menus_frame[x*8+y*SESSION_UI_HEIGHT*VIDEO_PIXELS_X];
+	while (prae-->0)
+		t+=session_ui_printglyph(t,' '+q);
+	int i=w-strlen(s);
+	if (i>0)
+	{
+		post+=i;
+		while (i=*s++)
+			t+=session_ui_printglyph(t,i+q);
+	}
+	else
+	{
+		while (w-->0)
+			t+=session_ui_printglyph(t,(*s++)+q);
+	}
+	while (post-->0)
+		t+=session_ui_printglyph(t,' '+q);
+	return n;
+}
+
+int session_ui_base_x,session_ui_base_y,session_ui_size_x,session_ui_size_y; // used to calculate mouse clicks relative to widget
+int session_ui_maus_x,session_ui_maus_y; // mouse X+Y, when the "key" is -1 (click) or -2 (move)
 int session_ui_char,session_ui_shift; // ASCII+Shift of the latest keystroke
+
 int session_ui_exchange(void) // update window and wait for a keystroke
 {
 	session_ui_char=0; SDL_Event event;
-	if (session_ui_dirty)
-		SDL_UpdateWindowSurface(session_hwnd),session_ui_dirty=0;
 	for (;;)
 	{
 		SDL_WaitEvent(&event);
@@ -382,12 +445,12 @@ int session_ui_exchange(void) // update window and wait for a keystroke
 		{
 			case SDL_WINDOWEVENT:
 				if (event.window.event==SDL_WINDOWEVENT_EXPOSED)
-					SDL_UpdateWindowSurface(session_hwnd); // fast redraw
+					SDL_RenderPresent(session_blitter);//SDL_UpdateWindowSurface(session_hwnd); // fast redraw
 				break;
 			case SDL_MOUSEMOTION:
 			case SDL_MOUSEBUTTONDOWN:
-				session_ui_clickx=event.button.x/8-session_ui_base_x,session_ui_clicky=event.button.y/SESSION_UI_HEIGHT-session_ui_base_y;
-				return event.type==SDL_MOUSEBUTTONDOWN?-1:-2;
+				session_ui_maus_x=(event.button.x-session_ideal.x)*VIDEO_PIXELS_X/session_ideal.w/8-session_ui_base_x,session_ui_maus_y=(event.button.y-session_ideal.y)*VIDEO_PIXELS_Y/session_ideal.h/SESSION_UI_HEIGHT-session_ui_base_y;
+				return event.type==SDL_MOUSEBUTTONDOWN?event.button.button==SDL_BUTTON_RIGHT?-3:-2:-1;
 			case SDL_MOUSEWHEEL:
 				{
 					int i=event.wheel.y;
@@ -408,78 +471,35 @@ int session_ui_exchange(void) // update window and wait for a keystroke
 		}
 	}
 }
-void session_ui_printglyph(SDL_Surface *t,char z,int x,int y) // print one glyph
-{
-	BYTE const *r=&onscreen_chrs[((z-32)&127)*onscreen_size];
-	VIDEO_UNIT q0,q1;
-	if (z&128)
-		q0=VIDEO1(0),q1=VIDEO1(-1);
-	else
-		q1=VIDEO1(0),q0=VIDEO1(-1);
-	BYTE yy=0;
-	while (yy<(SESSION_UI_HEIGHT-onscreen_size)/2)
-	{
-		VIDEO_UNIT *p=(VIDEO_UNIT *)&((BYTE *)t->pixels)[(y*SESSION_UI_HEIGHT+yy)*t->pitch]; p=&p[x*8];
-		for (int xx=0;xx<8;++xx)
-			*p++=q0;
-		++yy;
-	}
-	while (yy<(SESSION_UI_HEIGHT-onscreen_size)/2+onscreen_size)
-	{
-		VIDEO_UNIT *p=(VIDEO_UNIT *)&((BYTE *)t->pixels)[(y*SESSION_UI_HEIGHT+yy)*t->pitch]; p=&p[x*8];
-		BYTE rr=*r++; rr|=rr>>1; // normal, not thin or bold
-		for (int xx=0;xx<8;++xx)
-			*p++=(rr&(128>>xx))?q1:q0;
-		++yy;
-	}
-	while (yy<SESSION_UI_HEIGHT)
-	{
-		VIDEO_UNIT *p=(VIDEO_UNIT *)&((BYTE *)t->pixels)[(y*SESSION_UI_HEIGHT+yy)*t->pitch]; p=&p[x*8];
-		for (int xx=0;xx<8;++xx)
-			*p++=q0;
-		++yy;
-	}
-}
-int session_ui_printasciz(SDL_Surface *t,char *s,int x,int y,int m,int q) // print a text at a location with an optional length limit
-{
-	BYTE z,l=0,k=strlen(s);
-	session_ui_printglyph(t,q?160:32,x++,y);
-	while (m>0?l<m:*s)
-	{
-		if (!(z=*s))
-			z=' '; // pad with spaces
-		else
-		{
-			++s;
-			if (m>0&&k>m&&l+2>=m) // string is too long
-				z='.'; // ".."
-		}
-		if (q) z^=128;
-		session_ui_printglyph(t,z,x,y);
-		++x;
-		++l;
-	}
-	session_ui_printglyph(t,q?160:32,x,y);
-	return l+2;
-}
 
-BYTE session_ui_menudata[1<<12],session_ui_menusize; // encoded menu data
-SDL_Surface *session_ui_icon=NULL;
+void session_ui_loop(void) // get background painted again to erase old widgets
+{
+	#ifndef CONSOLE_DEBUGGER
+	if (session_signal&SESSION_SIGNAL_DEBUG)
+		memcpy(menus_frame,debug_frame,sizeof(VIDEO_UNIT)*VIDEO_PIXELS_X*VIDEO_PIXELS_Y); // use the debugger as the background, rather than the emulation
+	else
+	#endif
+	session_backup(menus_frame);
+}
+void session_ui_init(void) { memset(kbd_bit,0,sizeof(kbd_bit)); session_please(); session_ui_loop(); }
+void session_ui_exit(void) // wipe all widgets and restore the window contents
+{
+	#ifndef CONSOLE_DEBUGGER
+	if (session_signal&SESSION_SIGNAL_DEBUG)
+		session_redraw(1);
+	#endif
+}
 
 void session_ui_menu(void) // show the menu and set session_event accordingly
 {
 	if (!session_ui_menusize)
 		return;
 	session_ui_init();
-	SDL_Surface *hmenu,*hitem=NULL;
 	int menuxs[64],events[64]; // more than 64 menus, or 64 items in a menu? overkill!!!
 	int menu=0,menus=0,menuz=-1,item=0,items=0,itemz=-1,itemx=0,itemw=0;
 	char *zz,*z;
-	hmenu=session_ui_alloc(session_ui_menusize-2,1);
-	//session_ui_printasciz(hmenu,"",0,0,VIDEO_PIXELS_X/8-4,0);//SDL_FillRect(,NULL,VIDEO1(0xFFFFFF));
-	int done,ox=(session_ideal.x+(session_ideal.w-VIDEO_PIXELS_X)/2)/8,
-		oy=(session_ideal.y+(session_ideal.h-VIDEO_PIXELS_Y)/2)/SESSION_UI_HEIGHT;
-	session_ui_base_x=ox+1; session_ui_base_y=oy+1;
+
+	int done,ox=session_ui_base_x=1,oy=session_ui_base_y=1;
 	session_event=0x8000;
 	while (session_event==0x8000) // empty menu items must be ignored
 	{
@@ -498,10 +518,10 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 					if (menus==menu)
 					{
 						itemx=menux;
-						menux+=session_ui_printasciz(hmenu,m,menux,0,-1,1);
+						menux+=session_ui_printasciz(m,ox+menux,oy+0,1,-1,1,1);
 					}
 					else
-						menux+=session_ui_printasciz(hmenu,m,menux,0,-1,0);
+						menux+=session_ui_printasciz(m,ox+menux,oy+0,1,-1,1,0);
 					int i=0,j=0,k=0;
 					while (*m++) // skip menu name
 						++j;
@@ -517,10 +537,7 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 						itemw=j,items=k;
 					menuxs[menus++]=menux;
 				}
-				session_redraw(0); // build background, delay refresh
-				session_border(hmenu,1+ox,1+oy,1);
-				session_ui_free(hitem);
-				hitem=session_ui_alloc(itemw,items);
+				session_ui_drawframes(ox,oy,menux,1);
 			}
 			if (itemz!=item)
 			{
@@ -540,7 +557,7 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 						{
 							if (item==k)
 								z=&m[-2],session_event=j;
-							session_ui_printasciz(hitem,m,0,k,itemw,item==k);
+							session_ui_printasciz(m,itemx+ox+0,1+oy+k,1,itemw,1,item==k);
 							events[k++]=j;
 						}
 						while (*m++) // skip item name
@@ -548,8 +565,9 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 					}
 					++i;
 				}
-				session_border(hitem,itemx+1+ox,2+oy,1);
+				session_ui_drawframes(itemx+ox,1+oy,itemw+2,items);
 			}
+			session_redraw(0);
 			switch (session_ui_exchange())
 			{
 				case KBCODE_UP:
@@ -581,21 +599,20 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 					//if (session_event!=0x8000) // gap?
 						done=1;
 					break;
-				case -2: // mouse move
-					if (!session_ui_clicky&&session_ui_clickx>=0&&session_ui_clickx<session_ui_menusize) // select menu?
+				case -1: // mouse move
+					if (!session_ui_maus_y&&session_ui_maus_x>=0&&session_ui_maus_x<session_ui_menusize) // select menu?
 					{
-						menu=menus; while (session_ui_clickx<menuxs[menu-1]) --menu;
+						menu=menus; while (menu>0&&session_ui_maus_x<menuxs[menu-1]) --menu;
 					}
-					else if (session_ui_clicky>0&&session_ui_clicky<=items&&session_ui_clickx>=itemx&&session_ui_clickx<itemx+itemw+2) // select item?
-						item=session_ui_clicky-1;
+					else if (session_ui_maus_y>0&&session_ui_maus_y<=items&&session_ui_maus_x>=itemx&&session_ui_maus_x<itemx+itemw+2) // select item?
+						item=session_ui_maus_y-1; // hover, not click!
 					break;
-				case -1: // mouse click
-					if (!session_ui_clicky&&session_ui_clickx>=0&&session_ui_clickx<session_ui_menusize) // select menu?
-					{
-						//menu=menus; while (session_ui_clickx<menuxs[menu-1]) --menu; // already done above
-					}
-					else if (session_ui_clicky>0&&session_ui_clicky<=items&&session_ui_clickx>=itemx&&session_ui_clickx<itemx+itemw+2) // select item?
-						session_event=events[session_ui_clicky-1],done=1;
+				case -3: // mouse right click
+				case -2: // mouse left click
+					if (!session_ui_maus_y&&session_ui_maus_x>=0&&session_ui_maus_x<session_ui_menusize) // select menu?
+						; // already done above
+					else if (session_ui_maus_y>0&&session_ui_maus_y<=items&&session_ui_maus_x>=itemx&&session_ui_maus_x<itemx+itemw+2) // select item?
+						session_event=events[session_ui_maus_y-1],done=1;
 					else // quit?
 						session_event=0,done=1;
 					break;
@@ -613,10 +630,10 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 						}
 					break;
 			}
+			if (menuz!=menu)
+				session_ui_loop(); // redrawing the items doesn't need any wiping, unlike the menus
 		}
 	}
-	session_ui_free(hmenu);
-	session_ui_free(hitem);
 	session_ui_exit();
 	if (done<0)
 		session_event=0;
@@ -658,9 +675,14 @@ int session_ui_text(char *s,char *t,char q) // see session_message
 	if (i)
 		++texth;
 	if (q)
-		textw+=q=6; // 6: four characters, plus one extra char per side
-	SDL_Surface *htext=session_ui_alloc(textw,texth);
-	session_ui_printasciz(htext,t,0,0,textw,1);
+		textw+=q=6; // 6: four characters for the icon, plus one extra char per side
+
+	textw+=2; // include left+right margins
+	int textx=((VIDEO_PIXELS_X/8)-textw)/2,texty=((VIDEO_PIXELS_Y/SESSION_UI_HEIGHT)-texth)/2;
+	session_ui_drawframes(session_ui_base_x=textx,session_ui_base_y=texty,session_ui_size_x=textw,session_ui_size_y=texth);
+	textw-=2;
+
+	session_ui_printasciz(t,textx+0,texty+0,1,textw,1,1);
 	i=j=0;
 	m=session_parmtr;
 	while (*s) // render text proper
@@ -670,7 +692,7 @@ int session_ui_text(char *s,char *t,char q) // see session_message
 		if (k=='\n')
 		{
 			m[-1]=j=0;
-			session_ui_printasciz(htext,m=session_parmtr,q,++i,textw-q,0);
+			session_ui_printasciz(m=session_parmtr,textx+q,texty+(++i),1,textw-q,1,0);
 		}
 		else if (k=='\t')
 		{
@@ -682,191 +704,38 @@ int session_ui_text(char *s,char *t,char q) // see session_message
 	if (m!=session_parmtr)
 	{
 		*m=0;
-		session_ui_printasciz(htext,m=session_parmtr,q,++i,textw-q,0);
+		session_ui_printasciz(m=session_parmtr,textx+q,texty+(++i),1,textw-q,1,0);
 	}
 	if (q)
 	{
-		SDL_Rect r;
-		r.x=0; r.w=q*8; r.y=SESSION_UI_HEIGHT; r.h=(texth-1)*SESSION_UI_HEIGHT;
-		SDL_FillRect(htext,&r,0x00C0C0C0); // bright grey background
-		r.x=q*4-16; r.y=SESSION_UI_HEIGHT*2; r.w=r.h=32;
-		SDL_BlitSurface(session_ui_icon,NULL,htext,&r); // the icon!
+		session_ui_fillrect(textx+0,texty+1,q,texth-1,VIDEO1(0x00C0C0C0)); // bright grey background
+		{
+			VIDEO_UNIT *tgt=&menus_frame[(texty+2)*SESSION_UI_HEIGHT*VIDEO_PIXELS_X+(textx+1)*8];
+			int z=0; for (int y=0;y<32;++y,tgt+=VIDEO_PIXELS_X-32)
+				for (int x=0;x<32;++x)
+				{
+					int a=session_icon32xx16[z++]; if (a&0xF000)
+						*tgt=VIDEO1((a&0x00F)*0x0011+(a&0x0F0)*0x00110+(a&0xF00)*0x1100);
+					++tgt;
+				}
+		}
+		//session_ui_fillrect(textx+1,texty+2,4,2,VIDEO1(0x00808080)); // a simple couple of holes
+		//session_ui_fillrect(textx+1,texty+texth-3,4,2,VIDEO1(0x00FFFFFF)); // rather than an icon
 	}
-	session_centre(htext,1);//SDL_BlitSurface(htext,NULL,SDL_GetWindowSurface(session_hwnd),NULL);
+	session_redraw(0);
 	for (;;)
 		switch (session_ui_exchange())
 		{
-			case -1: // mouse click
-				//if (session_ui_clickx>=0&&session_ui_clickx<session_ui_size_x&&session_ui_clicky>=0&&session_ui_clicky<session_ui_size_y) break; // click anywhere, it doesn't matter
+			case -3: // mouse right click
+			case -2: // mouse left click
+				//if (session_ui_maus_x>=0&&session_ui_maus_x<session_ui_size_x&&session_ui_maus_y>=0&&session_ui_maus_y<session_ui_size_y) break; // click anywhere, it doesn't matter
 			case KBCODE_ESCAPE:
 			case KBCODE_SPACE:
 			case KBCODE_X_ENTER:
 			case KBCODE_ENTER:
-				session_ui_free(htext);
 				session_ui_exit();
 				return 0;
 		}
-}
-
-int session_ui_list(int item,char *s,char *t,void x(void),int q) // see session_list
-{
-	int i,dblclk=0,items=0,itemz=-2,listw=0,listh,listz=0;
-	char *m=t,*z=NULL;
-	while (*m++)
-		++listw;
-	m=s;
-	while (*m)
-	{
-		++items; i=0;
-		while (*m++)
-			++i;
-		if (listw<i)
-			listw=i;
-	}
-	if (!items)
-		return -1;
-	session_ui_init();
-	if (listw>VIDEO_PIXELS_X/8-4)
-		listw=VIDEO_PIXELS_X/8-4;
-	listh=items+1<VIDEO_PIXELS_Y/SESSION_UI_HEIGHT-2?items+1:VIDEO_PIXELS_Y/SESSION_UI_HEIGHT-2;
-	SDL_Surface *hlist=session_ui_alloc(listw,listh);
-	session_ui_printasciz(hlist,t,0,0,listw,1);
-	int done=0;
-	while (!done)
-	{
-		if (itemz!=item)
-		{
-			itemz=item;
-			if (listz>item)
-				if ((listz=item)<0)
-					listz=0; // allow index -1
-			if (listz<item-listh+2)
-				listz=item-listh+2;
-			m=s; i=0;
-			while (*m&&i<listz+listh-1)
-			{
-				if (i>=listz)
-				{
-					if (i==item)
-						z=m;
-					session_ui_printasciz(hlist,m,0,1+i-listz,listw,i==item);
-				}
-				if (*m) while (*m++)
-					;
-				++i;
-			}
-			session_centre(hlist,1);
-		}
-		switch (session_ui_exchange())
-		{
-			case KBCODE_PRIOR:
-			case KBCODE_LEFT:
-				item-=listh-2;
-			case KBCODE_UP:
-				if (--item<0)
-			case KBCODE_HOME:
-					item=0;
-				dblclk=0;
-				break;
-			case KBCODE_NEXT:
-			case KBCODE_RIGHT:
-				item+=listh-2;
-			case KBCODE_DOWN:
-				if (++item>=items)
-			case KBCODE_END:
-					item=items-1;
-				dblclk=0;
-				break;
-			case KBCODE_TAB:
-				if (q) // browse items if `q` is true
-				{
-					if (session_ui_shift)
-					{
-						if (--item<0) // prev?
-							item=items-1; // wrap
-					}
-					else
-					{
-						if (++item>=items) // next?
-							item=0; // wrap
-					}
-				}
-				else if (x) // special context widget
-					x(),dblclk=0;
-				break;
-			case -2: // mouse move
-				if (q&&session_ui_clickx>=0&&session_ui_clickx<session_ui_size_x&&session_ui_clicky>0&&session_ui_clicky<=items) // single click mode?
-					item=session_ui_clicky<2?0:1;
-				break;
-			case -1: // mouse click
-				if (session_ui_clickx<0||session_ui_clickx>=session_ui_size_x)
-					item=-1,done=1; // quit!
-				else if (session_ui_clicky<1) // scroll up?
-				{
-					if ((item-=listh-2)<0)
-						item=0;
-					dblclk=0;
-				}
-				else if (session_ui_clicky>=session_ui_size_y) // scroll down?
-				{
-					if ((item+=listh-2)>=items)
-						item=items-1;
-					dblclk=0;
-				}
-				else // select an item?
-				{
-					int button=listz+session_ui_clicky-1;
-					if (q||(item==button&&dblclk)) // `q` (single click mode, f.e. "YES"/"NO") or same item? (=double click)
-						item=button,done=1;
-					else // different item!
-					{
-						item=button; dblclk=1;
-						if (item<0)
-							item=0;
-						else if (item>=items)
-							item=items-1;
-					}
-				}
-				break;
-			case KBCODE_ESCAPE:
-			case KBCODE_F10:
-				item=-1;
-				//break;
-			case KBCODE_X_ENTER:
-			case KBCODE_ENTER:
-				done=1;
-				break;
-			default:
-				if (session_ui_char>=32&&session_ui_char<=128)
-				{
-					int itemz=item,n=items;
-					for (int o=lcase(session_ui_char);n;--n)
-					{
-						if (item<0)
-							item=0,z=s;
-						else
-						{
-							++item;
-							while (*z++)
-								;
-						}
-						if (!(*z))
-							item=0,z=s;
-						if (lcase(*z)==o)
-							break;
-					}
-					if (!n)
-						item=itemz; // allow rewinding to -1
-					dblclk=0;
-				}
-				break;
-		}
-	}
-	if (item>=0)
-		strcpy(session_parmtr,z);
-	session_ui_free(hlist);
-	session_ui_exit();
-	return item;
 }
 
 int session_ui_input(char *s,char *t) // see session_input
@@ -875,8 +744,13 @@ int session_ui_input(char *s,char *t) // see session_input
 	if ((i=j=first=strlen(strcpy(session_parmtr,s)))>=textw)
 		return -1; // error!
 	session_ui_init();
-	SDL_Surface *htext=session_ui_alloc(textw,2);
-	session_ui_printasciz(htext,t,0,0,textw,1);
+
+	textw+=2; // include left+right margins
+	int textx=((VIDEO_PIXELS_X/8)-textw)/2,texty=((VIDEO_PIXELS_Y/SESSION_UI_HEIGHT)-2)/2;
+	session_ui_drawframes(session_ui_base_x=textx,session_ui_base_y=texty,session_ui_size_x=textw,session_ui_size_y=2);
+	textw-=2;
+
+	session_ui_printasciz(t,textx+0,texty+0,1,textw,1,1);
 	int done=0;
 	while (!done)
 	{
@@ -885,22 +759,22 @@ int session_ui_input(char *s,char *t) // see session_input
 			if (first)
 			{
 				char *m=session_parmtr; while (*m) *m^=128,++m; // inverse video for all text
-				session_ui_printasciz(htext,session_parmtr,0,1,textw,0);
+				session_ui_printasciz(session_parmtr,textx+0,texty+1,1,textw,1,0);
 				m=session_parmtr; while (*m) *m^=128,++m; // restore video
 			}
 			else if (i<j)
 			{
 				session_parmtr[i]^=128; // inverse video
-				session_ui_printasciz(htext,session_parmtr,0,1,textw,0);
+				session_ui_printasciz(session_parmtr,textx+0,texty+1,1,textw,1,0);
 				session_parmtr[i]^=128; // restore video
 			}
 			else
 			{
 				session_parmtr[i]=160; session_parmtr[i+1]=0; // inverse space
-				session_ui_printasciz(htext,session_parmtr,0,1,textw,0);
+				session_ui_printasciz(session_parmtr,textx+0,texty+1,1,textw,1,0);
 				session_parmtr[i]=0; // end of string
 			}
-			session_centre(htext,1);
+			session_redraw(0);
 			dirty=0;
 		}
 		switch (session_ui_exchange())
@@ -919,13 +793,14 @@ int session_ui_input(char *s,char *t) // see session_input
 				first=0;
 				dirty=1;
 				break;
-			case -1: // mouse click
-				if (session_ui_clickx<0||session_ui_clickx>=session_ui_size_x||session_ui_clicky<0||session_ui_clicky>=session_ui_size_y)
+			case -3: // mouse right click
+			case -2: // mouse left click
+				if (session_ui_maus_x<0||session_ui_maus_x>=session_ui_size_x||session_ui_maus_y<0||session_ui_maus_y>=session_ui_size_y)
 					j=-1,done=1; // quit!
-				else if (session_ui_clicky==1)
+				else if (session_ui_maus_y==1)
 				{
 					first=0;
-					if ((i=session_ui_clickx-1)>j)
+					if ((i=session_ui_maus_x-1)>j)
 						i=j;
 					else if (i<0)
 						i=0;
@@ -983,9 +858,178 @@ int session_ui_input(char *s,char *t) // see session_input
 	}
 	if (j>=0)
 		strcpy(s,session_parmtr);
-	session_ui_free(htext);
 	session_ui_exit();
 	return j;
+}
+
+int session_ui_list(int item,char *s,char *t,void x(void),int q) // see session_list
+{
+	int i,dirty=1,dblclk=0,items=0,itemz=-2,listw=0,listh,listz=0;
+	char *m=t,*z=NULL;
+	while (*m++)
+		++listw;
+	m=s;
+	while (*m)
+	{
+		++items; i=0;
+		while (*m++)
+			++i;
+		if (listw<i)
+			listw=i;
+	}
+	if (!items)
+		return -1;
+	session_ui_init();
+	if (listw>VIDEO_PIXELS_X/8-4)
+		listw=VIDEO_PIXELS_X/8-4;
+	listh=items+1<VIDEO_PIXELS_Y/SESSION_UI_HEIGHT-2?items+1:VIDEO_PIXELS_Y/SESSION_UI_HEIGHT-2;
+	int listx=((VIDEO_PIXELS_X/8)-listw-2)/2,listy=((VIDEO_PIXELS_Y/SESSION_UI_HEIGHT)-listh)/2;
+
+	int done=0;
+	while (!done)
+	{
+		if (dirty) // showing x() must request a redraw!
+		{
+			session_ui_drawframes(session_ui_base_x=listx,session_ui_base_y=listy,session_ui_size_x=listw+2,session_ui_size_y=listh);
+			session_ui_printasciz(t,listx+0,listy+0,1,listw,1,1);
+			dirty=0; itemz=~item;
+		}
+		if (itemz!=item)
+		{
+			itemz=item;
+			if (listz>item)
+				if ((listz=item)<0)
+					listz=0; // allow index -1
+			if (listz<item-listh+2)
+				listz=item-listh+2;
+			m=s; i=0;
+			while (*m&&i<listz+listh-1)
+			{
+				if (i>=listz)
+				{
+					if (i==item)
+						z=m;
+					session_ui_printasciz(m,listx+0,listy+1+i-listz,1,listw,1,i==item);
+				}
+				if (*m) while (*m++)
+					;
+				++i;
+			}
+			session_redraw(0);
+		}
+		switch (session_ui_exchange())
+		{
+			case KBCODE_PRIOR:
+			case KBCODE_LEFT:
+				item-=listh-2;
+			case KBCODE_UP:
+				if (--item<0)
+			case KBCODE_HOME:
+					item=0;
+				dblclk=0;
+				break;
+			case KBCODE_NEXT:
+			case KBCODE_RIGHT:
+				item+=listh-2;
+			case KBCODE_DOWN:
+				if (++item>=items)
+			case KBCODE_END:
+					item=items-1;
+				dblclk=0;
+				break;
+			case KBCODE_TAB:
+				if (q) // browse items if `q` is true
+				{
+					if (session_ui_shift)
+					{
+						if (--item<0) // prev?
+							item=items-1; // wrap
+					}
+					else
+					{
+						if (++item>=items) // next?
+							item=0; // wrap
+					}
+				}
+				else if (x) // special context widget
+					x(),dblclk=0,dirty=1;
+				break;
+			case -1: // mouse move
+				if (q&&session_ui_maus_x>=0&&session_ui_maus_x<session_ui_size_x&&session_ui_maus_y>0&&session_ui_maus_y<=items) // single click mode?
+					item=session_ui_maus_y<2?0:1;
+				break;
+			case -3: // mouse right click
+				if (x)
+					x(),dblclk=0,dirty=1;
+				else
+			case -2: // mouse left click
+				if (session_ui_maus_x<0||session_ui_maus_x>=session_ui_size_x)
+					item=-1,done=1; // quit!
+				else if (session_ui_maus_y<1) // scroll up?
+				{
+					if ((item-=listh-2)<0)
+						item=0;
+					dblclk=0;
+				}
+				else if (session_ui_maus_y>=session_ui_size_y) // scroll down?
+				{
+					if ((item+=listh-2)>=items)
+						item=items-1;
+					dblclk=0;
+				}
+				else // select an item?
+				{
+					int button=listz+session_ui_maus_y-1;
+					if (q||(item==button&&dblclk)) // `q` (single click mode, f.e. "YES"/"NO") or same item? (=double click)
+						item=button,done=1;
+					else // different item!
+					{
+						item=button; dblclk=1;
+						if (item<0)
+							item=0;
+						else if (item>=items)
+							item=items-1;
+					}
+				}
+				break;
+			case KBCODE_ESCAPE:
+			case KBCODE_F10:
+				item=-1;
+				//break;
+			case KBCODE_X_ENTER:
+			case KBCODE_ENTER:
+				done=1;
+				break;
+			default:
+				if (session_ui_char>=32&&session_ui_char<=128)
+				{
+					int itemz=item,n=items;
+					for (int o=lcase(session_ui_char);n;--n)
+					{
+						if (item<0)
+							item=0,z=s;
+						else
+						{
+							++item;
+							while (*z++)
+								;
+						}
+						if (!(*z))
+							item=0,z=s;
+						if (lcase(*z)==o)
+							break;
+					}
+					if (!n)
+						item=itemz; // allow rewinding to -1
+					dblclk=0;
+				}
+				break;
+		}
+	}
+	if (item>=0)
+		strcpy(session_parmtr,z);
+	session_ui_exit();
+	return item;
 }
 
 int multiglobbing(char *w,char *t,int q); // multi-pattern globbing; must be defined later on!
@@ -1020,9 +1064,6 @@ int session_ui_filedialog_stat(char *s) // -1 = not exist, 0 = file, 1 = directo
 	struct stat a; return stat(s,&a)<0?-1:S_ISDIR(a.st_mode)?1:0;
 	#endif
 }
-#ifdef _WIN32
-int session_ui_drives=0; char session_ui_drive[]="::\\";
-#endif
 int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_filedialog; q here means TAB is available or not, and f means the starting TAB value (q) or whether we're reading (!q)
 {
 	int i; char *m,*n,basepath[8<<9],pastname[STRMAX],basefind[STRMAX]; // realpath() is an exception, see below
@@ -1185,17 +1226,27 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	SDL_SetMainReady();
 	if (SDL_Init(SDL_INIT_EVENTS|SDL_INIT_VIDEO|SDL_INIT_AUDIO|SDL_INIT_TIMER|SDL_INIT_JOYSTICK)<0)
 		return (char *)SDL_GetError();
-	if (!(session_hwnd=SDL_CreateWindow(caption_version,SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,0*SDL_WINDOW_BORDERLESS)))
+	if (!(session_hwnd=SDL_CreateWindow(caption_version,SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,0)))
 		return SDL_Quit(),(char *)SDL_GetError();
-	if (!(session_dib=SDL_CreateRGBSurface(0,VIDEO_LENGTH_X,VIDEO_LENGTH_Y,32,0xFF0000,0x00FF00,0x0000FF,0)))
-		return SDL_Quit(),(char *)SDL_GetError();
-	SDL_SetSurfaceBlendMode(session_dib,SDL_BLENDMODE_NONE);
-	video_frame=session_dib->pixels;
+
+	if (session_hardblit=1,session_softblit||!(session_blitter=SDL_CreateRenderer(session_hwnd,-1,SDL_RENDERER_ACCELERATED)))
+		if (session_hardblit=0,session_softblit=1,!(session_blitter=SDL_CreateRenderer(session_hwnd,-1,SDL_RENDERER_SOFTWARE)))
+			return SDL_Quit(),(char *)SDL_GetError();
+
+	SDL_SetRenderTarget(session_blitter,NULL); // necessary?
+	// ARGB8888 equates to masks A = 0xFF000000, R = 0x00FF0000, G = 0x0000FF00, B = 0x000000FF ; it provides the best performance AFAIK.
+	session_dib=SDL_CreateTexture(session_blitter,SDL_PIXELFORMAT_ARGB8888,SDL_TEXTUREACCESS_STREAMING,VIDEO_LENGTH_X,VIDEO_LENGTH_Y);
+	session_gui_dib=SDL_CreateTexture(session_blitter,SDL_PIXELFORMAT_ARGB8888,SDL_TEXTUREACCESS_STREAMING,VIDEO_PIXELS_X,VIDEO_PIXELS_Y);
+	SDL_SetTextureBlendMode(session_dib,SDL_BLENDMODE_NONE);
+	SDL_SetTextureBlendMode(session_gui_dib,SDL_BLENDMODE_NONE); // ignore alpha!
+	int dummy; SDL_LockTexture(session_dib,NULL,(void*)&video_frame,&dummy); // pitch must always equal VIDEO_LENGTH_X*4 !!!
+	if (dummy!=VIDEO_LENGTH_X*4) return SDL_Quit(),"pitch mismatch !?";
+	SDL_LockTexture(session_gui_dib,NULL,(void*)&menus_frame,&dummy); // ditto, pitch must always equal VIDEO_PIXELS_X*4 !!!
 
 	#ifndef CONSOLE_DEBUGGER
-		session_dbg_dib=SDL_CreateRGBSurface(0,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,32,0xFF0000,0x00FF00,0x0000FF,0);
-		SDL_SetSurfaceBlendMode(session_dbg_dib,SDL_BLENDMODE_NONE);
-		debug_frame=session_dbg_dib->pixels;
+		session_dbg=SDL_CreateTexture(session_blitter,SDL_PIXELFORMAT_ARGB8888,SDL_TEXTUREACCESS_STREAMING,VIDEO_PIXELS_X,VIDEO_PIXELS_Y);
+		SDL_SetTextureBlendMode(session_dbg,SDL_BLENDMODE_NONE);
+		SDL_LockTexture(session_dbg,NULL,(void*)&debug_frame,&dummy);
 	#endif
 
 	if (session_stick)
@@ -1220,13 +1271,13 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	}
 	session_timer=SDL_GetTicks();
 
-	session_ui_icon=SDL_CreateRGBSurfaceFrom(session_icon32xx16,32,32,16,32*2,0xF00,0xF0,0xF,0xF000);
 	#ifdef _WIN32
 	long int z;
 	for (session_ui_drive[0]='A';session_ui_drive[0]<='Z';++session_ui_drive[0]) // scan session_ui_drive just once
 		if (GetDriveType(session_ui_drive)>1&&GetDiskFreeSpace(session_ui_drive,&z,&z,&z,&z))
 			session_ui_drives|=1<<(session_ui_drive[0]-'A');
 	#else
+	session_ui_icon=SDL_CreateRGBSurfaceFrom(session_icon32xx16,32,32,16,32*2,0xF00,0xF0,0xF,0xF000); // ARGB4444
 	SDL_SetWindowIcon(session_hwnd,session_ui_icon); // SDL already handles WIN32 icons alone!
 	#endif
 
@@ -1338,7 +1389,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 		{
 			case SDL_WINDOWEVENT:
 				if (event.window.event==SDL_WINDOWEVENT_EXPOSED)
-					session_clrscr(),session_redraw(1);//SDL_UpdateWindowSurface(session_hwnd); // clear and redraw
+					session_clrscr(),session_redraw(1);// clear and redraw
 				break;
 			case SDL_MOUSEBUTTONDOWN:
 				if (event.button.button==SDL_BUTTON_RIGHT)
@@ -1504,7 +1555,7 @@ INLINE void session_render(void) // update video, audio and timers
 	{
 		if (performance_t)
 		{
-			sprintf(session_tmpstr,"%s | %s | %g%% CPU %g%% SDL",caption_version,session_info,performance_f*100.0/VIDEO_PLAYBACK,performance_b*100.0/VIDEO_PLAYBACK);
+			sprintf(session_tmpstr,"%s | %s | %g%% CPU %g%% %s",caption_version,session_info,performance_f*100.0/VIDEO_PLAYBACK,performance_b*100.0/VIDEO_PLAYBACK,session_hardblit?"SDL":"sdl");
 			SDL_SetWindowTitle(session_hwnd,session_tmpstr);
 		}
 		performance_t=i,performance_f=performance_b=session_paused=0;
@@ -1516,13 +1567,19 @@ INLINE void session_byebye(void) // delete video+audio devices
 	if (session_ji)
 		SDL_JoystickClose(session_ji);
 	SDL_StopTextInput();
-	SDL_DestroyWindow(session_hwnd);
-	#ifndef _WIN32
-	SDL_FreeSurface(session_ui_icon);
-	#endif
-	SDL_FreeSurface(session_dib);
+	SDL_UnlockTexture(session_dib);
+	SDL_DestroyTexture(session_dib);
+	SDL_UnlockTexture(session_gui_dib);
+	SDL_DestroyTexture(session_gui_dib);
 	#ifndef CONSOLE_DEBUGGER
-	SDL_FreeSurface(session_dbg_dib);
+	SDL_UnlockTexture(session_dbg);
+	SDL_DestroyTexture(session_dbg);
+	#endif
+	SDL_DestroyRenderer(session_blitter);
+	SDL_DestroyWindow(session_hwnd);
+	#ifdef _WIN32
+	#else
+	SDL_FreeSurface(session_ui_icon);
 	#endif
 	SDL_Quit();
 }
@@ -1608,8 +1665,8 @@ void session_menuradio(int id,int a,int z) // set the option `id` in the range `
 
 // message box ------------------------------------------------------ //
 
-int session_message(char *s,char *t) { return session_ui_text(s,t,0); } // show multi-lined text `s` under caption `t`
-int session_aboutme(char *s,char *t) { return session_ui_text(s,t,1); } // special case: "About.."
+void session_message(char *s,char *t) { session_ui_text(s,t,0); } // show multi-lined text `s` under caption `t`
+void session_aboutme(char *s,char *t) { session_ui_text(s,t,1); } // special case: "About.."
 
 // input dialog ----------------------------------------------------- //
 

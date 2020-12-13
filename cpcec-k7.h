@@ -172,12 +172,18 @@ int tape_open(char *s) // open a tape file. `s` path; 0 OK, !0 ERROR
 				tape_type=1; tape_count=q=0;
 			}
 		}
-		else if (!memcmp("ZXTape!\032",tape_buffer,8)||!memcmp("\023\000\000\000",tape_buffer,4)) // TZX/CDT,TAP?
+		#ifdef TAPE_OPEN_TAP_FORMAT
+		else if (!memcmp("\023\000\000\000",tape_buffer,4)||!memcmp("ZXTape!\032",tape_buffer,8)) // TAP + TZX/CDT?
+		#else
+		else if (!memcmp("ZXTape!\032",tape_buffer,8)) // TZX/CDT?
+		#endif
 		{
-			if (tape_buffer[1])
-				fgetii(tape),tape_type=2; // TZX/CDT: major.minor version
-			else
+			#ifdef TAPE_OPEN_TAP_FORMAT
+			if (!tape_buffer[1])
 				tape_length=8,tape_type=3; // TAP: header is actually valid data
+			else
+			#endif
+				fgetii(tape),tape_type=2; // TZX/CDT: major.minor version
 			tape_status=tape_count=q=tape_pilots=tape_syncs/*=tape_bits*/=tape_wave=tape_loop=0; // force HOLD
 			tape_playback=3500000/TAPE_MAIN_TZX_STEP; tape_hold=2*1000; // 2000 ms -> 3500 T = 1 ms
 		}
@@ -282,7 +288,40 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 							tape_status=0,++tape_hold;
 					}
 					// fetch new blocks if required
-					if (tape_type==2)
+					#ifdef TAPE_OPEN_TAP_FORMAT
+					if (tape_type==3) // TAP
+					{
+						if (!(tape_pilots|tape_syncs|tape_bits|tape_hold)) //
+						{
+							tape_half=tape_mask=0;
+							tape_hold=2*1000; // 2-second gap
+							tape_bits=tape_fgetcc()<<3;
+							//logprintf("<%04X> ",tape_bits>>3);
+							tape_pilots=(tape_fgetc()&128)?3223:8063;
+							tape_ungetc(); // cheating! (2/2)
+							if (tape_bits<0) // EOF?
+							{
+								tape_pilot=tape_bits=0; // fake hold
+								if (tape_bit0>=0) // first EOF?
+									tape_bit0=-1;
+								else // second EOF!
+									if (tape_endoftape())
+										return; // quit!
+							}
+							else
+							{
+								tape_pilot=2168;
+								tape_sync=0;
+								tape_syncs=2;
+								tape_syncz[0]=667;
+								tape_syncz[1]=735;
+								tape_bit0=855;
+								tape_bit1=1710;
+							}
+						}
+					}
+					else // TZX/CDT
+					#endif
 						while (!(tape_pilots|tape_syncs|tape_bits|tape_wave|tape_hold))
 						{
 							tape_half=tape_mask=0;
@@ -431,35 +470,6 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 									break;
 							}
 						}
-					else if (!(tape_pilots|tape_syncs|tape_bits|tape_hold))
-					{
-						tape_half=tape_mask=0;
-						tape_hold=2*1000; // 2-second gap
-						tape_bits=tape_fgetcc()<<3;
-						//logprintf("<%04X> ",tape_bits>>3);
-						tape_pilots=(tape_fgetc()&128)?3223:8063;
-						tape_ungetc(); // cheating! (2/2)
-						if (tape_bits<0) // EOF?
-						{
-							logprintf("!");
-							tape_pilot=tape_bits=0; // fake hold
-							if (tape_bit0>=0) // first EOF?
-								tape_bit0=-1;
-							else // second EOF!
-								if (tape_endoftape())
-									return; // quit!
-						}
-						else
-						{
-							tape_pilot=2168;
-							tape_sync=0;
-							tape_syncs=2;
-							tape_syncz[0]=667;
-							tape_syncz[1]=735;
-							tape_bit0=855;
-							tape_bit1=1710;
-						}
-					}
 					//logprintf("TONE %i SYNC %i BITS %i WAVE %i HOLD %i\n",tape_pilots,tape_syncs,tape_bits,tape_wave,tape_hold);
 				}
 				tape_count-=TAPE_MAIN_TZX_STEP;
@@ -507,7 +517,17 @@ int tape_catalog(char *t,int x)
 		char *s=&t[x-STRMAX],*u=NULL;
 		int z=tape_filetell,k,l;
 		tape_seek(tape_filebase);
-		if (tape_type==2) // TZX/CDT
+		#ifdef TAPE_OPEN_TAP_FORMAT
+		if (tape_type==3) // TAP
+			while (t<s&&(i=tape_fgetcc())>=0)
+			{
+				t+=1+sprintf(t,TAPE_CATALOG_HEAD " %i bytes",j=tape_filetell-2,i);
+				if (j<=z)
+					++p;
+				tape_skip(i);
+			}
+		else // TZX/CDT
+		#endif
 			while (t<s&&(i=tape_fgetc())>=0)
 			{
 				t+=sprintf(t,TAPE_CATALOG_HEAD " ",j=tape_filetell-1);
@@ -602,14 +622,6 @@ int tape_catalog(char *t,int x)
 					--t,t+=1+sprintf(t,", %i bytes",l);
 				if (u) // keep block invisible
 					t=u;
-			}
-		else // TAP
-			while (t<s&&(i=tape_fgetcc())>=0)
-			{
-				t+=1+sprintf(t,TAPE_CATALOG_HEAD " %i bytes",j=tape_filetell-2,i);
-				if (j<=z)
-					++p;
-				tape_skip(i);
 			}
 		if (i>=0) // tape is too long :-(
 		{

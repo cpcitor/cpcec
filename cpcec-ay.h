@@ -16,7 +16,7 @@
 
 // BEGINNING OF PSG AY-3-8910 EMULATION ============================== //
 
-const BYTE psg_valid[16]={-1,15,-1,15,-1,15,31,63,31,31,31,-1,-1,15,-1,-1}; // bit masks
+const BYTE psg_valid[16]={255,15,255,15,255,15,31,63,31,31,31,255,255,15,255,255}; // bit masks
 BYTE psg_index,psg_table[16]; // index and table
 BYTE psg_hard_log=0xFF; // default mode: drop and stay
 int psg_r7_filter; // safety delay to filter ultrasounds away, cfr. "Terminus" and "Robocop"

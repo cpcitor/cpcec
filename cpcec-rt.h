@@ -17,12 +17,24 @@
 	"please read the GNU General Public License. This is free software" "\n" \
 	"and you are welcome to redistribute it under certain conditions."
 
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+	typedef union { unsigned short w; struct { unsigned char h,l; } b; } Z80W; // big-endian: PPC, ARM...
+#else
+	typedef union { unsigned short w; struct { unsigned char l,h; } b; } Z80W; // lil-endian: i86, x64...
+#endif
+
 #define length(x) (sizeof(x)/sizeof(*(x)))
 #define MEMZERO(x) memset((x),0,sizeof(x))
 #define MEMFULL(x) memset((x),~0,sizeof(x))
 #define MEMSAVE(x,y) memcpy((x),(y),sizeof(y))
 #define MEMLOAD(x,y) memcpy((x),(y),sizeof(x))
 #define MEMNCPY(x,y,z) memcpy((x),(y),sizeof(*(x))*(z))
+
+void session_backup(VIDEO_UNIT *t) // make a clipped copy of the current screen; used by the debugger and the SDL2 UI
+{
+	for (int y=0;y<VIDEO_PIXELS_Y;++y)
+		memcpy(&t[y*VIDEO_PIXELS_X],&video_frame[(VIDEO_OFFSET_Y+y)*VIDEO_LENGTH_X+VIDEO_OFFSET_X],sizeof(VIDEO_UNIT)*VIDEO_PIXELS_X);
+}
 
 int fread1(void *t,int l,FILE *f) { int k=0,i; while (l&&(i=fread(t,1,l,f))) { t=(void*)((char*)t+i); k+=i; l-=i; } return k; } // safe fread(t,1,l,f)
 int fwrite1(void *t,int l,FILE *f) { int k=0,i; while (l&&(i=fwrite(t,1,l,f))) { t=(void*)((char*)t+i); k+=i; l-=i; } return k; } // safe fwrite(t,1,l,f)
@@ -41,12 +53,13 @@ char *session_configread(char *t) // reads configuration file; s points to the p
 		if (!strcmp(session_parmtr,"softaudio")) return audio_filter=*s&3,NULL;
 		if (!strcmp(session_parmtr,"softvideo")) return video_filter=*s&7,NULL;
 		if (!strcmp(session_parmtr,"zoomvideo")) return session_intzoom=*s&1,NULL;
+		if (!strcmp(session_parmtr,"safevideo")) return session_softblit=*s&1,NULL;
 	}
 	return s;
 }
 void session_configwrite(FILE *f) // save common parameters
 {
-	fprintf(f,"polyphony %i\nscanlines %i\nsoftaudio %i\nsoftvideo %i\nzoomvideo %i\n",audio_channels,video_scanline,audio_filter,video_filter,session_intzoom);
+	fprintf(f,"polyphony %i\nscanlines %i\nsoftaudio %i\nsoftvideo %i\nzoomvideo %i\nsafevideo %i\n",audio_channels,video_scanline,audio_filter,video_filter,session_intzoom,session_softblit);
 }
 
 char *strrstr(char *h,char *n) // = strrchr + strstr
@@ -747,9 +760,8 @@ int puff_body(int q) // loads (!0) or skips (0) a ZIP file body; !0 ERROR
 // simple ANSI X3.66
 unsigned int puff_dohash(unsigned int k,unsigned char *s,int l)
 {
-	static unsigned int z[]=
-		{0,0x01DB71064,0x03B6E20C8,0x026D930AC,0x076DC4190,0x06B6B51F4,0x04DB26158,0x05005713C,
-		0x0EDB88320,0x0F00F9344,0x0D6D6A3E8,0x0CB61B38C,0x09B64C2B0,0x086D3D2D4,0x0A00AE278,0x0BDBDF21C};
+	static unsigned int z[]= {0,0x01DB71064,0x03B6E20C8,0x026D930AC,0x076DC4190,0x06B6B51F4,0x04DB26158,0x05005713C,
+		0x0EDB88320,0x0F00F9344,0x0D6D6A3E8,0x0CB61B38C,0x09B64C2B0,0x086D3D2D4,0x0A00AE278,0x0BDBDF21C}; // precalc'd!
 	for (int i=0;i<l;++i)
 		k^=s[i],k=(k>>4)^z[k&15],k=(k>>4)^z[k&15];
 	return k;
@@ -995,8 +1007,7 @@ char onscreen_debug_mask=0,onscreen_debug_mask_=-1;
 unsigned char onscreen_debug_chrs[sizeof(onscreen_chrs)];
 void onscreen_clear(void) // get a copy of the visible screen
 {
-	for (int y=0;y<VIDEO_PIXELS_Y;++y)
-		memcpy(&debug_frame[y*VIDEO_PIXELS_X],&video_frame[(VIDEO_OFFSET_Y+y)*VIDEO_LENGTH_X+VIDEO_OFFSET_X],sizeof(VIDEO_UNIT)*VIDEO_PIXELS_X);
+	session_backup(debug_frame);
 	if (video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-1)
 		for (int x=0,z=((video_pos_y&-2)-VIDEO_OFFSET_Y)*VIDEO_PIXELS_X;x<VIDEO_PIXELS_X;++x,++z)
 			debug_frame[z]=debug_frame[z+VIDEO_PIXELS_X]^=x&16?VIDEO1(0x00FFFF):VIDEO1(0xFF0000);
@@ -1007,7 +1018,7 @@ void onscreen_clear(void) // get a copy of the visible screen
 WORD onscreen_grafx_addr=0; BYTE onscreen_grafx_size=1;
 WORD onscreen_grafx(int q,VIDEO_UNIT *v,int w,int x,int y); // defined later!
 VIDEO_UNIT onscreen_ascii0,onscreen_ascii1;
-void onscreen_ascii(int x,int y,int z)
+void onscreen_ascii(int x,int y,int z) // not exactly the same as onscreen_char
 {
 	const unsigned char *zz=&onscreen_debug_chrs[((z&127)-32)*onscreen_size];
 	VIDEO_UNIT q1,q0;
@@ -1071,6 +1082,7 @@ void onscreen_debug(int q) // rewrite debug texts or redraw graphics
 			for (int x=0;x<DEBUG_LENGTH_X;++x)
 				onscreen_ascii(x,y,*t++);
 }
+
 #endif
 
 // extremely primitive video+audio output! -------------------------- //
@@ -1094,14 +1106,14 @@ int xrf_encode(BYTE *t,BYTE *s,int l,int x) // terribly hacky encoder based on a
 			s+=x;
 		while (--l&&c==*s);
 		int n=(s-r)/x;
-		while (n>0x101FF) // i.e. 66047 = 512+65535
-			xrf_encode1(c),xrf_encode1(c),xrf_encode1(-1),xrf_encode1(-1),xrf_encode1(-1),n-=0x101FF;
+		while (n>66047) // i.e. 0x101FF = 512+65535
+			xrf_encode1(c),xrf_encode1(c),xrf_encode1(255),xrf_encode1(255),xrf_encode1(255),n-=66047;
 		xrf_encode1(c); if (n>1)
 		{
 			xrf_encode1(c); if (n>=512)
-				xrf_encode1(-1),n-=512,xrf_encode1(n>>8),xrf_encode1(n&255); // 512..66047 -> 0xFF 0x0000..0xFFFF
+				xrf_encode1(255),n-=512,xrf_encode1(n>>8),xrf_encode1(n&255); // 512..66047 -> 0xFF 0x0000..0xFFFF
 			else if (n>=256)
-				xrf_encode1(-2),xrf_encode1(n&255); // 256..511 -> 0xFE 0x00..0xFF
+				xrf_encode1(254),xrf_encode1(n&255); // 256..511 -> 0xFE 0x00..0xFF
 			else
 				xrf_encode1(n-2); // 2..256 -> 0x00..0xFE
 		}

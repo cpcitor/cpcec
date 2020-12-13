@@ -28,14 +28,14 @@ unsigned char session_scratch[1<<18]; // at least 256k!
 
 char caption_version[]=MY_CAPTION " " MY_VERSION;
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN 1 // low dependencies
-#endif
-
-#ifndef _WIN32
 #ifndef SDL2
+#if defined(SDL_MAIN_HANDLED)||!defined(_WIN32)
 #define SDL2 // fallback!
 #endif
+#endif
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN 1 // low dependencies
 #endif
 
 #ifdef SDL2
@@ -48,8 +48,6 @@ char caption_version[]=MY_CAPTION " " MY_VERSION;
 #include <commdlg.h> // COMDLG32.DLL: getOpenFileName()...
 #include <mmsystem.h> // WINMM.DLL: waveOutWrite()...
 #include <shellapi.h> // SHELL32.DLL: DragQueryFile()...
-
-typedef union { unsigned short w; struct { unsigned char l,h; } b; } Z80W; // WIN32 is a lil-endian platform!
 
 #define STRMAX 256 // widespread in Windows
 #define PATHCHAR '\\' // '/' in POSIX
@@ -101,9 +99,9 @@ BYTE audio_disabled=0,audio_channels=1,audio_session=0; // audio status and coun
 unsigned char session_path[STRMAX],session_parmtr[STRMAX],session_tmpstr[STRMAX],session_substr[STRMAX],session_info[STRMAX]="";
 
 int session_timer,session_event=0; // timing synchronisation and user command
-BYTE session_fast=0,session_wait=0,session_audio=1,session_blit=0; // timing and devices
+BYTE session_fast=0,session_wait=0,session_audio=1,session_softblit=1,session_hardblit; // timing and devices ; software blitting is enabled by default because it's safer
 BYTE session_stick=1,session_shift=0,session_key2joy=0; // keyboard and joystick
-BYTE video_scanline=0,video_scanlinez=-1; // 0 = solid, 1 = scanlines, 2 = full interlace, 3 = half interlace
+BYTE video_scanline=0,video_scanlinez=8; // 0 = solid, 1 = scanlines, 2 = full interlace, 3 = half interlace
 BYTE video_filter=0,audio_filter=0; // interpolation flags
 BYTE session_intzoom=0,session_recording=0;
 
@@ -113,18 +111,33 @@ RECT session_ideal; // ideal rectangle where the window fits perfectly
 JOYINFO session_ji; // joystick buffer
 HWND session_hwnd; // window handle
 HMENU session_menu=NULL; // menu handle
-HDC session_dc,session_cdc; HGDIOBJ session_dib; // video structs
+HDC session_dc1,session_dc2=NULL; HGDIOBJ session_dib=NULL; // video structs
+HWAVEOUT session_wo; WAVEHDR session_wh; MMTIME session_mmtime; // audio structs
+
+#ifdef DDRAW
+	//#define DIRECTDRAW_VERSION 0x0700
+	#include <ddraw.h>
+
+	LPDIRECTDRAW lpdd=NULL;
+	LPDIRECTDRAWCLIPPER lpddclip=NULL;
+	LPDIRECTDRAWSURFACE lpddfore=NULL,lpddback=NULL;
+	DDSURFACEDESC ddsd;
+#endif
+
 #ifndef CONSOLE_DEBUGGER
 	VIDEO_UNIT *debug_frame;
 	BYTE debug_buffer[DEBUG_LENGTH_X*DEBUG_LENGTH_Y]; // [0] can be a valid character, 128 (new redraw required) or 0 (redraw not required)
-	HGDIOBJ session_dbg_dib;
+	HGDIOBJ session_dbg=NULL;
+	#ifdef DDRAW
+		LPDIRECTDRAWSURFACE lpdd_dbg=NULL;
+	#endif
 #endif
-HWAVEOUT session_wo; WAVEHDR session_wh; MMTIME session_mmtime; // audio structs
 
 BYTE session_paused=0,session_signal=0;
 #define SESSION_SIGNAL_FRAME 1
 #define SESSION_SIGNAL_DEBUG 2
 #define SESSION_SIGNAL_PAUSE 4
+BYTE session_dirtymenu=1; // to force new status text
 
 #define kbd_bit_set(k) (kbd_bit[k/8]|=1<<(k%8))
 #define kbd_bit_res(k) (kbd_bit[k/8]&=~(1<<(k%8)))
@@ -306,8 +319,20 @@ int session_key_n_joy(int k) // handle some keys as joystick motions
 }
 
 BYTE session_dontblit=0;
-void session_blitit(HWND hwnd,HDC h,HGDIOBJ o,int ox,int oy)
+void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 {
+	if (session_dontblit)
+	{
+		session_dontblit=0;
+		return;
+	}
+	int ox,oy;
+	#ifndef CONSOLE_DEBUGGER
+		if (session_signal&SESSION_SIGNAL_DEBUG)
+			ox=0,oy=0;
+		else
+	#endif
+		ox=VIDEO_OFFSET_X,oy=VIDEO_OFFSET_Y;
 	RECT r; GetClientRect(hwnd,&r); int xx,yy; // calculate window area
 	if ((xx=(r.right-=r.left))>0&&(yy=(r.bottom-=r.top))>0) // divisions by zero happen on WM_PAINT during window resizing!
 	{
@@ -324,28 +349,75 @@ void session_blitit(HWND hwnd,HDC h,HGDIOBJ o,int ox,int oy)
 			xx=VIDEO_PIXELS_X,yy=VIDEO_PIXELS_Y; // window area is too small!
 		int x=(r.right-xx)/2,y=(r.bottom-yy)/2; // locate bitmap on window center
 		HGDIOBJ session_oldselect;
-		if (session_oldselect=SelectObject(session_cdc,o))
+
+		#ifdef DDRAW
+		if (lpddback)
 		{
-			if (session_blit=(xx<=VIDEO_PIXELS_X||yy<=VIDEO_PIXELS_Y)) // window area is a perfect fit?
-				BitBlt(h,x,y,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,session_cdc,ox,oy,SRCCOPY); // fast :-)
+			#ifndef CONSOLE_DEBUGGER
+			LPDIRECTDRAWSURFACE l=(session_signal&SESSION_SIGNAL_DEBUG)?lpdd_dbg:lpddback;
+			#else
+			LPDIRECTDRAWSURFACE l=lpddback;
+			#endif
+
+			IDirectDrawSurface_Unlock(l,0);
+
+			int q=1; // don't redraw if something went wrong
+			if (IDirectDrawSurface_IsLost(lpddfore))
+				q=0,IDirectDrawSurface_Restore(lpddfore);
+			if (IDirectDrawSurface_IsLost(lpddback))
+				q=0,IDirectDrawSurface_Restore(lpddback);
+			#ifndef CONSOLE_DEBUGGER
+			if (IDirectDrawSurface_IsLost(lpdd_dbg))
+				q=0,IDirectDrawSurface_Restore(lpdd_dbg);
+			#endif
+
+			if (q) // not sure if we can redraw even when !q ...
+			{
+				POINT p; p.x=0; p.y=0;
+				if (ClientToScreen(hwnd,&p)) // can this ever fail!?
+				{
+					RECT rr;
+					rr.right=(rr.left=ox)+VIDEO_PIXELS_X;
+					rr.bottom=(rr.top=oy)+VIDEO_PIXELS_Y;
+					r.right=(r.left=p.x+x)+xx;
+					r.bottom=(r.top=p.y+y)+yy;
+					IDirectDrawSurface_Blt(lpddfore,&r,l,&rr,DDBLT_WAIT,0);
+				}
+			}
+
+			ddsd.dwSize=sizeof(ddsd);
+			IDirectDrawSurface_Lock(l,0,&ddsd,DDLOCK_SURFACEMEMORYPTR|DDLOCK_WAIT,0);
+			#ifndef CONSOLE_DEBUGGER
+			if (session_signal&SESSION_SIGNAL_DEBUG)
+				debug_frame=ddsd.lpSurface;
 			else
-				StretchBlt(h,x,y,xx,yy,session_cdc,ox,oy,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,SRCCOPY); // slow :-(
-			SelectObject(session_cdc,session_oldselect);
+			#endif
+			{
+				int dummy=video_target-video_frame; // the old cursor...
+				video_frame=ddsd.lpSurface;
+				video_target=video_frame+dummy; // ...may need to move!
+			}
+		}
+		else
+		#endif
+		{
+			#ifndef CONSOLE_DEBUGGER
+			if (session_oldselect=SelectObject(session_dc2,session_signal&SESSION_SIGNAL_DEBUG?session_dbg:session_dib))
+			#else
+			if (session_oldselect=SelectObject(session_dc2,session_dib))
+			#endif
+			{
+				if (session_hardblit=(xx<=VIDEO_PIXELS_X||yy<=VIDEO_PIXELS_Y)) // window area is a perfect fit?
+					BitBlt(h,x,y,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,session_dc2,ox,oy,SRCCOPY); // fast :-)
+				else
+					StretchBlt(h,x,y,xx,yy,session_dc2,ox,oy,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,SRCCOPY); // slow :-(
+				SelectObject(session_dc2,session_oldselect);
+			}
 		}
 	}
 }
-void session_redraw(HWND hwnd,HDC h) // redraw the window contents
-{
-	if (session_dontblit)
-		session_dontblit=0;
-	#ifndef CONSOLE_DEBUGGER
-	else if (session_signal&SESSION_SIGNAL_DEBUG)
-		session_blitit(hwnd,h,session_dbg_dib,0,0);
-	#endif
-	else
-		session_blitit(hwnd,h,session_dib,VIDEO_OFFSET_X,VIDEO_OFFSET_Y);
-}
 #define session_clrscr() InvalidateRect(session_hwnd,NULL,1)
+int session_fullscreen=0;
 void session_togglefullscreen(void)
 {
 	if (IsZoomed(session_hwnd))
@@ -357,13 +429,16 @@ void session_togglefullscreen(void)
 		r.left+=((r.right-r.left)-session_ideal.right)/2;
 		r.top+=((r.bottom-r.top)-session_ideal.bottom)/2;
 		MoveWindow(session_hwnd,r.left,r.top,session_ideal.right,session_ideal.bottom,1);
+		session_fullscreen=0;
 	}
 	else
 	{
 		SetWindowLong(session_hwnd,GWL_STYLE,(GetWindowLong(session_hwnd,GWL_STYLE)&~WS_CAPTION)); //|WS_POPUP|WS_CLIPCHILDREN // hide caption and buttons
 		SetMenu(session_hwnd,NULL); // hide menu
 		ShowWindow(session_hwnd,SW_MAXIMIZE); // adjust to entire screen
+		session_fullscreen=1;
 	}
+	session_dirtymenu=1; // update "Full screen" option (if any)
 }
 
 LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // window callback function
@@ -477,7 +552,7 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 {
 	HMENU session_submenu=NULL;
 	char c,*t; int i;
-	if (!session_blit) while (c=*s++)
+	/*if (!session_softblit)*/ while (c=*s++)
 	{
 		if (c=='=') // separator?
 		{
@@ -526,29 +601,79 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	session_ideal.left=session_ideal.top=0; // calculate ideal size
 	session_ideal.right=VIDEO_PIXELS_X;
 	session_ideal.bottom=VIDEO_PIXELS_Y;
-	AdjustWindowRect(&session_ideal,i=session_blit?WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU:WS_OVERLAPPEDWINDOW,!!session_submenu);
+	AdjustWindowRect(&session_ideal,i=!session_submenu?WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU:WS_OVERLAPPEDWINDOW,!!session_submenu);
 	session_ideal.right-=session_ideal.left;
 	session_ideal.bottom-=session_ideal.top;
 	session_ideal.left=session_ideal.top=0; // ensure that the ideal area is defined as (0,0,WIDTH,HEIGHT)
 	if (!(session_hwnd=CreateWindow(wc.lpszClassName,caption_version,i,CW_USEDEFAULT,CW_USEDEFAULT,session_ideal.right,session_ideal.bottom,NULL,session_submenu?session_menu:NULL,wc.hInstance,NULL)))
 		return "cannot create window";
 	DragAcceptFiles(session_hwnd,1);
-	BITMAPINFO bmi;
-	memset(&bmi,0,sizeof(bmi));
-	bmi.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
-	bmi.bmiHeader.biWidth=VIDEO_LENGTH_X;
-	bmi.bmiHeader.biHeight=-VIDEO_LENGTH_Y; // negative values make a top-to-bottom bitmap; Windows' default bitmap is bottom-to-top
-	bmi.bmiHeader.biPlanes=1;
-	bmi.bmiHeader.biBitCount=32; // cfr. VIDEO_UNIT
-	bmi.bmiHeader.biCompression=BI_RGB;
-	session_dc=GetDC(session_hwnd); // caution: we assume that if CreateWindow() succeeds all other USER and GDI calls will succeed too
-	session_cdc=CreateCompatibleDC(session_dc); // ditto
-	session_dib=CreateDIBSection(session_dc,&bmi,DIB_RGB_COLORS,(void **)&video_frame,NULL,0); // ditto
-	#ifndef CONSOLE_DEBUGGER
-		bmi.bmiHeader.biWidth=VIDEO_PIXELS_X;
-		bmi.bmiHeader.biHeight=-VIDEO_PIXELS_Y;
-		session_dbg_dib=CreateDIBSection(session_dc,&bmi,DIB_RGB_COLORS,(void **)&debug_frame,NULL,0);
-	#endif
+
+	// hardware-able DirectDraw
+
+	if (!session_softblit)
+	{
+		session_softblit=1; // fallback!
+		#ifdef DDRAW
+		if (DirectDrawCreate(NULL,&lpdd,NULL)>=0)
+		{
+			IDirectDraw_SetCooperativeLevel(lpdd,session_hwnd,DDSCL_NORMAL);
+			ZeroMemory(&ddsd,sizeof(ddsd));
+			ddsd.dwSize=sizeof(ddsd);
+			ddsd.dwFlags=DDSD_CAPS;
+			ddsd.ddsCaps.dwCaps=DDSCAPS_PRIMARYSURFACE;
+			IDirectDraw_CreateSurface(lpdd,&ddsd,&lpddfore,NULL);
+
+			DDPIXELFORMAT ddpf; ddpf.dwSize=sizeof(ddpf);
+			IDirectDrawSurface_GetPixelFormat(lpddfore,&ddpf);
+			if (ddpf.dwRGBBitCount!=32) // lazy check, translating ARGB8888 to other bitdepths is a task better left to GDI
+				;//IDirectDrawSurface_Release(lpddback),lpddback=NULL; // failure
+			else
+			{
+				IDirectDraw_CreateClipper(lpdd,0,&lpddclip,NULL);
+				IDirectDrawClipper_SetHWnd(lpddclip,0,session_hwnd);
+				IDirectDrawSurface_SetClipper(lpddfore,lpddclip);
+				#ifndef CONSOLE_DEBUGGER
+					ddsd.dwSize=sizeof(ddsd); ddsd.dwFlags=DDSD_CAPS|DDSD_WIDTH|DDSD_HEIGHT;
+					ddsd.dwWidth=VIDEO_PIXELS_X; ddsd.dwHeight=VIDEO_PIXELS_Y;
+					ddsd.ddsCaps.dwCaps=DDSCAPS_OFFSCREENPLAIN|DDSCAPS_SYSTEMMEMORY;//DDSCAPS_VIDEOMEMORY;//
+					IDirectDraw_CreateSurface(lpdd,&ddsd,&lpdd_dbg,NULL);
+					IDirectDrawSurface_Lock(lpdd_dbg,0,&ddsd,DDLOCK_SURFACEMEMORYPTR|DDLOCK_WAIT,0),debug_frame=ddsd.lpSurface;
+				#endif
+				ddsd.dwSize=sizeof(ddsd); ddsd.dwFlags=DDSD_CAPS|DDSD_WIDTH|DDSD_HEIGHT;
+				ddsd.dwWidth=VIDEO_LENGTH_X; ddsd.dwHeight=VIDEO_LENGTH_Y;
+				ddsd.ddsCaps.dwCaps=DDSCAPS_OFFSCREENPLAIN|DDSCAPS_SYSTEMMEMORY;//DDSCAPS_VIDEOMEMORY;//
+				IDirectDraw_CreateSurface(lpdd,&ddsd,&lpddback,NULL);
+				IDirectDrawSurface_Lock(lpddback,0,&ddsd,DDLOCK_SURFACEMEMORYPTR|DDLOCK_WAIT,0),video_frame=ddsd.lpSurface,session_softblit=0; // success
+			}
+		}
+		#endif
+	}
+
+	// software-only GDI bitmap
+
+	if (session_softblit)
+	{
+		BITMAPINFO bmi;
+		memset(&bmi,0,sizeof(bmi));
+		bmi.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
+		bmi.bmiHeader.biWidth=VIDEO_LENGTH_X;
+		bmi.bmiHeader.biHeight=-VIDEO_LENGTH_Y; // negative values make a top-to-bottom bitmap; Windows' default bitmap is bottom-to-top
+		bmi.bmiHeader.biPlanes=1;
+		bmi.bmiHeader.biBitCount=32; // cfr. VIDEO_UNIT
+		bmi.bmiHeader.biCompression=BI_RGB;
+		session_dc1=GetDC(session_hwnd); // caution: we assume that if CreateWindow() succeeds all other USER and GDI calls will succeed too
+		session_dc2=CreateCompatibleDC(session_dc1); // ditto
+		session_dib=CreateDIBSection(session_dc1,&bmi,DIB_RGB_COLORS,(void **)&video_frame,NULL,0); // ditto
+		#ifndef CONSOLE_DEBUGGER
+			bmi.bmiHeader.biWidth=VIDEO_PIXELS_X;
+			bmi.bmiHeader.biHeight=-VIDEO_PIXELS_Y;
+			session_dbg=CreateDIBSection(session_dc1,&bmi,DIB_RGB_COLORS,(void **)&debug_frame,NULL,0);
+		#endif
+	}
+
+	// sound setup and cleanup
+
 	ShowWindow(session_hwnd,SW_SHOWDEFAULT);
 	UpdateWindow(session_hwnd);
 	session_timer=GetTickCount();
@@ -586,7 +711,7 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 }
 
 void session_menuinfo(void); // set the current menu flags. Must be defined later on!
-BYTE session_dirtymenu=1; // to force new status text
+
 INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 {
 	static int config_signal=0; // catch DEBUG and PAUSE signals
@@ -606,7 +731,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 			if (*debug_buffer==128)
 				session_please(),session_debug_show();
 			if (*debug_buffer)//!=0
-				session_redraw(session_hwnd,session_dc),*debug_buffer=0;
+				session_redraw(session_hwnd,session_dc1),*debug_buffer=0;
 		}
 		else
 		#endif
@@ -646,7 +771,7 @@ INLINE void session_render(void) // update video, audio and timers
 	if (!video_framecount) // do we need to hurry up?
 	{
 		if ((video_interlaces=!video_interlaces)||!video_interlaced)
-			++performance_b,session_redraw(session_hwnd,session_dc);
+			++performance_b,session_redraw(session_hwnd,session_dc1);
 		if (session_stick&&!session_key2joy) // do we need to check the joystick?
 		{
 			if (!joyGetPos(session_stick-1,&session_ji))
@@ -728,7 +853,11 @@ INLINE void session_render(void) // update video, audio and timers
 	{
 		if (performance_t)
 		{
-			sprintf(session_tmpstr,"%s | %s | %g%% CPU %g%% %s",caption_version,session_info,performance_f*100.0/VIDEO_PLAYBACK,performance_b*100.0/VIDEO_PLAYBACK,session_blit?"GFX":"gfx");
+			sprintf(session_tmpstr,"%s | %s | %g%% CPU %g%% %s",caption_version,session_info,performance_f*100.0/VIDEO_PLAYBACK,performance_b*100.0/VIDEO_PLAYBACK,
+			#ifdef DDRAW
+				lpddback?"DDRAW":
+			#endif
+				session_hardblit?"GDI":"gdi");
 			SetWindowText(session_hwnd,session_tmpstr);
 		}
 		performance_t=i,performance_f=performance_b=session_paused=0;
@@ -743,12 +872,23 @@ INLINE void session_byebye(void) // delete video+audio devices
 		waveOutUnprepareHeader(session_wo,&session_wh,sizeof(WAVEHDR));
 		waveOutClose(session_wo);
 	}
+
+	#ifdef DDRAW
+	if (lpddfore) IDirectDrawSurface_SetClipper(lpddfore,NULL),IDirectDrawSurface_Release(lpddfore);
+	if (lpddback) IDirectDrawSurface_Unlock(lpddback,0),IDirectDrawSurface_Release(lpddback);
 	#ifndef CONSOLE_DEBUGGER
-		DeleteObject(session_dbg_dib);
+		if (lpdd_dbg) IDirectDrawSurface_Unlock(lpdd_dbg,0),IDirectDrawSurface_Release(lpdd_dbg);
 	#endif
-	DeleteDC(session_cdc);
-	DeleteObject(session_dib);
-	ReleaseDC(session_hwnd,session_dc);
+	if (lpddclip) IDirectDrawClipper_Release(lpddclip);
+	if (lpdd) IDirectDraw_Release(lpdd);
+	#endif
+
+	#ifndef CONSOLE_DEBUGGER
+		if (session_dbg) DeleteObject(session_dbg);
+	#endif
+	if (session_dc2) DeleteDC(session_dc2);
+	if (session_dib) DeleteObject(session_dib);
+	ReleaseDC(session_hwnd,session_dc1);
 }
 
 // auxiliary functions ---------------------------------------------- //
@@ -993,6 +1133,7 @@ int fputmmmm(int i,FILE *f) { fputc(i>>24,f); fputc(i>>16,f); fputc(i>>8,f); ret
 #define SDL_BIG_ENDIAN 4321
 #define SDL_BYTEORDER SDL_LIL_ENDIAN
 
+// main-WinMain bootstrap
 #ifdef CONSOLE_DEBUGGER
 #define BOOTSTRAP
 #else
