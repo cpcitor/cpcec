@@ -39,6 +39,26 @@ void session_backup(VIDEO_UNIT *t) // make a clipped copy of the current screen;
 int fread1(void *t,int l,FILE *f) { int k=0,i; while (l&&(i=fread(t,1,l,f))) { t=(void*)((char*)t+i); k+=i; l-=i; } return k; } // safe fread(t,1,l,f)
 int fwrite1(void *t,int l,FILE *f) { int k=0,i; while (l&&(i=fwrite(t,1,l,f))) { t=(void*)((char*)t+i); k+=i; l-=i; } return k; } // safe fwrite(t,1,l,f)
 
+// configuration functions ------------------------------------------ //
+
+void session_detectpath(char *s) // detects session path using argv[0] as reference
+{
+	if (s=strrchr(strcpy(session_path,s),PATHCHAR))
+		s[1]=0; // keep separator
+	else
+		*session_path=0; // no path (?)
+}
+char *session_configfile(void) // returns path to configuration file
+{
+	return strcat(strcpy(session_parmtr,session_path),
+	#ifdef _WIN32
+	my_caption ".ini"
+	#else
+	"." my_caption "rc"
+	#endif
+	);
+}
+
 char *session_configread(char *t) // reads configuration file; s points to the parameter value, *s is ZERO if unhandleable
 {
 	unsigned char *s=t; while (*s) ++s; // go to trail
@@ -61,6 +81,8 @@ void session_configwrite(FILE *f) // save common parameters
 {
 	fprintf(f,"polyphony %i\nscanlines %i\nsoftaudio %i\nsoftvideo %i\nzoomvideo %i\nsafevideo %i\n",audio_channels,video_scanline,audio_filter,video_filter,session_intzoom,session_softblit);
 }
+
+// auxiliary functions ---------------------------------------------- //
 
 char *strrstr(char *h,char *n) // = strrchr + strstr
 {
@@ -888,8 +910,8 @@ char *puff_session_newfile(char *x,char *y,char *z) // writing within ZIP archiv
 
 // on-screen and debug text printing -------------------------------- //
 
-VIDEO_UNIT onscreen_ink0,onscreen_ink1;
-#define onscreen_inks(q0,q1) onscreen_ink0=q0,onscreen_ink1=q1
+#define onscreen_ink0 (VIDEO1(0xAA0000))
+#define onscreen_ink1 (VIDEO1(0x55FF55))
 
 #define ONSCREEN_XY if ((x*=8)<0) x+=VIDEO_OFFSET_X+VIDEO_PIXELS_X; else x+=VIDEO_OFFSET_X; \
 	if ((y*=onscreen_size)<0) y+=VIDEO_OFFSET_Y+VIDEO_PIXELS_Y; else y+=VIDEO_OFFSET_Y; \

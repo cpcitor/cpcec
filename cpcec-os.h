@@ -14,6 +14,7 @@
 // To compile the emulator for Windows 5.0+, the default platform,
 // "$(CC) -xc cpcec.c -luser32 -lgdi32 -lcomdlg32 -lshell32 -lwinmm"
 // or the equivalent options as defined by your preferred compiler.
+// Optional DirectDraw support is enabled by appending "-DDDRAW -lddraw"
 // Tested compilers: GCC 4.9.2, GCC 5.1.0, TCC 0.9.27, Pelles C 4.50.113
 
 #define INLINE // 'inline': useless in TCC and GCC4, harmful in GCC5!
@@ -891,21 +892,7 @@ INLINE void session_byebye(void) // delete video+audio devices
 	ReleaseDC(session_hwnd,session_dc1);
 }
 
-// auxiliary functions ---------------------------------------------- //
-
-void session_detectpath(char *s) // detects session path
-{
-	char *t; if ((t=strrchr(strcpy(session_path,s),'\\'))||(t=strrchr(strcpy(session_path,s),':')))
-		t[1]=0; // keep separator
-	else
-		*session_path=0; // no path
-}
-char *session_configfile(void) // returns path to configuration file
-{
-	return strcat(strcpy(session_parmtr,session_path),my_caption ".ini");
-}
-
-void session_writebitmap(FILE *f) // write current bitmap into a BMP file
+void session_writebitmap(FILE *f) // write current OS-dependent bitmap into a BMP file
 {
 	static BYTE r[VIDEO_PIXELS_X*3];
 	for (int i=VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-1;i>=VIDEO_OFFSET_Y;--i)

@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20201212"//"2355"
+#define MY_VERSION "20201215"//"2155"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -218,7 +218,7 @@ int z80_turbo=0,z80_multi=1; // overclocking options
 
 BYTE ula_v1,ula_v2,ula_v3; // 48k, 128k and PLUS3 respectively
 BYTE disc_disabled=0,psg_disabled=0,ula_v1_issue=1,ula_v1_cache=0; // auxiliar ULA variables
-BYTE *ula_screen,*ula_bitmap,*ula_attrib; // VRAM pointers
+BYTE *ula_screen; int ula_bitmap,ula_attrib; // VRAM pointers
 
 BYTE ula_clash[4][1<<16],*ula_clash_mreq[5],*ula_clash_iorq[5]; // the fifth entry stands for constant clashing
 int ula_clash_z; // 16-bit cursor that follows the ULA clash map
@@ -324,7 +324,7 @@ void ula_reset(void) // reset the ULA
 	ula_v1=ula_v2=ula_v3=0;
 	video_clut_update();
 	mmu_update();
-	ula_attrib=&(ula_bitmap=ula_screen)[0x1800];
+	ula_bitmap=0; ula_attrib=0x1800;
 	ula_clash_delta=type_id<3?!type_id?4:3:2;
 	// lowest valid ULA deltas for V1, V2 and V3
 	// Black Lamp (48K)	4	*	*
@@ -384,49 +384,56 @@ int ula_clash_alpha=0;
 
 INLINE void video_main(int t) // render video output for `t` clock ticks; t is always nonzero!
 {
-	BYTE b,a=ula_temp;
+	int b,a;
 	static int r=0; r+=t;
-	while (r>=0)
+	do
 	{
-		r-=4;
 		if (irq_delay&&(irq_delay-=4)<=0)
 			z80_irq=irq_delay=0; // IRQs are lost after few microseconds
 		if (!ula_clash_alpha++)
-			MEMLOAD(ula_clash_attrib,ula_attrib);//,MEMLOAD(ula_clash_bitmap,ula_bitmap); // half kludge, half cache: freeze the VRAM before "racing the beam" is over
-		int q;
-		if (q=(ula_pos_y>=0&&ula_pos_y<192&&ula_pos_x>=0&&ula_pos_x<32))
-			a=ula_clash_attrib[ula_pos_x],b=ula_bitmap[ula_pos_x];//b=ula_clash_bitmap[ula_pos_x];
+			MEMLOAD(ula_clash_attrib,&ula_screen[ula_attrib]); // half kludge, half cache: freeze the VRAM attributes before "racing the beam" is over
+		if (ula_pos_y>=0&&ula_pos_y<192&&ula_pos_x>=0&&ula_pos_x<32)
+			a=ula_clash_attrib[ula_pos_x]; // even if we don't draw the bitmap because of frameskip, we still need to drop the attribute on the bus
 		else
-			a=0xFF; // border!
+			a=-1; // border!
 		if (!video_framecount&&(video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y)&&(video_pos_x>VIDEO_OFFSET_X-16&&video_pos_x<VIDEO_OFFSET_X+VIDEO_PIXELS_X))
 		{
 			#define VIDEO_NEXT *video_target++ // "VIDEO_NEXT = VIDEO_NEXT = ..." generates invalid code on VS13 and slower code on TCC
-			if (q)
-			{
-				if ((ula_snow_z+=ula_snow_a)&256)
-				{
-					static BYTE z=0;
-					b+=z+=16+1; ula_snow_z-=256-1;
-				}
-				{
-					if ((a&128)&&(ula_flash&16))
-						b=~b;
-					VIDEO_UNIT p, v1=video_clut[(a&7)+((a&64)>>3)],v0=video_clut[(a&120)>>3];
-					p=b&128?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
-					p=b&64?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
-					p=b&32?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
-					p=b&16?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
-					p=b&8?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
-					p=b&4?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
-					p=b&2?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
-					p=b&1?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
-				}
-			}
-			else // BORDER
+			if (a<0) // BORDER
 			{
 				VIDEO_UNIT p=video_clut[16];
 				VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
 				VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
+			}
+			else // BITMAP
+			{
+				if ((ula_snow_z+=ula_snow_a)>=0) // snow?
+				{
+					#define ULA_SNOW_STEP_8BIT 31
+					static int pseudorandom=1;
+					pseudorandom=(pseudorandom&1)?(pseudorandom>>1)+184:(pseudorandom>>1);
+					ula_snow_z-=pseudorandom;
+					if (ula_snow_z&3)
+						b=ula_screen[ula_bitmap^1]; // horizontal glitch
+					else
+						b=ula_snow_z; // random value
+				}
+				else
+				{
+					b=ula_screen[ula_bitmap];
+					if ((a&128)&&(ula_flash&16)) // flash
+						b=~b;
+				}
+				++ula_bitmap;
+				VIDEO_UNIT p, v1=video_clut[(a&7)+((a&64)>>3)],v0=video_clut[(a&120)>>3];
+				p=b&128?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
+				p=b&64?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
+				p=b&32?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
+				p=b&16?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
+				p=b&8?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
+				p=b&4?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
+				p=b&2?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
+				p=b&1?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
 			}
 		}
 		else
@@ -443,8 +450,8 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 			if (++ula_pos_y>=0&&ula_pos_y<192)
 			{
 				ula_clash_alpha=ula_pos_x+ula_clash_delta;
-				ula_bitmap=&ula_screen[((ula_pos_y>>6)<<11)+((ula_pos_y<<2)&224)+((ula_pos_y&7)<<8)];
-				ula_attrib=&ula_screen[0x1800+((ula_pos_y>>3)<<5)];
+				ula_bitmap=((ula_pos_y>>6)<<11)+((ula_pos_y<<2)&224)+((ula_pos_y&7)<<8);
+				ula_attrib=0x1800+((ula_pos_y>>3)<<5);
 			}
 			// for lack of a more precise timer, the scanline is used to refresh the ULA's unstable input bit 6 when there's no tape inside:
 			// - Issue 2 systems (the first batch of 48K) make the bit depend on ULA output bits 3 and 4
@@ -458,13 +465,14 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 		{
 			if (!video_framecount) video_endscanlines(video_table[video_type][0]);
 			video_newscanlines(video_pos_x,(312-ula_limit_y)*2); // 128K screen is one line shorter, but begins one line later than 48K
-			ula_attrib=&(ula_bitmap=ula_screen)[0x1800];
+			ula_bitmap=0; ula_attrib=0x1800;
 			++ula_flash;
 			ula_count_y=0,ula_pos_y=248-ula_limit_y; // lines of BORDER before the top byte
 			z80_irq=1; irq_delay=(type_id?33:32); // 128K/+3 VS 48K "early"
 			++video_pos_z; session_signal|=SESSION_SIGNAL_FRAME; // end of frame!
 		}
 	}
+	while ((r-=4)>=0);
 	ula_temp=a; // ditto! required for "Cobra" and "Arkanoid"!
 }
 
@@ -888,7 +896,7 @@ int z80_debug_hard1(char *t,int q,BYTE i)
 void z80_debug_hard(int q,int x,int y)
 {
 	char s[16*20],*t;
-	t=s+sprintf(s,"ULA:                ""    %04X:%02X %02X",(WORD)(ula_bitmap-mem_ram),(BYTE)ula_temp,ula_v1);
+	t=s+sprintf(s,"ULA:                ""    %04X:%02X %02X",(WORD)(ula_bitmap+0x4000),(BYTE)ula_temp,ula_v1);
 	t+=z80_debug_hard1(t,type_id,ula_v2);
 	t+=z80_debug_hard1(t,type_id==3,ula_v3);
 	#define Z80_DEBUG_HARD_ULA_CLASH(x) (ula_clash_mreq[x]!=ula_clash[0]?'*':'-')
@@ -1321,8 +1329,12 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 		{
 			SNAP_LOAD_Z80W(0,z80_pc);
 			ula_v2_send(header[2]); // set 128k mode
-			if (!(header[2]&32)&&header[3]&&header[3]!=4&&type_id<3&&snap_extended)
-				type_id=3,bios_reload(),ula_v3_send(header[3]); // this is unreliable! most emulators don't handle Plus3!
+			if (!(header[2]&32)&&header[3]&&header[3]!=4) // possible Plus3 snapshot?
+			{
+				if (type_id<3)//&&snap_extended
+					type_id=3,bios_reload();
+				ula_v3_send(header[3]); // this is unreliable! most emulators don't handle Plus3!
+			}
 			MEMNCPY(&mem_ram[(ula_v2&7)<<14],&mem_ram[0x00000],1<<14); // move bank 0 to active bank
 			for (i=0;i<8;++i)
 				if (i!=5&&i!=2&&i!=(ula_v2&7))
@@ -1448,8 +1460,8 @@ char session_menudata[]=
 	"0x8510 Disc controller\n"
 	"0x8590 Strict disc writes\n"
 	"0x8511 Memory contention\n"
-	"0x8512 ULA 48K video noise\n"
-	"0x8513 ULA 48K Issue 2\n"
+	"0x8512 ULA video noise\n"
+	"0x8513 Issue-2 48K ULA\n"
 	"0x851F Strict SNA files\n"
 	"Video\n"
 	"0x8A00 Full screen\tAlt+Return\n"
@@ -1611,7 +1623,7 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 				"F12\tSave screenshot" MESSAGEBOX_WIDETAB
 				"^F12\tRecord wavefile" // "\t"
 				"\n"
-				"\t-\t" MESSAGEBOX_WIDETAB
+				"\t(shift: record film)\t"
 				"\t(shift: ..YM file)" // "\t"
 				"\n"
 				"\n"
@@ -2080,7 +2092,7 @@ int main(int argc,char *argv[])
 	session_kbdsetup(kbd_map_xlt,length(kbd_map_xlt)/2);
 	video_target=&video_frame[video_pos_y*VIDEO_LENGTH_X+video_pos_y]; audio_target=audio_frame;
 	audio_disabled=!session_audio;
-	video_clut_update(); onscreen_inks(VIDEO1(0xAA0000),VIDEO1(0x55FF55));
+	video_clut_update();
 	if (session_fullscreen) session_togglefullscreen();
 	// it begins, "alea jacta est!"
 	while (!session_listen())
@@ -2094,7 +2106,7 @@ int main(int argc,char *argv[])
 				z80_multi*( // clump Z80 instructions together to gain speed...
 				tape_fastskip?ula_limit_x*4: // tape loading ignores most events and heavy clumping is feasible, although some sync is still needed
 					irq_delay?irq_delay:(ula_pos_y<-1?(-ula_pos_y-1)*ula_limit_x*4:ula_pos_y<192?(ula_limit_x-ula_pos_x+ula_clash_delta)*4:
-					ula_count_y<ula_limit_y-1?(ula_limit_y-ula_count_y-1)*ula_limit_x*4:0 // the safest way to handle the fastest interrupt countdown possible (ULA SYNC)
+					ula_count_y<ula_limit_y-1?(ula_limit_y-ula_count_y-1)*ula_limit_x*4:1 // the safest way to handle the fastest interrupt countdown possible (ULA SYNC)
 				)<<(session_fast>>1)) // ...without missing any IRQ and ULA deadlines!
 			);
 		if (session_signal&SESSION_SIGNAL_FRAME) // end of frame?
@@ -2139,7 +2151,7 @@ int main(int argc,char *argv[])
 				audio_main(TICKS_PER_FRAME); // fill sound buffer to the brim!
 			audio_queue=0; // wipe audio queue and force a reset
 			psg_writelog(); session_writefilm();
-			ula_snow_a=(!(type_id|ula_snow_disabled)&&z80_ir.b.h>=0x40&&z80_ir.b.h<0x80)?27:0; // 48K only
+			ula_snow_a=(!ula_snow_disabled&&z80_ir.b.h>=0x40&&z80_ir.b.h<0x80)?ULA_SNOW_STEP_8BIT:0; // all models
 			ula_clash_z=(ula_clash_z&3)+(ula_count_y*ula_limit_x+ula_pos_x)*4;
 			if (tape_type<0&&tape&&!z80_iff.b.l) // tape is recording?
 				tape_enabled|=4;

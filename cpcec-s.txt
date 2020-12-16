@@ -847,3 +847,7 @@ Corrección en Spectrum: los puertos fantasma en 128K ahora están bien emulados
 por fin la demo "Tiratok" toca música. Nuevo comando de debugger "Y": llenar
 memoria con byte. XRF enumera los codecs disponibles al arrancarlo sin
 parámetros.
+- 20201215 -- parche menor que corrige la carga de snapshots de Spectrum Plus3 y
+extiende el comportamiento de la "nieve" de la ULA ("Vectron") y su ámbito
+("Narco Police", "Robocop 3"). El UI de SDL2 coloca unos puntos suspensivos al
+final de los nombres de fichero demasiado largos para caber en los diálogos.

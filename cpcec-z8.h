@@ -4153,11 +4153,11 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 			z80_main(1),z80_debug_reset(); break;
 		case KBDBG_SPC_S: // SHIFT+SPACE: STEP INTO (scanline)
 			session_signal&=~SESSION_SIGNAL_DEBUG;
-			k=video_pos_y; do z80_main(1); while (k==video_pos_y); // slow
+			k=video_pos_y; do z80_main(z80_multi); while (k==video_pos_y); // slow
 			session_signal|=SESSION_SIGNAL_DEBUG,z80_debug_reset(); break;
 		case KBDBG_RET_S: // SHIFT+RETURN: STEP INTO (frame)
 			session_signal&=~SESSION_SIGNAL_DEBUG;
-			k=video_pos_z; do z80_main(1); while (k==video_pos_z); // slow
+			k=video_pos_z; do z80_main(z80_multi); while (k==video_pos_z); // slow
 			session_signal|=SESSION_SIGNAL_DEBUG,z80_debug_reset(); break;
 		case KBDBG_TAB_S: // SHIFT+TAB
 			if (z80_debug_grfx)

@@ -53,7 +53,7 @@ following commands:
 	windres zxsec.rc -Ocoff -ozxsec.res
 	gcc -m32 -mwindows zxsec.res -O2 -xc zxsec.c -luser32 -lgdi32 -lwinmm
 -lcomdlg32 -lshell32 -ozxsec.exe
-	
+
 Optional DirectDraw support can be achieved by appending `-DDDRAW -lddraw` to
 the `gcc ...` commands.
 
@@ -599,10 +599,10 @@ PUFF.C from the ZLIB project, upgraded GCC to 5.1.0 and removed all `inline`
 tags (they did more harm than good), and generally reworked all internals to
 make them OS-independent. Several details improved as well: the file selector
 fixes a bug in Win10 (and in some cases in Win7), "browse tape" dialog shows the
-file name, Spectrum +3 automatically becomes +2A to load tapes, `auto rewind`
-shows up in Edit menu and fixes bugs in CSW files, and sound emulation has
-improved, for example "Terminus" on CPC plays sound and "Agent X II" on Spectrum
-is no longer noisy.
+file name, Spectrum Plus3 automatically becomes Plus2A to load tapes, `auto
+rewind` shows up in Edit menu and fixes bugs in CSW files, and sound emulation
+has improved, for example "Terminus" on CPC plays sound and "Agent X II" on
+Spectrum is no longer noisy.
 - 20190809 -- minor patch restoring the "silent" discarding (i.e. without error
 codes) of write operations in read-only discs and allowing the automatic booting
 of IBM-formatted discs.
@@ -667,8 +667,8 @@ extended colours, soft scrolling, hardware sprites, programmable raster
 interruptions, DMA channels, ROM cartridges, etc. Added fifty more tape schemes
 to speed up the reading of bytes and even whole blocks. Improvements in the disc
 drive emulation: new discs (by default the DATA format shared by CPC and
-Spectrum +3) can be created on the fly, emulation of protected games from Design
-Design ("2112 AD"), The Edge ("Palitron"), Titus ("Prehistorik" and
+Spectrum Plus3) can be created on the fly, emulation of protected games from
+Design Design ("2112 AD"), The Edge ("Palitron"), Titus ("Prehistorik" and
 "Moktar/Titus the Fox"), bugfixes (READ ID: "5KB Demo 3", "Daley Thompson's
 Olympic Challenge" and "Turbo Copy III"; FORMAT TRACK converts old-style MV -
 CPC discs into new-style EXTENDED ones, and cleans up useless data at the end of
@@ -799,3 +799,7 @@ missing or performs worse than pure software. CPC bugfix: PSG handles register
 are properly emulated, the demo "Tiratok" plays music at last. New debug command
 "Y": fill memory with byte. XRF lists the available codecs on Windows when
 launched without parameters.
+- 20201215 -- minor patch fixing snapshot loading on Spectrum Plus3 and
+extending the ULA's "snow" behavior ("Vectron") and scope ("Narco Police",
+"Robocop 3"). The SDL2 UI appends an ellipsis to filenames that are too long to
+fit within the dialogs.

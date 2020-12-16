@@ -344,6 +344,32 @@ void session_togglefullscreen(void)
 
 #define SESSION_UI_HEIGHT 14
 
+/*BYTE session_ui_chrs[96*onscreen_size],session_ui_chr_size[96];
+void session_ui_makechrs(void)
+{
+	for (int i=0;i<96;++i)
+	{
+		int bits=0;
+		for (int j=0;j<onscreen_size;++j)
+			bits|=onscreen_chrs[i*onscreen_size+j];
+		if (bits)
+		{
+			int k=0,l=8+2; // extra space after char
+			while (bits<128)
+				++k,bits<<=1;
+			while (!(bits&1))
+				--l,bits>>=1;
+			session_ui_chr_size[i]=l;
+			for (int j=0;j<onscreen_size;++j)
+			{
+				l=onscreen_chrs[i*onscreen_size+j]<<k;
+				session_ui_chrs[i*onscreen_size+j]=l|(l>>1); // normal, not thin or bold
+			}
+		}
+	}
+	session_ui_chr_size[0]=session_ui_chr_size[1]; // space is as wide as "!"
+}*/
+
 BYTE session_ui_menudata[1<<12],session_ui_menusize; // encoded menu data
 #ifdef _WIN32
 int session_ui_drives=0; char session_ui_drive[]="::\\";
@@ -379,7 +405,8 @@ void session_ui_drawframes(int x,int y,int w,int h)
 }
 int session_ui_printglyph(VIDEO_UNIT *p,BYTE z)
 {
-	BYTE const *r=&onscreen_chrs[((z-32)&127)*onscreen_size];
+	//BYTE const *r=&session_ui_chrs[((z-32)&127)*onscreen_size],w=session_ui_chr_size[(z-32)&127];
+	BYTE const *r=&onscreen_chrs[((z-32)&127)*onscreen_size]; const int w=8;
 	VIDEO_UNIT q0,q1;
 	if (z&128)
 		q0=VIDEO1(0),q1=VIDEO1(0x00FFFFFF);
@@ -388,24 +415,24 @@ int session_ui_printglyph(VIDEO_UNIT *p,BYTE z)
 	BYTE yy=0;
 	while (yy<(SESSION_UI_HEIGHT-onscreen_size)/2)
 	{
-		for (int xx=0;xx<8;++xx)
+		for (int xx=0;xx<w;++xx)
 			*p++=q0;
-		++yy; p+=VIDEO_PIXELS_X-8;
+		++yy; p+=VIDEO_PIXELS_X-w;
 	}
 	while (yy<(SESSION_UI_HEIGHT-onscreen_size)/2+onscreen_size)
 	{
 		BYTE rr=*r++; rr|=rr>>1; // normal, not thin or bold
-		for (int xx=0;xx<8;++xx)
+		for (int xx=0;xx<w;++xx)
 			*p++=(rr&(128>>xx))?q1:q0;
-		++yy; p+=VIDEO_PIXELS_X-8;
+		++yy; p+=VIDEO_PIXELS_X-w;
 	}
 	while (yy<SESSION_UI_HEIGHT)
 	{
-		for (int xx=0;xx<8;++xx)
+		for (int xx=0;xx<w;++xx)
 			*p++=q0;
-		++yy; p+=VIDEO_PIXELS_X-8;
+		++yy; p+=VIDEO_PIXELS_X-w;
 	}
-	return 8; // pixel width
+	return w; // pixel width
 }
 int session_ui_printasciz(char *s,int x,int y,int prae,int w,int post,int q)
 {
@@ -415,7 +442,7 @@ int session_ui_printasciz(char *s,int x,int y,int prae,int w,int post,int q)
 	while (prae-->0)
 		t+=session_ui_printglyph(t,' '+q);
 	int i=w-strlen(s);
-	if (i>0)
+	if (i>=0)
 	{
 		post+=i;
 		while (i=*s++)
@@ -423,8 +450,11 @@ int session_ui_printasciz(char *s,int x,int y,int prae,int w,int post,int q)
 	}
 	else
 	{
+		w-=2; // ellipsis, see below
 		while (w-->0)
 			t+=session_ui_printglyph(t,(*s++)+q);
+		t+=session_ui_printglyph(t,127+q); // ellipsis,
+		t+=session_ui_printglyph(t,'.'+q); // see above
 	}
 	while (post-->0)
 		t+=session_ui_printglyph(t,' '+q);
@@ -884,7 +914,10 @@ int session_ui_list(int item,char *s,char *t,void x(void),int q) // see session_
 		listw=VIDEO_PIXELS_X/8-4;
 	listh=items+1<VIDEO_PIXELS_Y/SESSION_UI_HEIGHT-2?items+1:VIDEO_PIXELS_Y/SESSION_UI_HEIGHT-2;
 	int listx=((VIDEO_PIXELS_X/8)-listw-2)/2,listy=((VIDEO_PIXELS_Y/SESSION_UI_HEIGHT)-listh)/2;
-
+	if (items>=listh) // list is long enough?
+		if (item>=listh/2) // go to center?
+			if ((listz=item-listh/2+1)>items-listh) // too deep?
+				listz=items-listh+1;
 	int done=0;
 	while (!done)
 	{
@@ -1280,6 +1313,7 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	session_ui_icon=SDL_CreateRGBSurfaceFrom(session_icon32xx16,32,32,16,32*2,0xF00,0xF0,0xF,0xF000); // ARGB4444
 	SDL_SetWindowIcon(session_hwnd,session_ui_icon); // SDL already handles WIN32 icons alone!
 	#endif
+	//session_ui_makechrs();
 
 	// translate menu data into custom format
 	BYTE *t=session_ui_menudata; session_ui_menusize=0;
@@ -1584,27 +1618,7 @@ INLINE void session_byebye(void) // delete video+audio devices
 	SDL_Quit();
 }
 
-// auxiliary functions ---------------------------------------------- //
-
-void session_detectpath(char *s) // detects session path
-{
-	if (s=strrchr(strcpy(session_path,s),PATHCHAR))
-		s[1]=0; // keep separator
-	else
-		*session_path=0; // no path
-}
-char *session_configfile(void) // returns path to configuration file
-{
-	return strcat(strcpy(session_parmtr,session_path),
-	#ifdef _WIN32
-	my_caption ".ini"
-	#else
-	"." my_caption "rc"
-	#endif
-	);
-}
-
-void session_writebitmap(FILE *f) // write current bitmap into a BMP file
+void session_writebitmap(FILE *f) // write current OS-dependent bitmap into a BMP file
 {
 	static BYTE r[VIDEO_PIXELS_X*3];
 	for (int i=VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-1;i>=VIDEO_OFFSET_Y;--i)

@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20201212"//"2355"
+#define MY_VERSION "20201215"//"2155"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -806,7 +806,6 @@ void video_main_borders(void)
 void video_main(int t) // render video output for `t` clock ticks; t is always nonzero!
 {
 	do {
-
 		#if 0 // faster on my desktop computer, fewer variables
 		#define CRTC_STATUS_SET(x) (~crtc_before&crtc_status&x)
 		//#define CRTC_STATUS_RES(x) (~crtc_status&crtc_before&x)
@@ -1250,7 +1249,6 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 			else
 				video_pos_x=inertia=0;
 		}
-
 	} while (--t);
 	if (plus_sprite_target) if (video_pos_x>plus_sprite_latest) video_main_sprites();
 }
@@ -3418,8 +3416,8 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 				"^F5\tReset emulation" // "\t"
 				"\n"
 				#ifdef Z80_CPC_DANDANATOR
-				/*"\t(shift: insert Dandanator..)\t"
-				"\t(shift: remove Dandanator)" // "\t"
+				/*"\t(shift: insert Dntr...)" MESSAGEBOX_WIDETAB
+				"(shift: remove Dntr.)" // "\t"
 				"\n"*/
 				#endif
 				"F6\tToggle realtime" MESSAGEBOX_WIDETAB
@@ -3454,7 +3452,7 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 				"F12\tSave screenshot" MESSAGEBOX_WIDETAB
 				"^F12\tRecord wavefile" // "\t"
 				"\n"
-				"\t-\t" MESSAGEBOX_WIDETAB
+				"\t(shift: record film)\t"
 				"\t(shift: ..YM file)" // "\t"
 				"\n"
 				"\n"
@@ -3963,7 +3961,7 @@ int main(int argc,char *argv[])
 	session_kbdsetup(kbd_map_xlt,length(kbd_map_xlt)/2);
 	video_target=&video_frame[video_pos_y*VIDEO_LENGTH_X+video_pos_y]; audio_target=audio_frame;
 	audio_disabled=!session_audio;
-	video_clut_update(); onscreen_inks(VIDEO1(0xAA0000),VIDEO1(0x55FF55));
+	video_clut_update();
 	if (session_fullscreen) session_togglefullscreen();
 	// it begins, "alea jacta est!"
 	while (!session_listen())
@@ -3976,7 +3974,7 @@ int main(int argc,char *argv[])
 			z80_main(
 				z80_multi*( // clump Z80 instructions together to gain speed...
 				tape_fastskip?VIDEO_LENGTH_X/16:( // tape loading ignores most events and heavy clumping is feasible, although some sync is still needed
-					video_pos_x<video_threshold?0:(VIDEO_LENGTH_X-1-video_pos_x)/16//(VIDEO_LENGTH_X+15-video_pos_x)/40) // all IRQ events happen early in each scanline!
+					video_pos_x<video_threshold?1:(VIDEO_LENGTH_X-1-video_pos_x)/16//(VIDEO_LENGTH_X+15-video_pos_x)/40) // all IRQ events happen early in each scanline!
 				)<<(session_fast>>1)) // ...without missing any IRQ and CRTC deadlines! (or particular VRAM updates, as in "CHAPELLE SIXTEEN")
 			);
 		if (session_signal&SESSION_SIGNAL_FRAME) // end of frame?
