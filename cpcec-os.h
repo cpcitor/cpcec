@@ -15,19 +15,21 @@
 // "$(CC) -xc cpcec.c -luser32 -lgdi32 -lcomdlg32 -lshell32 -lwinmm"
 // or the equivalent options as defined by your preferred compiler.
 // Optional DirectDraw support is enabled by appending "-DDDRAW -lddraw"
-// Tested compilers: GCC 4.9.2, GCC 5.1.0, TCC 0.9.27, Pelles C 4.50.113
+// Succesfully tested compilers: GCC 4.6.3 (-std=gnu99), 4.9.2, 5.1.0,
+// 8.3.0 ; TCC 0.9.27; CLANG 3.7.1, 7.0.1 ; Pelles C 4.50.113 ...
 
-#define INLINE // 'inline': useless in TCC and GCC4, harmful in GCC5!
+char session_caption[]=MY_CAPTION " " MY_VERSION;
+unsigned char session_scratch[1<<18]; // at least 256k!
+
+#define INLINE // 'inline' is useless in TCC and GCC4, and harmful in GCC5!
 INLINE int ucase(int i) { return i>='a'&&i<='z'?i-32:i; }
 INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
+#define length(x) (sizeof(x)/sizeof(*(x)))
 
-unsigned char session_scratch[1<<18]; // at least 256k!
 #define AUDIO_N_FRAMES 8 // safe on Windows and other systems
 
 #include "cpcec-a7.h" //unsigned char *onscreen_chrs;
-#define onscreen_size (sizeof(onscreen_chrs)/96)
-
-char caption_version[]=MY_CAPTION " " MY_VERSION;
+#define ONSCREEN_SIZE (sizeof(onscreen_chrs)/96)
 
 #ifndef SDL2
 #if defined(SDL_MAIN_HANDLED)||!defined(_WIN32)
@@ -36,10 +38,16 @@ char caption_version[]=MY_CAPTION " " MY_VERSION;
 #endif
 
 #ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN 1 // low dependencies
+#define WIN32_LEAN_AND_MEAN 1 // reduce dependencies
 #endif
 
-#ifdef SDL2
+#ifdef DEBUG
+#define logprintf(...) (fprintf(stdout,__VA_ARGS__))
+#else
+#define logprintf(...) 0
+#endif
+
+#ifdef SDL2 // SDL2 is mandatory outside Win32 and optional inside Win32
 
 #include "cpcec-ox.h"
 
@@ -50,19 +58,13 @@ char caption_version[]=MY_CAPTION " " MY_VERSION;
 #include <mmsystem.h> // WINMM.DLL: waveOutWrite()...
 #include <shellapi.h> // SHELL32.DLL: DragQueryFile()...
 
-#define STRMAX 256 // widespread in Windows
+#define STRMAX 288 // widespread in Windows
 #define PATHCHAR '\\' // '/' in POSIX
 #define strcasecmp _stricmp
 #define fsetsize(f,l) _chsize(_fileno(f),(l))
 #include <io.h> // _chsize(),_fileno()...
 
-#ifdef CONSOLE_DEBUGGER
-#define logprintf(...) (fprintf(stdout,__VA_ARGS__))
-#else
-#define logprintf(...) 0
-#endif
-
-#define MESSAGEBOX_WIDETAB "\t"
+#define MESSAGEBOX_WIDETAB "\t" // expect proportional font
 
 // general engine constants and variables --------------------------- //
 
@@ -87,16 +89,16 @@ char caption_version[]=MY_CAPTION " " MY_VERSION;
 	#define AUDIO_ZERO 0
 	#define AUDIO1(x) (x)
 #endif // bitsize
-#define AUDIO_STEREO 1
+#define AUDIO_CHANNELS 2 // 1 mono, 2 stereo
 
 VIDEO_UNIT *video_frame; // video frame, allocated on runtime
-AUDIO_UNIT *audio_frame,audio_buffer[AUDIO_LENGTH_Z*(AUDIO_STEREO+1)],audio_memory[AUDIO_N_FRAMES*AUDIO_LENGTH_Z*(AUDIO_STEREO+1)]; // audio frame, cycles during playback
+AUDIO_UNIT *audio_frame,audio_buffer[AUDIO_LENGTH_Z*AUDIO_CHANNELS],audio_memory[AUDIO_N_FRAMES*AUDIO_LENGTH_Z*AUDIO_CHANNELS]; // audio frame, cycles during playback
 VIDEO_UNIT *video_target; // pointer to current video pixel
 AUDIO_UNIT *audio_target; // pointer to current audio sample
 int video_pos_x,video_pos_y,audio_pos_z; // counters to keep pointers within range
 BYTE video_interlaced=0,video_interlaces=0,video_interlacez=0; // video scanline status
 char video_framelimit=0,video_framecount=0; // video frameskip counters; must be signed!
-BYTE audio_disabled=0,audio_channels=1,audio_session=0; // audio status and counter
+BYTE audio_disabled=0,audio_session=0; // audio status and counter
 unsigned char session_path[STRMAX],session_parmtr[STRMAX],session_tmpstr[STRMAX],session_substr[STRMAX],session_info[STRMAX]="";
 
 int session_timer,session_event=0; // timing synchronisation and user command
@@ -109,29 +111,24 @@ BYTE session_intzoom=0,session_recording=0;
 FILE *session_wavefile=NULL; // audio recording is done on each session update
 
 RECT session_ideal; // ideal rectangle where the window fits perfectly
-JOYINFO session_ji; // joystick buffer
+JOYINFOEX session_joy; // joystick buffer
 HWND session_hwnd; // window handle
 HMENU session_menu=NULL; // menu handle
 HDC session_dc1,session_dc2=NULL; HGDIOBJ session_dib=NULL; // video structs
 HWAVEOUT session_wo; WAVEHDR session_wh; MMTIME session_mmtime; // audio structs
 
-#ifdef DDRAW
-	//#define DIRECTDRAW_VERSION 0x0700
-	#include <ddraw.h>
+VIDEO_UNIT *debug_frame;
+BYTE debug_buffer[DEBUG_LENGTH_X*DEBUG_LENGTH_Y]; // [0] can be a valid character, 128 (new redraw required) or 0 (redraw not required)
+HGDIOBJ session_dbg=NULL;
 
+#ifdef DDRAW
+	#include <ddraw.h>
 	LPDIRECTDRAW lpdd=NULL;
 	LPDIRECTDRAWCLIPPER lpddclip=NULL;
 	LPDIRECTDRAWSURFACE lpddfore=NULL,lpddback=NULL;
 	DDSURFACEDESC ddsd;
-#endif
 
-#ifndef CONSOLE_DEBUGGER
-	VIDEO_UNIT *debug_frame;
-	BYTE debug_buffer[DEBUG_LENGTH_X*DEBUG_LENGTH_Y]; // [0] can be a valid character, 128 (new redraw required) or 0 (redraw not required)
-	HGDIOBJ session_dbg=NULL;
-	#ifdef DDRAW
-		LPDIRECTDRAWSURFACE lpdd_dbg=NULL;
-	#endif
+	LPDIRECTDRAWSURFACE lpdd_dbg=NULL;
 #endif
 
 BYTE session_paused=0,session_signal=0;
@@ -142,8 +139,10 @@ BYTE session_dirtymenu=1; // to force new status text
 
 #define kbd_bit_set(k) (kbd_bit[k/8]|=1<<(k%8))
 #define kbd_bit_res(k) (kbd_bit[k/8]&=~(1<<(k%8)))
-#define kbd_bit_tst(k) (kbd_bit[k/8]&(1<<(k%8)))
-BYTE kbd_bit[16]; // up to 128 keys in 16 rows of 8 bits
+#define joy_bit_set(k) (joy_bit[k/8]|=1<<(k%8))
+#define joy_bit_res(k) (joy_bit[k/8]&=~(1<<(k%8)))
+#define kbd_bit_tst(k) ((kbd_bit[k/8]|joy_bit[k/8])&(1<<(k%8)))
+BYTE kbd_bit[16],joy_bit[16]; // up to 128 keys in 16 rows of 8 bits
 
 // A modern keyboard as seen by Windows through WM_KEYDOWN and WK_KEYUP; extended keys are shown here with bit 7 on.
 // +----+   +-------------------+ +-------------------+ +-------------------+ +--------------+ *1 = trapped by Win32
@@ -182,7 +181,7 @@ BYTE kbd_bit[16]; // up to 128 keys in 16 rows of 8 bits
 #define	KBCODE_CAP_LOCK	0x3A
 #define	KBCODE_L_SHIFT	0x2A
 #define	KBCODE_L_CTRL	0x1D
-#define	KBCODE_L_ALT	0x38 // trapped by Win32
+//#define KBCODE_L_ALT	0x38 // trapped by Win32
 // alphanumeric row 1
 #define	KBCODE_1	0x02
 #define	KBCODE_2	0x03
@@ -241,9 +240,9 @@ BYTE kbd_bit[16]; // up to 128 keys in 16 rows of 8 bits
 #define	KBCODE_ENTER	0x1C
 #define	KBCODE_R_SHIFT	0x36
 #define	KBCODE_R_CTRL	0x9D
-#define	KBCODE_R_ALT	0xB8 // trapped by Win32
+//#define KBCODE_R_ALT	0xB8 // trapped by Win32
 // extended keys
-#define	KBCODE_PRINT	0x54 // trapped by Win32
+//#define KBCODE_PRINT	0x54 // trapped by Win32
 #define	KBCODE_SCR_LOCK	0x46
 #define	KBCODE_HOLD	0x45
 #define	KBCODE_INSERT	0xD2
@@ -283,11 +282,9 @@ unsigned char kbd_map[256]; // key-to-key translation map
 // general engine functions and procedures -------------------------- //
 
 int session_user(int k); // handle the user's commands; 0 OK, !0 ERROR. Must be defined later on!
-#ifndef CONSOLE_DEBUGGER
-	void session_debug_show(void);
-	int session_debug_user(int k); // debug logic is a bit different: 0 UNKNOWN COMMAND, !0 OK
-	int debug_xlat(int k); // translate debug keys into codes. Must be defined later on!
-#endif
+void session_debug_show(void);
+int session_debug_user(int k); // debug logic is a bit different: 0 UNKNOWN COMMAND, !0 OK
+int debug_xlat(int k); // translate debug keys into codes. Must be defined later on!
 INLINE void audio_playframe(int q,AUDIO_UNIT *ao); // handle the sound filtering; is defined in CPCEC-RT.H!
 
 void session_please(void) // stop activity for a short while
@@ -313,7 +310,7 @@ void session_kbdsetup(const unsigned char *s,char l) // maps a series of virtual
 int session_key_n_joy(int k) // handle some keys as joystick motions
 {
 	if (session_key2joy)
-		for (int i=0;i<sizeof(kbd_joy);++i)
+		for (int i=0;i<KBD_JOY_UNIQUE;++i)
 			if (kbd_k2j[i]==k)
 				return kbd_joy[i];
 	return kbd_map[k];
@@ -328,11 +325,9 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 		return;
 	}
 	int ox,oy;
-	#ifndef CONSOLE_DEBUGGER
-		if (session_signal&SESSION_SIGNAL_DEBUG)
-			ox=0,oy=0;
-		else
-	#endif
+	if (session_signal&SESSION_SIGNAL_DEBUG)
+		ox=0,oy=0;
+	else
 		ox=VIDEO_OFFSET_X,oy=VIDEO_OFFSET_Y;
 	RECT r; GetClientRect(hwnd,&r); int xx,yy; // calculate window area
 	if ((xx=(r.right-=r.left))>0&&(yy=(r.bottom-=r.top))>0) // divisions by zero happen on WM_PAINT during window resizing!
@@ -354,12 +349,7 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 		#ifdef DDRAW
 		if (lpddback)
 		{
-			#ifndef CONSOLE_DEBUGGER
 			LPDIRECTDRAWSURFACE l=(session_signal&SESSION_SIGNAL_DEBUG)?lpdd_dbg:lpddback;
-			#else
-			LPDIRECTDRAWSURFACE l=lpddback;
-			#endif
-
 			IDirectDrawSurface_Unlock(l,0);
 
 			int q=1; // don't redraw if something went wrong
@@ -367,10 +357,8 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 				q=0,IDirectDrawSurface_Restore(lpddfore);
 			if (IDirectDrawSurface_IsLost(lpddback))
 				q=0,IDirectDrawSurface_Restore(lpddback);
-			#ifndef CONSOLE_DEBUGGER
 			if (IDirectDrawSurface_IsLost(lpdd_dbg))
 				q=0,IDirectDrawSurface_Restore(lpdd_dbg);
-			#endif
 
 			if (q) // not sure if we can redraw even when !q ...
 			{
@@ -388,11 +376,9 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 
 			ddsd.dwSize=sizeof(ddsd);
 			IDirectDrawSurface_Lock(l,0,&ddsd,DDLOCK_SURFACEMEMORYPTR|DDLOCK_WAIT,0);
-			#ifndef CONSOLE_DEBUGGER
 			if (session_signal&SESSION_SIGNAL_DEBUG)
 				debug_frame=ddsd.lpSurface;
 			else
-			#endif
 			{
 				int dummy=video_target-video_frame; // the old cursor...
 				video_frame=ddsd.lpSurface;
@@ -402,11 +388,7 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 		else
 		#endif
 		{
-			#ifndef CONSOLE_DEBUGGER
 			if (session_oldselect=SelectObject(session_dc2,session_signal&SESSION_SIGNAL_DEBUG?session_dbg:session_dib))
-			#else
-			if (session_oldselect=SelectObject(session_dc2,session_dib))
-			#endif
 			{
 				if (session_hardblit=(xx<=VIDEO_PIXELS_X||yy<=VIDEO_PIXELS_Y)) // window area is a perfect fit?
 					BitBlt(h,x,y,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,session_dc2,ox,oy,SRCCOPY); // fast :-)
@@ -498,26 +480,20 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 				session_event=wparam&0xBFFF; // cfr infra: bit 7 means CONTROL KEY OFF
 			}
 			break;
-		#ifndef CONSOLE_DEBUGGER
 		case WM_CHAR:
 			if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant for the debugger, see below
 				session_event=wparam>32&&wparam<=255?wparam:0; // exclude SPACE and non-visible codes!
 			break;
-		#endif
 		case WM_KEYDOWN:
 			{
 				int vkc=GetKeyState(VK_CONTROL)<0;
 				session_shift=GetKeyState(VK_SHIFT)<0;
-				#ifndef CONSOLE_DEBUGGER
 				if (session_signal&SESSION_SIGNAL_DEBUG)
 					session_event=debug_xlat(((lparam>>16)&127)+((lparam>>17)&128));
-				#endif
 				int k=session_key_n_joy(((lparam>>16)&127)+((lparam>>17)&128));
 				if (k<128) // normal key
 				{
-					#ifndef CONSOLE_DEBUGGER
 					if (!(session_signal&SESSION_SIGNAL_DEBUG))
-					#endif
 						kbd_bit_set(k);
 				}
 				else if (!session_event) // special key
@@ -540,7 +516,7 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 		case WM_ENTERMENULOOP: // pause before showing the menus
 			session_please();
 		case WM_KILLFOCUS: // no 'break'!
-			memset(kbd_bit,0,sizeof(kbd_bit)); // loss of focus: no keys!
+			memset(kbd_bit,0,sizeof(kbd_bit)),memset(joy_bit,0,sizeof(joy_bit)); // loss of focus: no keys!
 		default: // no 'break'!
 			if (msg==WM_SYSKEYDOWN&&wparam==VK_RETURN) // ALT+RETURN toggles MAXIMIZE/RESTORE!
 				session_togglefullscreen();
@@ -606,20 +582,19 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	session_ideal.right-=session_ideal.left;
 	session_ideal.bottom-=session_ideal.top;
 	session_ideal.left=session_ideal.top=0; // ensure that the ideal area is defined as (0,0,WIDTH,HEIGHT)
-	if (!(session_hwnd=CreateWindow(wc.lpszClassName,caption_version,i,CW_USEDEFAULT,CW_USEDEFAULT,session_ideal.right,session_ideal.bottom,NULL,session_submenu?session_menu:NULL,wc.hInstance,NULL)))
+	if (!(session_hwnd=CreateWindow(wc.lpszClassName,session_caption,i,CW_USEDEFAULT,CW_USEDEFAULT,session_ideal.right,session_ideal.bottom,NULL,session_submenu?session_menu:NULL,wc.hInstance,NULL)))
 		return "cannot create window";
 	DragAcceptFiles(session_hwnd,1);
 
 	// hardware-able DirectDraw
-
+	#ifdef DDRAW
 	if (!session_softblit)
 	{
 		session_softblit=1; // fallback!
-		#ifdef DDRAW
 		if (DirectDrawCreate(NULL,&lpdd,NULL)>=0)
 		{
 			IDirectDraw_SetCooperativeLevel(lpdd,session_hwnd,DDSCL_NORMAL);
-			ZeroMemory(&ddsd,sizeof(ddsd));
+			//ZeroMemory(&ddsd,sizeof(ddsd));
 			ddsd.dwSize=sizeof(ddsd);
 			ddsd.dwFlags=DDSD_CAPS;
 			ddsd.ddsCaps.dwCaps=DDSCAPS_PRIMARYSURFACE;
@@ -634,26 +609,24 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 				IDirectDraw_CreateClipper(lpdd,0,&lpddclip,NULL);
 				IDirectDrawClipper_SetHWnd(lpddclip,0,session_hwnd);
 				IDirectDrawSurface_SetClipper(lpddfore,lpddclip);
-				#ifndef CONSOLE_DEBUGGER
-					ddsd.dwSize=sizeof(ddsd); ddsd.dwFlags=DDSD_CAPS|DDSD_WIDTH|DDSD_HEIGHT;
-					ddsd.dwWidth=VIDEO_PIXELS_X; ddsd.dwHeight=VIDEO_PIXELS_Y;
-					ddsd.ddsCaps.dwCaps=DDSCAPS_OFFSCREENPLAIN|DDSCAPS_SYSTEMMEMORY;//DDSCAPS_VIDEOMEMORY;//
-					IDirectDraw_CreateSurface(lpdd,&ddsd,&lpdd_dbg,NULL);
-					IDirectDrawSurface_Lock(lpdd_dbg,0,&ddsd,DDLOCK_SURFACEMEMORYPTR|DDLOCK_WAIT,0),debug_frame=ddsd.lpSurface;
-				#endif
 				ddsd.dwSize=sizeof(ddsd); ddsd.dwFlags=DDSD_CAPS|DDSD_WIDTH|DDSD_HEIGHT;
 				ddsd.dwWidth=VIDEO_LENGTH_X; ddsd.dwHeight=VIDEO_LENGTH_Y;
 				ddsd.ddsCaps.dwCaps=DDSCAPS_OFFSCREENPLAIN|DDSCAPS_SYSTEMMEMORY;//DDSCAPS_VIDEOMEMORY;//
 				IDirectDraw_CreateSurface(lpdd,&ddsd,&lpddback,NULL);
-				IDirectDrawSurface_Lock(lpddback,0,&ddsd,DDLOCK_SURFACEMEMORYPTR|DDLOCK_WAIT,0),video_frame=ddsd.lpSurface,session_softblit=0; // success
+				IDirectDrawSurface_Lock(lpddback,0,&ddsd,DDLOCK_SURFACEMEMORYPTR|DDLOCK_WAIT,0),video_frame=ddsd.lpSurface;
+				session_softblit=ddsd.lPitch!=4*VIDEO_LENGTH_X; // success (1/2)
+				ddsd.dwSize=sizeof(ddsd); ddsd.dwFlags=DDSD_CAPS|DDSD_WIDTH|DDSD_HEIGHT;
+				ddsd.dwWidth=VIDEO_PIXELS_X; ddsd.dwHeight=VIDEO_PIXELS_Y;
+				ddsd.ddsCaps.dwCaps=DDSCAPS_OFFSCREENPLAIN|DDSCAPS_SYSTEMMEMORY;//DDSCAPS_VIDEOMEMORY;//
+				IDirectDraw_CreateSurface(lpdd,&ddsd,&lpdd_dbg,NULL);
+				IDirectDrawSurface_Lock(lpdd_dbg,0,&ddsd,DDLOCK_SURFACEMEMORYPTR|DDLOCK_WAIT,0),debug_frame=ddsd.lpSurface;
+				//session_softblit|=ddsd.lPitch!=4*VIDEO_PIXELS_X; // success (2/2)
 			}
 		}
-		#endif
 	}
-
 	// software-only GDI bitmap
-
 	if (session_softblit)
+	#endif
 	{
 		BITMAPINFO bmi;
 		memset(&bmi,0,sizeof(bmi));
@@ -666,11 +639,9 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 		session_dc1=GetDC(session_hwnd); // caution: we assume that if CreateWindow() succeeds all other USER and GDI calls will succeed too
 		session_dc2=CreateCompatibleDC(session_dc1); // ditto
 		session_dib=CreateDIBSection(session_dc1,&bmi,DIB_RGB_COLORS,(void **)&video_frame,NULL,0); // ditto
-		#ifndef CONSOLE_DEBUGGER
-			bmi.bmiHeader.biWidth=VIDEO_PIXELS_X;
-			bmi.bmiHeader.biHeight=-VIDEO_PIXELS_Y;
-			session_dbg=CreateDIBSection(session_dc1,&bmi,DIB_RGB_COLORS,(void **)&debug_frame,NULL,0);
-		#endif
+		bmi.bmiHeader.biWidth=VIDEO_PIXELS_X;
+		bmi.bmiHeader.biHeight=-VIDEO_PIXELS_Y;
+		session_dbg=CreateDIBSection(session_dc1,&bmi,DIB_RGB_COLORS,(void **)&debug_frame,NULL,0);
 	}
 
 	// sound setup and cleanup
@@ -678,12 +649,16 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	ShowWindow(session_hwnd,SW_SHOWDEFAULT);
 	UpdateWindow(session_hwnd);
 	session_timer=GetTickCount();
+	session_joy.dwSize=sizeof(session_joy);
+	session_joy.dwFlags=JOY_RETURNALL;
 	if (session_stick)
 	{
-		int i=joyGetNumDevs(),j=0;
-		while (j<i&&joyGetPos(j,&session_ji)) // scan joysticks until we run out or one is OK
+		JOYCAPS jc; int i=joyGetNumDevs(),j=0;
+		logprintf("Detected %i joystick[s]: ",i);
+		while (j<i&&((!joyGetDevCaps(j,&jc,sizeof(jc))&&logprintf("Joystick #%i = '%s'. ",j,jc.szPname)),joyGetPosEx(j,&session_joy))) // scan joysticks until we run out or one is OK
 			++j;
 		session_stick=(j<i)?j+1:0; // ID+1 if available, 0 if missing
+		logprintf(session_stick?"Joystick enabled!\n":"No joystick!\n");
 	}
 	session_wo=0; // no audio unless device is detected
 	if (session_audio)
@@ -692,7 +667,7 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 		session_mmtime.wType=TIME_SAMPLES; // Windows doesn't always provide TIME_MS!
 		WAVEFORMATEX wfex;
 		memset(&wfex,0,sizeof(wfex)); wfex.wFormatTag=WAVE_FORMAT_PCM;
-		wfex.nBlockAlign=(wfex.wBitsPerSample=AUDIO_BITDEPTH)/8*(wfex.nChannels=(AUDIO_STEREO+1));
+		wfex.nBlockAlign=(wfex.wBitsPerSample=AUDIO_BITDEPTH)/8*(wfex.nChannels=AUDIO_CHANNELS);
 		wfex.nAvgBytesPerSec=wfex.nBlockAlign*(wfex.nSamplesPerSec=AUDIO_PLAYBACK);
 		if (session_audio=!waveOutOpen(&session_wo,WAVE_MAPPER,&wfex,0,0,0))
 		{
@@ -720,13 +695,8 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 		config_signal=session_signal,session_dirtymenu=1;
 	if (session_dirtymenu)
 		session_dirtymenu=0,session_menuinfo();
-	#ifndef CONSOLE_DEBUGGER
 	if (session_signal)
-	#else
-	if (session_dontblit=(session_signal&~SESSION_SIGNAL_DEBUG))
-	#endif
 	{
-		#ifndef CONSOLE_DEBUGGER
 		if (session_signal&SESSION_SIGNAL_DEBUG)
 		{
 			if (*debug_buffer==128)
@@ -734,12 +704,10 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 			if (*debug_buffer)//!=0
 				session_redraw(session_hwnd,session_dc1),*debug_buffer=0;
 		}
-		else
-		#endif
-		if (!session_paused) // set the caption just once
+		else if (!session_paused) // set the caption just once
 		{
 			session_please();
-			sprintf(session_tmpstr,"%s | %s | PAUSED",caption_version,session_info);
+			sprintf(session_tmpstr,"%s | %s | PAUSED",session_caption,session_info);
 			SetWindowText(session_hwnd,session_tmpstr);
 			session_paused=1;
 		}
@@ -754,9 +722,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 		DispatchMessage(&msg);
 		if (session_event)
 		{
-			#ifndef CONSOLE_DEBUGGER
 			if (!((session_signal&SESSION_SIGNAL_DEBUG)&&session_debug_user(session_event)))
-			#endif
 				q|=session_user(session_event);
 			session_event=0;
 		}
@@ -775,24 +741,26 @@ INLINE void session_render(void) // update video, audio and timers
 			++performance_b,session_redraw(session_hwnd,session_dc1);
 		if (session_stick&&!session_key2joy) // do we need to check the joystick?
 		{
-			if (!joyGetPos(session_stick-1,&session_ji))
-				j=((session_ji.wYpos<0x4000)?1:0)+((session_ji.wYpos>=0xC000)?2:0) // UP, DOWN
-				+((session_ji.wXpos<0x4000)?4:0)+((session_ji.wXpos>=0xC000)?8:0) // LEFT, RIGHT
-				+((session_ji.wButtons&JOY_BUTTON1)?16:0)+((session_ji.wButtons&JOY_BUTTON2)?32:0) // FIRE1, FIRE2
-				+((session_ji.wButtons&JOY_BUTTON3)?64:0)+((session_ji.wButtons&JOY_BUTTON4)?128:0); // FIRE3, FIRE4
+			session_joy.dwSize=sizeof(session_joy);
+			session_joy.dwFlags=JOY_RETURNBUTTONS|JOY_RETURNPOVCTS|JOY_RETURNX|JOY_RETURNY|JOY_RETURNCENTERED;
+			if (!joyGetPosEx(session_stick-1,&session_joy))
+			{
+				j=(session_joy.dwPOV==65535?(session_joy.dwYpos< 0x4000?1:0)+(session_joy.dwYpos>=0xC000?2:0)+(session_joy.dwXpos< 0x4000?4:0)+(session_joy.dwXpos>=0xC000?8:0) // axial
+				:(session_joy.dwPOV< 2250?1:session_joy.dwPOV< 6750?9:session_joy.dwPOV<11250?8:session_joy.dwPOV<15750?10: // angular: U (0), U-R (4500), R (9000), R-D (13500)
+				session_joy.dwPOV<20250?2:session_joy.dwPOV<24750?6:session_joy.dwPOV<29250?4:session_joy.dwPOV<33750?5:1)) // D (18000), D-L (22500), L (27000), L-U (31500)
+				+((session_joy.dwButtons&JOY_BUTTON1)?16:0)+((session_joy.dwButtons&JOY_BUTTON2)?32:0) // FIRE1, FIRE2
+				+((session_joy.dwButtons&JOY_BUTTON3)?64:0)+((session_joy.dwButtons&JOY_BUTTON4)?128:0); // FIRE3, FIRE4
+			}
 			else
 				j=0; // joystick failure, release its keys
-			for (i=0;i<sizeof(kbd_joy);++i)
-			{
-				int k=kbd_joy[i];
+			for (i=0;i<length(kbd_joy);++i)
+				joy_bit_res(kbd_joy[i]); // clean keys, allow redundancy
+			for (i=0;i<length(kbd_joy);++i)
 				if (j&(1<<i))
-					kbd_bit_set(k); // key is down
-				else
-					kbd_bit_res(k); // key is up
-			}
+					joy_bit_set(kbd_joy[i]); // key is down
 		}
 	}
-	audio_target=&audio_memory[AUDIO_LENGTH_Z*(AUDIO_STEREO+1)*audio_session];
+	audio_target=&audio_memory[AUDIO_LENGTH_Z*AUDIO_CHANNELS*audio_session];
 	if (!audio_disabled) // avoid conflicts when realtime is off: output and playback buffers clash!
 	{
 		if (audio_filter) // audio interpolation: sample averaging
@@ -854,7 +822,7 @@ INLINE void session_render(void) // update video, audio and timers
 	{
 		if (performance_t)
 		{
-			sprintf(session_tmpstr,"%s | %s | %g%% CPU %g%% %s",caption_version,session_info,performance_f*100.0/VIDEO_PLAYBACK,performance_b*100.0/VIDEO_PLAYBACK,
+			sprintf(session_tmpstr,"%s | %s | %g%% CPU %g%% %s",session_caption,session_info,performance_f*100.0/VIDEO_PLAYBACK,performance_b*100.0/VIDEO_PLAYBACK,
 			#ifdef DDRAW
 				lpddback?"DDRAW":
 			#endif
@@ -877,16 +845,12 @@ INLINE void session_byebye(void) // delete video+audio devices
 	#ifdef DDRAW
 	if (lpddfore) IDirectDrawSurface_SetClipper(lpddfore,NULL),IDirectDrawSurface_Release(lpddfore);
 	if (lpddback) IDirectDrawSurface_Unlock(lpddback,0),IDirectDrawSurface_Release(lpddback);
-	#ifndef CONSOLE_DEBUGGER
-		if (lpdd_dbg) IDirectDrawSurface_Unlock(lpdd_dbg,0),IDirectDrawSurface_Release(lpdd_dbg);
-	#endif
+	if (lpdd_dbg) IDirectDrawSurface_Unlock(lpdd_dbg,0),IDirectDrawSurface_Release(lpdd_dbg);
 	if (lpddclip) IDirectDrawClipper_Release(lpddclip);
 	if (lpdd) IDirectDraw_Release(lpdd);
 	#endif
 
-	#ifndef CONSOLE_DEBUGGER
-		if (session_dbg) DeleteObject(session_dbg);
-	#endif
+	if (session_dbg) DeleteObject(session_dbg);
 	if (session_dc2) DeleteDC(session_dc2);
 	if (session_dib) DeleteObject(session_dib);
 	ReleaseDC(session_hwnd,session_dc1);
@@ -1121,7 +1085,7 @@ int fputmmmm(int i,FILE *f) { fputc(i>>24,f); fputc(i>>16,f); fputc(i>>8,f); ret
 #define SDL_BYTEORDER SDL_LIL_ENDIAN
 
 // main-WinMain bootstrap
-#ifdef CONSOLE_DEBUGGER
+#ifdef DEBUG
 #define BOOTSTRAP
 #else
 #ifndef __argc

@@ -44,7 +44,7 @@ int tape_fgetcccc(void) // reads four little-endian bytes; cfr. tape_fgetc()
 	i+=tape_fgetc()<<16;
 	return i+(tape_fgetc()<<24); // in 32-bit systems the sign will be lost!
 }
-#define tape_ungetc() (--tape_filetell,--tape_offset)
+#define tape_ungetc() (--tape_filetell,--tape_offset) // cheating the buffer!
 void tape_seek(int i) // seek to byte `i`
 {
 	if ((tape_filetell-tape_offset<=i)&&(tape_filetell-tape_offset+tape_length>=i)) // inside cache?
@@ -150,8 +150,8 @@ int tape_open(char *s) // open a tape file. `s` path; 0 OK, !0 ERROR
 					if (q==0x666D7420) // "fmt " is the only chunk that we must process!
 					{
 						l-=fread(tape_buffer,1,16,tape); // read the first part of the "fmt " chunk
-						tape_playback=tape_buffer[0x08]+(tape_buffer[0x09]<<8)+(tape_buffer[0x0A]<<16); // to handle any bit depth and channel amount (even if it's obvious that only mono signal is reliable)
-						tape_wave=(tape_buffer[0x0E]-1)/8;
+						tape_playback=tape_buffer[4]+(tape_buffer[5]<<8)+(tape_buffer[6]<<16);
+						tape_sync=tape_buffer[12]; // handle any bit depth and channel amount: only the highest bit matters to us
 						//logprintf("<%i>",tape_playback);
 					}
 					fseek(tape,l,SEEK_CUR); // skip unknown chunk!
@@ -222,15 +222,11 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 	switch (tape_type) // `while` is inside `switch` because the tape type won't change inside the loop!
 	{
 		case 0: // WAV
-			while (p--)
-			{
-				int z; for (z=0;z<tape_wave;++z)
-					tape_fgetc(); // clip 16-BIT lsb
-				if ((tape_status=tape_fgetc())<0) // EOF?
-					if (tape_endoftape())
-						return; // quit!
-				tape_status=tape_status>128; // tape_status>>=7
-			}
+			tape_skip(tape_sync*p-1); // avoid bugs caused by `tape_wave` getting modified by tape_select()
+			if ((tape_status=tape_fgetc())<0) // EOF?
+				if (tape_endoftape())
+					return; // quit!
+			tape_status=tape_status>128;
 			break;
 		case 1: // CSW
 			while (p--)

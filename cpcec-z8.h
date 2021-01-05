@@ -19,10 +19,10 @@
 WORD z80_wz; // internal register WZ/MEMPTR
 #if Z80_XCF_BUG
 	BYTE z80_q; // internal register Q
-	#define Z80_Q_SET(x) z80_q=(x)
+	#define Z80_Q_SET(x) z80_q=z80_af.b.l=(x)
 	#define Z80_Q_RST() z80_q=0
 #else
-	#define Z80_Q_SET(x) (x)
+	#define Z80_Q_SET(x) z80_af.b.l=(x)
 	#define Z80_Q_RST()
 #endif
 
@@ -30,14 +30,10 @@ BYTE z80_flags_inc[256],z80_flags_dec[256]; // INC,DEC
 BYTE z80_flags_sgn[256],z80_flags_add[512],z80_flags_sub[512]; // ADD,ADC,SUB,SBC...
 BYTE z80_flags_and[256],z80_flags_xor[256],z80_flags_bit[256]; // AND,XOR,OR,BIT...
 
-WORD z80_break_stack=0xFFFF;
+WORD z80_debug_stack=0xFFFF;
 BYTE z80_debug_peekpoke=0,z80_debug_edfftrap=0;
-#ifdef CONSOLE_DEBUGGER
-#define z80_debug_reset()
-#define z80_debug_close()
-#else
-BYTE z80_breakpoints[1<<16];
-WORD z80_debug_volatile=0;
+BYTE z80_breakpoints[1<<16]; // breakpoints + register logs
+WORD z80_debug_volatile=0; // volatile breakpoint ("run to")
 WORD z80_debug_pnl0_w=0; // code byte / shadow PC
 char z80_debug_pnl0_x=0; // X position (word nibble)
 WORD z80_debug_pnl3_w=0; // stack word / shadow SP
@@ -61,22 +57,15 @@ void z80_debug_close(void)
 		z80_debug_logfile=NULL;
 	}
 }
-#endif
 
-#ifdef CONSOLE_DEBUGGER
-#else
 void z80_reset_breakpoints(void)
 {
 	MEMZERO(z80_breakpoints);
 }
-#endif
 
 void z80_setup(void) // setup the Z80
 {
-	#ifdef CONSOLE_DEBUGGER
-	#else
-		z80_reset_breakpoints();
-	#endif
+	z80_reset_breakpoints();
 	// flag bit reference:
 	// - 7, 0x80: S, Sign
 	// - 6, 0x40: Z, Zero
@@ -105,12 +94,12 @@ void z80_setup(void) // setup the Z80
 			++p;
 		if (i&128)
 			++p;
-		p=(p&1)?0x00:0x04; // -----P--
+		p=(p&1)?0:4; // -----P--
 		int j=i?(i&0x80):0x40; // SZ------
 		int x=j+(i&0x28); // SZ5-3----
 		z80_flags_sgn[i]=x; // SZ5-3---
-		z80_flags_inc[i]=x+(i==128?0x04:0)+((i&15)==00?0x10:0); // SZ5H3V0-
-		z80_flags_dec[i]=x+(i==127?0x04:0)+((i&15)==15?0x12:2); // SZ5H3V1-
+		z80_flags_inc[i]=x+(i==128?4:0)+((i&15)==00?0x10:0); // SZ5H3V0-
+		z80_flags_dec[i]=x+(i==127?4:0)+((i&15)==15?0x12:2); // SZ5H3V1-
 		z80_flags_and[i]=0x10+(z80_flags_xor[i]=(x+p)); // SZ513P--,SZ503P--
 		z80_flags_bit[i]=0x10+j+p; // SZ-1-P--
 		j=(i&0x10)+((i&128)>>5); // ---H-V--
@@ -121,7 +110,7 @@ void z80_setup(void) // setup the Z80
 
 void z80_reset(void) // reset the Z80
 {
-	z80_pc.w=z80_sp.w=z80_iff.w=z80_irq=z80_halted=z80_imd=0;
+	z80_pc.w=z80_sp.w=z80_iff.w=z80_irq=z80_active=z80_imd=0;
 	z80_ix.w=z80_iy.w=0xFFFF;
 	#ifdef Z80_CPC_DANDANATOR
 		MEMZERO(dandanator_config);
@@ -1663,6 +1652,7 @@ WORD z80_dasm(char *r,WORD m) // disassembles instruction at address `m` into st
 
 #ifdef Z80_CPC_DANDANATOR
 WORD dandanator_trap=0,dandanator_temp;
+char dandanator_path[STRMAX]="";
 
 int dandanator_insert(char *s)
 {
@@ -1673,12 +1663,25 @@ int dandanator_insert(char *s)
 		mem_dandanator=malloc(32<<14);
 	int i=fread1(mem_dandanator,32<<14,f)&-0x4000; // adjust 16k blocks
 	memset(&mem_dandanator[i],0xFF,(32<<14)-i);
+	strcpy(dandanator_path,s), dandanator_dirty=0;
 	return puff_fclose(f),0;
 }
 void dandanator_remove(void)
 {
 	if (mem_dandanator)
+	{
+		if (dandanator_dirty&&dandanator_canwrite&&*dandanator_path)
+		{
+			FILE *f=puff_fopen(dandanator_path,"wb");
+			if (f)
+			{
+				fwrite1(mem_dandanator,32<<14,f); // all 16k blocks
+				puff_fclose(f);
+			}
+		}
 		free(mem_dandanator),mem_dandanator=NULL;
+	}
+	dandanator_dirty=0;
 }
 
 void z80_close(void)
@@ -1697,29 +1700,6 @@ void z80_close(void)
 
 #define PEEKW(x) (PEEK((WORD)(x))+(PEEK((WORD)(x+1))<<8))
 #define POKEW(x,w) (POKE((WORD)(x))=(w),POKE((WORD)(x+1))=(w)>>8)
-#ifdef CONSOLE_DEBUGGER
-char *z80_debug_scan(WORD *w,char *s)
-{
-	while (*s==' ')
-		++s;
-	char *t=s;
-	if (*s>' ')
-		*w=strtol(s,&s,16);
-	return (t==s)?NULL:s; // no valid number = NULL!
-}
-WORD z80_debug_dump(char *t,WORD m)
-{
-	BYTE i,b;
-	t+=sprintf(t,"%04X: ",m);
-	for (i=0;i<16;++i)
-		t+=sprintf(t,"%02X ",PEEK(m)),++m; // hexadecimal values
-	m-=i;
-	for (i=0;i<16;++i)
-		b=PEEK(m),*t++=(b>=32&&b<127)?b:'.',++m; // printable ASCII characters
-	*t=0;
-	return m;
-}
-#endif
 
 // macros are handier than typing the same snippets of code a million times
 #define Z80_INC_R ++r7
@@ -1738,245 +1718,65 @@ WORD z80_debug_dump(char *t,WORD m)
 #define Z80_RD2(x) Z80_WZ_PC; ++z80_pc.w; x.l=Z80_PEEK1(z80_wz); ++z80_wz; x.h=Z80_PEEK2(z80_wz) // load r16 from [WZ]
 #define Z80_WR2(x) Z80_WZ_PC; ++z80_pc.w; Z80_POKE1(z80_wz,x.l); ++z80_wz; Z80_POKE2(z80_wz,x.h) // write r16 to [WZ]
 #define Z80_EXX2(x,y) do{ int w=x; x=y; y=w; }while(0)
-#define Z80_INC1(x) Z80_Q_SET(z80_af.b.l=(z80_af.b.l&0x01)+z80_flags_inc[++x])
-#define Z80_DEC1(x) Z80_Q_SET(z80_af.b.l=(z80_af.b.l&0x01)+z80_flags_dec[--x])
-#define Z80_ADD2(x,y) do{ DWORD z=x+y; Z80_Q_SET(z80_af.b.l=(z>>16)+((z>>8)&0x28)+(((z^x^y)>>8)&0x10)+(z80_af.b.l&0xC4)); z80_wz=x+1; x=z; Z80_WAIT(7); }while(0)
-#define Z80_ADC2(x) do{ DWORD z=z80_hl.w+x.w+(z80_af.b.l&1); Z80_Q_SET(z80_af.b.l=(z>>16)+(((z80_hl.w^z^x.w)>>8)&0x10)+(((WORD)z)?((z>>8)&0xA8):0x40)+((((x.w^~z80_hl.w)&(x.w^z))>>13)&4)); z80_wz=z80_hl.w+1; z80_hl.w=z; Z80_WAIT(7); }while(0)
-#define Z80_SBC2(x) do{ DWORD z=z80_hl.w-x.w-(z80_af.b.l&1); Z80_Q_SET(z80_af.b.l=2+((z>>16)&1)+(((z80_hl.w^z^x.w)>>8)&0x10)+(((WORD)z)?((z>>8)&0xA8):0x40)+((((x.w^z80_hl.w)&(z80_hl.w^z))>>13)&4)); z80_wz=z80_hl.w+1; z80_hl.w=z; Z80_WAIT(7); }while(0)
-#define Z80_ADDC(x,y) do{ DWORD z=z80_af.b.h+x+y; Z80_Q_SET(z80_af.b.l=z80_flags_sgn[(BYTE)z]+z80_flags_add[(z^z80_af.b.h^x)]); z80_af.b.h=z; }while(0) // ADD safely stays within [0,511]
-#define Z80_SUBC(x,y) do{ DWORD z=z80_af.b.h-x-y; Z80_Q_SET(z80_af.b.l=z80_flags_sgn[(BYTE)z]+z80_flags_sub[(z^z80_af.b.h^x)&511]); z80_af.b.h=z; }while(0) // SUB can fall beyond [0,511]
+#define Z80_INC1(x) Z80_Q_SET((z80_af.b.l&1)+z80_flags_inc[++x])
+#define Z80_DEC1(x) Z80_Q_SET((z80_af.b.l&1)+z80_flags_dec[--x])
+#define Z80_ADD2(x,y) do{ DWORD z=x+y; Z80_Q_SET((z>>16)+((z>>8)&0x28)+(((z^x^y)>>8)&0x10)+(z80_af.b.l&0xC4)); z80_wz=x+1; x=z; Z80_WAIT(7); }while(0)
+#define Z80_ADC2(x) do{ DWORD z=z80_hl.w+x.w+(z80_af.b.l&1); Z80_Q_SET((z>>16)+(((z80_hl.w^z^x.w)>>8)&0x10)+(((WORD)z)?((z>>8)&0xA8):0x40)+((((x.w^~z80_hl.w)&(x.w^z))>>13)&4)); z80_wz=z80_hl.w+1; z80_hl.w=z; Z80_WAIT(7); }while(0)
+#define Z80_SBC2(x) do{ DWORD z=z80_hl.w-x.w-(z80_af.b.l&1); Z80_Q_SET(2+((z>>16)&1)+(((z80_hl.w^z^x.w)>>8)&0x10)+(((WORD)z)?((z>>8)&0xA8):0x40)+((((x.w^z80_hl.w)&(z80_hl.w^z))>>13)&4)); z80_wz=z80_hl.w+1; z80_hl.w=z; Z80_WAIT(7); }while(0)
+#define Z80_ADDC(x,y) do{ DWORD z=z80_af.b.h+x+y; Z80_Q_SET(z80_flags_sgn[(BYTE)z]+z80_flags_add[(z^z80_af.b.h^x)]); z80_af.b.h=z; }while(0) // ADD safely stays within [0,511]
+#define Z80_SUBC(x,y) do{ DWORD z=z80_af.b.h-x-y; Z80_Q_SET(z80_flags_sgn[(BYTE)z]+z80_flags_sub[(z^z80_af.b.h^x)&511]); z80_af.b.h=z; }while(0) // SUB can fall beyond [0,511]
 #define Z80_ADD1(x) Z80_ADDC(x,0)
 #define Z80_ADC1(x) Z80_ADDC(x,(z80_af.b.l&1))
 #define Z80_SUB1(x) Z80_SUBC(x,0)
 #define Z80_SBC1(x) Z80_SUBC(x,(z80_af.b.l&1))
-#define Z80_AND1(x) Z80_Q_SET(z80_af.b.l=z80_flags_and[z80_af.b.h=z80_af.b.h&(x)])
-#define Z80_XOR1(x) Z80_Q_SET(z80_af.b.l=z80_flags_xor[z80_af.b.h=z80_af.b.h^(x)])
-#define Z80_OR1(x) Z80_Q_SET(z80_af.b.l=z80_flags_xor[z80_af.b.h=z80_af.b.h|(x)])
-#define Z80_CP1(x) do{ DWORD z=z80_af.b.h-x; Z80_Q_SET(z80_af.b.l=(z80_flags_sgn[(BYTE)z]&0xD7)+z80_flags_sub[(z^z80_af.b.h^x)&511]+(x&0x28)); }while(0) // unlike SUB, 1.- A intact, 2.- flags 3+5 from argument
-#define Z80_RET2 z80_wz=Z80_PEEK(z80_sp.w); ++z80_sp.w; z80_pc.w=z80_wz+=Z80_PEEK(z80_sp.w)<<8; if (++z80_sp.w>z80_break_stack) { z80_break_stack=0xFFFF; z80_debug_reset(); session_signal|=SESSION_SIGNAL_DEBUG; _t_=0; } // throw!
+#define Z80_AND1(x) Z80_Q_SET(z80_flags_and[z80_af.b.h=z80_af.b.h&(x)])
+#define Z80_XOR1(x) Z80_Q_SET(z80_flags_xor[z80_af.b.h=z80_af.b.h^(x)])
+#define Z80_OR1(x) Z80_Q_SET(z80_flags_xor[z80_af.b.h=z80_af.b.h|(x)])
+#define Z80_CP1(x) do{ DWORD z=z80_af.b.h-x; Z80_Q_SET((z80_flags_sgn[(BYTE)z]&0xD7)+z80_flags_sub[(z^z80_af.b.h^x)&511]+(x&0x28)); }while(0) // unlike SUB, 1.- A intact, 2.- flags 3+5 from argument
+#define Z80_RET2 z80_wz=Z80_PEEK(z80_sp.w); ++z80_sp.w; z80_pc.w=z80_wz+=Z80_PEEK(z80_sp.w)<<8; if (++z80_sp.w>z80_debug_stack) { z80_debug_stack=0xFFFF; session_signal|=SESSION_SIGNAL_DEBUG; _t_=0; } // throw!
 #define Z80_POP2(x) x.l=Z80_PEEK(z80_sp.w); ++z80_sp.w; x.h=Z80_PEEK(z80_sp.w); ++z80_sp.w
 #define Z80_PUSH2(x) --z80_sp.w; Z80_POKE1(z80_sp.w,x.h); --z80_sp.w; Z80_POKE2(z80_sp.w,x.l)
 #define Z80_CALL2 --z80_sp.w; Z80_POKE0(z80_sp.w,z80_pc.w>>8); --z80_sp.w; Z80_POKE0(z80_sp.w,z80_pc.w); z80_pc.w=z80_wz
-#define Z80_RLC1(x) x=(x<<1)+(x>>7); Z80_Q_SET(z80_af.b.l=z80_flags_xor[x]+(x&1))
-#define Z80_RRC1(x) x=(x>>1)+(x<<7); Z80_Q_SET(z80_af.b.l=z80_flags_xor[x]+((x>>7)&1))
-#define Z80_RL1(x) do{ BYTE z=x>>7; Z80_Q_SET(z80_af.b.l=z80_flags_xor[x=(x<<1)+(z80_af.b.l&1)]+z); }while(0)
-#define Z80_RR1(x) do{ BYTE z=x&1; Z80_Q_SET(z80_af.b.l=z80_flags_xor[x=(x>>1)+(z80_af.b.l<<7)]+z); }while(0)
-#define Z80_SLA1(x) do{ BYTE z=x>>7; Z80_Q_SET(z80_af.b.l=z80_flags_xor[x=x<<1]+z); }while(0)
-#define Z80_SRA1(x) do{ BYTE z=x&1; Z80_Q_SET(z80_af.b.l=z80_flags_xor[x=((signed char)x)>>1]+z); }while(0)
-#define Z80_SLL1(x) do{ BYTE z=x>>7; Z80_Q_SET(z80_af.b.l=z80_flags_xor[x=(x<<1)+1]+z); }while(0)
-#define Z80_SRL1(x) do{ BYTE z=x&1; Z80_Q_SET(z80_af.b.l=z80_flags_xor[x=x>>1]+z); }while(0)
-#define Z80_BIT1(n,x,y) Z80_Q_SET(z80_af.b.l=(z80_flags_bit[x&(1<<n)]+(y&0x28))+(z80_af.b.l&1))
+#define Z80_RLC1(x) x=(x<<1)+(x>>7); Z80_Q_SET(z80_flags_xor[x]+(x&1))
+#define Z80_RRC1(x) x=(x>>1)+(x<<7); Z80_Q_SET(z80_flags_xor[x]+((x>>7)&1))
+#define Z80_RL1(x) do{ BYTE z=x>>7; Z80_Q_SET(z80_flags_xor[x=(x<<1)+(z80_af.b.l&1)]+z); }while(0)
+#define Z80_RR1(x) do{ BYTE z=x&1; Z80_Q_SET(z80_flags_xor[x=(x>>1)+(z80_af.b.l<<7)]+z); }while(0)
+#define Z80_SLA1(x) do{ BYTE z=x>>7; Z80_Q_SET(z80_flags_xor[x=x<<1]+z); }while(0)
+#define Z80_SRA1(x) do{ BYTE z=x&1; Z80_Q_SET(z80_flags_xor[x=((signed char)x)>>1]+z); }while(0)
+#define Z80_SLL1(x) do{ BYTE z=x>>7; Z80_Q_SET(z80_flags_xor[x=(x<<1)+1]+z); }while(0)
+#define Z80_SRL1(x) do{ BYTE z=x&1; Z80_Q_SET(z80_flags_xor[x=x>>1]+z); }while(0)
+#define Z80_BIT1(n,x,y) Z80_Q_SET((z80_flags_bit[x&(1<<n)]+(y&0x28))+(z80_af.b.l&1))
 #define Z80_RES1(n,x) x&=~(1<<n)
 #define Z80_SET1(n,x) x|=(1<<n)
-#define Z80_IN2(x,y) z80_r7=r7; z80_wz=z80_bc.w; Z80_PRAE_RECV(z80_wz); Z80_Q_SET(z80_af.b.l=z80_flags_xor[x=Z80_RECV(z80_wz)]+(z80_af.b.l&1)); Z80_POST_RECV(z80_wz); Z80_STRIDE_IO(y); r7=z80_r7; ++z80_wz
+#define Z80_IN2(x,y) z80_r7=r7; z80_wz=z80_bc.w; Z80_PRAE_RECV(z80_wz); Z80_Q_SET(z80_flags_xor[x=Z80_RECV(z80_wz)]+(z80_af.b.l&1)); Z80_POST_RECV(z80_wz); Z80_STRIDE_IO(y); r7=z80_r7; ++z80_wz
 #define Z80_OUT2(x,y) z80_wz=z80_bc.w; Z80_PRAE_SEND(z80_wz,x); Z80_SEND(z80_wz,x); Z80_POST_SEND(z80_wz); Z80_STRIDE_IO(y); ++z80_wz
-#define Z80_LDID2 do{ BYTE b=Z80_PEEK(z80_hl.w); Z80_POKE(z80_de.w,b); b+=z80_af.b.h; Z80_Q_SET(z80_af.b.l=(z80_af.b.l&0xC1)+(--z80_bc.w?0x04:0x00)+(b&8)+((b&2)<<4)); }while(0)
-#define Z80_CPID2 do{ BYTE b=Z80_PEEK(z80_hl.w); BYTE z=z80_af.b.h-b; z80_af.b.l=((z^z80_af.b.h^b)&0x10)+(z?(z&0x80):0x40)+(--z80_bc.w?0x06:0x02)+(z80_af.b.l&1); b=z-((z80_af.b.l>>4)&1); Z80_Q_SET(z80_af.b.l+=((b<<4)&0x20)+(b&8)); }while(0) // ZS5H3V1-
-#define Z80_INOTF() Z80_Q_SET(z80_af.b.l=(z80_flags_xor[z80_bc.b.h]&0xE8)+(w<b?17:0)+(z80_flags_xor[(w&7)^z80_bc.b.h]&4)+(b&0x80?2:0))
+#define Z80_LDID2 do{ BYTE b=Z80_PEEK(z80_hl.w); Z80_POKE(z80_de.w,b); b+=z80_af.b.h; Z80_Q_SET((z80_af.b.l&0xC1)+(--z80_bc.w?4:0)+(b&8)+((b&2)<<4)); }while(0)
+#define Z80_CPID2 do{ BYTE b=Z80_PEEK(z80_hl.w); BYTE z=z80_af.b.h-b; z80_af.b.l=((z^z80_af.b.h^b)&0x10)+(z?(z&0x80):0x40)+(--z80_bc.w?6:2)+(z80_af.b.l&1); b=z-((z80_af.b.l>>4)&1); Z80_Q_SET(z80_af.b.l+((b<<4)&2)+(b&8)); }while(0) // ZS5H3V1-
+#define Z80_INOTF() Z80_Q_SET((z80_flags_xor[z80_bc.b.h]&0xE8)+(w<b?17:0)+(z80_flags_xor[(w&7)^z80_bc.b.h]&4)+(b&0x80?2:0))
 #define Z80_INID2(x,y) do{ Z80_WAIT(1); z80_wz=z80_bc.w; Z80_PRAE_RECV(z80_wz); BYTE b=Z80_RECV(z80_wz); Z80_POST_RECV(z80_wz); Z80_STRIDE_IO(y); Z80_POKE(z80_hl.w,b); --z80_bc.b.h; BYTE w=b+z80_bc.b.l+x; Z80_INOTF(); }while(0)
 #define Z80_OTID2(x,y) do{ Z80_WAIT(1); --z80_bc.b.h; z80_wz=z80_bc.w; BYTE b=Z80_PEEK(z80_hl.w); Z80_PRAE_SEND(z80_wz,b); Z80_SEND(z80_wz,b); Z80_POST_SEND(z80_wz); Z80_STRIDE_IO(y); z80_hl.w+=x; BYTE w=b+z80_hl.b.l; Z80_INOTF(); }while(0)
 
 INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 {
-	#ifdef CONSOLE_DEBUGGER
-	static WORD breakpoint=0xFFFF;
-	#endif
 	int z80_t=0; // clock tick counter
 	BYTE r7=z80_ir.b.l; // split R7+R8!
 	Z80_AUXILIARY;
 	do
 	{
-		#ifdef CONSOLE_DEBUGGER
-		if (session_signal&SESSION_SIGNAL_DEBUG)
-		{
-			if (feof(stdin))
-			{
-				session_signal&=~SESSION_SIGNAL_DEBUG;
-				break;
-			}
-			session_please();
-			static WORD m=0;
-			int q=1,i; WORD w; char *s;
-			z80_ir.b.l=Z80_GET_R8; // unify R7+R8!
-			while (q)
-			{
-				char cmdline[STRMAX];
-				w=z80_dasm(cmdline,z80_pc.w);
-				z80_info();
-				printf(
-					"AF=%04X BC=%04X DE=%04X HL=%04X IX=%04X IY=%04X IR=%04X IM=%i %cI\n"
-					"%-32s %04X: %04X %04X %04X %04X %04X\n>"
-					,z80_af.w,z80_bc.w,z80_de.w,z80_hl.w,z80_ix.w,z80_iy.w,z80_ir.w,z80_imd,'D'+z80_iff.b.l
-					,cmdline,z80_sp.w,PEEKW(z80_sp.w),PEEKW(z80_sp.w+2),PEEKW(z80_sp.w+4),PEEKW(z80_sp.w+6),PEEKW(z80_sp.w+8)
-					);
-				cmdline[0]=0;
-				fgets(cmdline,STRMAX,stdin);
-				switch (~32&cmdline[0])
-				{
-					case 'A':
-						switch (~32&cmdline[1])
-						{
-							case 'F': // "AF"
-								z80_debug_scan(&z80_af.w,&cmdline[2]);
-								break;
-						}
-						break;
-					case 'B':
-						switch (~32&cmdline[1])
-						{
-							case 'C': // "BC"
-								z80_debug_scan(&z80_bc.w,&cmdline[2]);
-								break;
-						}
-						break;
-					case 'D':
-						switch (~32&cmdline[1])
-						{
-							case 'E': // "DE"
-								z80_debug_scan(&z80_de.w,&cmdline[2]);
-								break;
-							default: // DISASSEMBLY
-								z80_debug_scan(&m,&cmdline[1]);
-								for (i=0;i<Z80_DEBUG_LEN;++i)
-								{
-									m=z80_dasm(cmdline,m);
-									puts(cmdline);
-								}
-								break;
-						}
-						break;
-					case 'H':
-						switch (~32&cmdline[1])
-						{
-							case 'L': // "HL"
-								z80_debug_scan(&z80_hl.w,&cmdline[2]);
-								break;
-							default: // QUICK HELP
-								puts(
-									"\nHelp..\n\th"
-									"\nStep into\n\t<empty>"
-									"\nSet register\n\tAF/BC/DE/HL/IR/IX/IY/SP <word>"
-									"\nDisassemble [from address]\n\td [addr]\t"
-									"\nJump to address\n\tj <addr>"
-									"\nDump memory [from address]\n\tm [addr]"
-									"\nPoke byte[s] into address\n\tp <addr> <byte..>"
-									"\nSearch byte[s] from address\n\ts <addr> <byte..>"
-									"\nRun [to address]\n\tr [addr]"
-									"\nReturn from call\n\tu"
-									"\nQuit debugger\n\tq"
-								);
-								break;
-						}
-						break;
-					case 'I':
-						switch (~32&cmdline[1])
-						{
-							case 'R': // "IR"
-								z80_debug_scan(&z80_ir.w,&cmdline[2]);
-								break;
-							case 'X': // "IX"
-								z80_debug_scan(&z80_ix.w,&cmdline[2]);
-								break;
-							case 'Y': // "IY"
-								z80_debug_scan(&z80_iy.w,&cmdline[2]);
-								break;
-						}
-						break;
-					case 'J': // JUMP TO
-						z80_debug_scan(&z80_pc.w,&cmdline[1]);
-						break;
-					case 'M': // MEMORY DUMP
-						z80_debug_scan(&m,&cmdline[1]);
-						for (i=0;i<Z80_DEBUG_LEN;++i)
-						{
-							m=z80_debug_dump(cmdline,m);
-							puts(cmdline);
-						}
-						break;
-					case 'P': // POKE
-						s=z80_debug_scan(&m,&cmdline[1]);
-						while (s=z80_debug_scan(&w,s))
-							POKE(m)=w,++m;
-						break;
-					case 'R': // RUN TO / STEP OVER
-						z80_debug_scan(&w,&cmdline[1]);
-						z80_break_stack=0xFFFF; breakpoint=w;
-						session_signal&=~SESSION_SIGNAL_DEBUG;
-						q=0;
-						break;
-					case 'S':
-						switch (~32&cmdline[1])
-						{
-							case 'P': // "SP"
-								z80_debug_scan(&z80_sp.w,&cmdline[2]);
-								break;
-							default: // SEARCH
-								if (s=z80_debug_scan(&m,&cmdline[1]))
-								{
-									i=m; m=0;
-									unsigned char pattern[STRMAX];
-									while (s=z80_debug_scan(&w,s))
-										pattern[m++]=w;
-									if (m)
-									{
-										int k=0;
-										while (i<65536-m)
-										{
-											int j;
-											for (j=0,w=i;j<m;++j,++w)
-												if (PEEK(w)!=pattern[j])
-													break;
-											if (j>=m)
-											{
-												printf("%04X ",i);
-												if (++k>=16*Z80_DEBUG_LEN)
-												{
-													printf("...");
-													break; // too many finds!
-												}
-											}
-											++i;
-										}
-										if (k)
-											putchar('\n');
-									}
-								}
-								break;
-						}
-						break;
-					case 'U': // RETURN FROM..
-						if (z80_sp.w>=0xFFFE) // fringe case?
-							z80_break_stack=0xFFFF, breakpoint=w;
-						else
-							z80_break_stack=z80_sp.w, breakpoint=0xFFFF;
-						session_signal&=~SESSION_SIGNAL_DEBUG;
-						q=0;
-						break;
-					case 'Q': // QUIT
-					case 0: // EOT
-						session_signal&=~SESSION_SIGNAL_DEBUG;
-					case 10: // LF
-					case 13: // CR
-						q=0; // STEP INTO
-				}
-			}
-			r7=z80_ir.b.l; // split R7+R8!
-		}
-		#endif
 		Z80_INC_R; // "Timing Tests 48k Spectrum" requires this!
-		if (z80_irq*z80_halted) // ignore IRQs when either is zero!
+		if (z80_irq*z80_active) // ignore IRQs when either is zero!
 		{
 			#ifdef Z80_NMI
-			if (z80_halted<0) // NMI?
+			if (z80_active<0) // NMI?
 			{
 				Z80_WAIT(7); Z80_STRIDE_X(0x3A); z80_wz=0x66;
-				z80_halted=z80_iff.b.l=0;
+				z80_active=z80_iff.b.l=0;
 				z80_nmi_ack();
 			}
 			else
 			#endif
 			{
-				if (z80_halted>1) // HALT?
+				if (z80_active>1) // HALT?
 					++z80_pc.w; // skip!
 				if (z80_imd&2)
 				{
@@ -1992,7 +1792,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					Z80_WAIT(7); Z80_STRIDE_X(0x3A); // IM 0 and IM 1 timing equals LD A,($NNNN) : 13 T / 4 NOP (RST N is actually 11 T!)
 					z80_wz=(z80_imd&1)?0x38:(z80_irq_bus&0x38); // IM 0 reads the address from the bus, `RST x` style; any opcode but a RST crashes anyway.
 				}
-				z80_halted=z80_iff.w=0;
+				z80_active=z80_iff.w=0;
 				z80_irq_ack();
 			}
 			Z80_CALL2;
@@ -2002,7 +1802,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 			BYTE op=Z80_FETCH;
 			Z80_STRIDE(op); ++z80_pc.w;
 			Z80_STRIDE_0;
-			z80_halted=z80_iff.b.l; // EI delay
+			z80_active=z80_iff.b.l; // EI delay
 			switch (op)
 			{
 				// 0x00-0x3F
@@ -2157,16 +1957,16 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					z80_af.b.h=Z80_RD_PC; ++z80_pc.w;
 					break;
 				case 0x07: // RLCA
-					z80_af.b.h=(z80_af.b.h<<1)+(z80_af.b.h>>7); Z80_Q_SET(z80_af.b.l=(z80_af.b.h&1)+(z80_af.b.h&0x28)+(z80_af.b.l&0xC4)); // flags --503-0C
+					z80_af.b.h=(z80_af.b.h<<1)+(z80_af.b.h>>7); Z80_Q_SET((z80_af.b.h&1)+(z80_af.b.h&0x28)+(z80_af.b.l&0xC4)); // flags --503-0C
 					break;
 				case 0x0F: // RRCA
-					z80_af.b.h=(z80_af.b.h>>1)+(z80_af.b.h<<7); Z80_Q_SET(z80_af.b.l=(z80_af.b.h>>7)+(z80_af.b.h&0x28)+(z80_af.b.l&0xC4)); // flags --503-0C
+					z80_af.b.h=(z80_af.b.h>>1)+(z80_af.b.h<<7); Z80_Q_SET((z80_af.b.h>>7)+(z80_af.b.h&0x28)+(z80_af.b.l&0xC4)); // flags --503-0C
 					break;
 				case 0x17: // RLA
-					{ BYTE b=z80_af.b.h>>7; z80_af.b.h=(z80_af.b.h<<1)+(z80_af.b.l&1); Z80_Q_SET(z80_af.b.l=b+(z80_af.b.h&0x28)+(z80_af.b.l&0xC4)); } // flags --503-0C
+					{ BYTE b=z80_af.b.h>>7; z80_af.b.h=(z80_af.b.h<<1)+(z80_af.b.l&1); Z80_Q_SET(b+(z80_af.b.h&0x28)+(z80_af.b.l&0xC4)); } // flags --503-0C
 					break;
 				case 0x1F: // RRA
-					{ BYTE b=z80_af.b.h&1; z80_af.b.h=(z80_af.b.h>>1)+(z80_af.b.l<<7); Z80_Q_SET(z80_af.b.l=b+(z80_af.b.h&0x28)+(z80_af.b.l&0xC4)); } // flags --503-0C
+					{ BYTE b=z80_af.b.h&1; z80_af.b.h=(z80_af.b.h>>1)+(z80_af.b.l<<7); Z80_Q_SET(b+(z80_af.b.h&0x28)+(z80_af.b.l&0xC4)); } // flags --503-0C
 					break;
 				case 0x08: // EX AF,AF'
 					Z80_EXX2(z80_af.w,z80_af2.w);
@@ -2259,22 +2059,22 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							z80_af.b.h-=b;
 						else
 							z80_af.b.h+=b;
-						Z80_Q_SET(z80_af.b.l=z80_flags_xor[z80_af.b.h]+((z80_af.b.h^x)&0x10)+(z80_af.b.l&2)+z);
+						Z80_Q_SET(z80_flags_xor[z80_af.b.h]+((z80_af.b.h^x)&0x10)+(z80_af.b.l&2)+z);
 					}
 					break;
 				case 0x2F: // CPL
-					Z80_Q_SET(z80_af.b.l=(z80_af.b.l&0xC5)+((z80_af.b.h=~z80_af.b.h)&0x28)+0x12); // --5-3---
+					Z80_Q_SET((z80_af.b.l&0xC5)+((z80_af.b.h=~z80_af.b.h)&0x28)+0x12); // --513-1-
 					break;
 				case 0x37: // SCF
 					#if Z80_XCF_BUG
-						Z80_Q_SET(z80_af.b.l=(z80_af.b.l&0xC4)+((z80_af.b.h|(z80_af.b.l^z80_q))&0x28)+1); // --5-3--1
+						Z80_Q_SET((z80_af.b.l&0xC4)+((z80_af.b.h|(z80_af.b.l^z80_q))&0x28)+1); // --503--1
 					#else
-						z80_af.b.l=(z80_af.b.l&0xC4)+(z80_af.b.h&0x28)+1; // --5-3--1
+						z80_af.b.l=(z80_af.b.l&0xC4)+(z80_af.b.h&0x28)+1; // --503--1
 					#endif
 					break;
 				case 0x3F: // CCF
 					#if Z80_XCF_BUG
-						Z80_Q_SET(z80_af.b.l=(z80_af.b.l&0xC4)+((z80_af.b.h|(z80_af.b.l^z80_q))&0x28)+((z80_af.b.l&1)<<4)+((~z80_af.b.l)&1)); // --5H3--C
+						Z80_Q_SET((z80_af.b.l&0xC4)+((z80_af.b.h|(z80_af.b.l^z80_q))&0x28)+((z80_af.b.l&1)<<4)+((~z80_af.b.l)&1)); // --5H3--C
 					#else
 						z80_af.b.l=(z80_af.b.l&0xC4)+(z80_af.b.h&0x28)+((z80_af.b.l&1)<<4)+((~z80_af.b.l)&1); // --5H3--C
 					#endif
@@ -2282,6 +2082,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 				// 0x40-0x7F
 				case 0x41: // LD B,C
 					z80_bc.b.h=z80_bc.b.l;
+				case 0x40: // LD B,B
 					break;
 				case 0x42: // LD B,D
 					z80_bc.b.h=z80_de.b.h;
@@ -2303,6 +2104,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					break;
 				case 0x48: // LD C,B
 					z80_bc.b.l=z80_bc.b.h;
+				case 0x49: // LD C,C
 					break;
 				case 0x4A: // LD C,D
 					z80_bc.b.l=z80_de.b.h;
@@ -2330,6 +2132,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					break;
 				case 0x53: // LD D,E
 					z80_de.b.h=z80_de.b.l;
+				case 0x52: // LD D,D
 					break;
 				case 0x54: // LD D,H
 					z80_de.b.h=z80_hl.b.h;
@@ -2351,6 +2154,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					break;
 				case 0x5A: // LD E,D
 					z80_de.b.l=z80_de.b.h;
+				case 0x5B: // LD E,E
 					break;
 				case 0x5C: // LD E,H
 					z80_de.b.l=z80_hl.b.h;
@@ -2378,6 +2182,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					break;
 				case 0x65: // LD H,L
 					z80_hl.b.h=z80_hl.b.l;
+				case 0x64: // LD H,H
 					break;
 				case 0x66: // LD H,(HL)
 					z80_hl.b.h=Z80_PEEK(z80_hl.w);
@@ -2399,6 +2204,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					break;
 				case 0x6C: // LD L,H
 					z80_hl.b.l=z80_hl.b.h;
+				case 0x6D: // LD L,L
 					break;
 				case 0x6E: // LD L,(HL)
 					z80_hl.b.l=Z80_PEEK(z80_hl.w);
@@ -2447,27 +2253,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					break;
 				case 0x7E: // LD A,(HL)
 					z80_af.b.h=Z80_PEEK(z80_hl.w);
-				case 0x40: // LD B,B
-					//z80_bc.b.h=z80_bc.b.h;
-					//break;
-				case 0x49: // LD C,C
-					//z80_bc.b.l=z80_bc.b.l;
-					//break;
-				case 0x52: // LD D,D
-					//z80_de.b.h=z80_de.b.h;
-					//break;
-				case 0x5B: // LD E,E
-					//z80_de.b.l=z80_de.b.l;
-					//break;
-				case 0x64: // LD H,H
-					//z80_hl.b.h=z80_hl.b.h;
-					//break;
-				case 0x6D: // LD L,L
-					//z80_hl.b.l=z80_hl.b.l;
-					//break;
 				case 0x7F: // LD A,A
-					//z80_af.b.h=z80_af.b.h;
-					//break;
 					break;
 				case 0x76: // HALT
 					if (_t_>z80_t&&!(z80_irq*z80_iff.b.l)) // optimisation!
@@ -2476,7 +2262,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 						z80_r7+=z;
 						z80_t+=z*Z80_STRIDE_HALT;
 					}
-					--z80_pc.w,z80_halted<<=1; // ...-1=>-2, 0=>0, 1=>2...
+					--z80_pc.w,z80_active<<=1; // ...-1=>-2, 0=>0, 1=>2...
 					break;
 				// 0x80-0xBF
 				case 0x80: // ADD B
@@ -2983,7 +2769,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					Z80_WAIT(2);
 					break;
 				case 0xF3: // DI
-					z80_iff.w=z80_halted=0; // disable interruptions at once
+					z80_iff.w=z80_active=0; // disable interruptions at once
 					break;
 				case 0xFB: // EI
 					z80_iff.w=0x0101; // enable interruptions one instruction later
@@ -3202,6 +2988,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 								break;
 							case 0x65: // LD XH,XL
 								xy->b.h=xy->b.l;
+							case 0x64: // LD XH,XH
 								break;
 							case 0x66: // LD H,(IX+$XX)
 								Z80_WZ_XY_1X(5); z80_hl.b.h=Z80_PEEK(z80_wz);
@@ -3223,6 +3010,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 								break;
 							case 0x6C: // LD XL,XH
 								xy->b.l=xy->b.h;
+							case 0x6D: // LD XL,XL
 								break;
 							case 0x6E: // LD L,(IX+$XX)
 								Z80_WZ_XY_1X(5); z80_hl.b.l=Z80_PEEK(z80_wz);
@@ -3286,12 +3074,6 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 								break;
 							case 0x7E: // LD A,(IX+$XX)
 								Z80_WZ_XY_1X(5); z80_af.b.h=Z80_PEEK(z80_wz);
-							case 0x64: // LD XH,XH
-								//xy->b.h=xy->b.h;
-								//break;
-							case 0x6D: // LD XL,XL
-								//xy->b.l=xy->b.l;
-								//break;
 								break;
 							// 0xDD80-0xDDBF
 							case 0x84: // ADD XH
@@ -3533,7 +3315,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 								// no `break`!
 							#endif
 							default: // ILLEGAL DDXX/FDXX!
-								z80_halted=0; // delay interruption (if any)
+								z80_active=0; // delay interruption (if any)
 								--z80_pc.w; Z80_DEC_R; // undo increases!!
 								// Z80_STRIDE(op) MUST BE ZERO if OP is illegal!!
 								Z80_REWIND; // terrible hack to undo the opcode fetching!
@@ -3692,18 +3474,18 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							Z80_WAIT(1);
 							break;
 						case 0x57: // LD A,I
-							Z80_Q_SET(z80_af.b.l=(z80_af.b.l&1)+z80_flags_sgn[z80_af.b.h=z80_ir.b.h]+(z80_iff.b.l?0x04:0x00)); // SZ000V0-
+							Z80_Q_SET((z80_af.b.l&1)+z80_flags_sgn[z80_af.b.h=z80_ir.b.h]+(z80_iff.b.l?0x04:0x00)); // SZ000V0-
 							Z80_STRIDE_1;
 							Z80_WAIT(1);
 							break;
 						case 0x5F: // LD A,R
-							Z80_Q_SET(z80_af.b.l=(z80_af.b.l&1)+z80_flags_sgn[z80_af.b.h=Z80_GET_R8]+(z80_iff.b.l?0x04:0x00)); // SZ000V0-
+							Z80_Q_SET((z80_af.b.l&1)+z80_flags_sgn[z80_af.b.h=Z80_GET_R8]+(z80_iff.b.l?0x04:0x00)); // SZ000V0-
 							Z80_STRIDE_1;
 							Z80_WAIT(1);
 							break;
 						case 0x77: // *LD I
 						case 0x7F: // *LD R
-							Z80_Q_SET(z80_af.b.l=(z80_af.b.l&0xFB)+(z80_iff.b.l?0x04:0x00)); // -----V--
+							Z80_Q_SET((z80_af.b.l&0xFB)+(z80_iff.b.l?0x04:0x00)); // -----V--
 							break;
 						case 0x67: // RRD
 							{
@@ -3711,7 +3493,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 								Z80_IORQ_1X_NEXT(4);
 								z=(b>>4)+(z80_af.b.h<<4); Z80_POKE(z80_hl.w,z);
 								z80_af.b.h=(z80_af.b.h&0xF0)+(b&0x0F);
-								Z80_Q_SET(z80_af.b.l=z80_flags_xor[z80_af.b.h]|(z80_af.b.l&0x01));
+								Z80_Q_SET(z80_flags_xor[z80_af.b.h]|(z80_af.b.l&0x01));
 								z80_wz=z80_hl.w+1;
 							}
 							break;
@@ -3721,7 +3503,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 								Z80_IORQ_1X_NEXT(4);
 								z=(b<<4)+(z80_af.b.h&0x0F); Z80_POKE(z80_hl.w,z);
 								z80_af.b.h=(z80_af.b.h&0xF0)+(b>>4);
-								Z80_Q_SET(z80_af.b.l=z80_flags_xor[z80_af.b.h]|(z80_af.b.l&0x01));
+								Z80_Q_SET(z80_flags_xor[z80_af.b.h]|(z80_af.b.l&0x01));
 								z80_wz=z80_hl.w+1;
 							}
 							break;
@@ -3851,12 +3633,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 						case 0xFF: // WINAPE-LIKE $EDFF BREAKPOINT
 							if (z80_debug_edfftrap)
 							{
-								#ifdef CONSOLE_DEBUGGER
-									breakpoint=0xFFFF;
-								#else
-									z80_debug_reset(); _t_=0; // throw!
-								#endif
-								session_signal|=SESSION_SIGNAL_DEBUG;
+								session_signal|=SESSION_SIGNAL_DEBUG; _t_=0; // throw!
 							}
 							// no `break`!
 						// 0xEDC0-0xEDFF
@@ -3866,10 +3643,6 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					break;
 			}
 		}
-		#ifdef CONSOLE_DEBUGGER
-		if ((z80_pc.w==breakpoint)&&(breakpoint!=0xFFFF))
-			session_signal|=SESSION_SIGNAL_DEBUG,breakpoint=0xFFFF;
-		#else
 		if (z80_breakpoints[z80_pc.w])
 		{
 			if (z80_breakpoints[z80_pc.w]&8) // log bytes?
@@ -3904,20 +3677,15 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 			}
 			else // pure breakpoints?
 			{
-				z80_debug_reset(); session_signal|=SESSION_SIGNAL_DEBUG; _t_=0; // throw!
+				session_signal|=SESSION_SIGNAL_DEBUG; _t_=0; // throw!
 			}
 		}
-		#endif
 	}
 	while (z80_t<_t_);
 	z80_ir.b.l=Z80_GET_R8; // unify R7+R8!
 	z80_sync(z80_t); // flush accumulated T!
 }
 
-#ifdef CONSOLE_DEBUGGER
-	#define z80_debug_configread(i) (z80_debug_edfftrap=(i)) // store config
-	#define z80_debug_configwrite() (z80_debug_edfftrap) // restore config
-#else
 char z80_debug_panel=0; // current panel: 0 disassembly, 1 registers, 2 memory, 3 stack
 char z80_debug_page=0; // hardware info
 char z80_debug_pnl1_x=0,z80_debug_pnl1_y=0; // X+Y position (nibble+register)
@@ -3932,10 +3700,11 @@ int z80_debug_peek(int q,WORD m)
 }
 void z80_debug_show(void) // redraw debug screen
 {
+	static int old_pc=-1,old_r=-1; if (old_pc!=z80_pc.w||old_r!=z80_ir.b.l) old_pc=z80_pc.w,old_r=z80_ir.b.l, z80_debug_reset(); // force recalc
 	int y,x;
 	WORD m,w;
 	memset(debug_buffer,' ',sizeof(debug_buffer)); // clear buffer
-	z80_break_stack=0xFFFF; z80_breakpoints[z80_debug_volatile]&=~128; // reset volatile breakpoints
+	z80_debug_stack=0xFFFF; z80_breakpoints[z80_debug_volatile]&=~128; // reset volatile breakpoints
 	// DISASSEMBLY
 	m=z80_debug_pnl0_w;
 	for (y=0;y<length(z80_debug_cache);++y)
@@ -4126,11 +3895,10 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 		if (i)
 		{
 			z80_breakpoints[z80_debug_volatile=(WORD)(z80_pc.w+i)]|=128; // set volatile breakpoint
-			session_signal&=~SESSION_SIGNAL_DEBUG;
-			k=0;
+			k=KBDBG_ESCAPE; // force debugger exit!
 		}
 		else
-			k=' '; // equivalent to SPACE
+			k=KBDBG_SPC; // equivalent to STEP INTO
 	}
 	switch (ucase(k))
 	{
@@ -4138,7 +3906,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 			if (z80_sp.w>=0xFFFE) // fringe case?
 				z80_breakpoints[z80_debug_volatile=PEEKW(z80_sp.w)]|=128; // set volatile breakpoint
 			else
-				z80_break_stack=z80_sp.w; // no `break`!
+				z80_debug_stack=z80_sp.w; // no `break`!
 		case KBDBG_ESCAPE: // ESCAPE
 			session_signal&=~SESSION_SIGNAL_DEBUG;
 		case 0: // dummy!
@@ -4150,15 +3918,11 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 		case 'V': // VIDEO
 			++onscreen_debug_mask; break;
 		case KBDBG_SPC: // SPACE: STEP INTO
-			z80_main(1),z80_debug_reset(); break;
+			z80_main(1); break;
 		case KBDBG_SPC_S: // SHIFT+SPACE: STEP INTO (scanline)
-			session_signal&=~SESSION_SIGNAL_DEBUG;
-			k=video_pos_y; do z80_main(z80_multi); while (k==video_pos_y); // slow
-			session_signal|=SESSION_SIGNAL_DEBUG,z80_debug_reset(); break;
+			session_signal_scanlines|=SESSION_SIGNAL_DEBUG; session_signal&=~SESSION_SIGNAL_DEBUG; break;
 		case KBDBG_RET_S: // SHIFT+RETURN: STEP INTO (frame)
-			session_signal&=~SESSION_SIGNAL_DEBUG;
-			k=video_pos_z; do z80_main(z80_multi); while (k==video_pos_z); // slow
-			session_signal|=SESSION_SIGNAL_DEBUG,z80_debug_reset(); break;
+			session_signal_frames|=SESSION_SIGNAL_DEBUG; session_signal&=~SESSION_SIGNAL_DEBUG; break;
 		case KBDBG_TAB_S: // SHIFT+TAB
 			if (z80_debug_grfx)
 				--z80_debug_grfxmode;
@@ -4534,8 +4298,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 	}
 	return k&&(debug_buffer[0]=128); // 128: draw debug screen
 }
-	#define z80_debug_configread(i) (onscreen_debug_mask=(i)/4,z80_debug_peekpoke=Z80_DEBUG_MMU?(i)&1:0,z80_debug_edfftrap=!!(i&2))
-	#define z80_debug_configwrite() onscreen_debug_mask*4+(z80_debug_peekpoke)+2*(z80_debug_edfftrap)
-#endif
+#define z80_debug_configread(i) (onscreen_debug_mask=(i)/4,z80_debug_peekpoke=Z80_DEBUG_MMU?(i)&1:0,z80_debug_edfftrap=!!(i&2))
+#define z80_debug_configwrite() onscreen_debug_mask*4+(z80_debug_peekpoke)+2*(z80_debug_edfftrap)
 
 // ============================================= END OF Z80 EMULATION //

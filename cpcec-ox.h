@@ -21,7 +21,7 @@
 
 #define strcasecmp SDL_strcasecmp
 #ifdef _WIN32
-	#define STRMAX 256 // widespread in Windows
+	#define STRMAX 288 // widespread in Windows
 	#define PATHCHAR '\\' // WIN32
 	#include <windows.h> // FindFirstFile...
 	#include <io.h> // _chsize(),_fileno()...
@@ -42,13 +42,7 @@
 	#define DWORD Uint32
 #endif
 
-#ifdef CONSOLE_DEBUGGER
-#define logprintf(...) (fprintf(stdout,__VA_ARGS__))
-#else
-#define logprintf(...) 0
-#endif
-
-#define MESSAGEBOX_WIDETAB "\t\t"
+#define MESSAGEBOX_WIDETAB "\t\t" // rely on monospace font
 
 // general engine constants and variables --------------------------- //
 
@@ -73,16 +67,16 @@
 	#define AUDIO_ZERO 0
 	#define AUDIO1(x) (x)
 #endif // bitsize
-#define AUDIO_STEREO 1
+#define AUDIO_CHANNELS 2 // 1 mono, 2 stereo
 
 VIDEO_UNIT *video_frame,*menus_frame; // video and UI frames, allocated on runtime
-AUDIO_UNIT *audio_frame,audio_buffer[AUDIO_LENGTH_Z*(AUDIO_STEREO+1)]; // audio frame
+AUDIO_UNIT *audio_frame,audio_buffer[AUDIO_LENGTH_Z*AUDIO_CHANNELS]; // audio frame
 VIDEO_UNIT *video_target; // pointer to current video pixel
 AUDIO_UNIT *audio_target; // pointer to current audio sample
 int video_pos_x,video_pos_y,audio_pos_z; // counters to keep pointers within range
 BYTE video_interlaced=0,video_interlaces=0,video_interlacez=0; // video scanline status
 char video_framelimit=0,video_framecount=0; // video frameskip counters; must be signed!
-BYTE audio_disabled=0,audio_channels=1,audio_session=0; // audio status and counter
+BYTE audio_disabled=0,audio_session=0; // audio status and counter
 unsigned char session_path[STRMAX],session_parmtr[STRMAX],session_tmpstr[STRMAX],session_substr[STRMAX],session_info[STRMAX]="";
 
 int session_timer,session_event=0; // timing synchronisation and user command
@@ -102,8 +96,10 @@ BYTE session_dirtymenu=1; // to force new status text
 
 #define kbd_bit_set(k) (kbd_bit[k/8]|=1<<(k%8))
 #define kbd_bit_res(k) (kbd_bit[k/8]&=~(1<<(k%8)))
-#define kbd_bit_tst(k) (kbd_bit[k/8]&(1<<(k%8)))
-BYTE kbd_bit[16]; // up to 128 keys in 16 rows of 8 bits
+#define joy_bit_set(k) (joy_bit[k/8]|=1<<(k%8))
+#define joy_bit_res(k) (joy_bit[k/8]&=~(1<<(k%8)))
+#define kbd_bit_tst(k) ((kbd_bit[k/8]|joy_bit[k/8])&(1<<(k%8)))
+BYTE kbd_bit[16],joy_bit[16]; // up to 128 keys in 16 rows of 8 bits
 
 // SDL2 follows the USB keyboard standard, so we're using the same values here:
 
@@ -127,7 +123,7 @@ BYTE kbd_bit[16]; // up to 128 keys in 16 rows of 8 bits
 #define	KBCODE_CAP_LOCK	 57
 #define	KBCODE_L_SHIFT	225
 #define	KBCODE_L_CTRL	224
-#define	KBCODE_L_ALT	226 // trapped by Win32
+//#define KBCODE_L_ALT	226 // trapped by Win32
 // alphanumeric row 1
 #define	KBCODE_1	 30
 #define	KBCODE_2	 31
@@ -186,9 +182,9 @@ BYTE kbd_bit[16]; // up to 128 keys in 16 rows of 8 bits
 #define	KBCODE_ENTER	 40
 #define	KBCODE_R_SHIFT	229
 #define	KBCODE_R_CTRL	228
-#define	KBCODE_R_ALT	230 // trapped by Win32
+// #define KBCODE_R_ALT	230 // trapped by Win32
 // extended keys
-#define	KBCODE_PRINT	 70 // trapped by Win32
+// #define KBCODE_PRINT	 70 // trapped by Win32
 #define	KBCODE_SCR_LOCK	 71
 #define	KBCODE_HOLD	 72
 #define	KBCODE_INSERT	 73
@@ -228,11 +224,9 @@ unsigned char kbd_map[256]; // key-to-key translation map
 // general engine functions and procedures -------------------------- //
 
 int session_user(int k); // handle the user's commands; 0 OK, !0 ERROR. Must be defined later on!
-#ifndef CONSOLE_DEBUGGER
-	void session_debug_show(void);
-	int session_debug_user(int k); // debug logic is a bit different: 0 UNKNOWN COMMAND, !0 OK
-	int debug_xlat(int k); // translate debug keys into codes. Must be defined later on!
-#endif
+void session_debug_show(void);
+int session_debug_user(int k); // debug logic is a bit different: 0 UNKNOWN COMMAND, !0 OK
+int debug_xlat(int k); // translate debug keys into codes. Must be defined later on!
 INLINE void audio_playframe(int q,AUDIO_UNIT *ao); // handle the sound filtering; is defined in CPCEC-RT.H!
 
 void session_please(void) // stop activity for a short while
@@ -258,13 +252,13 @@ void session_kbdsetup(const unsigned char *s,char l) // maps a series of virtual
 int session_key_n_joy(int k) // handle some keys as joystick motions
 {
 	if (session_key2joy)
-		for (int i=0;i<sizeof(kbd_joy);++i)
+		for (int i=0;i<KBD_JOY_UNIQUE;++i)
 			if (kbd_k2j[i]==k)
 				return kbd_joy[i];
 	return kbd_map[k];
 }
 
-SDL_Joystick *session_ji=NULL;
+SDL_GameController *session_joy=NULL;
 SDL_Window *session_hwnd=NULL;
 
 // unlike Windows, where the user interface is internally provided by the system and as well as the compositing work,
@@ -273,11 +267,9 @@ SDL_Window *session_hwnd=NULL;
 // the graphical debugger effectively behaves as a temporary substitute of the emulation canvas.
 // notice that SDL_Texture, unlike SDL_Surface, doesn't rely on anything like SDL_GetWindowSurface()
 
-#ifndef CONSOLE_DEBUGGER
-	VIDEO_UNIT *debug_frame;
-	BYTE debug_buffer[DEBUG_LENGTH_X*DEBUG_LENGTH_Y]; // [0] can be a valid character, 128 (new redraw required) or 0 (redraw not required)
-	SDL_Texture *session_dbg=NULL;
-#endif
+VIDEO_UNIT *debug_frame;
+BYTE debug_buffer[DEBUG_LENGTH_X*DEBUG_LENGTH_Y]; // [0] can be a valid character, 128 (new redraw required) or 0 (redraw not required)
+SDL_Texture *session_dbg=NULL;
 
 SDL_Texture *session_dib=NULL,*session_gui_dib=NULL; SDL_Renderer *session_blitter=NULL;
 SDL_Rect session_ideal; // used for calculations, see below
@@ -303,10 +295,8 @@ void session_redraw(BYTE q)
 		SDL_Texture *s; VIDEO_UNIT *t; int ox,oy;
 		if (!q)
 			s=session_gui_dib,ox=0,oy=0;
-		#ifndef CONSOLE_DEBUGGER
 		else if (session_signal&SESSION_SIGNAL_DEBUG)
 			s=session_dbg,ox=0,oy=0;
-		#endif
 		else
 			s=session_dib,ox=VIDEO_OFFSET_X,oy=VIDEO_OFFSET_Y;
 		SDL_Rect r;
@@ -318,10 +308,8 @@ void session_redraw(BYTE q)
 		int dummy; SDL_LockTexture(s,NULL,(void**)&t,&dummy); // allow editing again
 		if (!q)
 			menus_frame=t;
-		#ifndef CONSOLE_DEBUGGER
 		else if (session_signal&SESSION_SIGNAL_DEBUG)
 			debug_frame=t;
-		#endif
 		else
 		{
 			dummy=video_target-video_frame; // the old cursor...
@@ -331,12 +319,16 @@ void session_redraw(BYTE q)
 	}
 }
 
-#define session_clrscr() 0 //SDL_RenderClear(session_blitter) // defaults to black
+#ifdef __TINYC__
+#define session_clrscr() 0 // Tiny C Compiler causes a segmentation fault (!?)
+#else
+#define session_clrscr() SDL_RenderClear(session_blitter) // defaults to black
+#endif
 int session_fullscreen=0;
 void session_togglefullscreen(void)
 {
 	SDL_SetWindowFullscreen(session_hwnd,session_fullscreen=((SDL_GetWindowFlags(session_hwnd)&SDL_WINDOW_FULLSCREEN_DESKTOP)?0:SDL_WINDOW_FULLSCREEN_DESKTOP));
-	//session_clrscr(); // not really necessary, SDL2 cleans up
+	session_clrscr(); // SDL2 cleans up, but not on all systems
 	session_dirtymenu=1; // update "Full screen" option (if any)
 }
 
@@ -344,31 +336,34 @@ void session_togglefullscreen(void)
 
 #define SESSION_UI_HEIGHT 14
 
-/*BYTE session_ui_chrs[96*onscreen_size],session_ui_chr_size[96];
+BYTE session_ui_chrs[96*SESSION_UI_HEIGHT];//,session_ui_chr_size[96];
 void session_ui_makechrs(void)
 {
+	memset(session_ui_chrs,0,sizeof(session_ui_chrs));
 	for (int i=0;i<96;++i)
-	{
+		for (int j=0;j<ONSCREEN_SIZE;++j)
+		{
+			int z=onscreen_chrs[i*ONSCREEN_SIZE+j];
+			session_ui_chrs[i*SESSION_UI_HEIGHT+(SESSION_UI_HEIGHT-ONSCREEN_SIZE)/2+j]=z|(z>>1); // normal, not thin or bold
+		}
+	/*{ // experimental monospace-to-proportional font rendering
 		int bits=0;
-		for (int j=0;j<onscreen_size;++j)
-			bits|=onscreen_chrs[i*onscreen_size+j];
+		for (int j=0;j<SESSION_UI_HEIGHT;++j)
+			bits|=session_ui_chrs[i*SESSION_UI_HEIGHT+j];
 		if (bits)
 		{
-			int k=0,l=8+2; // extra space after char
+			int k=0,l=8+1; // extra space after char
 			while (bits<128)
 				++k,bits<<=1;
 			while (!(bits&1))
 				--l,bits>>=1;
 			session_ui_chr_size[i]=l;
-			for (int j=0;j<onscreen_size;++j)
-			{
-				l=onscreen_chrs[i*onscreen_size+j]<<k;
-				session_ui_chrs[i*onscreen_size+j]=l|(l>>1); // normal, not thin or bold
-			}
+			for (int j=0;j<SESSION_UI_HEIGHT;++j)
+				l=session_ui_chrs[i*SESSION_UI_HEIGHT+j]<<k;
 		}
 	}
-	session_ui_chr_size[0]=session_ui_chr_size[1]; // space is as wide as "!"
-}*/
+	session_ui_chr_size[0]=session_ui_chr_size[1];*/ // space is as wide as "!"
+}
 
 BYTE session_ui_menudata[1<<12],session_ui_menusize; // encoded menu data
 #ifdef _WIN32
@@ -405,32 +400,17 @@ void session_ui_drawframes(int x,int y,int w,int h)
 }
 int session_ui_printglyph(VIDEO_UNIT *p,BYTE z)
 {
-	//BYTE const *r=&session_ui_chrs[((z-32)&127)*onscreen_size],w=session_ui_chr_size[(z-32)&127];
-	BYTE const *r=&onscreen_chrs[((z-32)&127)*onscreen_size]; const int w=8;
-	VIDEO_UNIT q0,q1;
+	BYTE const *r=&session_ui_chrs[((z-32)&127)*SESSION_UI_HEIGHT];
+	const int w=8; //=session_ui_chr_size[(z-32)&127];
+	VIDEO_UNIT q0=VIDEO1(0x00FFFFFF),q1=VIDEO1(0);
 	if (z&128)
 		q0=VIDEO1(0),q1=VIDEO1(0x00FFFFFF);
-	else
-		q1=VIDEO1(0),q0=VIDEO1(0x00FFFFFF);
-	BYTE yy=0;
-	while (yy<(SESSION_UI_HEIGHT-onscreen_size)/2)
+	for (int yy=0;yy<SESSION_UI_HEIGHT;++yy)
 	{
-		for (int xx=0;xx<w;++xx)
-			*p++=q0;
-		++yy; p+=VIDEO_PIXELS_X-w;
-	}
-	while (yy<(SESSION_UI_HEIGHT-onscreen_size)/2+onscreen_size)
-	{
-		BYTE rr=*r++; rr|=rr>>1; // normal, not thin or bold
+		BYTE rr=*r++;
 		for (int xx=0;xx<w;++xx)
 			*p++=(rr&(128>>xx))?q1:q0;
-		++yy; p+=VIDEO_PIXELS_X-w;
-	}
-	while (yy<SESSION_UI_HEIGHT)
-	{
-		for (int xx=0;xx<w;++xx)
-			*p++=q0;
-		++yy; p+=VIDEO_PIXELS_X-w;
+		p+=VIDEO_PIXELS_X-w;
 	}
 	return w; // pixel width
 }
@@ -504,20 +484,16 @@ int session_ui_exchange(void) // update window and wait for a keystroke
 
 void session_ui_loop(void) // get background painted again to erase old widgets
 {
-	#ifndef CONSOLE_DEBUGGER
 	if (session_signal&SESSION_SIGNAL_DEBUG)
 		memcpy(menus_frame,debug_frame,sizeof(VIDEO_UNIT)*VIDEO_PIXELS_X*VIDEO_PIXELS_Y); // use the debugger as the background, rather than the emulation
 	else
-	#endif
-	session_backup(menus_frame);
+		session_backup(menus_frame);
 }
-void session_ui_init(void) { memset(kbd_bit,0,sizeof(kbd_bit)); session_please(); session_ui_loop(); }
+void session_ui_init(void) { memset(kbd_bit,0,sizeof(kbd_bit)),memset(joy_bit,0,sizeof(joy_bit)); session_please(); session_ui_loop(); }
 void session_ui_exit(void) // wipe all widgets and restore the window contents
 {
-	#ifndef CONSOLE_DEBUGGER
 	if (session_signal&SESSION_SIGNAL_DEBUG)
 		session_redraw(1);
-	#endif
 }
 
 void session_ui_menu(void) // show the menu and set session_event accordingly
@@ -1172,8 +1148,8 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 		#endif
 
 		if (!q&&!f)
-			m=&m[sortedinsert(m,0,"*NEW*")]; // point at "*" by default on SAVE, rather than on any past names
-		else
+			m=&m[sortedinsert(m,0,"** NEW **")]; // point at "*" by default on SAVE, rather than on any past names
+		//else
 			half=session_scratch,i=sortedsearch(half,m-half,pastname); // look for past name, if any
 		*m=0; // end of list
 
@@ -1194,7 +1170,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 				if (!strcmp(session_parmtr,strcpy(pastname,"..\\")))
 				{
 					m=strrchr(basepath,PATHCHAR);
-					while(m&&m>basepath&&*--m!=PATHCHAR)
+					while (m&&m>basepath&&*--m!=PATHCHAR)
 						;
 					if (m)
 						strcpy(pastname,&m[1]); // allow returning to previous directory
@@ -1207,7 +1183,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 			if (!strcmp(session_parmtr,strcpy(pastname,"../")))
 			{
 				m=strrchr(basepath,PATHCHAR);
-				while(m&&m>basepath&&*--m!=PATHCHAR)
+				while (m&&m>basepath&&*--m!=PATHCHAR)
 					;
 				if (m)
 					strcpy(pastname,&m[1]); // allow returning to previous directory
@@ -1257,9 +1233,9 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 INLINE char* session_create(char *s) // create video+audio devices and set menu; 0 OK, !0 ERROR
 {
 	SDL_SetMainReady();
-	if (SDL_Init(SDL_INIT_EVENTS|SDL_INIT_VIDEO|SDL_INIT_AUDIO|SDL_INIT_TIMER|SDL_INIT_JOYSTICK)<0)
+	if (SDL_Init(SDL_INIT_EVENTS|SDL_INIT_VIDEO|SDL_INIT_AUDIO|SDL_INIT_TIMER|SDL_INIT_JOYSTICK|SDL_INIT_GAMECONTROLLER)<0)
 		return (char *)SDL_GetError();
-	if (!(session_hwnd=SDL_CreateWindow(caption_version,SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,0)))
+	if (!(session_hwnd=SDL_CreateWindow(session_caption,SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,0)))
 		return SDL_Quit(),(char *)SDL_GetError();
 
 	if (session_hardblit=1,session_softblit||!(session_blitter=SDL_CreateRenderer(session_hwnd,-1,SDL_RENDERER_ACCELERATED)))
@@ -1273,23 +1249,21 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	SDL_SetTextureBlendMode(session_dib,SDL_BLENDMODE_NONE);
 	SDL_SetTextureBlendMode(session_gui_dib,SDL_BLENDMODE_NONE); // ignore alpha!
 	int dummy; SDL_LockTexture(session_dib,NULL,(void*)&video_frame,&dummy); // pitch must always equal VIDEO_LENGTH_X*4 !!!
-	if (dummy!=VIDEO_LENGTH_X*4) return SDL_Quit(),"pitch mismatch !?";
+	if (dummy!=4*VIDEO_LENGTH_X) return SDL_Quit(),"pitch mismatch"; // can this EVER happen!?!?
 	SDL_LockTexture(session_gui_dib,NULL,(void*)&menus_frame,&dummy); // ditto, pitch must always equal VIDEO_PIXELS_X*4 !!!
 
-	#ifndef CONSOLE_DEBUGGER
-		session_dbg=SDL_CreateTexture(session_blitter,SDL_PIXELFORMAT_ARGB8888,SDL_TEXTUREACCESS_STREAMING,VIDEO_PIXELS_X,VIDEO_PIXELS_Y);
-		SDL_SetTextureBlendMode(session_dbg,SDL_BLENDMODE_NONE);
-		SDL_LockTexture(session_dbg,NULL,(void*)&debug_frame,&dummy);
-	#endif
+	session_dbg=SDL_CreateTexture(session_blitter,SDL_PIXELFORMAT_ARGB8888,SDL_TEXTUREACCESS_STREAMING,VIDEO_PIXELS_X,VIDEO_PIXELS_Y);
+	SDL_SetTextureBlendMode(session_dbg,SDL_BLENDMODE_NONE);
+	SDL_LockTexture(session_dbg,NULL,(void*)&debug_frame,&dummy);
 
 	if (session_stick)
 	{
-		int i=SDL_NumJoysticks();
-		//printf("Detected %i joystick[s]: ",i);
-		while (--i>=0&&!(/*printf("Joystick #%i = '%s'. ",i,SDL_JoystickNameForIndex(i)),*/session_ji=SDL_JoystickOpen(i))) // scan joysticks until we run out or one is OK
+		int i=SDL_NumJoysticks(),j;
+		logprintf("Detected %i joystick[s]: ",i);
+		while (--i>=0&&!(j=SDL_IsGameController(i),logprintf("Joystick #%i = '%s'. ",i,j?SDL_GameControllerNameForIndex(i):SDL_JoystickNameForIndex(i)),session_joy=(j?SDL_GameControllerOpen(i):SDL_JoystickOpen(i)))) // scan joysticks and game controllers until we run out or one is OK
 			; // unlike Win32, SDL lists the joysticks from last to first
 		session_stick=i>=0;
-		//printf(session_stick?"Joystick enabled!\n":"No joystick!");
+		logprintf(session_stick?"Joystick enabled!\n":"No joystick!\n");
 	}
 	if (session_audio)
 	{
@@ -1297,7 +1271,7 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 		SDL_zero(spec);
 		spec.freq=AUDIO_PLAYBACK;
 		spec.format=AUDIO_BITDEPTH>8?AUDIO_S16SYS:AUDIO_U8;
-		spec.channels=AUDIO_STEREO+1;
+		spec.channels=AUDIO_CHANNELS;
 		spec.samples=4096; // safe value?
 		if (session_audio=SDL_OpenAudioDevice(NULL,0,&spec,NULL,0))
 			audio_frame=audio_buffer;
@@ -1313,7 +1287,7 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	session_ui_icon=SDL_CreateRGBSurfaceFrom(session_icon32xx16,32,32,16,32*2,0xF00,0xF0,0xF,0xF000); // ARGB4444
 	SDL_SetWindowIcon(session_hwnd,session_ui_icon); // SDL already handles WIN32 icons alone!
 	#endif
-	//session_ui_makechrs();
+	session_ui_makechrs();
 
 	// translate menu data into custom format
 	BYTE *t=session_ui_menudata; session_ui_menusize=0;
@@ -1383,6 +1357,29 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	return NULL;
 }
 
+int session_pad2bit(int i)
+{
+	switch (i)
+	{
+		case SDL_CONTROLLER_BUTTON_A:
+			return 16; // =16<<event.cbutton.button
+		case SDL_CONTROLLER_BUTTON_B:
+			return 32;
+		case SDL_CONTROLLER_BUTTON_X:
+			return 64;
+		case SDL_CONTROLLER_BUTTON_Y:
+			return 128;
+		case SDL_CONTROLLER_BUTTON_DPAD_UP:
+			return 1;
+		case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+			return 2;
+		case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+			return 4;
+		case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+			return 8;
+	}
+	return 0;
+}
 void session_menuinfo(void); // set the current menu flags. Must be defined later on!
 INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 {
@@ -1391,13 +1388,8 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 		config_signal=session_signal,session_dirtymenu=1;
 	if (session_dirtymenu)
 		session_dirtymenu=0,session_menuinfo();
-	#ifndef CONSOLE_DEBUGGER
 	if (session_signal)
-	#else
-	if (session_signal&~SESSION_SIGNAL_DEBUG)
-	#endif
 	{
-		#ifndef CONSOLE_DEBUGGER
 		if (session_signal&SESSION_SIGNAL_DEBUG)
 		{
 			if (*debug_buffer==128)
@@ -1405,12 +1397,10 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 			if (*debug_buffer)//!=0
 				session_redraw(1),*debug_buffer=0;
 		}
-		else
-		#endif
-		if (!session_paused) // set the caption just once
+		else if (!session_paused) // set the caption just once
 		{
 			session_please();
-			sprintf(session_tmpstr,"%s | %s | PAUSED",caption_version,session_info);
+			sprintf(session_tmpstr,"%s | %s | PAUSED",session_caption,session_info);
 			SDL_SetWindowTitle(session_hwnd,session_tmpstr);
 			session_paused=1;
 		}
@@ -1429,14 +1419,12 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 				if (event.button.button==SDL_BUTTON_RIGHT)
 					session_event=0x8080; // show menu
 				break;
-			#ifndef CONSOLE_DEBUGGER
 			case SDL_TEXTINPUT:
 				if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant for the debugger, see below
 					if (event.text.text[0]>32) // exclude SPACE and non-visible codes!
 						if ((session_event=event.text.text[0])&128) // UTF-8?
 							session_event=128+(session_event&31)*64+(event.text.text[1]&63);
 				break;
-			#endif
 			case SDL_KEYDOWN: //if (event.key.state==SDL_PRESSED)
 				{
 					if (event.key.keysym.mod&KMOD_ALT)
@@ -1451,16 +1439,12 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 						session_event=0x8080; // show menu
 						break;
 					}
-					#ifndef CONSOLE_DEBUGGER
 					if (session_signal&SESSION_SIGNAL_DEBUG)
 						session_event=debug_xlat(event.key.keysym.scancode);
-					#endif
 					int k=session_key_n_joy(event.key.keysym.scancode);
 					if (k<128)
 					{
-						#ifndef CONSOLE_DEBUGGER
 						if (!(session_signal&SESSION_SIGNAL_DEBUG))
-						#endif
 							kbd_bit_set(k);
 					}
 					else if (!session_event) // special key
@@ -1474,20 +1458,32 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 						kbd_bit_res(k);
 				}
 				break;
-			case SDL_JOYAXISMOTION: // 10922 ~ 32768/3
+			case SDL_JOYAXISMOTION:
 				if (event.jaxis.axis&1)
-					session_joybits=(session_joybits&~(1+2))+(event.jaxis.value<-10922?1:event.jaxis.value>=19022?2:0);
+					session_joybits=(session_joybits&~(1+2))+(event.caxis.value<-0x4000?1:event.caxis.value>=0x4000?2:0);
 				else
-					session_joybits=(session_joybits&~(4+8))+(event.jaxis.value<-10922?4:event.jaxis.value>=19022?8:0);
+					session_joybits=(session_joybits&~(4+8))+(event.caxis.value<-0x4000?4:event.caxis.value>=0x4000?8:0);
+				break;
+			case SDL_CONTROLLERAXISMOTION:
+				if (event.caxis.axis&1)
+					session_joybits=(session_joybits&~(1+2))+(event.caxis.value<-0x4000?1:event.caxis.value>=0x4000?2:0);
+				else
+					session_joybits=(session_joybits&~(4+8))+(event.caxis.value<-0x4000?4:event.caxis.value>=0x4000?8:0);
 				break;
 			case SDL_JOYBUTTONDOWN:
-				session_joybits|=16<<event.jbutton.button;
+				session_joybits|=session_pad2bit(event.jbutton.button);
+				break;
+			case SDL_CONTROLLERBUTTONDOWN:
+				session_joybits|=session_pad2bit(event.cbutton.button);
 				break;
 			case SDL_JOYBUTTONUP:
-				session_joybits&=~(16<<event.jbutton.button);
+				session_joybits&=~session_pad2bit(event.jbutton.button);
+				break;
+			case SDL_CONTROLLERBUTTONUP:
+				session_joybits&=~session_pad2bit(event.cbutton.button);
 				break;
 			case SDL_WINDOWEVENT_FOCUS_LOST:
-				memset(kbd_bit,0,sizeof(kbd_bit)); // loss of focus: no keys!
+				memset(kbd_bit,0,sizeof(kbd_bit)),memset(joy_bit,0,sizeof(joy_bit)); // loss of focus: no keys!
 				break;
 			case SDL_DROPFILE:
 				strcpy(session_parmtr,event.drop.file);
@@ -1504,9 +1500,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 			q=1;
 		else if (session_event)
 		{
-			#ifndef CONSOLE_DEBUGGER
 			if (!((session_signal&SESSION_SIGNAL_DEBUG)&&session_debug_user(session_event)))
-			#endif
 				q|=session_user(session_event);
 			session_event=0;
 		}
@@ -1526,14 +1520,13 @@ INLINE void session_render(void) // update video, audio and timers
 		if ((video_interlaces=!video_interlaces)||!video_interlaced)
 			++performance_b,session_redraw(1);
 		if (session_stick&&!session_key2joy) // do we need to check the joystick?
-			for (i=0;i<sizeof(kbd_joy);++i)
-			{
-				int k=kbd_joy[i];
+		{
+			for (i=0;i<length(kbd_joy);++i)
+				joy_bit_res(kbd_joy[i]); // clean keys, allow redundancy
+			for (i=0;i<length(kbd_joy);++i)
 				if (session_joybits&(1<<i))
-					kbd_bit_set(k); // key is down
-				else
-					kbd_bit_res(k); // key is up
-			}
+					joy_bit_set(kbd_joy[i]); // key is down
+		}
 	}
 
 	if (!audio_disabled)
@@ -1589,7 +1582,7 @@ INLINE void session_render(void) // update video, audio and timers
 	{
 		if (performance_t)
 		{
-			sprintf(session_tmpstr,"%s | %s | %g%% CPU %g%% %s",caption_version,session_info,performance_f*100.0/VIDEO_PLAYBACK,performance_b*100.0/VIDEO_PLAYBACK,session_hardblit?"SDL":"sdl");
+			sprintf(session_tmpstr,"%s | %s | %g%% CPU %g%% %s",session_caption,session_info,performance_f*100.0/VIDEO_PLAYBACK,performance_b*100.0/VIDEO_PLAYBACK,session_hardblit?"SDL":"sdl");
 			SDL_SetWindowTitle(session_hwnd,session_tmpstr);
 		}
 		performance_t=i,performance_f=performance_b=session_paused=0;
@@ -1598,17 +1591,14 @@ INLINE void session_render(void) // update video, audio and timers
 
 INLINE void session_byebye(void) // delete video+audio devices
 {
-	if (session_ji)
-		SDL_JoystickClose(session_ji);
+	if (session_joy) SDL_GameControllerClose(session_joy),SDL_JoystickClose(session_joy);
 	SDL_StopTextInput();
 	SDL_UnlockTexture(session_dib);
 	SDL_DestroyTexture(session_dib);
 	SDL_UnlockTexture(session_gui_dib);
 	SDL_DestroyTexture(session_gui_dib);
-	#ifndef CONSOLE_DEBUGGER
 	SDL_UnlockTexture(session_dbg);
 	SDL_DestroyTexture(session_dbg);
-	#endif
 	SDL_DestroyRenderer(session_blitter);
 	SDL_DestroyWindow(session_hwnd);
 	#ifdef _WIN32

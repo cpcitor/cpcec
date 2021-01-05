@@ -23,23 +23,18 @@
 	typedef union { unsigned short w; struct { unsigned char l,h; } b; } Z80W; // lil-endian: i86, x64...
 #endif
 
-#define length(x) (sizeof(x)/sizeof(*(x)))
 #define MEMZERO(x) memset((x),0,sizeof(x))
 #define MEMFULL(x) memset((x),~0,sizeof(x))
 #define MEMSAVE(x,y) memcpy((x),(y),sizeof(y))
 #define MEMLOAD(x,y) memcpy((x),(y),sizeof(x))
 #define MEMNCPY(x,y,z) memcpy((x),(y),sizeof(*(x))*(z))
 
-void session_backup(VIDEO_UNIT *t) // make a clipped copy of the current screen; used by the debugger and the SDL2 UI
-{
-	for (int y=0;y<VIDEO_PIXELS_Y;++y)
-		memcpy(&t[y*VIDEO_PIXELS_X],&video_frame[(VIDEO_OFFSET_Y+y)*VIDEO_LENGTH_X+VIDEO_OFFSET_X],sizeof(VIDEO_UNIT)*VIDEO_PIXELS_X);
-}
-
 int fread1(void *t,int l,FILE *f) { int k=0,i; while (l&&(i=fread(t,1,l,f))) { t=(void*)((char*)t+i); k+=i; l-=i; } return k; } // safe fread(t,1,l,f)
 int fwrite1(void *t,int l,FILE *f) { int k=0,i; while (l&&(i=fwrite(t,1,l,f))) { t=(void*)((char*)t+i); k+=i; l-=i; } return k; } // safe fwrite(t,1,l,f)
 
 // configuration functions ------------------------------------------ //
+
+int audio_mixmode=1; // 0 = pure mono, 1 = pure stereo, 2 = 50%, 3 = 25%
 
 void session_detectpath(char *s) // detects session path using argv[0] as reference
 {
@@ -68,7 +63,7 @@ char *session_configread(char *t) // reads configuration file; s points to the p
 	while (*s==' ') ++s; // skip spaces between both
 	//if (*s) // handle common parameters, if valid
 	{
-		if (!strcmp(session_parmtr,"polyphony")) return audio_channels=*s&3,NULL;
+		if (!strcmp(session_parmtr,"polyphony")) return audio_mixmode=*s&3,NULL;
 		if (!strcmp(session_parmtr,"scanlines")) return video_scanline=*s&3,NULL;
 		if (!strcmp(session_parmtr,"softaudio")) return audio_filter=*s&3,NULL;
 		if (!strcmp(session_parmtr,"softvideo")) return video_filter=*s&7,NULL;
@@ -79,7 +74,7 @@ char *session_configread(char *t) // reads configuration file; s points to the p
 }
 void session_configwrite(FILE *f) // save common parameters
 {
-	fprintf(f,"polyphony %i\nscanlines %i\nsoftaudio %i\nsoftvideo %i\nzoomvideo %i\nsafevideo %i\n",audio_channels,video_scanline,audio_filter,video_filter,session_intzoom,session_softblit);
+	fprintf(f,"polyphony %i\nscanlines %i\nsoftaudio %i\nsoftvideo %i\nzoomvideo %i\nsafevideo %i\n",audio_mixmode,video_scanline,audio_filter,video_filter,session_intzoom,session_softblit);
 }
 
 // auxiliary functions ---------------------------------------------- //
@@ -373,7 +368,7 @@ INLINE void video_endscanlines(VIDEO_UNIT z) // call between frames
 INLINE void audio_playframe(int q,AUDIO_UNIT *ao) // call between frames by the OS wrapper
 {
 	AUDIO_UNIT aa,*ai=audio_frame; // session_filter[(aa<<8)+az] is 8-bit only and isn't faster than the calculations
-	#if AUDIO_STEREO
+	#if AUDIO_CHANNELS > 1
 	static AUDIO_UNIT a0=AUDIO_ZERO,a1=AUDIO_ZERO; // independent channels
 	switch (q)
 	{
@@ -414,6 +409,7 @@ INLINE void audio_playframe(int q,AUDIO_UNIT *ao) // call between frames by the 
 }
 
 int video_pos_z=0; // for statistics and debugging
+int session_signal_frames=0,session_signal_scanlines=0;
 INLINE void session_update(void) // render video+audio thru OS and handle realtime logic (self-adjusting delays, automatic frameskip, etc.)
 {
 	session_render();
@@ -474,10 +470,10 @@ INLINE int session_createwave(void) // create a wave file; !0 ERROR
 		return 1; // too many files!
 	if (!(session_wavefile=fopen(session_parmtr,"wb")))
 		return 1; // cannot create file!
-	waveheader[0x16]=AUDIO_STEREO+1; // channels
+	waveheader[0x16]=AUDIO_CHANNELS; // channels
 	mputiiii(&waveheader[0x18],AUDIO_PLAYBACK); // samples per second
-	mputiiii(&waveheader[0x1C],AUDIO_PLAYBACK*sizeof(AUDIO_UNIT)*(AUDIO_STEREO+1)); // bytes per second
-	waveheader[0x20]=sizeof(AUDIO_UNIT)*(AUDIO_STEREO+1); // bytes per sample
+	mputiiii(&waveheader[0x1C],AUDIO_PLAYBACK*AUDIO_BITDEPTH/8*AUDIO_CHANNELS); // bytes per second
+	waveheader[0x20]=AUDIO_BITDEPTH/8*AUDIO_CHANNELS; // bytes per sample
 	waveheader[0x22]=AUDIO_BITDEPTH;
 	fwrite(waveheader,1,sizeof(waveheader),session_wavefile);
 	return session_wavesize=0;
@@ -910,11 +906,11 @@ char *puff_session_newfile(char *x,char *y,char *z) // writing within ZIP archiv
 
 // on-screen and debug text printing -------------------------------- //
 
-#define onscreen_ink0 (VIDEO1(0xAA0000))
-#define onscreen_ink1 (VIDEO1(0x55FF55))
+VIDEO_UNIT onscreen_ink0,onscreen_ink1; BYTE onscreen_flag=1;
+#define onscreen_inks(q0,q1) onscreen_ink0=q0,onscreen_ink1=q1
 
 #define ONSCREEN_XY if ((x*=8)<0) x+=VIDEO_OFFSET_X+VIDEO_PIXELS_X; else x+=VIDEO_OFFSET_X; \
-	if ((y*=onscreen_size)<0) y+=VIDEO_OFFSET_Y+VIDEO_PIXELS_Y; else y+=VIDEO_OFFSET_Y; \
+	if ((y*=ONSCREEN_SIZE)<0) y+=VIDEO_OFFSET_Y+VIDEO_PIXELS_Y; else y+=VIDEO_OFFSET_Y; \
 	int p=y*VIDEO_LENGTH_X+x,a=video_scanline==1?2:1; \
 	VIDEO_UNIT q0=q?onscreen_ink1:onscreen_ink0
 void onscreen_char(int x,int y,int z,int q) // draw a character
@@ -922,8 +918,8 @@ void onscreen_char(int x,int y,int z,int q) // draw a character
 	if ((z=(z&127)-32)<0)//if (z=='\t')
 		return;
 	ONSCREEN_XY,q1=q?onscreen_ink0:onscreen_ink1;
-	unsigned const char *zz=&onscreen_chrs[z*onscreen_size];
-	for (y=0;y<onscreen_size;++y)
+	unsigned const char *zz=&onscreen_chrs[z*ONSCREEN_SIZE];
+	for (y=0;y<ONSCREEN_SIZE;++y)
 	{
 		unsigned char bb=*zz++;
 		bb|=bb>>1; // normal, rather than thin or bold
@@ -948,7 +944,7 @@ void onscreen_byte(int x, int y, int a, int q) // write two digits
 void onscreen_bool(int x,int y,int lx,int ly,int q) // draw dots
 {
 	ONSCREEN_XY;
-	lx*=8; ly*=onscreen_size;
+	lx*=8; ly*=ONSCREEN_SIZE;
 	for (y=0;y<ly;y+=a)
 	{
 		for (x=0;x<lx;++x)
@@ -956,9 +952,6 @@ void onscreen_bool(int x,int y,int lx,int ly,int q) // draw dots
 		p+=VIDEO_LENGTH_X*a-lx;
 	}
 }
-
-#ifdef CONSOLE_DEBUGGER
-#else
 
 #define KBDBG_UP	11
 #define KBDBG_DOWN	10
@@ -1025,6 +1018,12 @@ void debug_dumpxy(int x,int y,char *s) // dump text block
 	while (c);
 }
 
+void session_backup(VIDEO_UNIT *t) // make a clipped copy of the current screen; used by the debugger and the SDL2 UI
+{
+	for (int y=0;y<VIDEO_PIXELS_Y;++y)
+		memcpy(&t[y*VIDEO_PIXELS_X],&video_frame[(VIDEO_OFFSET_Y+y)*VIDEO_LENGTH_X+VIDEO_OFFSET_X],sizeof(VIDEO_UNIT)*VIDEO_PIXELS_X);
+}
+
 char onscreen_debug_mask=0,onscreen_debug_mask_=-1;
 unsigned char onscreen_debug_chrs[sizeof(onscreen_chrs)];
 void onscreen_clear(void) // get a copy of the visible screen
@@ -1042,29 +1041,23 @@ WORD onscreen_grafx(int q,VIDEO_UNIT *v,int w,int x,int y); // defined later!
 VIDEO_UNIT onscreen_ascii0,onscreen_ascii1;
 void onscreen_ascii(int x,int y,int z) // not exactly the same as onscreen_char
 {
-	const unsigned char *zz=&onscreen_debug_chrs[((z&127)-32)*onscreen_size];
+	const unsigned char *zz=&onscreen_debug_chrs[((z&127)-32)*ONSCREEN_SIZE];
 	VIDEO_UNIT q1,q0;
 	if (z&128)
 		q1=onscreen_ascii1,q0=onscreen_ascii0;
 	else
 		q0=onscreen_ascii1,q1=onscreen_ascii0;
-	z=(y*VIDEO_PIXELS_X*DEBUG_LENGTH_Z)+x*8+((VIDEO_PIXELS_Y-DEBUG_LENGTH_Y*DEBUG_LENGTH_Z)*VIDEO_PIXELS_X+VIDEO_PIXELS_X-DEBUG_LENGTH_X*8)/2;
-	int yy=(onscreen_size-DEBUG_LENGTH_Z)/2;
-	for (;yy<0;++yy,z+=VIDEO_PIXELS_X-8)
-		for (int w=0;w<8;++w)
-			debug_frame[z++]=q0;
-	for (;yy<onscreen_size;++yy,z+=VIDEO_PIXELS_X-8)
+	z=(y*VIDEO_PIXELS_X*ONSCREEN_SIZE)+x*8+((VIDEO_PIXELS_Y-DEBUG_LENGTH_Y*ONSCREEN_SIZE)*VIDEO_PIXELS_X+VIDEO_PIXELS_X-DEBUG_LENGTH_X*8)/2;
+	for (int yy=0;yy<ONSCREEN_SIZE;++yy,z+=VIDEO_PIXELS_X-8)
 		for (int w=128,bb=*zz++;w;w>>=1)
 			debug_frame[z++]=(w&bb)?q1:q0;
-	for (;yy<(onscreen_size+DEBUG_LENGTH_Z)/2;++yy,z+=VIDEO_PIXELS_X-8)
-		for (int w=0;w<8;++w)
-			debug_frame[z++]=q0;
 }
 void onscreen_debug(int q) // rewrite debug texts or redraw graphics
 {
 	static int videox=-1,videoy=-1,videoz=-1;
+	session_signal_frames=0,session_signal_scanlines=0; // reset traps
 	if (videox!=video_pos_x||videoy!=video_pos_y||videoz!=video_pos_z)
-		videox=video_pos_x,videoy=video_pos_y,onscreen_clear(),videoz=video_pos_z; // flush background if required!
+		videox=video_pos_x,videoy=video_pos_y,videoz=video_pos_z,onscreen_clear(); // flush background if required!
 	if (onscreen_debug_mask&1) // normal or inverse?
 		onscreen_ascii1=VIDEO1(0xFFFFFF),onscreen_ascii0=VIDEO1(0x000000);
 	else
@@ -1081,7 +1074,7 @@ void onscreen_debug(int q) // rewrite debug texts or redraw graphics
 				break;
 			case 4:
 				for (int i=0,j;i<sizeof(onscreen_debug_chrs);++i)
-					j=onscreen_chrs[i],onscreen_debug_chrs[i]=j|((2*i/onscreen_size)&1?(j<<1):(j>>1)); // italic
+					j=onscreen_chrs[i],onscreen_debug_chrs[i]=j|((2*i/ONSCREEN_SIZE)&1?(j<<1):(j>>1)); // italic
 				break;
 			case 6:
 				for (int i=0,j;i<sizeof(onscreen_debug_chrs);++i)
@@ -1091,8 +1084,8 @@ void onscreen_debug(int q) // rewrite debug texts or redraw graphics
 	unsigned char *t=debug_buffer;
 	if (q>=0)
 	{
-		int z=onscreen_grafx(q,&debug_frame[VIDEO_PIXELS_X*(VIDEO_PIXELS_Y-DEBUG_LENGTH_Y*DEBUG_LENGTH_Z)/2+(VIDEO_PIXELS_X-DEBUG_LENGTH_X*8)/2],
-			VIDEO_PIXELS_X,DEBUG_LENGTH_X*8,DEBUG_LENGTH_Y*DEBUG_LENGTH_Z);
+		int z=onscreen_grafx(q,&debug_frame[VIDEO_PIXELS_X*(VIDEO_PIXELS_Y-DEBUG_LENGTH_Y*ONSCREEN_SIZE)/2+(VIDEO_PIXELS_X-DEBUG_LENGTH_X*8)/2],
+			VIDEO_PIXELS_X,DEBUG_LENGTH_X*8,DEBUG_LENGTH_Y*ONSCREEN_SIZE);
 		sprintf(t,"%04X...%04X %c%03iH: help  W: exit",onscreen_grafx_addr&0xFFFF,z&0xFFFF,(q&1)?'V':'H',onscreen_grafx_size);
 		int w=strlen(t)/2;
 		for (int y=-2;y<0;++y)
@@ -1105,14 +1098,12 @@ void onscreen_debug(int q) // rewrite debug texts or redraw graphics
 				onscreen_ascii(x,y,*t++);
 }
 
-#endif
-
 // extremely primitive video+audio output! -------------------------- //
 
 FILE *session_filmfile=NULL; unsigned int session_nextfilm=1,session_filmfreq,session_filmcount;
 BYTE session_filmflag,session_filmscale=2,session_filmtimer=2,session_filmalign; // format options
 #define SESSION_FILMVIDEO_LENGTH (VIDEO_PIXELS_X*VIDEO_PIXELS_Y) // copy of the previous video frame
-#define SESSION_FILMAUDIO_LENGTH (AUDIO_LENGTH_Z*2*(AUDIO_STEREO+1)) // copies of TWO audio frames
+#define SESSION_FILMAUDIO_LENGTH (AUDIO_LENGTH_Z*2*AUDIO_CHANNELS) // copies of TWO audio frames
 VIDEO_UNIT *session_filmvideo=NULL; AUDIO_UNIT session_filmaudio[SESSION_FILMAUDIO_LENGTH];
 BYTE *xrf_chunk=NULL; // this buffer contains one video frame and two audio frames AFTER encoding
 
@@ -1155,7 +1146,7 @@ int session_createfilm(void) // start recording video and audio; !0 ERROR
 
 	if (!session_filmvideo&&!(session_filmvideo=malloc(sizeof(VIDEO_UNIT)*SESSION_FILMVIDEO_LENGTH)))
 		return 1; // cannot allocate buffer!
-	if (!xrf_chunk&&!(xrf_chunk=malloc((sizeof(VIDEO_UNIT)*SESSION_FILMVIDEO_LENGTH+sizeof(AUDIO_UNIT)*SESSION_FILMAUDIO_LENGTH)*9/8+4*8))) // maximum pathological length!
+	if (!xrf_chunk&&!(xrf_chunk=malloc((sizeof(VIDEO_UNIT)*SESSION_FILMVIDEO_LENGTH+AUDIO_BITDEPTH/8*SESSION_FILMAUDIO_LENGTH)*9/8+4*8))) // maximum pathological length!
 		return 1; // cannot allocate memory!
 
 	if (!(session_nextfilm=session_savenext("%s%08i.xrf",session_nextfilm))) // "Xor-Rle Film"
@@ -1167,7 +1158,7 @@ int session_createfilm(void) // start recording video and audio; !0 ERROR
 	fputmm(VIDEO_PIXELS_Y/session_filmscale,session_filmfile);
 	fputmm(session_filmfreq=audio_disabled?0:AUDIO_LENGTH_Z*session_filmtimer,session_filmfile);
 	fputc(VIDEO_PLAYBACK/session_filmtimer,session_filmfile);
-	fputc(session_filmflag=sizeof(AUDIO_UNIT)-1+AUDIO_STEREO*2,session_filmfile); // +16BITS(1)+STEREO(2)
+	fputc(session_filmflag=(AUDIO_BITDEPTH>8?1:0)+(AUDIO_CHANNELS>1?2:0),session_filmfile); // +16BITS(1)+STEREO(2)
 	fputmmmm(-1,session_filmfile); // to be filled later
 	session_filmalign=video_pos_y; // catch scanline mode, if any
 	return session_recording=1,MEMZERO(session_filmvideo),session_filmcount=0;
@@ -1221,8 +1212,8 @@ void session_writefilm(void) // record one frame of video and audio
 		{
 			BYTE *s=(BYTE*)audio_frame; int l=AUDIO_LENGTH_Z;
 			if (session_filmtimer>1)
-				s=(BYTE*)session_filmaudio,l*=2,memcpy(&session_filmaudio[AUDIO_LENGTH_Z*(AUDIO_STEREO+1)],audio_frame,sizeof(AUDIO_UNIT)*AUDIO_LENGTH_Z*(AUDIO_STEREO+1)); // glue both blocks!
-			#if AUDIO_STEREO
+				s=(BYTE*)session_filmaudio,l*=2,memcpy(&session_filmaudio[AUDIO_LENGTH_Z*AUDIO_CHANNELS],audio_frame,AUDIO_BITDEPTH/8*AUDIO_LENGTH_Z*AUDIO_CHANNELS); // glue both blocks!
+			#if AUDIO_CHANNELS > 1
 			#if AUDIO_BITDEPTH > 8
 				#if SDL_BYTEORDER == SDL_BIG_ENDIAN
 				z+=xrf_encode(z,&s[1],l,4); // l
@@ -1257,7 +1248,7 @@ void session_writefilm(void) // record one frame of video and audio
 		fwrite1(xrf_chunk,z-xrf_chunk,session_filmfile);
 	}
 	else if (session_filmfreq) // audio?
-		memcpy(session_filmaudio,audio_frame,sizeof(AUDIO_UNIT)*AUDIO_LENGTH_Z*(AUDIO_STEREO+1)); // keep audio block for later!
+		memcpy(session_filmaudio,audio_frame,AUDIO_BITDEPTH/8*AUDIO_LENGTH_Z*AUDIO_CHANNELS); // keep audio block for later!
 	session_filmalign=video_pos_y;
 }
 int session_closefilm(void) // stop recording video and audio; !0 ERROR

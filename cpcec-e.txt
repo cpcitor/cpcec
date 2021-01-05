@@ -257,7 +257,7 @@ power, or 2.- the user needs to speed the emulation up for a while.
 The menu also includes several additional options (for example CRTC type) as
 well as actions such as flipping the sides of inserted discs, browsing the
 contents of the current tape, enabling the hardware extensions Dandanator and
-Playcity (disabled by default), etc.
+Playcity, etc.
 
 CPCEC supports drag-and-drop. Dropped files will be automatically loaded (as F3
 does) unless the Shift key is down; in this case they will be inserted as F7 and
@@ -803,3 +803,12 @@ launched without parameters.
 extending the ULA's "snow" behavior ("Vectron") and scope ("Narco Police",
 "Robocop 3"). The SDL2 UI appends an ellipsis to filenames that are too long to
 fit within the dialogs.
+- 20201220 -- minor patch removing the obsolete console-based debugger from the
+sources and making the Playcity option stick between sessions. "Software render"
+is now "Acceleration", as the former was counterintuitive.
+- 20210105 -- minor patch fixing a bug in video recording (it turned 44KHz
+stereo into 88KHz mono) and tape playback (16 and 24 bit WAVE files were
+improperly supported), extending the joystick support to handle directional
+controls (thanks to Pelrun for the Win32 and SDL2 code) and letting the
+Dandanator emulation modify the cartridge (configuration, savestates...) if the
+user requests it.

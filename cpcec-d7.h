@@ -24,8 +24,7 @@ BYTE disc_change[4],disc_motor,disc_action,disc_track[4],disc_flip[4],disc_canwr
 
 BYTE disc_index_table[4][256]; // "MV - CPC" disc header - one for each drive
 BYTE disc_track_table[8][512]; // current track info - one for each drive AND side, because one SEEK TRACK enables access to BOTH sides of said track!
-int disc_track_offset[8]; // current tracks' file offsets - one for each drive and side
-#define disc_track_reset(d) (MEMZERO(disc_track_table[d]),MEMZERO(disc_track_table[d+4])) // invalidate drive `d` tracks
+int disc_track_offset[8]; // current tracks' file offsets - one for each drive (drives A..D: 0..3) and side (side A +0, side B +4)
 
 // each drive can hold a disc and point at a track, but the FDC is limited to one operation at once,
 // so parameters, buffers, pointers, counters, etc. are unique for the whole system.
@@ -50,6 +49,11 @@ int disc_tolerant=1; // set whether disc write errors are strict or relaxed
 // disc file handling operations ------------------------------------ //
 
 char disc_path[STRMAX]="";
+
+void disc_track_reset(int drive) // invalidate drive `d` tracks on both sides
+{
+	MEMZERO(disc_track_table[drive]); MEMZERO(disc_track_table[drive+4]);
+}
 
 void disc_close(int drive) // close disc file. drive = 0 (A:) or 1 (B:)
 {

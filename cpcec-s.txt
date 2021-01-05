@@ -272,7 +272,7 @@ acelerar la emulación durante un tiempo.
 El menú también incluye algunas opciones adicionales (por ejemplo el tipo de
 CRTC) además de acciones tales como cambiar los lados de los discos insertados,
 examinar los contenidos de la cinta actual, habilitar las extensiones de
-hardware Dandanator y Playcity (desactivadas por defecto), etc.
+hardware Dandanator y Playcity, etc.
 
 CPCEC permite arrastrar y soltar ficheros. Éstos serán automáticamente
 ejecutados (como con F3) a menos que la tecla Mays esté pulsada, en cuyo caso
@@ -851,3 +851,12 @@ parámetros.
 extiende el comportamiento de la "nieve" de la ULA ("Vectron") y su ámbito
 ("Narco Police", "Robocop 3"). El UI de SDL2 coloca unos puntos suspensivos al
 final de los nombres de fichero demasiado largos para caber en los diálogos.
+- 20201220 -- parche menor que elimina el debugger de consola, ya obsoleto, de
+las fuentes, y hace que la opción de Playcity perdure entre sesiones. "Software
+render*" ahora es "Acceleration*", más congruente en su contexto.
+- 20210105 -- parche menor que corrige un error en la grabación de vídeo
+(convertía el sonido 44KHz estéreo en 88KHz mono) y otro en la lectura de cintas
+(problemas con ficheros WAV de 16 y 24 bits), aumenta el soporte de joystick
+para aceptar controles angulares (gracias a Pelrun por el código para Win32 y
+SDL2), y permite que la emulación de Dandanator modifique el cartucho
+(configuración, partidas...) si el usuario lo solicita.

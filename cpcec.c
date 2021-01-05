@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20201215"//"2155"
+#define MY_VERSION "20210105"//"1955"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -60,7 +60,6 @@ Contact information: <mailto:cngsoft@gmail.com> */
 
 #define DEBUG_LENGTH_X 64
 #define DEBUG_LENGTH_Y 32
-#define DEBUG_LENGTH_Z 12
 #define session_debug_show z80_debug_show
 #define session_debug_user z80_debug_user
 
@@ -70,8 +69,8 @@ unsigned short session_icon32xx16[32*32] = {
 	0x0000,0x0000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0x0000,0x0000,0xf000,0xf000,0xf000,0xf000,	0xf000,0xf000,0xf000,0xf000,0x0000,0x0000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0x0000,0x0000,
 	0x0000,0xf000,0xf000,0xf000,0xf800,0xf800,0xf800,0xf800,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf080,0xf080,	0xf080,0xf080,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf008,0xf008,0xf008,0xf008,0xf000,0xf000,0xf000,0x0000,
 	0x0000,0xf000,0xf000,0xf800,0xf800,0xf800,0xf800,0xf800,0xf800,0xf000,0xf000,0xf000,0xf000,0xf080,0xf080,0xf080,	0xf080,0xf080,0xf080,0xf000,0xf000,0xf000,0xf000,0xf008,0xf008,0xf008,0xf008,0xf008,0xf008,0xf000,0xf000,0x0000,
-	0xf000,0xf000,0xf800,0xf800,0xff00,0xff00,0xf800,0xf800,0xf800,0xf800,0xf000,0xf000,0xf080,0xf080,0xf0f0,0xf0f0,	0xf080,0xf080,0xf080,0xf080,0xf000,0xf000,0xf008,0xf00f,0xf08f,0xf08f,0xf00f,0xf008,0xf008,0xf008,0xf000,0xf000,
-	0xf000,0xf000,0xf800,0xff00,0xff00,0xff00,0xff00,0xf800,0xf800,0xf800,0xf000,0xf000,0xf080,0xf0f0,0xf0f0,0xf0f0,	0xf0f0,0xf080,0xf080,0xf080,0xf000,0xf000,0xf00f,0xf08f,0xf08f,0xf08f,0xf08f,0xf00f,0xf008,0xf008,0xf000,0xf000,
+	0xf000,0xf000,0xf800,0xf800,0xff00,0xff00,0xf800,0xf800,0xf800,0xf800,0xf000,0xf000,0xf080,0xf080,0xf0f0,0xf0f0,	0xf080,0xf080,0xf080,0xf080,0xf000,0xf000,0xf008,0xf008,0xf08f,0xf08f,0xf008,0xf008,0xf008,0xf008,0xf000,0xf000,
+	0xf000,0xf000,0xf800,0xff00,0xff00,0xff00,0xff00,0xf800,0xf800,0xf800,0xf000,0xf000,0xf080,0xf0f0,0xf0f0,0xf0f0,	0xf0f0,0xf080,0xf080,0xf080,0xf000,0xf000,0xf008,0xf08f,0xf08f,0xf08f,0xf08f,0xf008,0xf008,0xf008,0xf000,0xf000,
 	0xf000,0xf000,0xff00,0xff00,0xffff,0xffff,0xff00,0xff00,0xf800,0xf800,0xf000,0xf000,0xf0f0,0xf0f0,0xffff,0xffff,	0xf0f0,0xf0f0,0xf080,0xf080,0xf000,0xf000,0xf08f,0xf08f,0xffff,0xffff,0xf08f,0xf08f,0xf008,0xf008,0xf000,0xf000,
 	0xf000,0xf000,0xff00,0xff00,0xffff,0xffff,0xff00,0xff00,0xf800,0xf800,0xf000,0xf000,0xf0f0,0xf0f0,0xffff,0xffff,	0xf0f0,0xf0f0,0xf080,0xf080,0xf000,0xf000,0xf08f,0xf08f,0xffff,0xffff,0xf08f,0xf08f,0xf008,0xf008,0xf000,0xf000,
 	0xf000,0xf000,0xff00,0xff00,0xffff,0xffff,0xff00,0xff00,0xf800,0xf800,0xf000,0xf000,0xf0f0,0xf0f0,0xffff,0xffff,	0xf0f0,0xf0f0,0xf080,0xf080,0xf000,0xf000,0xf08f,0xf08f,0xffff,0xffff,0xf08f,0xf08f,0xf008,0xf008,0xf000,0xf000,
@@ -115,8 +114,9 @@ unsigned short session_icon32xx16[32*32] = {
 // | 17      | 09    | 2F                                    | 06             | 08 | 02 | 01 | | 4C | 4D | 4E |
 // +-----------------------------------------------------------------------------------------+ +--------------+
 
-const unsigned char kbd_joy[]= // ATARI norm: up, down, left, right, fire1, fire2...
-	{ 0x48,0x49,0x4A,0x4B,0x4C,0x4D }; // constant, joystick bits are hard-wired
+#define KBD_JOY_UNIQUE 6 // exclude repeated buttons
+const unsigned char kbd_joy[]= // ATARI norm: up, down, left, right, fire1-fire4
+	{ 0x48,0x49,0x4A,0x4B,0x4C,0x4D,0x4C,0x4D }; // constant, joystick bits are hard-wired; last two fires are repeated
 
 #include "cpcec-os.h" // OS-specific code!
 #include "cpcec-rt.h" // OS-independent code!
@@ -304,6 +304,7 @@ BYTE *mem_xtr=NULL; // external 257x 16K EXTENDED ROMS
 #define plus_enabled (type_id>2) // the PLUS ASIC hardware MUST BE tied to the model!
 #define bdos_rom (&mem_rom[32<<14])
 BYTE *mmu_ram[4],*mmu_rom[4]; // memory is divided in 14 6k R+W areas
+
 BYTE mmu_bit[4]={0,0,0,0}; // RAM bit masks: nonzero raises a write event
 BYTE mmu_xtr[257]; // ROM bit masks: nonzero reads from EXTENDED rather than from DEFAULT/CARTRIDGE
 #define PEEK(x) mmu_rom[(x)>>14][x] // WARNING, x cannot be `x=EXPR`!
@@ -318,7 +319,7 @@ VIDEO_UNIT video_clut[32]; // precalculated colour palette, 16 bitmap inks, 1 bo
 BYTE *mem_dandanator=NULL;
 #define mmu_dandanator() (memcpy(&dandanator_config[4],&dandanator_config[0],4),mmu_update())
 BYTE dandanator_config[8]; // PENDING and CURRENT cnfg_0,cnfg_1,zone_0,zone_1 (A0,A1,B,C)
-char dandanator_path[STRMAX]="";
+int dandanator_canwrite=0,dandanator_dirty; // R/W status
 
 // Z80 registers: the hardware and the debugger must be allowed to "spy" on them!
 
@@ -613,21 +614,35 @@ void mmu_update(void) // update the MMU tables with all the new offsets
 	#ifdef Z80_CPC_DANDANATOR
 	if (mem_dandanator) // emulate the Dandanator (and more exactly its CPC-only memory map) only when a card is loaded
 	{
-		if (dandanator_config[5]&0x73)
-			logprintf("DAN! %02X%02X,%02X,%02X ",dandanator_config[4],dandanator_config[5],dandanator_config[6],dandanator_config[7]);
+		//if (dandanator_config[5]&0x73)
+			//logprintf("DAN! %02X%02X,%02X,%02X ",dandanator_config[4],dandanator_config[5],dandanator_config[6],dandanator_config[7]);
 		if (!(dandanator_config[6]&32))
 		{
 			if (dandanator_config[5]&4) // the order is important; checking bit 0 first breaks "THE SWORD OF IANNA" when the first level begins
+			{
 				mmu_rom[2]=&mem_dandanator[((dandanator_config[6]&31)<<14)-0x8000];
+				//if ((dandanator_config[4]&2)&&dandanator_canwrite) mmu_ram[2]=mmu_rom[2],dandanator_dirty=1;
+			}
 			else if (!(dandanator_config[5]&1))
+			{
 				mmu_rom[0]=&mem_dandanator[((dandanator_config[6]&31)<<14)-0x0000];
+				if ((dandanator_config[4]&2)&&(dandanator_config[6]&30)&&dandanator_canwrite) // forbid writing on pages 0 and 1 (!?)
+					logprintf("R/W %02X%02X%02X%02X\n",dandanator_config[4],dandanator_config[5],dandanator_config[6],dandanator_config[7]),
+					mmu_ram[0]=mmu_rom[0],dandanator_dirty=1;
+			}
 		}
 		if (!(dandanator_config[7]&32))
 		{
 			if (dandanator_config[5]&8) // the order is important again: checking bit 1 first breaks "MOJON TWINS ROMSET" and other snapshot packs
+			{
 				mmu_rom[3]=&mem_dandanator[((dandanator_config[7]&31)<<14)-0xC000];
+				//if ((dandanator_config[4]&2)&&dandanator_canwrite) mmu_ram[3]=mmu_rom[3],dandanator_dirty=1;
+			}
 			else if (!(dandanator_config[5]&2))
+			{
 				mmu_rom[1]=&mem_dandanator[((dandanator_config[7]&31)<<14)-0x4000];
+				//if ((dandanator_config[4]&2)&&dandanator_canwrite) mmu_ram[1]=mmu_rom[1],dandanator_dirty=1;
+			}
 		}
 	}
 	#endif
@@ -677,7 +692,7 @@ void gate_setup(void) // setup the Gate Array
 BYTE irq_delay; // 0 = INACTIVE, 1 = LINE 1, 2 = LINE 2
 BYTE irq_timer; // Winape `R52`: rises from 0 to 52 (IRQ!)
 int z80_irq; // Winape `ICSR`: B7 Raster (Gate Array / PRI), B6 DMA0, B5 DMA1, B4 DMA2 (top -- PRI DMA2 DMA1 DMA0 -- bottom)
-int z80_halted=0; // internal HALT flag: <0 EXPECT NMI!, 0 IGNORE IRQS, >0 ACCEPT IRQS, >1 EXPECT IRQ!
+int z80_active=0; // internal HALT flag: <0 EXPECT NMI!, 0 IGNORE IRQS, >0 ACCEPT IRQS, >1 EXPECT IRQ!
 
 void gate_reset(void) // reset the Gate Array
 {
@@ -704,7 +719,7 @@ void pio_reset(void)
 #define PSG_TICK_STEP 8 // 1 MHz /2 /8 = 62500 Hz
 #define PSG_KHZ_CLOCK 1000
 #define PSG_MAIN_EXTRABITS 0
-#if AUDIO_STEREO
+#if AUDIO_CHANNELS > 1
 int psg_stereo[3][2]; const int psg_stereos[][3]={{0,0,0},{+256,0,-256},{+128,0,-128},{+64,0,-64}}; // A left, B middle, C right
 #endif
 #define PSG_PLAYCITY 1
@@ -806,6 +821,7 @@ void video_main_borders(void)
 void video_main(int t) // render video output for `t` clock ticks; t is always nonzero!
 {
 	do {
+
 		#if 0 // faster on my desktop computer, fewer variables
 		#define CRTC_STATUS_SET(x) (~crtc_before&crtc_status&x)
 		//#define CRTC_STATUS_RES(x) (~crtc_status&crtc_before&x)
@@ -989,6 +1005,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 			}*/
 			if (CRTC_STATUS_SET(CRTC_STATUS_VSYNC)) // CRTC_STATUS_VSYNC_SET
 			{
+				//z80_irq&=~128; // partial fix of "PHEELONE" on CRTC1 without breaking "CHAPELLE SIXTEEN"
 				irq_delay=1;
 				gate_count_r3y=26;
 			}
@@ -1198,8 +1215,9 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 				CRTC_STATUS_HSYNC_RES;
 				#ifdef PSG_PLAYCITY
 				if (playcity_ctc_count[1]>0)
-					if ((playcity_ctc_count[1]-=(playcity_ctc_flags[1]&32?1:16))<=0)
-						z80_halted=-1,z80_irq|=256; // NMI!
+					if ((playcity_ctc_count[1]-=((playcity_ctc_flags[1]&32)?1:16))<=0)
+						z80_active=-1,z80_irq|=256; // NMI!
+				// *!* todo *!* ... playcity_ctc_count[3] ... `z80_irq|=128;`
 				#endif
 				crtc_status&=~CRTC_STATUS_HSYNC; // stop horizontal sync!
 			}
@@ -1211,10 +1229,10 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 
 		if (!--irq_steps)
 		{
-			irq_timer=(irq_timer+1)&63;
+			++irq_timer;//irq_timer=(irq_timer+1)&63; // 6-bit or 8-bit, does it matter?
 			if (irq_delay?++irq_delay>=3:irq_timer>=52)
 			{
-				if (irq_timer&32&&!plus_pri)
+				if (irq_timer>=32&&!plus_pri)
 					z80_irq|=128;
 				irq_delay=irq_timer=0;
 			}
@@ -1233,11 +1251,11 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 				if (!video_framecount) video_endscanlines(video_table[video_type][20]); // 'T' = BLACK
 				crtc_status=(crtc_table[8]&1)?(crtc_status^CRTC_STATUS_REG_8):(crtc_status&~CRTC_STATUS_REG_8); // "CLEVER & SMART": screen shakes!
 				video_newscanlines(video_pos_x,(crtc_status&CRTC_STATUS_REG_8)?2:0); // vertical reset
-				++video_pos_z; session_signal|=SESSION_SIGNAL_FRAME; // end of frame!
+				++video_pos_z; session_signal|=SESSION_SIGNAL_FRAME+session_signal_frames; // end of frame!
 			}
 
 			if (!video_framecount) video_drawscanline();
-			video_pos_y+=2,video_target+=VIDEO_LENGTH_X*2-video_pos_x;
+			video_pos_y+=2,video_target+=VIDEO_LENGTH_X*2-video_pos_x; session_signal|=session_signal_scanlines;
 			// "PREHISTORIK 2" and "EDGE GRINDER" (6-r), "CAMEMBERT MEETING 4" (6-r) and "SCROLL FACTORY" (2-r) rely on the monitor providing fine horizontal adjust as follows;
 			// however, the title of ONESCREEN COLONIES (48 chars wide, 5 chars SYNC) must be excluded because it's limited to single scanlines that the monitor must not adjust!
 			static int inertia=0;
@@ -1249,6 +1267,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 			else
 				video_pos_x=inertia=0;
 		}
+
 	} while (--t);
 	if (plus_sprite_target) if (video_pos_x>plus_sprite_latest) video_main_sprites();
 }
@@ -1282,7 +1301,7 @@ int autorun_mode=0,autorun_t=0;
 BYTE autorun_kbd[16]; // automatic keypresses
 #define autorun_kbd_set(k) (autorun_kbd[k/8]|=1<<(k%8))
 #define autorun_kbd_res(k) (autorun_kbd[k/8]&=~(1<<(k%8)))
-#define autorun_kbd_bit (autorun_mode?autorun_kbd:kbd_bit)
+#define autorun_kbd_bit(k) (autorun_mode?autorun_kbd[k]:(kbd_bit[k]|joy_bit[k]))
 INLINE void autorun_next(void)
 {
 	++autorun_t;
@@ -1349,7 +1368,7 @@ INLINE void autorun_next(void)
 void z80_irq_ack(void)
 {
 	if (z80_irq&128) // OLD IRQ + PLUS PRI
-		plus_dcsr|=128,z80_irq&=64+32+16,irq_timer&=~32,plus_8k_bug=6; // reset the ASIC IRQ bug
+		/*irq_delay=0,*/plus_dcsr|=128,z80_irq&=64+32+16,irq_timer&=~32,plus_8k_bug=6; // reset the ASIC IRQ bug
 	else
 	{
 		plus_dcsr&=~128;
@@ -1552,11 +1571,12 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 			playcity_reset();
 			MEMZERO(playcity_ctc_count);
 		}
-		if (!playcity_disabled)
+		if (p==0xF880) //logprintf("F880:%02X ",b),
+			playcity_set_config(b); // CTC CHANNEL 0 CONFIG
+		else if (!playcity_disabled)
 		{
-			if (p==0xF880) logprintf("F880:%02X ",b),playcity_set_config(b); // CTC CHANNEL 0 CONFIG
 			//#ifdef Z80_NMI
-			else if (p==0xF881)
+			if (p==0xF881)
 			{
 				logprintf("F881:%02X ",b); // CTC CHANNEL 1 CONFIG
 				switch (playcity_ctc_state[1])
@@ -1573,8 +1593,8 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 						break;
 				}
 			}
-			//else if (p==0xF882) logprintf("F882:%02X ",b);
-			//else if (p==0xF883) logprintf("F883:%02X ",b);
+			//else if (p==0xF882) logprintf("F882:%02X ",b); // *!* todo *!*
+			//else if (p==0xF883) logprintf("F883:%02X ",b); // *!* todo *!*
 			//#endif
 			else if (p==0xF884) playcity_send(0,b); // YMZ RIGHT CHANNEL WRITE
 			else if (p==0xF888) playcity_send(1,b); // YMZ LEFT CHANNEL WRITE
@@ -2085,11 +2105,11 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 		{
 			case 0x0000: // 0xF400, PIO PORT A
 				if (psg_index==14) // READ PSG REGISTER
-					b&=~autorun_kbd_bit[pio_port_c&15]; // index 14 is keyboard port!
+					b&=~autorun_kbd_bit(pio_port_c&15); // index 14 is keyboard port!
 				else if (pio_control&0x10) // READ PSG REGISTER
 					b&=psg_table_recv();
 				//if (pio_control&0x10) // READ PSG REGISTER
-					//b&=psg_index==14?(~autorun_kbd_bit[pio_port_c&15]):psg_table_recv(); // index 14 is keyboard port!
+					//b&=psg_index==14?(~autorun_kbd_bit(pio_port_c&15)):psg_table_recv(); // index 14 is keyboard port!
 				else if (!plus_enabled)
 					b=0; // "TIRE AU FLAN" expects this!? Is it nonzero on PLUS!?
 				break;
@@ -2136,6 +2156,10 @@ void z80_trap(WORD p,BYTE b)
 {
 	switch (p>>8)
 	{
+		// DANDANATOR uses the range 0x0000-0x3FFF, but only to perform EEPROM commands we can ignore;
+		// besides, does any write operation NOT reach any memory, besides when we modify the EEPROM?
+		// case 0x15: case 0x2A: break; // 0x1555 and 0x2AAA are EEPROM chip control addresses
+		// PLUS ASIC: range 0x4000-0x6C0F
 		case 0x40: case 0x41: case 0x42: case 0x43:
 		case 0x44: case 0x45: case 0x46: case 0x47:
 		case 0x48: case 0x49: case 0x4A: case 0x4B:
@@ -2216,22 +2240,6 @@ void z80_trap(WORD p,BYTE b)
 	}
 }
 
-#ifdef CONSOLE_DEBUGGER
-void z80_info(void) // prints a short hardware dump from the debugger
-{
-	char c,s[STRMAX],*t;
-	t=s+sprintf(s,"\nGATE %02X:",gate_index);
-	for (c=0;c<17;++c)
-		t+=sprintf(t," %02X",gate_table[c]);
-	t+=sprintf(t,"\nCRTC %02X:",crtc_index);
-	for (c=0;c<16;++c)
-		t+=sprintf(t," %02X",crtc_table[c]);
-	t+=sprintf(t,"\nPSG. %02X:",psg_index);
-	for (c=0;c<14;++c)
-		t+=sprintf(t," %02X",psg_table[c]);
-	printf("%s\nMCR $%02X / RAM $%02X / ROM $%02X\n",s,gate_mcr,gate_ram,gate_rom);
-}
-#else
 int z80_debug_hard_tab(char *t)
 {
 	return sprintf(t,"    ");
@@ -2378,8 +2386,8 @@ WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 	for (int yy=0;yy<(plus_enabled?2:1);++yy)
 		for (int xx=0;xx<16;++xx)
 		{
-			VIDEO_UNIT z=video_clut[yy*16+xx],*zz=&vv[mx-16*8+xx*8+yy*ww*onscreen_size];
-			for (int y=0;y<onscreen_size;++y)
+			VIDEO_UNIT z=video_clut[yy*16+xx],*zz=&vv[mx-16*8+xx*8+yy*ww*ONSCREEN_SIZE];
+			for (int y=0;y<ONSCREEN_SIZE;++y)
 				for (int x=0;x<8;++x)
 					zz[x+y*ww]=z;
 		}
@@ -2390,7 +2398,7 @@ WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 		for (int yy=0;yy<2;++yy)
 			for (int xx=0;xx<8;++xx)
 			{
-				v=&vv[(2*onscreen_size+yy*16)*ww+mx-8*16+xx*16];
+				v=&vv[(2*ONSCREEN_SIZE+yy*16)*ww+mx-8*16+xx*16];
 				for (int y=0;y<16;++y,v+=ww-16)
 					for (int x=0;x<16;++x)
 						*v++=video_clut[16+*p++];
@@ -2398,7 +2406,6 @@ WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 	}
 	return s;
 }
-#endif
 
 // CPU: ZILOG Z80 MICROPROCESSOR ==================================== //
 
@@ -2525,7 +2532,7 @@ const BYTE z80_delays[0x700]= // precalc'd coarse timings
 	2,0,0,0,0,0,0,0,2,2,0,0,0,0,0,0, // 0xF0-0xFF
 };
 
-int z80_halted_delay=0; // cannot be local, it must stick :-(
+int z80_active_delay=0; // cannot be local, it must stick :-(
 // input/output
 #define Z80_SYNC_IO ( _t_-=z80_t, z80_sync(z80_t) )
 #define Z80_PRAE_RECV(w) Z80_SYNC_IO
@@ -2557,9 +2564,9 @@ int z80_halted_delay=0; // cannot be local, it must stick :-(
 #define Z80_REWIND
 // coarse timings
 #define Z80_STRIDE(o) z80_t+=z80_delays[o]
-#define Z80_STRIDE_0 z80_halted_delay=1 // extra int. timing after "slow" opcode
-#define Z80_STRIDE_1 z80_halted_delay=0 // extra int. timing after "fast" opcode
-#define Z80_STRIDE_X(o) z80_t+=z80_delays[o]+z80_halted_delay
+#define Z80_STRIDE_0 z80_active_delay=1 // extra int. timing after "slow" opcode
+#define Z80_STRIDE_1 z80_active_delay=0 // extra int. timing after "fast" opcode
+#define Z80_STRIDE_X(o) z80_t+=z80_delays[o]+z80_active_delay
 #define Z80_STRIDE_IO(o) z80_t=z80_delays[o]
 #define Z80_STRIDE_HALT 1
 
@@ -2607,6 +2614,10 @@ void all_reset(void) // reset everything!
 	z80_imd=1; // implicit in "Pro Tennis Tour" PLUS!
 	crtc_table[0]=63; crtc_table[3]=0x8E; crtc_table[4]=38; crtc_table[9]=7; crtc_syncs_update(); // implicit in "GNG11B" (?)
 	MEMFULL(z80_tape_fastindices);
+	#ifdef PSG_PLAYCITY
+	playcity_reset();
+	MEMZERO(playcity_ctc_count);
+	#endif
 }
 
 // firmware/cartridge ROM file handling operations ------------------ //
@@ -2849,7 +2860,7 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 	header[0xB4]=!!z80_irq;
 	header[0xB5]=z80_irq; // compare plus_dcsr with ICSR
 	header[0xB6]=!(header[0xB7]=plus_enabled);
-	strcpy(&header[0xE0],caption_version);
+	strcpy(&header[0xE0],session_caption);
 	fwrite1(header,256,f);
 	fwrite1(mem_ram,gate_ram_dirty<<10,f);
 
@@ -2964,7 +2975,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 	SNAP_LOAD_Z80W(0x28,z80_bc2);
 	SNAP_LOAD_Z80W(0x2A,z80_de2);
 	SNAP_LOAD_Z80W(0x2C,z80_hl2);
-	z80_irq=z80_halted=0; // avoid nasty surprises!
+	z80_irq=z80_active=0; // avoid nasty surprises!
 	for (i=0;i<17;++i)
 		gate_table[i]=header[0x2F+i]&31;
 	gate_table_select(header[0x2E]);
@@ -3202,8 +3213,6 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 
 // auxiliary user interface operations ------------------------------ //
 
-BYTE onscreen_flag=1;
-
 char txt_error_snap_save[]="Cannot save snapshot!";
 char snap_pattern[]="*.sna";
 
@@ -3270,6 +3279,7 @@ char session_menudata[]=
 	"=\n"
 	"0xC500 Insert Dandanator..\tShift+F5\n"
 	"0x4500 Remove Dandanator\tCtrl+Shift+F5\n"
+	"0x0510 Writeable Dandanator\n"
 	#endif
 	"=\n"
 	#ifdef PSG_PLAYCITY
@@ -3280,7 +3290,7 @@ char session_menudata[]=
 	"Video\n"
 	"0x8A00 Full screen\tAlt+Return\n"
 	"0x8A01 Zoom to integer\n"
-	"0x8A02 Software render*\n"
+	"0x8A02 Acceleration*\n"
 	"=\n"
 	"0x8901 Onscreen status\tShift+F9\n"
 	"0x8904 Interpolation\n"
@@ -3313,7 +3323,7 @@ char session_menudata[]=
 	"0x8C02 Hi-speed XRF mode\n"
 	"Audio\n"
 	"0x8400 Sound playback\tF4\n"
-	#if AUDIO_STEREO
+	#if AUDIO_CHANNELS > 1
 	"0xC401 0% stereo\n"
 	"0xC404 25% stereo\n"
 	"0xC403 50% stereo\n"
@@ -3362,6 +3372,7 @@ void session_menuinfo(void)
 	session_menucheck(0x8510,!(disc_disabled&1));
 	#ifdef Z80_CPC_DANDANATOR
 	session_menucheck(0xC500,(size_t)mem_dandanator);
+	session_menucheck(0x0510,dandanator_canwrite);
 	#endif
 	#ifdef PSG_PLAYCITY
 	session_menucheck(0x8520,!playcity_disabled);
@@ -3370,16 +3381,16 @@ void session_menuinfo(void)
 	session_menucheck(0x8901,onscreen_flag);
 	session_menucheck(0x8A00,session_fullscreen);
 	session_menucheck(0x8A01,session_intzoom);
-	session_menucheck(0x8A02,session_softblit);
+	session_menucheck(0x8A02,!session_softblit);
 	session_menuradio(0x8B01+video_type,0x8B01,0x8B05);
 	session_menuradio(0x0B01+video_scanline,0x0B01,0x0B04);
 	session_menucheck(0x8902,video_filter&VIDEO_FILTER_Y_MASK);
 	session_menucheck(0x8903,video_filter&VIDEO_FILTER_X_MASK);
 	session_menucheck(0x8904,video_filter&VIDEO_FILTER_SMUDGE);
-	#if AUDIO_STEREO
-	session_menuradio(0xC401+audio_channels,0xC401,0xC404);
+	#if AUDIO_CHANNELS > 1
+	session_menuradio(0xC401+audio_mixmode,0xC401,0xC404);
 	for (int i=0;i<3;++i)
-		psg_stereo[i][0]=256+psg_stereos[audio_channels][i],psg_stereo[i][1]=256-psg_stereos[audio_channels][i];
+		psg_stereo[i][0]=256+psg_stereos[audio_mixmode][i],psg_stereo[i][1]=256-psg_stereos[audio_mixmode][i];
 	#ifdef PSG_PLAYCITY
 	if (!playcity_disabled)
 	{
@@ -3473,7 +3484,7 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 				"for the UNED 2019 Master's Degree in Computer Engineering.\n"
 				"\nhome page, news and updates: http://cngsoft.no-ip.org/cpcec.htm"
 				"\n\n" MY_LICENSE "\n\n" GPL_3_INFO
-			,caption_version);
+			,session_caption);
 			break;
 		case 0x8200: // F2: SAVE SNAPSHOT..
 			if (s=puff_session_newfile(snap_path,snap_pattern,"Save snapshot"))
@@ -3502,9 +3513,9 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 		case 0x8400: // F4: TOGGLE SOUND
 			if (session_audio)
 			{
-				#if AUDIO_STEREO
+				#if AUDIO_CHANNELS > 1
 				if (session_shift) // TOGGLE STEREO
-					audio_channels=!audio_channels;
+					audio_mixmode=!audio_mixmode;
 				else
 				#endif
 					audio_disabled^=1;
@@ -3514,9 +3525,9 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 		case 0x8402:
 		case 0x8403:
 		case 0x8404:
-			#if AUDIO_STEREO
+			#if AUDIO_CHANNELS > 1
 			if (session_shift) // TOGGLE STEREO
-				audio_channels=(k&15)-1;
+				audio_mixmode=(k&15)-1;
 			else
 			#endif
 			audio_filter=(k&15)-1;
@@ -3558,8 +3569,8 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 			gate_ram_depth=4;
 			break;
 		case 0x8520: // PLAYCITY
-			playcity_disabled=!playcity_disabled;
-			playcity_reset();
+			if (playcity_disabled=!playcity_disabled)
+				playcity_reset();
 			break;
 		case 0x8500: // F5: LOAD FIRMWARE.. // INSERT DANDANATOR..
 		#ifdef Z80_CPC_DANDANATOR
@@ -3570,7 +3581,7 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 					if (dandanator_insert(s)) // error? warn!
 						session_message(txt_error_any_load,txt_error);
 					else
-						strcpy(dandanator_path,s),autorun_mode=0,disc_disabled&=~2,all_reset(); // setup and reset
+						autorun_mode=0,disc_disabled&=~2,all_reset(); // setup and reset
 				}
 			}
 			else
@@ -3594,6 +3605,11 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 		#endif
 				autorun_mode=0,disc_disabled&=~2,all_reset();
 			break;
+		#ifdef Z80_CPC_DANDANATOR
+		case 0x0510:
+			dandanator_canwrite=!dandanator_canwrite;
+			break;
+		#endif
 		case 0x8600: // F6: TOGGLE REALTIME
 			session_fast^=1;
 			break;
@@ -3780,6 +3796,10 @@ void session_configreadmore(char *s)
 	else if (!strcasecmp(session_parmtr,"type")) { if ((i=*s&15)<length(bios_system)) type_id=i; }
 	else if (!strcasecmp(session_parmtr,"crtc")) { if ((i=*s&15)<5) crtc_type=i; }
 	else if (!strcasecmp(session_parmtr,"bank")) { if ((i=*s&15)<5) gate_ram_depth=i; }
+	else if (!strcasecmp(session_parmtr,"xfdc")) disc_tolerant=*s&1;
+	#ifdef PSG_PLAYCITY
+	else if (!strcasecmp(session_parmtr,"plct")) playcity_disabled=!(*s&1);
+	#endif
 	else if (!strcasecmp(session_parmtr,"file")) strcpy(autorun_path,s);
 	else if (!strcasecmp(session_parmtr,"snap")) strcpy(snap_path,s);
 	else if (!strcasecmp(session_parmtr,"tape")) strcpy(tape_path,s);
@@ -3788,7 +3808,6 @@ void session_configreadmore(char *s)
 	#ifdef Z80_CPC_DANDANATOR
 	else if (!strcasecmp(session_parmtr,"dntr")) strcpy(dandanator_path,s);
 	#endif
-	else if (!strcasecmp(session_parmtr,"xfdc")) disc_tolerant=*s&1;
 	else if (!strcasecmp(session_parmtr,"info")) onscreen_flag=*s&1;
 	else if (!strcasecmp(session_parmtr,"palette")) { if ((i=*s&15)<length(video_table)) video_type=i; }
 	else if (!strcasecmp(session_parmtr,"autorewind")) tape_rewind=*s&1;
@@ -3796,24 +3815,32 @@ void session_configreadmore(char *s)
 }
 void session_configwritemore(FILE *f)
 {
-	fprintf(f,"type %i\ncrtc %i\nbank %i\nxfdc %i\nfile %s\nsnap %s\ntape %s\ndisc %s\ncard %s\n"
+	fprintf(f,"type %i\ncrtc %i\nbank %i\nxfdc %i\n"
+	#ifdef PSG_PLAYCITY
+		"plct %i\n"
+	#endif
+		"file %s\nsnap %s\ntape %s\ndisc %s\ncard %s\n"
 	#ifdef Z80_CPC_DANDANATOR
 		"dntr %s\n"
 	#endif
-		"info %i\npalette %i\nautorewind %i\ndebug %i\n"
-		,type_id,crtc_type,gate_ram_depth,disc_tolerant,autorun_path,snap_path,tape_path,disc_path,bios_path,
+		"info %i\npalette %i\nautorewind %i\ndebug %i\n",
+		type_id,crtc_type,gate_ram_depth,disc_tolerant,
+	#ifdef PSG_PLAYCITY
+		!playcity_disabled,
+	#endif
+		autorun_path,snap_path,tape_path,disc_path,bios_path,
 	#ifdef Z80_CPC_DANDANATOR
 		dandanator_path,
 	#endif
 		onscreen_flag,video_type,tape_rewind,z80_debug_configwrite());
 }
 
-#if defined(CONSOLE_DEBUGGER) || defined(SDL_MAIN_HANDLED)
+#if defined(DEBUG) || defined(SDL_MAIN_HANDLED)
 void printferror(char *s) { printf("Error: %s\n",s); }
 #define printfusage(s) printf(MY_CAPTION " " MY_VERSION " " MY_LICENSE "\n" s)
 #else
 void printferror(char *s) { sprintf(session_tmpstr,"Error: %s\n",s); session_message(session_tmpstr,txt_error); }
-#define printfusage(s) session_message(s,caption_version)
+#define printfusage(s) session_message(s,session_caption)
 #endif
 
 // START OF USER INTERFACE ========================================== //
@@ -3892,7 +3919,7 @@ int main(int argc,char *argv[])
 						session_audio=0;
 						break;
 					case 'T':
-						audio_channels=0;
+						audio_mixmode=0;
 						break;
 					case 'W':
 						session_fullscreen=1;
@@ -3937,13 +3964,13 @@ int main(int argc,char *argv[])
 			"\t-k2\t192k RAM\n"
 			"\t-k3\t320k RAM\n"
 			"\t-k4\t576k RAM\n"
-			//"\t-K\tno extended RAM\n"
+			//"\t-K\tno extended RAM\n" // = "-k0"
 			"\t-m0\tload 464 firmware\n"
 			"\t-m1\tload 664 firmware\n"
 			"\t-m2\tload 6128 firmware\n"
 			"\t-m3\tload PLUS firmware\n"
-			"\t-O\tdisable onscreen status\n"
 			"\t-rN\tset frameskip (0..9)\n"
+			"\t-O\tdisable onscreen status\n"
 			"\t-R\tdisable realtime\n"
 			"\t-S\tdisable sound\n"
 			"\t-T\tdisable stereo\n"
@@ -3961,16 +3988,12 @@ int main(int argc,char *argv[])
 	session_kbdsetup(kbd_map_xlt,length(kbd_map_xlt)/2);
 	video_target=&video_frame[video_pos_y*VIDEO_LENGTH_X+video_pos_y]; audio_target=audio_frame;
 	audio_disabled=!session_audio;
-	video_clut_update();
+	video_clut_update(); onscreen_inks(VIDEO1(0xAA0000),VIDEO1(0x55FF55));
 	if (session_fullscreen) session_togglefullscreen();
 	// it begins, "alea jacta est!"
 	while (!session_listen())
 	{
-		#ifdef CONSOLE_DEBUGGER
-		while (!(session_signal&~SESSION_SIGNAL_DEBUG))
-		#else
 		while (!session_signal)
-		#endif
 			z80_main(
 				z80_multi*( // clump Z80 instructions together to gain speed...
 				tape_fastskip?VIDEO_LENGTH_X/16:( // tape loading ignores most events and heavy clumping is feasible, although some sync is still needed
@@ -3998,8 +4021,8 @@ int main(int argc,char *argv[])
 				if (tape_filesize)
 				{
 					i=(long long)tape_filetell*1000/(tape_filesize+1);
-					onscreen_byte(+7,-3,i/10,q);
-					onscreen_char(+9,-3,'0'+(i%10),q);
+					onscreen_char(+7,-3,'0'+i/100,q);
+					onscreen_byte(+8,-3,i%100,q);
 				}
 				else
 					onscreen_text(+7, -3, tape_type < 0 ? "REC" : "---", q);

@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20201215"//"2155"
+#define MY_VERSION "20210105"//"1955"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -56,7 +56,6 @@ Contact information: <mailto:cngsoft@gmail.com> */
 
 #define DEBUG_LENGTH_X 64
 #define DEBUG_LENGTH_Y 32
-#define DEBUG_LENGTH_Z 12
 #define session_debug_show z80_debug_show
 #define session_debug_user z80_debug_user
 
@@ -75,11 +74,11 @@ unsigned short session_icon32xx16[32*32] = {
 	0xf000,0xf000,0xf800,0xf800,0xf800,0xf800,0xf000,0xff80,0xffff,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,	0xfff0,0xfff0,0xfff0,0xff80,0xff80,0xf000,0xf080,0xffff,0xf0f0,0xf0f0,0xffff,0xffff,0xffff,0xffff,0xf000,0xf000,
 	0xf000,0xf000,0xf800,0xf800,0xf800,0xf000,0xff80,0xffff,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,	0xfff0,0xfff0,0xff80,0xff80,0xf000,0xf080,0xffff,0xf0f0,0xf0f0,0xf0f0,0xffff,0xffff,0xffff,0xffff,0xf000,0xf000,
 	0xf000,0xf000,0xf800,0xf800,0xf000,0xff80,0xffff,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,	0xfff0,0xff80,0xff80,0xf000,0xf080,0xffff,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xffff,0xffff,0xffff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xf800,0xf000,0xff80,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,	0xff80,0xff80,0xf000,0xf080,0xffff,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xffff,0xffff,0xffff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xf000,0xff80,0xfff0,0xff80,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xff80,	0xff80,0xf000,0xf080,0xffff,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xffff,0xffff,0xffff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xff80,0xfff0,0xff80,0xff80,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xff80,0xff80,	0xf000,0xf080,0xffff,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xffff,0xffff,0xffff,0xf0f0,0xf000,0xf000,
+	0xf000,0xf000,0xf800,0xf000,0xff80,0xff80,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,	0xff80,0xff80,0xf000,0xf080,0xffff,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xffff,0xffff,0xffff,0xffff,0xf000,0xf000,
+	0xf000,0xf000,0xf000,0xff80,0xff80,0xff80,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xff80,	0xff80,0xf000,0xf080,0xffff,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xffff,0xffff,0xffff,0xffff,0xf000,0xf000,
+	0xf000,0xf000,0xff80,0xff80,0xff80,0xff80,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xff80,0xff80,	0xf000,0xf080,0xffff,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xffff,0xffff,0xffff,0xf0f0,0xf000,0xf000,
 
-	0xf000,0xf000,0xfff0,0xff80,0xff80,0xff80,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xff80,0xff80,0xf000,	0xf080,0xffff,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xffff,0xffff,0xf0f0,0xf080,0xf000,0xf000,
+	0xf000,0xf000,0xff80,0xff80,0xff80,0xff80,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xff80,0xff80,0xf000,	0xf080,0xffff,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xffff,0xffff,0xf0f0,0xf080,0xf000,0xf000,
 	0xf000,0xf000,0xff80,0xff80,0xff80,0xff80,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xff80,0xff80,0xf000,0xf080,	0xffff,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xffff,0xf0f0,0xf080,0xf000,0xf000,0xf000,
 	0xf000,0xf000,0xff80,0xff80,0xff80,0xff80,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xff80,0xff80,0xf000,0xf080,0xffff,	0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf080,0xf000,0xf08f,0xf000,0xf000,
 	0xf000,0xf000,0xff80,0xff80,0xff80,0xff80,0xfff0,0xfff0,0xfff0,0xfff0,0xff80,0xff80,0xf000,0xf080,0xffff,0xf0f0,	0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf080,0xf080,0xf000,0xf08f,0xffff,0xf000,0xf000,
@@ -89,10 +88,10 @@ unsigned short session_icon32xx16[32*32] = {
 	0xf000,0xf000,0xff80,0xff80,0xff80,0xff80,0xff80,0xff80,0xf000,0xf080,0xffff,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,	0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf080,0xf080,0xf000,0xf08f,0xffff,0xffff,0xffff,0xffff,0xffff,0xf000,0xf000,
 	0xf000,0xf000,0xff80,0xff80,0xff80,0xff80,0xff80,0xf000,0xf080,0xffff,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,	0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf080,0xf080,0xf000,0xf08f,0xffff,0xf0ff,0xffff,0xffff,0xffff,0xffff,0xf000,0xf000,
 	0xf000,0xf000,0xff80,0xff80,0xff80,0xff80,0xf000,0xf080,0xffff,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,	0xf0f0,0xf0f0,0xf0f0,0xf080,0xf080,0xf000,0xf08f,0xffff,0xf0ff,0xf0ff,0xffff,0xffff,0xffff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xff80,0xff80,0xff80,0xf000,0xf080,0xf0f0,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,	0xf080,0xf080,0xf080,0xf080,0xf000,0xf08f,0xf0ff,0xf08f,0xf08f,0xf08f,0xf0ff,0xffff,0xffff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xff80,0xff80,0xf000,0xf080,0xf0f0,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,	0xf080,0xf080,0xf080,0xf000,0xf08f,0xf0ff,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf0ff,0xffff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xff80,0xf000,0xf080,0xf0f0,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,	0xf080,0xf080,0xf000,0xf08f,0xf0ff,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf0ff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xf000,0xf080,0xf0f0,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,	0xf080,0xf000,0xf08f,0xf0ff,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf000,0xf000,0xf000,
+	0xf000,0xf000,0xff80,0xff80,0xff80,0xf000,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,	0xf080,0xf080,0xf080,0xf080,0xf000,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf0ff,0xffff,0xffff,0xffff,0xf000,0xf000,
+	0xf000,0xf000,0xff80,0xff80,0xf000,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,	0xf080,0xf080,0xf080,0xf000,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf0ff,0xffff,0xffff,0xf000,0xf000,
+	0xf000,0xf000,0xff80,0xf000,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,	0xf080,0xf080,0xf000,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf0ff,0xffff,0xf000,0xf000,
+	0xf000,0xf000,0xf000,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,	0xf080,0xf000,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf000,0xf000,0xf000,
 	0x0000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,	0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0x0000,
 	0x0000,0x0000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,	0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0x0000,0x0000,
 	};
@@ -109,8 +108,9 @@ unsigned short session_icon32xx16[32*32] = {
 // | + 00 | Z 01 | X 02 | C 03 | V 04 | B 3C | N 3B | M 3A | - 39 | / 38 | / = SPACE
 // +---------------------------------------------------------------------+ - = SYMBOL SHIFT
 
-/*const*/ unsigned char kbd_joy[]= // ATARI norm: up, down, left, right, fire1, fire2...
-	{ 0,0,0,0,0 }; // variable instead of constant, there are several joystick types
+#define KBD_JOY_UNIQUE 5 // exclude repeated buttons
+/*const*/ unsigned char kbd_joy[]= // ATARI norm: up, down, left, right, fire1-4
+	{ 0,0,0,0,0,0,0,0 }; // variable instead of constant, there are several joystick types
 
 #include "cpcec-os.h" // OS-specific code!
 #include "cpcec-rt.h" // OS-independent code!
@@ -217,7 +217,9 @@ int z80_turbo=0,z80_multi=1; // overclocking options
 // 0x??FE,0x7FFD,0x1FFD: ULA 48K,128K,PLUS3 ------------------------- //
 
 BYTE ula_v1,ula_v2,ula_v3; // 48k, 128k and PLUS3 respectively
-BYTE disc_disabled=0,psg_disabled=0,ula_v1_issue=1,ula_v1_cache=0; // auxiliar ULA variables
+#define ULA_V1_ISSUE3 16
+#define ULA_V1_ISSUE2 24
+BYTE disc_disabled=0,psg_disabled=0,ula_v1_issue=ULA_V1_ISSUE3,ula_v1_cache=0; // auxiliar ULA variables
 BYTE *ula_screen; int ula_bitmap,ula_attrib; // VRAM pointers
 
 BYTE ula_clash[4][1<<16],*ula_clash_mreq[5],*ula_clash_iorq[5]; // the fifth entry stands for constant clashing
@@ -313,7 +315,7 @@ void video_clut_update(void) // precalculate palette following `video_type`
 	ula_v1_send(ula_v1);
 }
 
-int z80_irq,z80_halted=0; // internal HALT flag: <0 EXPECT NMI!, 0 IGNORE IRQS, >0 ACCEPT IRQS, >1 EXPECT IRQ!
+int z80_irq,z80_active=0; // internal HALT flag: <0 EXPECT NMI!, 0 IGNORE IRQS, >0 ACCEPT IRQS, >1 EXPECT IRQ!
 int irq_delay=0,ula_limit_x=0,ula_limit_y=0; // IRQ counter, horizontal+vertical limits
 
 void ula_reset(void) // reset the ULA
@@ -338,7 +340,7 @@ void ula_reset(void) // reset the ULA
 #define PSG_TICK_STEP 16 // 3.5 MHz /2 /16 = 109375 Hz
 #define PSG_KHZ_CLOCK 1750
 #define PSG_MAIN_EXTRABITS 0
-#if AUDIO_STEREO
+#if AUDIO_CHANNELS > 1
 int psg_stereo[3][2]; const int psg_stereos[][3]={{0,0,0},{+256,-256,0},{+128,-128,0},{+64,-64,0}}; // A left, C middle, B right
 #endif
 
@@ -412,8 +414,7 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 					#define ULA_SNOW_STEP_8BIT 31
 					static int pseudorandom=1;
 					pseudorandom=(pseudorandom&1)?(pseudorandom>>1)+184:(pseudorandom>>1);
-					ula_snow_z-=pseudorandom;
-					if (ula_snow_z&3)
+					if ((ula_snow_z-=pseudorandom)<0)
 						b=ula_screen[ula_bitmap^1]; // horizontal glitch
 					else
 						b=ula_snow_z; // random value
@@ -425,17 +426,17 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 						b=~b;
 				}
 				++ula_bitmap;
-				VIDEO_UNIT p, v1=video_clut[(a&7)+((a&64)>>3)],v0=video_clut[(a&120)>>3];
-				p=b&128?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
-				p=b&64?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
-				p=b&32?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
-				p=b&16?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
-				p=b&8?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
-				p=b&4?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
-				p=b&2?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
-				p=b&1?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
+					VIDEO_UNIT p, v1=video_clut[(a&7)+((a&64)>>3)],v0=video_clut[(a&120)>>3];
+					p=b&128?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
+					p=b&64?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
+					p=b&32?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
+					p=b&16?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
+					p=b&8?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
+					p=b&4?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
+					p=b&2?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
+					p=b&1?v1:v0; VIDEO_NEXT=p; VIDEO_NEXT=p;
+				}
 			}
-		}
 		else
 			video_target+=16;
 		video_pos_x+=16;
@@ -443,7 +444,7 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 		if (++ula_count_x>=ula_limit_x)
 		{
 			if (!video_framecount) video_drawscanline();
-			video_pos_y+=2,video_target+=VIDEO_LENGTH_X*2-video_pos_x;
+			video_pos_y+=2,video_target+=VIDEO_LENGTH_X*2-video_pos_x; session_signal|=session_signal_scanlines;
 			video_pos_x=0;
 			ula_count_x=0,ula_pos_x=-4; // characters of BORDER before the leftmost byte
 			++ula_count_y;
@@ -457,8 +458,8 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 			// - Issue 2 systems (the first batch of 48K) make the bit depend on ULA output bits 3 and 4
 			// - Issue 3 systems (later batches of 48K) make the bit depend on ULA output bit 4
 			// - Whatever the issue ID, 48K doesn't update the unstable bit at once; it takes a while.
-			// - 128K and later always mask the bit out when no tape is playing
-			ula_v1_cache=type_id?64:ula_v1&(ula_v1_issue?16:24)?0:64;
+			// - 128K and later always mask the bit out when no tape is playing (we let the user override it)
+			ula_v1_cache=/*type_id?64:*/ula_v1&ula_v1_issue?0:64;
 			// "Abu Simbel Profanation" (menu doesn't obey keys; in-game is stuck jumping to the right) and "Rasputin" (menu fails to play the music) rely on this on 48K.
 		}
 		if (ula_pos_x==0&&ula_count_y>=ula_limit_y)
@@ -469,7 +470,7 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 			++ula_flash;
 			ula_count_y=0,ula_pos_y=248-ula_limit_y; // lines of BORDER before the top byte
 			z80_irq=1; irq_delay=(type_id?33:32); // 128K/+3 VS 48K "early"
-			++video_pos_z; session_signal|=SESSION_SIGNAL_FRAME; // end of frame!
+			++video_pos_z; session_signal|=SESSION_SIGNAL_FRAME+session_signal_frames; // end of frame!
 		}
 	}
 	while ((r-=4)>=0);
@@ -486,7 +487,7 @@ void audio_main(int t) // render audio output for `t` clock ticks; t is always n
 		AUDIO_UNIT k=((tape_status<<4)+((ula_v1&16)<<2)+((ula_v1&8)<<0))<<(AUDIO_BITDEPTH-8);
 		static AUDIO_UNIT j=0;
 		while (z<audio_target)
-			#if AUDIO_STEREO
+			#if AUDIO_CHANNELS > 1
 			*z++-=j=((k+j+(k>j))/2),
 			*z++-=j;
 			#else
@@ -503,7 +504,7 @@ int autorun_mode=0,autorun_t=0;
 BYTE autorun_kbd[16]; // automatic keypresses
 #define autorun_kbd_set(k) (autorun_kbd[k/8]|=1<<(k%8))
 #define autorun_kbd_res(k) (autorun_kbd[k/8]&=~(1<<(k%8)))
-#define autorun_kbd_bit (autorun_mode?autorun_kbd:kbd_bit)
+#define autorun_kbd_bit(k) (autorun_mode?autorun_kbd[k]:(kbd_bit[k]|joy_bit[k]))
 INLINE void autorun_next(void)
 {
 	++autorun_t;
@@ -837,19 +838,19 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 {
 	BYTE b=0xFF;
 	if ((p&63)==31) // KEMPSTON joystick
-		b=autorun_kbd_bit[8];
+		b=autorun_kbd_bit(8);
 	else if ((p&15)==14) // 0x??FE, ULA 48K
 	{
-		int i,j,k=autorun_kbd_bit[11]||autorun_kbd_bit[12]||autorun_kbd_bit[15];
+		int i,j,k=autorun_kbd_bit(11)||autorun_kbd_bit(12)||autorun_kbd_bit(15);
 		for (i=j=0;i<8;++i)
 		{
 			if (!(p&(256<<i)))
 			{
-				j|=autorun_kbd_bit[i]; // bits 0-4: keyboard rows
+				j|=autorun_kbd_bit(i); // bits 0-4: keyboard rows
 				if (!i)
 					j|=k; // CAPS SHIFT: row 0, bit 0
 				else
-					j|=autorun_kbd_bit[8+i]; // other rows
+					j|=autorun_kbd_bit(8+i); // other rows
 			}
 		}
 		b=~j;
@@ -882,9 +883,6 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 	return b;
 }
 
-#ifdef CONSOLE_DEBUGGER
-#define z80_info(q) printf("\n%ULAs: 48k $%02X / 128k $%02X / PLUS3 $%02X\n",ula_v1,ula_v2,ula_v3) // prints a short hardware dump from the debugger
-#else
 int z80_debug_hard_tab(char *t)
 {
 	return sprintf(t,"    ");
@@ -977,7 +975,6 @@ WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 	}
 	return s;
 }
-#endif
 
 // CPU: ZILOG Z80 MICROPROCESSOR ==================================== //
 
@@ -1349,7 +1346,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 				psg_table_select(i),psg_table_send(0); // mute channels
 		}
 	}
-	z80_irq=z80_halted=0; // avoid nasty surprises!
+	z80_irq=z80_active=0; // avoid nasty surprises!
 	mmu_update(); // adjust RAM and ULA models
 	psg_all_update();
 	z80_debug_reset();
@@ -1393,15 +1390,13 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 
 // auxiliary user interface operations ------------------------------ //
 
-BYTE onscreen_flag=1;
-
 BYTE joy1_type=2;
-BYTE joy1_types[][5]={
-	{ 0x43,0x42,0x41,0x40,0x44 }, // Kempston
-	{ 0x1B,0x1A,0x18,0x19,0x1C }, // 4312+5: Sinclair 1
-	{ 0x21,0x22,0x24,0x23,0x20 }, // 9867+0: Interface II, Sinclair 2
-	{ 0x23,0x24,0x1C,0x22,0x20 }, // 7658+0: Cursor, Protek, AGF
-	{ 0x10,0x08,0x29,0x28,0x38 }, // QAOP+Space
+BYTE joy1_types[][8]={ // virtual button is repeated for all joystick buttons
+	{ 0x43,0x42,0x41,0x40,0x44,0x44,0x44,0x44 }, // Kempston
+	{ 0x1B,0x1A,0x18,0x19,0x1C,0x1C,0x1C,0x1C }, // 4312+5: Sinclair 1
+	{ 0x21,0x22,0x24,0x23,0x20,0x20,0x20,0x20 }, // 9867+0: Interface II, Sinclair 2
+	{ 0x23,0x24,0x1C,0x22,0x20,0x20,0x20,0x20 }, // 7658+0: Cursor, Protek, AGF
+	{ 0x10,0x08,0x29,0x28,0x38,0x38,0x38,0x38 }, // QAOP+Space
 };
 
 char txt_error_snap_save[]="Cannot save snapshot!";
@@ -1461,12 +1456,12 @@ char session_menudata[]=
 	"0x8590 Strict disc writes\n"
 	"0x8511 Memory contention\n"
 	"0x8512 ULA video noise\n"
-	"0x8513 Issue-2 48K ULA\n"
+	"0x8513 Issue-2 ULA line\n"
 	"0x851F Strict SNA files\n"
 	"Video\n"
 	"0x8A00 Full screen\tAlt+Return\n"
 	"0x8A01 Zoom to integer\n"
-	"0x8A02 Software render*\n"
+	"0x8A02 Acceleration*\n"
 	"=\n"
 	"0x8901 Onscreen status\tShift+F9\n"
 	"0x8904 Interpolation\n"
@@ -1499,7 +1494,7 @@ char session_menudata[]=
 	"0x8C02 Hi-speed XRF mode\n"
 	"Audio\n"
 	"0x8400 Sound playback\tF4\n"
-	#if AUDIO_STEREO
+	#if AUDIO_CHANNELS > 1
 	"0xC401 0% stereo\n"
 	"0xC404 25% stereo\n"
 	"0xC403 50% stereo\n"
@@ -1548,22 +1543,22 @@ void session_menuinfo(void)
 	session_menucheck(0x8510,!(disc_disabled&1));
 	session_menucheck(0x8511,!(ula_clash_disabled));
 	session_menucheck(0x8512,!(ula_snow_disabled));
-	session_menucheck(0x8513,!(ula_v1_issue));
+	session_menucheck(0x8513,ula_v1_issue!=ULA_V1_ISSUE3);
 	session_menucheck(0x851F,!(snap_extended));
 	session_menucheck(0x8901,onscreen_flag);
 	session_menucheck(0x8A00,session_fullscreen);
 	session_menucheck(0x8A01,session_intzoom);
-	session_menucheck(0x8A02,session_softblit);
+	session_menucheck(0x8A02,!session_softblit);
 	session_menuradio(0x8B01+video_type,0x8B01,0x8B05);
 	session_menuradio(0x0B01+video_scanline,0x0B01,0x0B04);
 	session_menucheck(0x8902,video_filter&VIDEO_FILTER_Y_MASK);
 	session_menucheck(0x8903,video_filter&VIDEO_FILTER_X_MASK);
 	session_menucheck(0x8904,video_filter&VIDEO_FILTER_SMUDGE);
 	MEMLOAD(kbd_joy,joy1_types[joy1_type]);
-	#if AUDIO_STEREO
-	session_menuradio(0xC401+audio_channels,0xC401,0xC404);
+	#if AUDIO_CHANNELS > 1
+	session_menuradio(0xC401+audio_mixmode,0xC401,0xC404);
 	for (int i=0;i<3;++i)
-		psg_stereo[i][0]=256+psg_stereos[audio_channels][i],psg_stereo[i][1]=256-psg_stereos[audio_channels][i];
+		psg_stereo[i][0]=256+psg_stereos[audio_mixmode][i],psg_stereo[i][1]=256-psg_stereos[audio_mixmode][i];
 	#endif
 	z80_multi=1+z80_turbo; // setup overclocking
 	sprintf(session_info,"%i:%s ULAv%c %0.1fMHz"//" | disc %s | tape %s | %s"
@@ -1644,7 +1639,7 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 				"for the UNED 2019 Master's Degree in Computer Engineering.\n"
 				"\nhome page, news and updates: http://cngsoft.no-ip.org/cpcec.htm"
 				"\n\n" MY_LICENSE "\n\n" GPL_3_INFO
-			,caption_version);
+			,session_caption);
 			break;
 		case 0x8200: // F2: SAVE SNAPSHOT..
 			if (s=puff_session_newfile(snap_path,snap_pattern,"Save snapshot"))
@@ -1673,9 +1668,9 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 		case 0x8400: // F4: TOGGLE SOUND
 			if (session_audio)
 			{
-				#if AUDIO_STEREO
+				#if AUDIO_CHANNELS > 1
 				if (session_shift) // TOGGLE STEREO
-					audio_channels=!audio_channels;
+					audio_mixmode=!audio_mixmode;
 				else
 				#endif
 					audio_disabled^=1;
@@ -1685,9 +1680,9 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 		case 0x8402:
 		case 0x8403:
 		case 0x8404:
-			#if AUDIO_STEREO
+			#if AUDIO_CHANNELS > 1
 			if (session_shift) // TOGGLE STEREO
-				audio_channels=(k&15)-1;
+				audio_mixmode=(k&15)-1;
 			else
 			#endif
 			audio_filter=(k&15)-1;
@@ -1716,7 +1711,7 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 			ula_snow_disabled=!ula_snow_disabled;
 			break;
 		case 0x8513:
-			ula_v1_issue=!ula_v1_issue;
+			ula_v1_issue^=ULA_V1_ISSUE2^ULA_V1_ISSUE3;
 			break;
 		case 0x851F:
 			snap_extended=!snap_extended;
@@ -1939,12 +1934,12 @@ void session_configwritemore(FILE *f)
 		onscreen_flag,video_type,tape_rewind,z80_debug_configwrite());
 }
 
-#if defined(CONSOLE_DEBUGGER) || defined(SDL_MAIN_HANDLED)
+#if defined(DEBUG) || defined(SDL_MAIN_HANDLED)
 void printferror(char *s) { printf("error: %s!\n",s); }
 #define printfusage(s) printf(MY_CAPTION " " MY_VERSION " " MY_LICENSE "\n" s)
 #else
 void printferror(char *s) { sprintf(session_tmpstr,"Error: %s\n",s); session_message(session_tmpstr,txt_error); }
-#define printfusage(s) session_message(s,caption_version)
+#define printfusage(s) session_message(s,session_caption)
 #endif
 
 // START OF USER INTERFACE ========================================== //
@@ -1990,7 +1985,7 @@ int main(int argc,char *argv[])
 							i=argc; // help!
 						break;
 					case 'I':
-						ula_v1_issue=0;
+						ula_v1_issue=ULA_V1_ISSUE2;
 						break;
 						;
 						;
@@ -2023,7 +2018,7 @@ int main(int argc,char *argv[])
 						session_audio=0;
 						break;
 					case 'T':
-						audio_channels=0;
+						audio_mixmode=0;
 						break;
 					case 'W':
 						session_fullscreen=1;
@@ -2065,7 +2060,7 @@ int main(int argc,char *argv[])
 			"\t-g2\tset Sinclair 2 joystick\n"
 			"\t-g3\tset Cursor/AGF joystick\n"
 			"\t-g4\tset QAOP+Space joystick\n"
-			//"\t-I\temulate Issue 2 ULA\n"
+			"\t-I\temulate Issue-2 ULA line\n"
 			"\t-j\tenable joystick keys\n"
 			"\t-J\tdisable joystick\n"
 			"\t-K\tdisable 48K AY chip\n"
@@ -2092,16 +2087,12 @@ int main(int argc,char *argv[])
 	session_kbdsetup(kbd_map_xlt,length(kbd_map_xlt)/2);
 	video_target=&video_frame[video_pos_y*VIDEO_LENGTH_X+video_pos_y]; audio_target=audio_frame;
 	audio_disabled=!session_audio;
-	video_clut_update();
+	video_clut_update(); onscreen_inks(VIDEO1(0xAA0000),VIDEO1(0x55FF55));
 	if (session_fullscreen) session_togglefullscreen();
 	// it begins, "alea jacta est!"
 	while (!session_listen())
 	{
-		#ifdef CONSOLE_DEBUGGER
-		while (!(session_signal&~SESSION_SIGNAL_DEBUG))
-		#else
 		while (!session_signal)
-		#endif
 			z80_main(
 				z80_multi*( // clump Z80 instructions together to gain speed...
 				tape_fastskip?ula_limit_x*4: // tape loading ignores most events and heavy clumping is feasible, although some sync is still needed
@@ -2130,8 +2121,8 @@ int main(int argc,char *argv[])
 				if (tape_filesize)
 				{
 					i=(long long)tape_filetell*1000/(tape_filesize+1);
-					onscreen_byte(+7,-3,i/10,q);
-					onscreen_char(+9,-3,'0'+(i%10),q);
+					onscreen_char(+7,-3,'0'+i/100,q);
+					onscreen_byte(+8,-3,i%100,q);
 				}
 				else
 					onscreen_text(+7, -3, tape_type < 0 ? "REC" : "---", q);
@@ -2143,6 +2134,8 @@ int main(int argc,char *argv[])
 					onscreen_bool(-2,-5,1,3,kbd_bit_tst(kbd_joy[3]));
 					onscreen_bool(-4,-4,1,1,kbd_bit_tst(kbd_joy[4]));
 				}
+				;
+				;
 			}
 			// update session and continue
 			if (autorun_mode)
@@ -2151,7 +2144,7 @@ int main(int argc,char *argv[])
 				audio_main(TICKS_PER_FRAME); // fill sound buffer to the brim!
 			audio_queue=0; // wipe audio queue and force a reset
 			psg_writelog(); session_writefilm();
-			ula_snow_a=(!ula_snow_disabled&&z80_ir.b.h>=0x40&&z80_ir.b.h<0x80)?ULA_SNOW_STEP_8BIT:0; // all models
+			ula_snow_a=(!ula_snow_disabled&&z80_ir.b.h>=0x40&&z80_ir.b.h<0x80)?main_t&ULA_SNOW_STEP_8BIT:0; // random step
 			ula_clash_z=(ula_clash_z&3)+(ula_count_y*ula_limit_x+ula_pos_x)*4;
 			if (tape_type<0&&tape&&!z80_iff.b.l) // tape is recording?
 				tape_enabled|=4;
