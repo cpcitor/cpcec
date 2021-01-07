@@ -240,9 +240,16 @@ void session_please(void) // stop activity for a short while
 	}
 }
 
+void session_kbdclear(void)
+{
+	session_joybits=0;
+	memset(kbd_bit,0,sizeof(kbd_bit));
+	memset(joy_bit,0,sizeof(joy_bit));
+}
 #define session_kbdreset() memset(kbd_map,~~~0,sizeof(kbd_map)) // init and clean key map up
 void session_kbdsetup(const unsigned char *s,char l) // maps a series of virtual keys to the real ones
 {
+	session_kbdclear();
 	while (l--)
 	{
 		int k=*s++;
@@ -258,7 +265,7 @@ int session_key_n_joy(int k) // handle some keys as joystick motions
 	return kbd_map[k];
 }
 
-SDL_GameController *session_joy=NULL;
+void *session_joy=NULL; int session_pad; // SDL_Joystick + SDL_GameController
 SDL_Window *session_hwnd=NULL;
 
 // unlike Windows, where the user interface is internally provided by the system and as well as the compositing work,
@@ -444,6 +451,8 @@ int session_ui_printasciz(char *s,int x,int y,int prae,int w,int post,int q)
 int session_ui_base_x,session_ui_base_y,session_ui_size_x,session_ui_size_y; // used to calculate mouse clicks relative to widget
 int session_ui_maus_x,session_ui_maus_y; // mouse X+Y, when the "key" is -1 (click) or -2 (move)
 int session_ui_char,session_ui_shift; // ASCII+Shift of the latest keystroke
+#define SESSION_UI_MAXX (VIDEO_PIXELS_X/8-6)
+#define SESSION_UI_MAXY (VIDEO_PIXELS_Y/SESSION_UI_HEIGHT-2)
 
 int session_ui_exchange(void) // update window and wait for a keystroke
 {
@@ -489,7 +498,7 @@ void session_ui_loop(void) // get background painted again to erase old widgets
 	else
 		session_backup(menus_frame);
 }
-void session_ui_init(void) { memset(kbd_bit,0,sizeof(kbd_bit)),memset(joy_bit,0,sizeof(joy_bit)); session_please(); session_ui_loop(); }
+void session_ui_init(void) { session_kbdclear(); session_please(); session_ui_loop(); }
 void session_ui_exit(void) // wipe all widgets and restore the window contents
 {
 	if (session_signal&SESSION_SIGNAL_DEBUG)
@@ -676,8 +685,8 @@ int session_ui_text(char *s,char *t,char q) // see session_message
 	}
 	if (textw<i)
 		textw=i;
-	if (textw>VIDEO_PIXELS_X/8-4)
-		textw=VIDEO_PIXELS_X/8-4;
+	if (textw>SESSION_UI_MAXX)
+		textw=SESSION_UI_MAXX;
 	if (i)
 		++texth;
 	if (q)
@@ -746,7 +755,7 @@ int session_ui_text(char *s,char *t,char q) // see session_message
 
 int session_ui_input(char *s,char *t) // see session_input
 {
-	int i,j,first,dirty=1,textw=VIDEO_PIXELS_X/8-4;
+	int i,j,first,dirty=1,textw=SESSION_UI_MAXX;
 	if ((i=j=first=strlen(strcpy(session_parmtr,s)))>=textw)
 		return -1; // error!
 	session_ui_init();
@@ -886,9 +895,10 @@ int session_ui_list(int item,char *s,char *t,void x(void),int q) // see session_
 	if (!items)
 		return -1;
 	session_ui_init();
-	if (listw>VIDEO_PIXELS_X/8-4)
-		listw=VIDEO_PIXELS_X/8-4;
-	listh=items+1<VIDEO_PIXELS_Y/SESSION_UI_HEIGHT-2?items+1:VIDEO_PIXELS_Y/SESSION_UI_HEIGHT-2;
+	if (listw>SESSION_UI_MAXX)
+		listw=SESSION_UI_MAXX;
+	if ((listh=items+1)>SESSION_UI_MAXY)
+		listh=SESSION_UI_MAXY;
 	int listx=((VIDEO_PIXELS_X/8)-listw-2)/2,listy=((VIDEO_PIXELS_Y/SESSION_UI_HEIGHT)-listh)/2;
 	if (items>=listh) // list is long enough?
 		if (item>=listh/2) // go to center?
@@ -1258,9 +1268,10 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 
 	if (session_stick)
 	{
-		int i=SDL_NumJoysticks(),j;
+		int i=SDL_NumJoysticks();
 		logprintf("Detected %i joystick[s]: ",i);
-		while (--i>=0&&!(j=SDL_IsGameController(i),logprintf("Joystick #%i = '%s'. ",i,j?SDL_GameControllerNameForIndex(i):SDL_JoystickNameForIndex(i)),session_joy=(j?SDL_GameControllerOpen(i):SDL_JoystickOpen(i)))) // scan joysticks and game controllers until we run out or one is OK
+		while (--i>=0&&!((session_pad=SDL_IsGameController(i)),(logprintf("%s #%i = '%s'. ",session_pad?"Controller":"Joystick",i,session_pad?SDL_GameControllerNameForIndex(i):SDL_JoystickNameForIndex(i))),
+			session_joy=(session_pad?SDL_GameControllerOpen(i):SDL_JoystickOpen(i)))) // scan joysticks and game controllers until we run out or one is OK
 			; // unlike Win32, SDL lists the joysticks from last to first
 		session_stick=i>=0;
 		logprintf(session_stick?"Joystick enabled!\n":"No joystick!\n");
@@ -1357,17 +1368,21 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	return NULL;
 }
 
-int session_pad2bit(int i)
+int session_pad2bit(int i) // translate motions and buttons into codes
 {
 	switch (i)
 	{
-		case SDL_CONTROLLER_BUTTON_A:
-			return 16; // =16<<event.cbutton.button
-		case SDL_CONTROLLER_BUTTON_B:
+		case SDL_CONTROLLER_BUTTON_A: // button 0; the order isn't the same used in Win32
+		//case 4: // SDL_CONTROLLER_BUTTON_BACK?
+			return 16;
+		case SDL_CONTROLLER_BUTTON_B: // button 1
+		//case 5: // SDL_CONTROLLER_BUTTON_GUIDE?
 			return 32;
-		case SDL_CONTROLLER_BUTTON_X:
+		case SDL_CONTROLLER_BUTTON_X: // button 2
+		//case 6: // SDL_CONTROLLER_BUTTON_START?
 			return 64;
-		case SDL_CONTROLLER_BUTTON_Y:
+		case SDL_CONTROLLER_BUTTON_Y: // button 3
+		//case 7: // SDL_CONTROLLER_BUTTON_???
 			return 128;
 		case SDL_CONTROLLER_BUTTON_DPAD_UP:
 			return 1;
@@ -1377,8 +1392,9 @@ int session_pad2bit(int i)
 			return 4;
 		case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
 			return 8;
+		default:
+			return 0;
 	}
-	return 0;
 }
 void session_menuinfo(void); // set the current menu flags. Must be defined later on!
 INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
@@ -1459,31 +1475,41 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 				}
 				break;
 			case SDL_JOYAXISMOTION:
-				if (event.jaxis.axis&1)
-					session_joybits=(session_joybits&~(1+2))+(event.caxis.value<-0x4000?1:event.caxis.value>=0x4000?2:0);
-				else
-					session_joybits=(session_joybits&~(4+8))+(event.caxis.value<-0x4000?4:event.caxis.value>=0x4000?8:0);
+				if (!session_pad)
+				{
+					if (event.jaxis.axis&1)
+						session_joybits=(session_joybits&~(1+2))+(event.jaxis.value<-0x4000?1:event.jaxis.value>=0x4000?2:0);
+					else
+						session_joybits=(session_joybits&~(4+8))+(event.jaxis.value<-0x4000?4:event.jaxis.value>=0x4000?8:0);
+				}
 				break;
 			case SDL_CONTROLLERAXISMOTION:
-				if (event.caxis.axis&1)
-					session_joybits=(session_joybits&~(1+2))+(event.caxis.value<-0x4000?1:event.caxis.value>=0x4000?2:0);
-				else
-					session_joybits=(session_joybits&~(4+8))+(event.caxis.value<-0x4000?4:event.caxis.value>=0x4000?8:0);
+				if (session_pad)
+				{
+					if (event.caxis.axis&1)
+						session_joybits=(session_joybits&~(1+2))+(event.caxis.value<-0x4000?1:event.caxis.value>=0x4000?2:0);
+					else
+						session_joybits=(session_joybits&~(4+8))+(event.caxis.value<-0x4000?4:event.caxis.value>=0x4000?8:0);
+				}
 				break;
 			case SDL_JOYBUTTONDOWN:
-				session_joybits|=session_pad2bit(event.jbutton.button);
-				break;
-			case SDL_CONTROLLERBUTTONDOWN:
-				session_joybits|=session_pad2bit(event.cbutton.button);
+				if (!session_pad)
+					session_joybits|=16<<event.jbutton.button;
 				break;
 			case SDL_JOYBUTTONUP:
-				session_joybits&=~session_pad2bit(event.jbutton.button);
+				if (!session_pad)
+					session_joybits&=~(16<<event.jbutton.button);
+				break;
+			case SDL_CONTROLLERBUTTONDOWN:
+				if (session_pad)
+					session_joybits|=session_pad2bit(event.cbutton.button);
 				break;
 			case SDL_CONTROLLERBUTTONUP:
-				session_joybits&=~session_pad2bit(event.cbutton.button);
+				if (session_pad)
+					session_joybits&=~session_pad2bit(event.cbutton.button);
 				break;
 			case SDL_WINDOWEVENT_FOCUS_LOST:
-				memset(kbd_bit,0,sizeof(kbd_bit)),memset(joy_bit,0,sizeof(joy_bit)); // loss of focus: no keys!
+				session_kbdclear(); // loss of focus: no keys!
 				break;
 			case SDL_DROPFILE:
 				strcpy(session_parmtr,event.drop.file);
@@ -1521,8 +1547,8 @@ INLINE void session_render(void) // update video, audio and timers
 			++performance_b,session_redraw(1);
 		if (session_stick&&!session_key2joy) // do we need to check the joystick?
 		{
-			for (i=0;i<length(kbd_joy);++i)
-				joy_bit_res(kbd_joy[i]); // clean keys, allow redundancy
+			memset(joy_bit,0,sizeof(joy_bit));
+			//for (i=0;i<length(kbd_joy);++i) joy_bit_res(kbd_joy[i]); // clean keys, allow redundancy
 			for (i=0;i<length(kbd_joy);++i)
 				if (session_joybits&(1<<i))
 					joy_bit_set(kbd_joy[i]); // key is down
@@ -1591,7 +1617,7 @@ INLINE void session_render(void) // update video, audio and timers
 
 INLINE void session_byebye(void) // delete video+audio devices
 {
-	if (session_joy) SDL_GameControllerClose(session_joy),SDL_JoystickClose(session_joy);
+	if (session_joy) session_pad?SDL_GameControllerClose(session_joy):SDL_JoystickClose(session_joy);
 	SDL_StopTextInput();
 	SDL_UnlockTexture(session_dib);
 	SDL_DestroyTexture(session_dib);

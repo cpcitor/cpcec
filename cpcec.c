@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20210105"//"1955"
+#define MY_VERSION "20210107"//"1555"
 #define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -762,7 +762,7 @@ WORD gate_screen; // Gate Array's internal video address within the lowest 64K R
 int crtc_screen,crtc_raster,crtc_backup,crtc_double; // CRTC's internal video addresses, active and backup
 int gate_count_r3x,gate_count_r3y,irq_steps; // Gate Array's horizontal and vertical timers filtering the CRTC's own
 VIDEO_UNIT plus_sprite_border,*plus_sprite_target=NULL;
-int plus_sprite_offset,plus_sprite_latest,plus_sprite_adjust;
+int plus_sprite_offset,plus_sprite_latest,plus_sprite_adjust; BYTE plus_sssl_safe;
 VIDEO_UNIT plus_backup_pixels[3];
 
 void video_main_sprites(void)
@@ -1173,7 +1173,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 					}
 			}
 
-			if (plus_sssl==(BYTE)(crtc_line)&&plus_sssl) // the PLUS ASIC can set new address with PLUS_SSSL and PLUS_SSSS
+			if (plus_sssl_safe==(BYTE)(crtc_line)&&plus_sssl_safe) // the PLUS ASIC can set new address with PLUS_SSSL and PLUS_SSSS
 				crtc_double=0,crtc_backup=(plus_ssss[0]&48)*1024+(plus_ssss[0]&3)*512+plus_ssss[1]*2;
 
 			crtc_line_set();
@@ -1207,6 +1207,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 		{
 			CRTC_STATUS_HSYNC_SET;
 			crtc_count_r3x=0,crtc_status|=CRTC_STATUS_HSYNC; // start horizontal sync!
+			plus_sssl_safe=plus_sssl; // the test may be done later, but its value must stick here
 		}
 		if (crtc_status&CRTC_STATUS_HSYNC)
 		{
@@ -1249,7 +1250,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 			if (video_pos_y>=video_vsync_max||(video_pos_y>=video_vsync_min&&gate_count_r3y>0)) // VBLANK?
 			{
 				if (!video_framecount) video_endscanlines(video_table[video_type][20]); // 'T' = BLACK
-				crtc_status=(crtc_table[8]&1)?(crtc_status^CRTC_STATUS_REG_8):(crtc_status&~CRTC_STATUS_REG_8); // "CLEVER & SMART": screen shakes!
+				crtc_status=((crtc_table[8]&1)&&(crtc_table[4]&32))?(crtc_status^CRTC_STATUS_REG_8):(crtc_status&~CRTC_STATUS_REG_8); // "CLEVER & SMART": screen shakes!, but ECSTASY DEMO 1 doesn't shake
 				video_newscanlines(video_pos_x,(crtc_status&CRTC_STATUS_REG_8)?2:0); // vertical reset
 				++video_pos_z; session_signal|=SESSION_SIGNAL_FRAME+session_signal_frames; // end of frame!
 			}
@@ -1583,7 +1584,10 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 				{
 					case 0:
 						playcity_ctc_flags[1]=b;
-						playcity_ctc_count[1]=0; // avoid triggering the counter between steps 0 and 1
+						if (b!=3) // command $03 stops the channel...
+							playcity_ctc_count[1]=0; // avoid triggering the counter between steps 0 and 1
+						else if (playcity_ctc_count[1]>0&&playcity_ctc_count[1]<16) // ...but pending triggers will still pop up!
+							z80_active=playcity_ctc_count[1]=-1,z80_irq|=256; // NMI!
 						playcity_ctc_state[1]=b&4?1:0; // no need to request more bytes if bit 2 is OFF
 						break;
 					case 1:
@@ -3151,7 +3155,7 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 					if ((j=any_load_catalog(0,0xC1))!=0x800) // VENDOR format instead of DATA?
 						if ((j=any_load_catalog(2,0x41))!=0x800) // VENDOR format instead of DATA?
 							j=any_load_catalog(1,0x01); // IBM format instead of VENDOR or DATA?
-					BYTE bestfile[STRMAX];
+					BYTE bestfile[STRMAX]; bestfile[8]='.'; // filenames follow the "8.3" style
 					int bestscore=bestfile[0]=0;
 					logprintf("AUTORUN: ");
 					if (j==0x800) // we got a seemingly valid catalogue
@@ -3181,15 +3185,14 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 									if (bestscore<k)
 									{
 										bestscore=k;
-										MEMNCPY(bestfile,&disc_buffer[i+1],8);
-										bestfile[8]='.';
-										strcpy(&bestfile[9],&disc_buffer[i+9]);
+										MEMNCPY(bestfile,&disc_buffer[i+1],8); // name
+										strcpy(&bestfile[9],&disc_buffer[i+9]); // extension
 									}
 								}
 							}
-					if (bestscore) // load and run file
+					if (bestscore) // load and run a file
 						sprintf(autorun_line,"RUN\"%s",bestfile);
-					else // no known file, run boot sector
+					else // no known files, run boot sector
 						strcpy(autorun_line,"|CPM");
 					logprintf("%s\n",autorun_line);
 					disc_disabled=0,tape_close(); // open disc? enable disc, close tapes!

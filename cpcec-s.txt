@@ -859,4 +859,7 @@ render*" ahora es "Acceleration*", más congruente en su contexto.
 (problemas con ficheros WAV de 16 y 24 bits), aumenta el soporte de joystick
 para aceptar controles angulares (gracias a Pelrun por el código para Win32 y
 SDL2), y permite que la emulación de Dandanator modifique el cartucho
-(configuración, partidas...) si el usuario lo solicita.
+(configuración, partidas...) si el usuario lo permite.
+- 20210107 -- parche menor que corrige un error en la pantalla dividida del ASIC
+(SSSL se comprueba cuando HSYNC sube, no cuando HDISP sube) y un fallo en el
+soporte de joystick de Win32, y que hace el CTC de Playcity más reactivo.

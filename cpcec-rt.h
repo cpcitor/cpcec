@@ -966,7 +966,7 @@ void onscreen_bool(int x,int y,int lx,int ly,int q) // draw dots
 #define KBDBG_RET	13
 #define KBDBG_RET_S	12
 #define KBDBG_SPC	32
-#define KBDBG_SPC_S	160
+#define KBDBG_SPC_S	160 // cfr. "non-breaking space"
 #define KBDBG_ESCAPE	27
 int debug_xlat(int k) // turns non-alphanumeric keypresses into pseudo-ASCII codes
 { switch (k) {

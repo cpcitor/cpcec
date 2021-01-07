@@ -811,4 +811,7 @@ stereo into 88KHz mono) and tape playback (16 and 24 bit WAVE files were
 improperly supported), extending the joystick support to handle directional
 controls (thanks to Pelrun for the Win32 and SDL2 code) and letting the
 Dandanator emulation modify the cartridge (configuration, savestates...) if the
-user requests it.
+user allows it.
+- 20210107 -- minor patch fixing a bug in the ASIC's screen split trigger (SSSL
+must be checked when HSYNC rises, rather than when HDISP rises) and a glitch in
+the Win32 joystick support, and making the Playcity CTC more responsive.

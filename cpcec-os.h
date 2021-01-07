@@ -298,9 +298,15 @@ void session_please(void) // stop activity for a short while
 	}
 }
 
+void session_kbdclear(void)
+{
+	memset(kbd_bit,0,sizeof(kbd_bit));
+	memset(joy_bit,0,sizeof(joy_bit));
+}
 #define session_kbdreset() memset(kbd_map,~~~0,sizeof(kbd_map)) // init and clean key map up
 void session_kbdsetup(const unsigned char *s,char l) // maps a series of virtual keys to the real ones
 {
+	session_kbdclear();
 	while (l--)
 	{
 		int k=*s++;
@@ -516,7 +522,7 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 		case WM_ENTERMENULOOP: // pause before showing the menus
 			session_please();
 		case WM_KILLFOCUS: // no 'break'!
-			memset(kbd_bit,0,sizeof(kbd_bit)),memset(joy_bit,0,sizeof(joy_bit)); // loss of focus: no keys!
+			session_kbdclear(); // loss of focus: no keys!
 		default: // no 'break'!
 			if (msg==WM_SYSKEYDOWN&&wparam==VK_RETURN) // ALT+RETURN toggles MAXIMIZE/RESTORE!
 				session_togglefullscreen();
@@ -655,7 +661,7 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	{
 		JOYCAPS jc; int i=joyGetNumDevs(),j=0;
 		logprintf("Detected %i joystick[s]: ",i);
-		while (j<i&&((!joyGetDevCaps(j,&jc,sizeof(jc))&&logprintf("Joystick #%i = '%s'. ",j,jc.szPname)),joyGetPosEx(j,&session_joy))) // scan joysticks until we run out or one is OK
+		while (j<i&&((!joyGetDevCaps(j,&jc,sizeof(jc))&&logprintf("Joystick/controller #%i = '%s'. ",j,jc.szPname)),joyGetPosEx(j,&session_joy))) // scan joysticks until we run out or one is OK
 			++j;
 		session_stick=(j<i)?j+1:0; // ID+1 if available, 0 if missing
 		logprintf(session_stick?"Joystick enabled!\n":"No joystick!\n");
@@ -745,16 +751,16 @@ INLINE void session_render(void) // update video, audio and timers
 			session_joy.dwFlags=JOY_RETURNBUTTONS|JOY_RETURNPOVCTS|JOY_RETURNX|JOY_RETURNY|JOY_RETURNCENTERED;
 			if (!joyGetPosEx(session_stick-1,&session_joy))
 			{
-				j=(session_joy.dwPOV==65535?(session_joy.dwYpos< 0x4000?1:0)+(session_joy.dwYpos>=0xC000?2:0)+(session_joy.dwXpos< 0x4000?4:0)+(session_joy.dwXpos>=0xC000?8:0) // axial
+				j=((session_joy.dwPOV<0||session_joy.dwPOV>=36000)?(session_joy.dwYpos< 0x4000?1:0)+(session_joy.dwYpos>=0xC000?2:0)+(session_joy.dwXpos< 0x4000?4:0)+(session_joy.dwXpos>=0xC000?8:0) // axial
 				:(session_joy.dwPOV< 2250?1:session_joy.dwPOV< 6750?9:session_joy.dwPOV<11250?8:session_joy.dwPOV<15750?10: // angular: U (0), U-R (4500), R (9000), R-D (13500)
 				session_joy.dwPOV<20250?2:session_joy.dwPOV<24750?6:session_joy.dwPOV<29250?4:session_joy.dwPOV<33750?5:1)) // D (18000), D-L (22500), L (27000), L-U (31500)
-				+((session_joy.dwButtons&JOY_BUTTON1)?16:0)+((session_joy.dwButtons&JOY_BUTTON2)?32:0) // FIRE1, FIRE2
-				+((session_joy.dwButtons&JOY_BUTTON3)?64:0)+((session_joy.dwButtons&JOY_BUTTON4)?128:0); // FIRE3, FIRE4
+				+((session_joy.dwButtons&(JOY_BUTTON1/*|JOY_BUTTON5*/))?16:0)+((session_joy.dwButtons&(JOY_BUTTON2/*|JOY_BUTTON6*/))?32:0) // FIRE1, FIRE2 ...
+				+((session_joy.dwButtons&(JOY_BUTTON3/*|JOY_BUTTON7*/))?64:0)+((session_joy.dwButtons&(JOY_BUTTON4/*|JOY_BUTTON8*/))?128:0); // FIRE3, FIRE4 ...
 			}
 			else
 				j=0; // joystick failure, release its keys
-			for (i=0;i<length(kbd_joy);++i)
-				joy_bit_res(kbd_joy[i]); // clean keys, allow redundancy
+			memset(joy_bit,0,sizeof(joy_bit));
+			//for (i=0;i<length(kbd_joy);++i) joy_bit_res(kbd_joy[i]); // clean keys, allow redundancy
 			for (i=0;i<length(kbd_joy);++i)
 				if (j&(1<<i))
 					joy_bit_set(kbd_joy[i]); // key is down
