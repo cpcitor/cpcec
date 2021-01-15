@@ -8,8 +8,8 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20210107"//"1555"
-#define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
+#define MY_VERSION "20210114"//"2555"
+#define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
 
@@ -443,7 +443,8 @@ void crtc_invis_update(void)
 void crtc_syncs_update(void)
 {
 	crtc_limit_r3x=crtc_table[3]&15; if (!crtc_limit_r3x&&crtc_type==3) crtc_limit_r3x=16;
-	crtc_limit_r3y=(crtc_type<1||crtc_type>2)?crtc_table[3]>>4:0;
+	crtc_limit_r3y=(crtc_type<1||crtc_type>2)?crtc_table[3]>>4:
+		crtc_table[4]==62&&crtc_table[9]==4&&!crtc_table[5]?15:0; // kludge: '15' (possibly 13) rather than '0' fixes PHEELONE (315 scanlines rather than 312) on CRTC1
 	video_vsync_min=crtc_hold<0?VIDEO_VSYNC_LO-(VIDEO_LENGTH_Y-VIDEO_VSYNC_LO):VIDEO_VSYNC_LO;
 	video_vsync_max=crtc_hold>0?VIDEO_VSYNC_HI+(VIDEO_LENGTH_Y-VIDEO_VSYNC_LO):VIDEO_VSYNC_HI;
 }
@@ -615,34 +616,44 @@ void mmu_update(void) // update the MMU tables with all the new offsets
 	if (mem_dandanator) // emulate the Dandanator (and more exactly its CPC-only memory map) only when a card is loaded
 	{
 		//if (dandanator_config[5]&0x73)
-			//logprintf("DAN! %02X%02X,%02X,%02X ",dandanator_config[4],dandanator_config[5],dandanator_config[6],dandanator_config[7]);
-		if (!(dandanator_config[6]&32))
+			logprintf("DAN! %02X%02X,%02X,%02X ",dandanator_config[4],dandanator_config[5],dandanator_config[6],dandanator_config[7]);
+		if (!(dandanator_config[5]&32)) // enabled?
 		{
-			if (dandanator_config[5]&4) // the order is important; checking bit 0 first breaks "THE SWORD OF IANNA" when the first level begins
+			if (!(dandanator_config[6]&32))
 			{
-				mmu_rom[2]=&mem_dandanator[((dandanator_config[6]&31)<<14)-0x8000];
-				//if ((dandanator_config[4]&2)&&dandanator_canwrite) mmu_ram[2]=mmu_rom[2],dandanator_dirty=1;
+				if (dandanator_config[5]&4) // the order is important; checking bit 0 first breaks "THE SWORD OF IANNA" when the first level begins
+				{
+					mmu_rom[2]=&mem_dandanator[((dandanator_config[6]&31)<<14)-0x8000];
+					//if ((dandanator_config[4]&2)&&dandanator_canwrite) mmu_ram[2]=mmu_rom[2],dandanator_dirty=1;
+				}
+				else if (!(dandanator_config[5]&1))
+				{
+					mmu_rom[0]=&mem_dandanator[((dandanator_config[6]&31)<<14)-0x0000];
+					if ((dandanator_config[4]&2)&&(dandanator_config[6]&30)&&dandanator_canwrite) // forbid writing on pages 0 and 1 (!?)
+						logprintf("R/W %02X%02X%02X%02X\n",dandanator_config[4],dandanator_config[5],dandanator_config[6],dandanator_config[7]),
+						mmu_ram[0]=mmu_rom[0],dandanator_dirty=1;
+				}
 			}
-			else if (!(dandanator_config[5]&1))
+			if (!(dandanator_config[7]&32))
 			{
-				mmu_rom[0]=&mem_dandanator[((dandanator_config[6]&31)<<14)-0x0000];
-				if ((dandanator_config[4]&2)&&(dandanator_config[6]&30)&&dandanator_canwrite) // forbid writing on pages 0 and 1 (!?)
-					logprintf("R/W %02X%02X%02X%02X\n",dandanator_config[4],dandanator_config[5],dandanator_config[6],dandanator_config[7]),
-					mmu_ram[0]=mmu_rom[0],dandanator_dirty=1;
+				if (dandanator_config[5]&8) // the order is important again: checking bit 1 first breaks "MOJON TWINS ROMSET" and other snapshot packs
+				{
+					mmu_rom[3]=&mem_dandanator[((dandanator_config[7]&31)<<14)-0xC000];
+					//if ((dandanator_config[4]&2)&&dandanator_canwrite) mmu_ram[3]=mmu_rom[3],dandanator_dirty=1;
+				}
+				else if (!(dandanator_config[5]&2))
+				{
+					mmu_rom[1]=&mem_dandanator[((dandanator_config[7]&31)<<14)-0x4000];
+					//if ((dandanator_config[4]&2)&&dandanator_canwrite) mmu_ram[1]=mmu_rom[1],dandanator_dirty=1;
+				}
 			}
 		}
-		if (!(dandanator_config[7]&32))
+		else if (dandanator_config[5]&16) // rombox?
 		{
-			if (dandanator_config[5]&8) // the order is important again: checking bit 1 first breaks "MOJON TWINS ROMSET" and other snapshot packs
-			{
+			if (!(gate_mcr&4)) // "poor-man rombox" (LO)
+				mmu_rom[0]=&mem_dandanator[0x70000+((dandanator_config[0]&24)<<11)-0x0000];
+			if (!(gate_mcr&8)) // "poor-man rombox" (HI)
 				mmu_rom[3]=&mem_dandanator[((dandanator_config[7]&31)<<14)-0xC000];
-				//if ((dandanator_config[4]&2)&&dandanator_canwrite) mmu_ram[3]=mmu_rom[3],dandanator_dirty=1;
-			}
-			else if (!(dandanator_config[5]&2))
-			{
-				mmu_rom[1]=&mem_dandanator[((dandanator_config[7]&31)<<14)-0x4000];
-				//if ((dandanator_config[4]&2)&&dandanator_canwrite) mmu_ram[1]=mmu_rom[1],dandanator_dirty=1;
-			}
 		}
 	}
 	#endif
@@ -699,7 +710,6 @@ void gate_reset(void) // reset the Gate Array
 	gate_mcr=gate_ram=gate_rom=gate_index=irq_timer=irq_delay=0;
 	gate_ram_dirty=64;
 	MEMZERO(gate_table);
-	video_clut_update();
 	mmu_update();
 }
 
@@ -723,7 +733,7 @@ void pio_reset(void)
 int psg_stereo[3][2]; const int psg_stereos[][3]={{0,0,0},{+256,0,-256},{+128,0,-128},{+64,0,-64}}; // A left, B middle, C right
 #endif
 #define PSG_PLAYCITY 1
-int playcity_disabled=1,playcity_ctc_state[4]={0,0,0,0},playcity_ctc_flags[4]={0,0,0,0},playcity_ctc_count[4]={0,0,0,0},playcity_ctc_limit[4]={0,0,0,0};
+int playcity_disabled=1,playcity_dirty,playcity_ctc_state[4]={0,0,0,0},playcity_ctc_flags[4]={0,0,0,0},playcity_ctc_count[4]={0,0,0,0},playcity_ctc_limit[4]={0,0,0,0};
 
 #include "cpcec-ay.h"
 
@@ -980,50 +990,28 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 					z80_irq|=128;
 
 			/*if (CRTC_STATUS_RES(CRTC_STATUS_H_OFF)) // CRTC_STATUS_H_OFF_RES
-			{
-				;
-			}*/
+				;*/
 			/*if (CRTC_STATUS_SET(CRTC_STATUS_H_OFF)) // CRTC_STATUS_H_OFF_SET
-			{
-				;
-			}*/
+				;*/
 			/*if (CRTC_STATUS_RES(CRTC_STATUS_V_OFF)) // CRTC_STATUS_V_OFF_RES
-			{
-				;
-			}*/
+				;*/
 			/*if (CRTC_STATUS_SET(CRTC_STATUS_V_OFF)) // CRTC_STATUS_V_OFF_SET
-			{
-				;
-			}*/
+				;*/
 			/*if (CRTC_STATUS_SET(CRTC_STATUS_HSYNC)) // CRTC_STATUS_HSYNC_SET
-			{
-				;
-			}*/
+				;*/
 			/*if (CRTC_STATUS_RES(CRTC_STATUS_HSYNC)) // CRTC_STATUS_HSYNC_RES
-			{
-				;
-			}*/
+				;*/
 			if (CRTC_STATUS_SET(CRTC_STATUS_VSYNC)) // CRTC_STATUS_VSYNC_SET
-			{
-				//z80_irq&=~128; // partial fix of "PHEELONE" on CRTC1 without breaking "CHAPELLE SIXTEEN"
-				irq_delay=1;
-				gate_count_r3y=26;
-			}
+				irq_delay=1,gate_count_r3y=26;
 			/*if (CRTC_STATUS_RES(CRTC_STATUS_VSYNC)) // CRTC_STATUS_VSYNC_RES
-			{
-				;
-			}*/
+				;*/
 			/*if (CRTC_STATUS_SET(CRTC_STATUS_INVIS)) // CRTC_STATUS_INVIS_SET
-			{
-				;
-			}*/
+				;*/
 			/*if (CRTC_STATUS_RES(CRTC_STATUS_INVIS)) // CRTC_STATUS_INVIS_RES
-			{
-				;
-			}*/
+				;*/
+			// CRTC_STATUS_VSYNC is handled separately and runs its own counter
 			gate_status=(gate_status&~(CRTC_STATUS_H_OFF+CRTC_STATUS_V_OFF+CRTC_STATUS_HSYNC+CRTC_STATUS_INVIS))+
-			((crtc_before=crtc_status)&(CRTC_STATUS_H_OFF+CRTC_STATUS_V_OFF+CRTC_STATUS_HSYNC+CRTC_STATUS_INVIS));
-			// CRTC_STATUS_VSYNC is handled separately
+				((crtc_before=crtc_status)&(CRTC_STATUS_H_OFF+CRTC_STATUS_V_OFF+CRTC_STATUS_HSYNC+CRTC_STATUS_INVIS));
 		}
 
 		// ASIC hardware sprites and DMA
@@ -1569,7 +1557,7 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 		{
 			//disc_reset();
 		#ifdef PSG_PLAYCITY
-			playcity_reset();
+			playcity_reset(); playcity_dirty=0;
 			MEMZERO(playcity_ctc_count);
 		}
 		if (p==0xF880) //logprintf("F880:%02X ",b),
@@ -1600,8 +1588,8 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 			//else if (p==0xF882) logprintf("F882:%02X ",b); // *!* todo *!*
 			//else if (p==0xF883) logprintf("F883:%02X ",b); // *!* todo *!*
 			//#endif
-			else if (p==0xF884) playcity_send(0,b); // YMZ RIGHT CHANNEL WRITE
-			else if (p==0xF888) playcity_send(1,b); // YMZ LEFT CHANNEL WRITE
+			else if (p==0xF884) playcity_dirty|=2,playcity_send(0,b); // YMZ RIGHT CHANNEL WRITE
+			else if (p==0xF888) playcity_dirty|=1,playcity_send(1,b); // YMZ LEFT CHANNEL WRITE
 			else if (p==0xF984) playcity_select(0,b); // YMZ RIGHT CHANNEL SELECT
 			else if (p==0xF988) playcity_select(1,b); // YMZ LEFT CHANNEL SELECT
 		#endif
@@ -2575,7 +2563,6 @@ int z80_active_delay=0; // cannot be local, it must stick :-(
 #define Z80_STRIDE_HALT 1
 
 #define Z80_XCF_BUG 1 // replicate the SCF/CCF quirk
-#define Z80_DEBUG_LEN 16 // height of disassemblies, dumps and searches
 #define Z80_DEBUG_MMU 1 // allow ROM/RAM toggling, it's useful on CPC!
 #define Z80_DEBUG_EXT 1 // allow EXTRA hardware debugging info pages
 #define z80_out0() 0 //  whether OUT (C) sends 0 (NMOS) or 255 (CMOS)
@@ -2607,6 +2594,7 @@ void all_reset(void) // reset everything!
 	crtc_reset();
 	gate_reset();
 	plus_reset();
+	video_clut_update(); // normal CPC is all gray by default, PLUS ASIC is black instead
 	tape_reset();
 	disc_reset();
 	pio_reset();
@@ -2619,7 +2607,7 @@ void all_reset(void) // reset everything!
 	crtc_table[0]=63; crtc_table[3]=0x8E; crtc_table[4]=38; crtc_table[9]=7; crtc_syncs_update(); // implicit in "GNG11B" (?)
 	MEMFULL(z80_tape_fastindices);
 	#ifdef PSG_PLAYCITY
-	playcity_reset();
+	playcity_reset(); playcity_dirty=0;
 	MEMZERO(playcity_ctc_count);
 	#endif
 }
@@ -2788,7 +2776,7 @@ char snap_magic8[]="MV - SNA";
 #define SNAP_SAVE_Z80W(x,r) header[x]=r.b.l,header[x+1]=r.b.h
 int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ERROR
 {
-	FILE *f=fopen(s,"wb");
+	FILE *f=puff_fopen(s,"wb");
 	if (!f)
 		return 1;
 	BYTE header[256];
@@ -3293,7 +3281,7 @@ char session_menudata[]=
 	"Video\n"
 	"0x8A00 Full screen\tAlt+Return\n"
 	"0x8A01 Zoom to integer\n"
-	"0x8A02 Acceleration*\n"
+	"0x8A02 Video acceleration*\n"
 	"=\n"
 	"0x8901 Onscreen status\tShift+F9\n"
 	"0x8904 Interpolation\n"
@@ -3715,7 +3703,7 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 		case 0x8A01: // ZOOM TO INTEGER
 			session_intzoom=!session_intzoom; session_clrscr();
 			break;
-		case 0x8A02: // SOFTWARE RENDER*
+		case 0x8A02: // VIDEO ACCELERATION / SOFTWARE RENDER (*needs restart)
 			session_softblit=!session_softblit;
 			break;
 		case 0x8B01:
@@ -4050,7 +4038,25 @@ int main(int argc,char *argv[])
 				audio_main(TICKS_PER_FRAME); // fill sound buffer to the brim!
 			#ifdef PSG_PLAYCITY
 				if (!playcity_disabled)
+				{
+					// "ALCON 2020: SLAP FIGHT" uses just one Playcity chip: we make it MONO and restore the STEREO to the original AY chip
+					if (playcity_dirty<2)
+					{
+						playcity_stereo[1][0]+=playcity_stereo[0][0]; playcity_stereo[1][1]+=playcity_stereo[0][1];
+					}
 					playcity_main(audio_frame,AUDIO_LENGTH_Z);
+					if (playcity_dirty<2)
+					{
+						playcity_stereo[1][0]-=playcity_stereo[0][0]; playcity_stereo[1][1]-=playcity_stereo[0][1];
+						psg_stereo[0][0]=playcity_stereo[1][0]; psg_stereo[0][1]=playcity_stereo[1][1];
+						psg_stereo[2][0]=playcity_stereo[0][0]; psg_stereo[2][1]=playcity_stereo[0][1];
+					}
+					else
+					{
+						psg_stereo[0][0]=psg_stereo[2][0]=psg_stereo[1][0];
+						psg_stereo[0][1]=psg_stereo[2][1]=psg_stereo[1][1];
+					}
+				}
 			#endif
 			}
 			audio_queue=0; // wipe audio queue and force a reset
@@ -4070,8 +4076,9 @@ int main(int argc,char *argv[])
 	z80_close(); if (mem_xtr) free(mem_xtr);
 	tape_close();
 	disc_close(0); disc_close(1);
-	psg_closelog(); session_closefilm();
+	psg_closelog();
 	session_closewave();
+	session_closefilm();
 	if (f=fopen(session_configfile(),"w"))
 		session_configwritemore(f),session_configwrite(f),fclose(f);
 	return puff_byebye(),session_byebye(),0;

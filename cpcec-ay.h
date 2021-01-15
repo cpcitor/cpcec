@@ -44,7 +44,7 @@ void psg_reg_update(int c)
 				psg_tone_mixer[c]=psg_table[7]&((1+8)<<c); // 8+1, 16+2, 32+4
 			break;
 		case 8: case 9: case 10: // amplitudes
-			if ((psg_tone_power[c-8]=psg_table[c])&~15) // hard envelope?
+			if ((psg_tone_power[c-8]=psg_table[c])&16) // hard envelope?
 				psg_tone_power[c-8]=16;
 			break;
 		case 11: case 12: // envelope wavelength

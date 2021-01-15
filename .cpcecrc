@@ -1,0 +1,21 @@
+type 0
+crtc 1
+bank 1
+xfdc 1
+plct 0
+file /org/gourichon/localdata/stephane/SG/project/retrocomputing/bydate/2020/2020-12-31/FDCToolsV1_1/ReadAmsdos/Example.dsk
+snap 
+tape 
+disc /org/gourichon/localdata/stephane/SG/project/retrocomputing/bydate/2020/2020-12-31/FDCToolsV1_1/ReadAmsdos/Example.dsk
+card /org/gourichon/localdata/stephane/SG/project/retrocomputing/bydate/2020/2020-05-09/cpcec/cpc464.rom
+dntr 
+info 1
+palette 2
+autorewind 1
+debug 0
+polyphony 1
+scanlines 0
+softaudio 0
+softvideo 0
+zoomvideo 0
+safevideo 1

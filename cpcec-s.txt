@@ -863,3 +863,8 @@ SDL2), y permite que la emulación de Dandanator modifique el cartucho
 - 20210107 -- parche menor que corrige un error en la pantalla dividida del ASIC
 (SSSL se comprueba cuando HSYNC sube, no cuando HDISP sube) y un fallo en el
 soporte de joystick de Win32, y que hace el CTC de Playcity más reactivo.
+- 20210114 -- parche menor que mejora la detección automática de estéreo en
+Playcity ("Alcon 2020" solamente usa el chip izquierdo), añade simulación de ROM
+a los cartuchos Dandanator ("CPC Soccer") y corrige un bug en la instrucción de
+Z80 CPI aparecido en la versión 20210105 y otro en la duración de VSYNC en CRTC
+1 ("Pheelone").

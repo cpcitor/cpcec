@@ -1240,9 +1240,12 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 
 // create, handle and destroy session ------------------------------- //
 
+SDL_version sdl_version; char sdl_version_str[8];
 INLINE char* session_create(char *s) // create video+audio devices and set menu; 0 OK, !0 ERROR
 {
 	SDL_SetMainReady();
+	SDL_GetVersion(&sdl_version);
+	sprintf(sdl_version_str,"%i.%i.%i",sdl_version.major,sdl_version.minor,sdl_version.patch);
 	if (SDL_Init(SDL_INIT_EVENTS|SDL_INIT_VIDEO|SDL_INIT_AUDIO|SDL_INIT_TIMER|SDL_INIT_JOYSTICK|SDL_INIT_GAMECONTROLLER)<0)
 		return (char *)SDL_GetError();
 	if (!(session_hwnd=SDL_CreateWindow(session_caption,SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,0)))
@@ -1271,7 +1274,7 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 		int i=SDL_NumJoysticks();
 		logprintf("Detected %i joystick[s]: ",i);
 		while (--i>=0&&!((session_pad=SDL_IsGameController(i)),(logprintf("%s #%i = '%s'. ",session_pad?"Controller":"Joystick",i,session_pad?SDL_GameControllerNameForIndex(i):SDL_JoystickNameForIndex(i))),
-			session_joy=(session_pad?SDL_GameControllerOpen(i):SDL_JoystickOpen(i)))) // scan joysticks and game controllers until we run out or one is OK
+			session_joy=(session_pad?(void*)SDL_GameControllerOpen(i):(void*)SDL_JoystickOpen(i)))) // scan joysticks and game controllers until we run out or one is OK
 			; // unlike Win32, SDL lists the joysticks from last to first
 		session_stick=i>=0;
 		logprintf(session_stick?"Joystick enabled!\n":"No joystick!\n");
@@ -1292,7 +1295,7 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	#ifdef _WIN32
 	long int z;
 	for (session_ui_drive[0]='A';session_ui_drive[0]<='Z';++session_ui_drive[0]) // scan session_ui_drive just once
-		if (GetDriveType(session_ui_drive)>1&&GetDiskFreeSpace(session_ui_drive,&z,&z,&z,&z))
+		if (GetDriveType(session_ui_drive)>2&&GetDiskFreeSpace(session_ui_drive,&z,&z,&z,&z))
 			session_ui_drives|=1<<(session_ui_drive[0]-'A');
 	#else
 	session_ui_icon=SDL_CreateRGBSurfaceFrom(session_icon32xx16,32,32,16,32*2,0xF00,0xF0,0xF,0xF000); // ARGB4444
@@ -1476,21 +1479,23 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 				break;
 			case SDL_JOYAXISMOTION:
 				if (!session_pad)
-				{
-					if (event.jaxis.axis&1)
-						session_joybits=(session_joybits&~(1+2))+(event.jaxis.value<-0x4000?1:event.jaxis.value>=0x4000?2:0);
-					else
-						session_joybits=(session_joybits&~(4+8))+(event.jaxis.value<-0x4000?4:event.jaxis.value>=0x4000?8:0);
-				}
+					switch (event.jaxis.axis) // warning, there can be more than two axes
+					{
+						case SDL_CONTROLLER_AXIS_LEFTX: // safe
+						//case SDL_CONTROLLER_AXIS_RIGHTX: // unsafe?
+							session_joybits=(session_joybits&~(4+8))+(event.jaxis.value<-0x4000?4:event.jaxis.value>=0x4000?8:0); break;
+						case SDL_CONTROLLER_AXIS_LEFTY: // safe
+						//case SDL_CONTROLLER_AXIS_RIGHTY: // unsafe?
+							session_joybits=(session_joybits&~(1+2))+(event.jaxis.value<-0x4000?1:event.jaxis.value>=0x4000?2:0); break;
+					}
 				break;
 			case SDL_CONTROLLERAXISMOTION:
 				if (session_pad)
-				{
-					if (event.caxis.axis&1)
-						session_joybits=(session_joybits&~(1+2))+(event.caxis.value<-0x4000?1:event.caxis.value>=0x4000?2:0);
-					else
-						session_joybits=(session_joybits&~(4+8))+(event.caxis.value<-0x4000?4:event.caxis.value>=0x4000?8:0);
-				}
+					switch (event.caxis.axis) // only the first two axes (X and Y) are safe
+					{
+						case 0: session_joybits=(session_joybits&~(4+8))+(event.caxis.value<-0x4000?4:event.caxis.value>=0x4000?8:0); break;
+						case 1: session_joybits=(session_joybits&~(1+2))+(event.caxis.value<-0x4000?1:event.caxis.value>=0x4000?2:0); break;
+					}
 				break;
 			case SDL_JOYBUTTONDOWN:
 				if (!session_pad)
@@ -1608,7 +1613,8 @@ INLINE void session_render(void) // update video, audio and timers
 	{
 		if (performance_t)
 		{
-			sprintf(session_tmpstr,"%s | %s | %g%% CPU %g%% %s",session_caption,session_info,performance_f*100.0/VIDEO_PLAYBACK,performance_b*100.0/VIDEO_PLAYBACK,session_hardblit?"SDL":"sdl");
+			sprintf(session_tmpstr,"%s | %s | %g%% CPU %g%% %s%s",session_caption,session_info,
+				performance_f*100.0/VIDEO_PLAYBACK,performance_b*100.0/VIDEO_PLAYBACK,session_hardblit?"SDL":"sdl",sdl_version_str);
 			SDL_SetWindowTitle(session_hwnd,session_tmpstr);
 		}
 		performance_t=i,performance_f=performance_b=session_paused=0;

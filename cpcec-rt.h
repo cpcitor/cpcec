@@ -785,7 +785,7 @@ unsigned int puff_dohash(unsigned int k,unsigned char *s,int l)
 	return k;
 }
 // ZIP-aware fopen()
-char PUFFCHAR[]="|",puff_path[STRMAX];
+char PUFF_STR[]="|\177|",puff_path[STRMAX]; // hoping that no Unix user will be crazy enough to use this combination in a filename!
 FILE *puff_ffile=NULL;
 FILE *puff_fopen(char *s,char *m) // mimics fopen(), so NULL on error, *FILE otherwise
 {
@@ -796,10 +796,11 @@ FILE *puff_fopen(char *s,char *m) // mimics fopen(), so NULL on error, *FILE oth
 	// TODO: handle more than one puff_ffile at once so the file caching is smart
 	//if (puff_ffile) fclose(puff_ffile),puff_ffile=NULL; // it's a new file, destroy old one and start anew
 	char *z;
-	if (!(z=strrstr(s,PUFFCHAR))||!strchr(m,'r'))
+	if (!(z=strrstr(s,PUFF_STR)))//||!strchr(m,'r')) // TODO: what to do with 'w' and 'a' file modes?
 		return fopen(s,m); // normal file logic
 	strcpy(puff_path,s);
-	puff_path[z++-s]=0;
+	puff_path[z-s]=0;
+	z+=strlen(PUFF_STR);
 	if (puff_open(puff_path))
 		return 0;
 	while (!puff_head()) // scan archive
@@ -843,9 +844,9 @@ char *puff_session_filedialog(char *r,char *s,char *t,int q,int f) // ZIP archiv
 	strcpy(rr,r);
 	for (;;) // try either a file list or the file dialog until the user either chooses a file or quits
 	{
-		if (zz=strrstr(rr,PUFFCHAR)) // 'rr' holds the path, does it contain the separator already?
+		if (zz=strrstr(rr,PUFF_STR)) // 'rr' holds the path, does it contain the separator already?
 		{
-			*zz=0; zz+=strlen(PUFFCHAR);  // *zz++=0; // now it either points to the previous file name or to a zero
+			*zz=0; zz+=strlen(PUFF_STR);  // *zz++=0; // now it either points to the previous file name or to a zero
 			z=session_scratch; // generate list of files in archive
 			int l=0,i=-1; // number of files, default selection
 			if (!puff_open(rr))
@@ -874,7 +875,7 @@ char *puff_session_filedialog(char *r,char *s,char *t,int q,int f) // ZIP archiv
 			if (l==1) // exactly one file?
 			{
 				if (!*zz) // new archive? (old archive would still show a file here)
-					return session_filedialog_readonly1(),strcpy(session_parmtr,strcat(strcat(rr,PUFFCHAR),session_scratch));
+					return session_filedialog_readonly1(),strcpy(session_parmtr,strcat(strcat(rr,PUFF_STR),session_scratch));
 			}
 			else if (l) // at least one file?
 			{
@@ -882,14 +883,14 @@ char *puff_session_filedialog(char *r,char *s,char *t,int q,int f) // ZIP archiv
 				*z++=0; // END OF LIST
 				sprintf(z,"Browse archive %s",rr);
 				if (session_list(i,session_scratch,z)>=0) // default to latest file if possible
-					return session_filedialog_readonly1(),strcpy(session_parmtr,strcat(strcat(rr,PUFFCHAR),session_parmtr));
+					return session_filedialog_readonly1(),strcpy(session_parmtr,strcat(strcat(rr,PUFF_STR),session_parmtr));
 			}
 		}
 		if (!(z=(q?session_getfilereadonly(rr,ss,t,f):session_getfile(rr,ss,t)))) // what did the user choose?
 			return NULL; // user cancel: give up
 		if (strlen(z)<4||strcasecmp(z+strlen(z)-4,&puff_pattern[1]))
 			return z; // normal file: accept it
-		strcat(strcpy(rr,z),PUFFCHAR); // ZIP archive: append and try again
+		strcat(strcpy(rr,z),PUFF_STR); // ZIP archive: append and try again
 	}
 }
 #define puff_session_getfile(x,y,z) puff_session_filedialog(x,y,z,0,0)
@@ -898,7 +899,7 @@ char *puff_session_newfile(char *x,char *y,char *z) // writing within ZIP archiv
 {
 	char xx[STRMAX],*zz;
 	strcpy(xx,x); // cancelling must NOT destroy the source path
-	if (zz=strrstr(xx,PUFFCHAR))
+	if (zz=strrstr(xx,PUFF_STR))
 		while (--zz>=xx&&*zz!=PATHCHAR)
 			*zz=0; // remove ZIP archive and file within
 	return session_newfile(xx,y,z);

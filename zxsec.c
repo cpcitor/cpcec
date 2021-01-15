@@ -8,8 +8,8 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20210107"//"1555"
-#define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
+#define MY_VERSION "20210114"//"2555"
+#define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
 
@@ -141,14 +141,19 @@ const unsigned char kbd_map_xlt[]=
 	KBCODE_X_1	,0x18,	KBCODE_X_2	,0x19,	KBCODE_X_3	,0x1A,
 	KBCODE_X_0	,0x20,	KBCODE_X_ENTER	,0x30,
 	// built-in combinations
-	KBCODE_ESCAPE	,0x78, // CAPS SHIFT FLAG (0x40) + SPACE (0x38)
-	KBCODE_BKSPACE	,0x60, // CAPS SHIFT FLAG (0x40) + "0" (0x20)
-	KBCODE_TAB	,0x58, // CAPS SHIFT FLAG (0x40) + "1" (0x18)
-	KBCODE_CAP_LOCK	,0x59, // CAPS SHIFT FLAG (0x40) + "2" (0x19)
-	KBCODE_UP	,0x63, // CAPS SHIFT FLAG (0x40) + "7" (0x23)
-	KBCODE_DOWN	,0x64, // CAPS SHIFT FLAG (0x40) + "6" (0x24)
-	KBCODE_LEFT	,0x5C, // CAPS SHIFT FLAG (0x40) + "5" (0x1C)
-	KBCODE_RIGHT	,0x62, // CAPS SHIFT FLAG (0x40) + "8" (0x22)
+	KBCODE_ESCAPE	,0x78, // CAPS SHIFT (0x40) + SPACE (0x38)
+	KBCODE_BKSPACE	,0x60, // CAPS SHIFT (0x40) + "0" (0x20)
+	KBCODE_TAB	,0x58, // CAPS SHIFT (0x40) + "1" (0x18)
+	KBCODE_CAP_LOCK	,0x59, // CAPS SHIFT (0x40) + "2" (0x19)
+	KBCODE_UP	,0x63, // CAPS SHIFT (0x40) + "7" (0x23)
+	KBCODE_DOWN	,0x64, // CAPS SHIFT (0x40) + "6" (0x24)
+	KBCODE_LEFT	,0x5C, // CAPS SHIFT (0x40) + "5" (0x1C)
+	KBCODE_RIGHT	,0x62, // CAPS SHIFT (0x40) + "8" (0x22)
+	//KBCODE_X_ADD	,0xB2, // SYMBOL SHIFT (0x80) + "K" (0x)
+	//KBCODE_X_SUB	,0xB3, // SYMBOL SHIFT (0x80) + "J" (0x)
+	//KBCODE_X_MUL	,0xBC, // SYMBOL SHIFT (0x80) + "B" (0x)
+	//KBCODE_X_DIV	,0x84, // SYMBOL SHIFT (0x80) + "V" (0x)
+	//KBCODE_X_DOT	,0xBA, // SYMBOL SHIFT (0x80) + "M" (0x3A)
 	//KBCODE_INSERT	,0x61, // CAPS SHIFT FLAG (0x40) + "9" (0x21) GRAPH?
 };
 
@@ -1018,7 +1023,6 @@ WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 #define Z80_STRIDE_HALT 4
 
 #define Z80_XCF_BUG 1 // replicate the SCF/CCF quirk
-#define Z80_DEBUG_LEN 16 // height of disassemblies, dumps and searches
 #define Z80_DEBUG_MMU 0 // forbid ROM/RAM toggling, it's useless on Spectrum
 #define Z80_DEBUG_EXT 0 // forbid EXTRA hardware debugging info pages
 #define z80_out0() 0 // whether OUT (C) sends 0 (NMOS) or 255 (CMOS)
@@ -1115,7 +1119,7 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 {
 	if (!snap_is_a_sna(s))
 		return 1; // cannot save Z80!
-	FILE *f=fopen(s,"wb");
+	FILE *f=puff_fopen(s,"wb");
 	if (!f)
 		return 1;
 	int i=z80_sp.w; BYTE header[27],q=snap_extended&&!z80_iff.b.l&&z80_pc.w>=0x5B00; // limit extended 48K snapshots to unsafe cases
@@ -1461,7 +1465,7 @@ char session_menudata[]=
 	"Video\n"
 	"0x8A00 Full screen\tAlt+Return\n"
 	"0x8A01 Zoom to integer\n"
-	"0x8A02 Acceleration*\n"
+	"0x8A02 Video acceleration*\n"
 	"=\n"
 	"0x8901 Onscreen status\tShift+F9\n"
 	"0x8904 Interpolation\n"
@@ -1831,7 +1835,7 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 		case 0x8A01: // ZOOM TO INTEGER
 			session_intzoom=!session_intzoom; session_clrscr();
 			break;
-		case 0x8A02: // SOFTWARE RENDER*
+		case 0x8A02: // VIDEO ACCELERATION / SOFTWARE RENDER (*needs restart)
 			session_softblit=!session_softblit;
 			break;
 		case 0x8B01:
@@ -2063,7 +2067,7 @@ int main(int argc,char *argv[])
 			"\t-I\temulate Issue-2 ULA line\n"
 			"\t-j\tenable joystick keys\n"
 			"\t-J\tdisable joystick\n"
-			"\t-K\tdisable 48K AY chip\n"
+			"\t-K\tdisable AY chip in 48K\n"
 			"\t-m0\tload 48K firmware\n"
 			"\t-m1\tload 128K firmware\n"
 			"\t-m2\tload +2 firmware\n"
@@ -2166,8 +2170,9 @@ int main(int argc,char *argv[])
 	z80_close();
 	tape_close();
 	disc_close(0); disc_close(1);
-	psg_closelog(); session_closefilm();
+	psg_closelog();
 	session_closewave();
+	session_closefilm();
 	if (f=fopen(session_configfile(),"w"))
 		session_configwritemore(f),session_configwrite(f),fclose(f);
 	return puff_byebye(),session_byebye(),0;

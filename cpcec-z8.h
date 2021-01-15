@@ -16,7 +16,7 @@
 
 // BEGINNING OF Z80 EMULATION ======================================= //
 
-WORD z80_wz; // internal register WZ/MEMPTR
+WORD z80_wz/*,z80_wz2*/; // internal register WZ/MEMPTR -- is WZ dual?
 #if Z80_XCF_BUG
 	BYTE z80_q; // internal register Q
 	#define Z80_Q_SET(x) z80_q=z80_af.b.l=(x)
@@ -1751,7 +1751,7 @@ void z80_close(void)
 #define Z80_IN2(x,y) z80_r7=r7; z80_wz=z80_bc.w; Z80_PRAE_RECV(z80_wz); Z80_Q_SET(z80_flags_xor[x=Z80_RECV(z80_wz)]+(z80_af.b.l&1)); Z80_POST_RECV(z80_wz); Z80_STRIDE_IO(y); r7=z80_r7; ++z80_wz
 #define Z80_OUT2(x,y) z80_wz=z80_bc.w; Z80_PRAE_SEND(z80_wz,x); Z80_SEND(z80_wz,x); Z80_POST_SEND(z80_wz); Z80_STRIDE_IO(y); ++z80_wz
 #define Z80_LDID2 do{ BYTE b=Z80_PEEK(z80_hl.w); Z80_POKE(z80_de.w,b); b+=z80_af.b.h; Z80_Q_SET((z80_af.b.l&0xC1)+(--z80_bc.w?4:0)+(b&8)+((b&2)<<4)); }while(0)
-#define Z80_CPID2 do{ BYTE b=Z80_PEEK(z80_hl.w); BYTE z=z80_af.b.h-b; z80_af.b.l=((z^z80_af.b.h^b)&0x10)+(z?(z&0x80):0x40)+(--z80_bc.w?6:2)+(z80_af.b.l&1); b=z-((z80_af.b.l>>4)&1); Z80_Q_SET(z80_af.b.l+((b<<4)&2)+(b&8)); }while(0) // ZS5H3V1-
+#define Z80_CPID2 do{ BYTE b=Z80_PEEK(z80_hl.w); BYTE z=z80_af.b.h-b; z80_af.b.l=((z^z80_af.b.h^b)&0x10)+(z?(z&0x80):0x40)+(--z80_bc.w?6:2)+(z80_af.b.l&1); b=z-((z80_af.b.l>>4)&1); Z80_Q_SET(z80_af.b.l+((b<<4)&0x20)+(b&8)); }while(0) // ZS5H3V1-
 #define Z80_INOTF() Z80_Q_SET((z80_flags_xor[z80_bc.b.h]&0xE8)+(w<b?17:0)+(z80_flags_xor[(w&7)^z80_bc.b.h]&4)+(b&0x80?2:0))
 #define Z80_INID2(x,y) do{ Z80_WAIT(1); z80_wz=z80_bc.w; Z80_PRAE_RECV(z80_wz); BYTE b=Z80_RECV(z80_wz); Z80_POST_RECV(z80_wz); Z80_STRIDE_IO(y); Z80_POKE(z80_hl.w,b); --z80_bc.b.h; BYTE w=b+z80_bc.b.l+x; Z80_INOTF(); }while(0)
 #define Z80_OTID2(x,y) do{ Z80_WAIT(1); --z80_bc.b.h; z80_wz=z80_bc.w; BYTE b=Z80_PEEK(z80_hl.w); Z80_PRAE_SEND(z80_wz,b); Z80_SEND(z80_wz,b); Z80_POST_SEND(z80_wz); Z80_STRIDE_IO(y); z80_hl.w+=x; BYTE w=b+z80_hl.b.l; Z80_INOTF(); }while(0)
@@ -2540,8 +2540,12 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					break;
 				case 0xC9: // RET
 					#ifdef Z80_CPC_DANDANATOR
-						if (dandanator_config[1]&64) // RET trap is on? (used by game packs but not by "IANNA")
-							mmu_dandanator(),dandanator_config[1]&=~64; // update MMU and disable RET trap
+					if (dandanator_config[1]&64) // RET trap is on? (used by game packs but not by "IANNA")
+					{
+						if (!(dandanator_config[5]&32)) // enabled?
+							mmu_dandanator();
+						dandanator_config[1]&=~64; // update MMU and disable RET trap
+					}
 					#endif
 					Z80_RET2;
 					break;
@@ -2745,6 +2749,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					Z80_EXX2(z80_bc.w,z80_bc2.w);
 					Z80_EXX2(z80_de.w,z80_de2.w);
 					Z80_EXX2(z80_hl.w,z80_hl2.w);
+					//Z80_EXX2(z80_wz,z80_wz2); // is WZ dual?
 					break;
 				case 0xEB: // EX DE,HL
 					Z80_EXX2(z80_de.w,z80_hl.w);
@@ -3021,7 +3026,8 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							case 0x70: // LD (IX+$XX),B
 								Z80_WZ_XY_1X(5); Z80_POKE(z80_wz,z80_bc.b.h);
 								#ifdef Z80_CPC_DANDANATOR
-									if (dandanator_trap==z80_pc.w&&!(dandanator_config[1]&32)) // "FDFDFD70"
+								if (dandanator_trap==z80_pc.w&&!(dandanator_config[1]&32)) // "FDFDFD70"
+									if (!(dandanator_config[5]&32)) // enabled?
 									{
 										dandanator_config[2]=z80_bc.b.h;
 										if (!(dandanator_config[1]&64)) // RET trap is off?
@@ -3032,7 +3038,8 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							case 0x71: // LD (IX+$XX),C
 								Z80_WZ_XY_1X(5); Z80_POKE(z80_wz,z80_bc.b.l);
 								#ifdef Z80_CPC_DANDANATOR
-									if (dandanator_trap==z80_pc.w&&!(dandanator_config[1]&32)) // "FDFDFD71"
+								if (dandanator_trap==z80_pc.w&&!(dandanator_config[1]&32)) // "FDFDFD71"
+									if (!(dandanator_config[5]&32)) // enabled?
 									{
 										dandanator_config[3]=z80_bc.b.l;
 										if (!(dandanator_config[1]&64)) // RET trap is off?
@@ -3055,7 +3062,8 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							case 0x77: // LD (IX+$XX),A
 								Z80_WZ_XY_1X(5); Z80_POKE(z80_wz,z80_af.b.h);
 								#ifdef Z80_CPC_DANDANATOR
-									if (dandanator_trap==z80_pc.w&&!(dandanator_config[1]&32)) // "FDFDFD77"
+								if (dandanator_trap==z80_pc.w&&!(dandanator_config[1]&32)) // "FDFDFD77"
+									if (!(dandanator_config[5]&32)) // enabled?
 									{
 										if (z80_af.b.h&128)
 											dandanator_config[1]=z80_af.b.h;
@@ -3412,7 +3420,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							Z80_WR2(z80_hl.b);
 							break;
 						case 0x73: // LD ($NNNN),SP
-							Z80_WR2(z80_sp.b); // `Z80_Q_RST();` is overkill
+							Z80_WR2(z80_sp.b); // Z80_Q_RST(); // overkill
 							break;
 						case 0x4B: // LD BC,($NNNN)
 							Z80_RD2(z80_bc.b);
@@ -3514,23 +3522,23 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							Z80_IORQ_1X_NEXT(2);
 							++z80_hl.w; ++z80_de.w;
 							break;
-						case 0xA8: // LDD
-							Z80_STRIDE_1;
-							Z80_LDID2;
-							Z80_IORQ_1X_NEXT(2);
-							--z80_hl.w; --z80_de.w;
-							break;
 						case 0xB0: // LDIR
 							Z80_STRIDE_1;
 							Z80_LDID2;
 							Z80_IORQ_1X_NEXT(2);
-							 ++z80_hl.w; ++z80_de.w;
+							++z80_hl.w; ++z80_de.w;
 							if (z80_af.b.l&0x04)
 							{
 								Z80_IORQ_1X_NEXT(5);
 								z80_wz=--z80_pc.w; --z80_pc.w;
 								Z80_STRIDE(0x3B0);
 							}
+							break;
+						case 0xA8: // LDD
+							Z80_STRIDE_1;
+							Z80_LDID2;
+							Z80_IORQ_1X_NEXT(2);
+							--z80_hl.w; --z80_de.w;
 							break;
 						case 0xB8: // LDDR
 							Z80_STRIDE_1;
@@ -3548,10 +3556,6 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							Z80_CPID2; ++z80_hl.w; ++z80_wz;
 							Z80_IORQ_1X_NEXT(5);
 							break;
-						case 0xA9: // CPD
-							Z80_CPID2; --z80_hl.w; --z80_wz;
-							Z80_IORQ_1X_NEXT(5);
-							break;
 						case 0xB1: // CPIR
 							Z80_CPID2; ++z80_hl.w; ++z80_wz;
 							Z80_IORQ_1X_NEXT(5);
@@ -3562,6 +3566,10 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 								Z80_STRIDE(0x3B1);
 								Z80_STRIDE_1;
 							}
+							break;
+						case 0xA9: // CPD
+							Z80_CPID2; --z80_hl.w; --z80_wz;
+							Z80_IORQ_1X_NEXT(5);
 							break;
 						case 0xB9: // CPDR
 							Z80_CPID2; --z80_hl.w; --z80_wz;
@@ -3578,10 +3586,6 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							Z80_INID2(+1,0x3A2);
 							++z80_hl.w; ++z80_wz;
 							break;
-						case 0xAA: // IND
-							Z80_INID2(-1,0x3AA);
-							--z80_hl.w; --z80_wz;
-							break;
 						case 0xB2: // INIR
 							Z80_INID2(+1,0x3A2);
 							++z80_hl.w; ++z80_wz;
@@ -3591,6 +3595,10 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 								z80_pc.w-=2;
 								Z80_STRIDE(0x3B2);
 							}
+							break;
+						case 0xAA: // IND
+							Z80_INID2(-1,0x3AA);
+							--z80_hl.w; --z80_wz;
 							break;
 						case 0xBA: // INDR
 							Z80_INID2(-1,0x3AA);
@@ -3606,10 +3614,6 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							Z80_OTID2(+1,0x3A3);
 							++z80_wz;
 							break;
-						case 0xAB: // OUTD
-							Z80_OTID2(-1,0x3AB);
-							--z80_wz;
-							break;
 						case 0xB3: // OTIR
 							Z80_OTID2(+1,0x3A3);
 							++z80_wz;
@@ -3619,6 +3623,10 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 								z80_pc.w-=2;
 								Z80_STRIDE(0x3B3);
 							}
+							break;
+						case 0xAB: // OUTD
+							Z80_OTID2(-1,0x3AB);
+							--z80_wz;
 							break;
 						case 0xBB: // OTDR
 							Z80_OTID2(-1,0x3AB);
@@ -3964,7 +3972,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 			{
 				char *s; FILE *f; WORD w=i;
 				if (s=session_getfile("","*","Input file"))
-					if (f=fopen(s,"rb"))
+					if (f=puff_fopen(s,"rb"))
 					{
 						while ((i=fgetc(f))>=0)
 							POKE(w)=i,++w;

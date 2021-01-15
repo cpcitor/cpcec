@@ -7,8 +7,8 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "XRF"
-#define MY_VERSION "20201231"//"2555"
-#define MY_LICENSE "Copyright (C) 2019-2020 Cesar Nicolas-Gonzalez"
+#define MY_VERSION "20210108"//"1915"
+#define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
 

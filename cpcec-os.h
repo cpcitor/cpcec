@@ -644,10 +644,10 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 		bmi.bmiHeader.biCompression=BI_RGB;
 		session_dc1=GetDC(session_hwnd); // caution: we assume that if CreateWindow() succeeds all other USER and GDI calls will succeed too
 		session_dc2=CreateCompatibleDC(session_dc1); // ditto
-		session_dib=CreateDIBSection(session_dc1,&bmi,DIB_RGB_COLORS,(void **)&video_frame,NULL,0); // ditto
+		session_dib=CreateDIBSection(session_dc1,&bmi,DIB_RGB_COLORS,(void**)&video_frame,NULL,0); // ditto
 		bmi.bmiHeader.biWidth=VIDEO_PIXELS_X;
 		bmi.bmiHeader.biHeight=-VIDEO_PIXELS_Y;
-		session_dbg=CreateDIBSection(session_dc1,&bmi,DIB_RGB_COLORS,(void **)&debug_frame,NULL,0);
+		session_dbg=CreateDIBSection(session_dc1,&bmi,DIB_RGB_COLORS,(void**)&debug_frame,NULL,0);
 	}
 
 	// sound setup and cleanup
@@ -748,14 +748,17 @@ INLINE void session_render(void) // update video, audio and timers
 		if (session_stick&&!session_key2joy) // do we need to check the joystick?
 		{
 			session_joy.dwSize=sizeof(session_joy);
-			session_joy.dwFlags=JOY_RETURNBUTTONS|JOY_RETURNPOVCTS|JOY_RETURNX|JOY_RETURNY|JOY_RETURNCENTERED;
+			session_joy.dwFlags=JOY_RETURNBUTTONS|JOY_RETURNPOVCTS|JOY_RETURNX|JOY_RETURNY|JOY_RETURNZ|JOY_RETURNR|JOY_RETURNCENTERED;
 			if (!joyGetPosEx(session_stick-1,&session_joy))
 			{
 				j=((session_joy.dwPOV<0||session_joy.dwPOV>=36000)?(session_joy.dwYpos< 0x4000?1:0)+(session_joy.dwYpos>=0xC000?2:0)+(session_joy.dwXpos< 0x4000?4:0)+(session_joy.dwXpos>=0xC000?8:0) // axial
 				:(session_joy.dwPOV< 2250?1:session_joy.dwPOV< 6750?9:session_joy.dwPOV<11250?8:session_joy.dwPOV<15750?10: // angular: U (0), U-R (4500), R (9000), R-D (13500)
 				session_joy.dwPOV<20250?2:session_joy.dwPOV<24750?6:session_joy.dwPOV<29250?4:session_joy.dwPOV<33750?5:1)) // D (18000), D-L (22500), L (27000), L-U (31500)
 				+((session_joy.dwButtons&(JOY_BUTTON1/*|JOY_BUTTON5*/))?16:0)+((session_joy.dwButtons&(JOY_BUTTON2/*|JOY_BUTTON6*/))?32:0) // FIRE1, FIRE2 ...
-				+((session_joy.dwButtons&(JOY_BUTTON3/*|JOY_BUTTON7*/))?64:0)+((session_joy.dwButtons&(JOY_BUTTON4/*|JOY_BUTTON8*/))?128:0); // FIRE3, FIRE4 ...
+				+((session_joy.dwButtons&(JOY_BUTTON3/*|JOY_BUTTON7*/))?64:0)+((session_joy.dwButtons&(JOY_BUTTON4/*|JOY_BUTTON8*/))?128:0) // FIRE3, FIRE4 ...
+				/*+((session_joy.dwZpos<0x4000?4:0)+(session_joy.dwZpos>0xC000?8:0))
+				+((session_joy.dwRpos<0x4000?1:0)+(session_joy.dwRpos>0xC000?2:0))*/ // this is safe on my controller (Axis Z + Rotation Z) but perhaps not on other controllers
+				;
 			}
 			else
 				j=0; // joystick failure, release its keys
@@ -1029,7 +1032,7 @@ int session_filedialog(char *r,char *s,char *t,int q,int f) // auxiliar function
 		strcpy(session_parmtr,++r),*r=0;
 	else
 		strcpy(session_parmtr,session_tmpstr),strcpy(session_tmpstr,".\\");
-	if (!strcmp(session_parmtr,".")) // BUG: Win10 cancels showing a file selector if the source FILENAME is "." (valid path but invalid file)
+	if (!strcmp(session_parmtr,".")||strchr(session_parmtr,'|')) // BUG: Win10 cancels showing a file selector if the source FILENAME is "." (valid path but invalid file) or plain invalid
 		*session_parmtr=0;
 	strcpy(session_substr,s);
 	strcpy(&session_substr[strlen(s)+1],s);

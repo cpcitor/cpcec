@@ -763,7 +763,7 @@ void disc_data_send(BYTE b) // DATA I/O
 							{
 								disc_track_table[disc_trueunithead][disc_sector_last*8+0x1D]=newtag;
 								fseek(disc[disc_trueunit],disc_track_offset[disc_trueunithead],SEEK_SET);
-								fwrite(disc_track_table[disc_trueunithead],1,disc_track_table[disc_trueunithead][0x15]>29?512:256,disc[disc_trueunit]); // warning: this silently fails if the file mode is "rb" instead of "rb+" (again)
+								fwrite(disc_track_table[disc_trueunithead],1,disc_track_table[disc_trueunithead][0x15]>29?512:256,disc[disc_trueunit]); // warning: this silently fails if the file mode is "rb" instead of "rb+" (again!)
 							}
 						}
 						else if (!disc_tolerant)
