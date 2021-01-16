@@ -838,7 +838,7 @@ de perfiles de ROM, según una idea de Sid.
 crtc, fddc.
 - 20201212 -- decimonovena versión pública. La versión de Windows puede emplear
 DirectDraw en lugar de GDI, y la de SDL2 emplea texturas en lugar de
-superficies: la eficiencia sube cuando dispone de aceleración por hardware. De
+superficies: la eficiencia sube al disponer de aceleración por hardware. De
 todos modos, el parámetro de línea de comando `-!` y la opción de menú "Video:
 Software render" sirven para deshabilitar la aceleración por hardware en
 sistemas donde o no existe o rinde peor que el software puro. Corrección en CPC:
@@ -866,5 +866,8 @@ soporte de joystick de Win32, y que hace el CTC de Playcity más reactivo.
 - 20210114 -- parche menor que mejora la detección automática de estéreo en
 Playcity ("Alcon 2020" solamente usa el chip izquierdo), añade simulación de ROM
 a los cartuchos Dandanator ("CPC Soccer") y corrige un bug en la instrucción de
-Z80 CPI aparecido en la versión 20210105 y otro en la duración de VSYNC en CRTC
-1 ("Pheelone").
+Z80 CPI aparecido en la versión 20210105 (pruebas RAXOFT) y otro en la duración
+de VSYNC en CRTC 1 ("Pheelone").
+- 20210115 -- parche menor que corrige un error en el PIO de CPC: "Inertie"
+manda un valor al puerto A, y luego lee el mismo valor en lugar de recibir un
+registro del PSG o bits del teclado.

@@ -818,4 +818,7 @@ the Win32 joystick support, and making the Playcity CTC more responsive.
 - 20210114 -- minor patch improving Playcity stereo autodetection ("Alcon 2020"
 uses the left chip only), adding ROM simulation to Dandanator cartridges ("CPC
 Soccer") and fixing a bug in Z80 instruction CPI introduced in version 20210105
-and another one in the CRTC1 VSYNC length ("Pheelone").
+(RAXOFT tests) and another one in the CRTC1 VSYNC length ("Pheelone").
+- 20210115 -- minor patch fixing a bug in the CPC PIO: "Inertie" sends a value
+to port A, then reads the same value back instead of receiving a PSG register or
+keyboard bits.

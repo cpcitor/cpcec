@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20210114"//"2555"
+#define MY_VERSION "20210115"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -1524,6 +1524,8 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 					else // WRITE PSG REGISTER
 						psg_table_send(pio_port_a);
 				}
+				else if (pio_port_c&0x40)
+					pio_port_a=~autorun_kbd_bit(pio_port_c&15);
 			}
 			else // 0xF700, PIO CONTROL
 			{
@@ -2097,7 +2099,7 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 		{
 			case 0x0000: // 0xF400, PIO PORT A
 				if (psg_index==14) // READ PSG REGISTER
-					b&=~autorun_kbd_bit(pio_port_c&15); // index 14 is keyboard port!
+					b&=pio_port_a; // index 14 is keyboard port!
 				else if (pio_control&0x10) // READ PSG REGISTER
 					b&=psg_table_recv();
 				//if (pio_control&0x10) // READ PSG REGISTER
