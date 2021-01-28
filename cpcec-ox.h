@@ -477,14 +477,13 @@ int session_ui_exchange(void) // update window and wait for a keystroke
 					if (event.wheel.direction==SDL_MOUSEWHEEL_FLIPPED) i=-i;
 					return i>0?KBCODE_PRIOR:KBCODE_NEXT;
 				}
-			case SDL_TEXTINPUT:
-				session_ui_char=event.text.text[0];
-				if (session_ui_char&128) // UTF-8?
-					session_ui_char=128+(session_ui_char&1)*64+(event.text.text[1]&63);
-				return 0;
 			case SDL_KEYDOWN:
 				session_ui_shift=!!(event.key.keysym.mod&KMOD_SHIFT);
 				return event.key.keysym.mod&KMOD_ALT?0:event.key.keysym.scancode;
+			case SDL_TEXTINPUT: // always follows SDL_KEYDOWN
+				if ((session_ui_char=event.text.text[0])&128) // UTF-8? (not that it matters, we stick to ASCII)
+					session_ui_char=128+(session_ui_char&1)*64+(event.text.text[1]&63);
+				return 0;
 			case SDL_QUIT:
 				return KBCODE_ESCAPE;
 		}
@@ -662,7 +661,7 @@ int session_ui_text(char *s,char *t,char q) // see session_message
 	if (!s||!t)
 		return -1;
 	session_ui_init();
-	int i,j,textw=0,texth=1;
+	int i,j,textw=0,texth=1+2; // caption + blank + text + blank
 	unsigned char *m=t;
 	while (*m++)
 		++textw;
@@ -700,6 +699,7 @@ int session_ui_text(char *s,char *t,char q) // see session_message
 	session_ui_printasciz(t,textx+0,texty+0,1,textw,1,1);
 	i=j=0;
 	m=session_parmtr;
+	session_ui_printasciz("",textx+q,texty+(++i),1,textw-q,1,0); // blank
 	while (*s) // render text proper
 	{
 		int k=(*m++=*s++);
@@ -721,21 +721,16 @@ int session_ui_text(char *s,char *t,char q) // see session_message
 		*m=0;
 		session_ui_printasciz(m=session_parmtr,textx+q,texty+(++i),1,textw-q,1,0);
 	}
-	if (q)
+	session_ui_printasciz("",textx+q,texty+(++i),1,textw-q,1,0); // blank
+	if (q) // draw icon?
 	{
-		session_ui_fillrect(textx+0,texty+1,q,texth-1,VIDEO1(0x00C0C0C0)); // bright grey background
-		{
-			VIDEO_UNIT *tgt=&menus_frame[(texty+2)*SESSION_UI_HEIGHT*VIDEO_PIXELS_X+(textx+1)*8];
-			int z=0; for (int y=0;y<32;++y,tgt+=VIDEO_PIXELS_X-32)
-				for (int x=0;x<32;++x)
-				{
-					int a=session_icon32xx16[z++]; if (a&0xF000)
-						*tgt=VIDEO1((a&0x00F)*0x0011+(a&0x0F0)*0x00110+(a&0xF00)*0x1100);
-					++tgt;
-				}
-		}
-		//session_ui_fillrect(textx+1,texty+2,4,2,VIDEO1(0x00808080)); // a simple couple of holes
-		//session_ui_fillrect(textx+1,texty+texth-3,4,2,VIDEO1(0x00FFFFFF)); // rather than an icon
+		session_ui_fillrect(textx,texty+1,q,texth-1,VIDEO1(0x00C0C0C0));
+		//for (int z=0;z<q;++z) session_ui_fillrect(textx+z,texty+1,1,texth-1,VIDEO1(0x00010101*((0xFF*z+0xC0*(q-z)+q/2)/q))); // gradient!
+		VIDEO_UNIT *tgt=&menus_frame[(texty+2)*SESSION_UI_HEIGHT*VIDEO_PIXELS_X+(textx+1)*8];
+		for (int z=0,y=0;y<32;++y,tgt+=VIDEO_PIXELS_X-32)
+			for (int a,x=0;x<32;++x,++tgt)
+				if ((a=session_icon32xx16[z++])&0x8000)
+					*tgt=VIDEO1((a&0x00F)*0x0011+(a&0x0F0)*0x00110+(a&0xF00)*0x1100);
 	}
 	session_redraw(0);
 	for (;;)
@@ -1074,13 +1069,13 @@ void session_ui_filedialog_tabkey(void)
 	if (i>=0)
 		session_ui_fileflags=i;
 }
-int session_ui_filedialog_stat(char *s) // -1 = not exist, 0 = file, 1 = directory
+int getftype(char *s) // <0 = not exist, 0 = file, >0 = directory
 {
 	if (!s||!*s) return -1; // not even a valid path!
 	#ifdef _WIN32
-	int i=GetFileAttributes(s); return i<0?-1:i&FILE_ATTRIBUTE_DIRECTORY?1:0;
+	int i=GetFileAttributes(s); return i>0?i&FILE_ATTRIBUTE_DIRECTORY:i; // not i>=0!
 	#else
-	struct stat a; return stat(s,&a)<0?-1:S_ISDIR(a.st_mode)?1:0;
+	struct stat a; int i=stat(s,&a); return i>=0?S_ISDIR(a.st_mode):i; // not i>0!
 	#endif
 }
 int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_filedialog; q here means TAB is available or not, and f means the starting TAB value (q) or whether we're reading (!q)
@@ -1096,7 +1091,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 		i=0; m=session_scratch;
 
 		#ifdef _WIN32
-		if (session_ui_filedialog_stat(basepath)<1) // ensure that basepath exists and is a valid directory
+		if (getftype(basepath)<=0) // ensure that basepath exists and is a valid directory
 		{
 			GetCurrentDirectory(STRMAX,basepath); // fall back to current directory
 			session_ui_filedialog_sanitizepath(basepath);
@@ -1130,7 +1125,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 		}
 		#else
 		DIR *d; struct dirent *e;
-		if (session_ui_filedialog_stat(basepath)<1) // ensure that basepath exists and is a valid directory
+		if (getftype(basepath)<=0) // ensure that basepath exists and is a valid directory
 		{
 			if (getcwd(basepath,STRMAX)) // fall back to current directory
 				session_ui_filedialog_sanitizepath(basepath);
@@ -1142,7 +1137,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 		{
 			while ((e=readdir(d))&&m-(char *)session_scratch<sizeof(session_scratch)-STRMAX)
 				if (n=e->d_name,n[0]!='.') // reject ".*"
-					if (session_ui_filedialog_stat(strcat(strcpy(basefind,basepath),n))>0) // add directory name with the separator at the end
+					if (getftype(strcat(strcpy(basefind,basepath),n))>0) // add directory name with the separator at the end
 						++i,m=&half[sortedinsert(half,m-half,session_ui_filedialog_sanitizepath(n))];
 			closedir(d);
 		}
@@ -1151,7 +1146,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 		{
 			while ((e=readdir(d))&&m-(char *)session_scratch<sizeof(session_scratch)-STRMAX)
 				if (n=e->d_name,n[0]!='.'&&multiglobbing(s,n,1)) // reject ".*"
-					if (!session_ui_filedialog_stat(strcat(strcpy(basefind,basepath),n))) // add file name
+					if (!getftype(strcat(strcpy(basefind,basepath),n))) // add file name
 						++i,m=&half[sortedinsert(half,m-half,n)];
 			closedir(d);
 		}
@@ -1163,7 +1158,8 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 			half=session_scratch,i=sortedsearch(half,m-half,pastname); // look for past name, if any
 		*m=0; // end of list
 
-		if (session_ui_list(i,session_scratch,t,q?session_ui_filedialog_tabkey:NULL,0)<0)
+		sprintf(session_tmpstr,"%s -- %s",t,basepath); //,s
+		if (session_ui_list(i,session_scratch,session_tmpstr,q?session_ui_filedialog_tabkey:NULL,0)<0)
 			return 0; // user closed the dialog!
 
 		m=session_parmtr;
@@ -1230,7 +1226,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 			}
 			strcat(strcpy(session_scratch,basepath),session_parmtr); // build full name
 			strcpy(session_parmtr,session_scratch); // copy to target, but keep the source...
-			if (q||f||session_ui_filedialog_stat(session_parmtr)<0)
+			if (q||f||getftype(session_parmtr)<0)
 				return 1; // the user succesfully chose a file, either extant for reading or new for writing!
 			if (session_ui_list(0,"YES\000NO\000","Overwrite?",NULL,1)==0)
 				return strcpy(session_parmtr,session_scratch),1; // ...otherwise session_parmtr would hold "YES"!
@@ -1240,17 +1236,15 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 
 // create, handle and destroy session ------------------------------- //
 
-SDL_version sdl_version; char sdl_version_str[8];
+SDL_version sdl_version; char session_version[8];
 INLINE char* session_create(char *s) // create video+audio devices and set menu; 0 OK, !0 ERROR
 {
 	SDL_SetMainReady();
-	SDL_GetVersion(&sdl_version);
-	sprintf(sdl_version_str,"%i.%i.%i",sdl_version.major,sdl_version.minor,sdl_version.patch);
+	SDL_GetVersion(&sdl_version); sprintf(session_version,"%i.%i.%i",sdl_version.major,sdl_version.minor,sdl_version.patch);
 	if (SDL_Init(SDL_INIT_EVENTS|SDL_INIT_VIDEO|SDL_INIT_AUDIO|SDL_INIT_TIMER|SDL_INIT_JOYSTICK|SDL_INIT_GAMECONTROLLER)<0)
 		return (char *)SDL_GetError();
 	if (!(session_hwnd=SDL_CreateWindow(session_caption,SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,0)))
 		return SDL_Quit(),(char *)SDL_GetError();
-
 	if (session_hardblit=1,session_softblit||!(session_blitter=SDL_CreateRenderer(session_hwnd,-1,SDL_RENDERER_ACCELERATED)))
 		if (session_hardblit=0,session_softblit=1,!(session_blitter=SDL_CreateRenderer(session_hwnd,-1,SDL_RENDERER_SOFTWARE)))
 			return SDL_Quit(),(char *)SDL_GetError();
@@ -1438,13 +1432,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 				if (event.button.button==SDL_BUTTON_RIGHT)
 					session_event=0x8080; // show menu
 				break;
-			case SDL_TEXTINPUT:
-				if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant for the debugger, see below
-					if (event.text.text[0]>32) // exclude SPACE and non-visible codes!
-						if ((session_event=event.text.text[0])&128) // UTF-8?
-							session_event=128+(session_event&31)*64+(event.text.text[1]&63);
-				break;
-			case SDL_KEYDOWN: //if (event.key.state==SDL_PRESSED)
+			case SDL_KEYDOWN:
 				{
 					if (event.key.keysym.mod&KMOD_ALT)
 					{
@@ -1458,19 +1446,25 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 						session_event=0x8080; // show menu
 						break;
 					}
-					if (session_signal&SESSION_SIGNAL_DEBUG)
+					if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant inside debugger, see below
 						session_event=debug_xlat(event.key.keysym.scancode);
 					int k=session_key_n_joy(event.key.keysym.scancode);
-					if (k<128)
+					if (k<128) // normal key
 					{
-						if (!(session_signal&SESSION_SIGNAL_DEBUG))
+						if (!(session_signal&SESSION_SIGNAL_DEBUG)) // only relevant outside debugger
 							kbd_bit_set(k);
 					}
-					else if (!session_event) // special key
+					else if (!session_event) // special key, but only if not already set by debugger
 						session_event=(k-((event.key.keysym.mod&KMOD_CTRL)?128:0))<<8;
 				}
 				break;
-			case SDL_KEYUP: //if (event.key.state==SDL_RELEASED)
+			case SDL_TEXTINPUT: // always follows SDL_KEYDOWN
+				if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant inside debugger
+					if (event.text.text[0]>32) // exclude SPACE and non-visible codes!
+						if ((session_event=event.text.text[0])&128) // UTF-8?
+							session_event=128+(session_event&31)*64+(event.text.text[1]&63);
+				break;
+			case SDL_KEYUP:
 				{
 					int k=session_key_n_joy(event.key.keysym.scancode);
 					if (k<128)
@@ -1613,8 +1607,10 @@ INLINE void session_render(void) // update video, audio and timers
 	{
 		if (performance_t)
 		{
-			sprintf(session_tmpstr,"%s | %s | %g%% CPU %g%% %s%s",session_caption,session_info,
-				performance_f*100.0/VIDEO_PLAYBACK,performance_b*100.0/VIDEO_PLAYBACK,session_hardblit?"SDL":"sdl",sdl_version_str);
+			sprintf(session_tmpstr,"%s | %s | %g%% CPU %g%% %s %s",
+				session_caption,session_info,
+				performance_f*100.0/VIDEO_PLAYBACK,performance_b*100.0/VIDEO_PLAYBACK,
+				session_hardblit?"SDL":"sdl",session_version);
 			SDL_SetWindowTitle(session_hwnd,session_tmpstr);
 		}
 		performance_t=i,performance_f=performance_b=session_paused=0;
@@ -1624,6 +1620,7 @@ INLINE void session_render(void) // update video, audio and timers
 INLINE void session_byebye(void) // delete video+audio devices
 {
 	if (session_joy) session_pad?SDL_GameControllerClose(session_joy):SDL_JoystickClose(session_joy);
+	if (session_audio) SDL_ClearQueuedAudio(session_audio),SDL_CloseAudioDevice(session_audio);
 	SDL_StopTextInput();
 	SDL_UnlockTexture(session_dib);
 	SDL_DestroyTexture(session_dib);

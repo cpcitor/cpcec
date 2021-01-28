@@ -24,7 +24,7 @@
 #endif
 
 #define MEMZERO(x) memset((x),0,sizeof(x))
-#define MEMFULL(x) memset((x),~0,sizeof(x))
+#define MEMFULL(x) memset((x),255,sizeof(x))
 #define MEMSAVE(x,y) memcpy((x),(y),sizeof(y))
 #define MEMLOAD(x,y) memcpy((x),(y),sizeof(x))
 #define MEMNCPY(x,y,z) memcpy((x),(y),sizeof(*(x))*(z))
@@ -739,7 +739,7 @@ int puff_head(void) // reads a ZIP file header, if any; !0 ERROR
 		return -1;
 	unsigned char h[46];
 	fseek(puff_file,puff_diff+puff_next,SEEK_SET);
-	if (fread(h,1,sizeof(h),puff_file)!=sizeof(h)||memcmp(h,"PK\001\002",4)||h[11]||/*!h[28]||*/h[29])//||(h[8]&8)
+	if (fread(h,1,sizeof(h),puff_file)!=sizeof(h)||memcmp(h,"PK\001\002",4)||h[11]||!h[28]||h[29])//||(h[8]&8)
 		return puff_close(),1; // reject EOFs, unknown IDs, extended types and improperly sized filenames!
 	puff_type=h[10];
 	puff_srcl=mgetiiii(&h[20]);

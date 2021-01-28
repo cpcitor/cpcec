@@ -16,13 +16,13 @@
 
 // BEGINNING OF Z80 EMULATION ======================================= //
 
-WORD z80_wz/*,z80_wz2*/; // internal register WZ/MEMPTR -- is WZ dual?
+WORD z80_wz; //WORD z80_wz2; // internal register WZ/MEMPTR // is WZ dual?
 #if Z80_XCF_BUG
 	BYTE z80_q; // internal register Q
-	#define Z80_Q_SET(x) z80_q=z80_af.b.l=(x)
-	#define Z80_Q_RST() z80_q=0
+	#define Z80_Q_SET(x) (z80_q=z80_af.b.l=(x))
+	#define Z80_Q_RST() (z80_q=0)
 #else
-	#define Z80_Q_SET(x) z80_af.b.l=(x)
+	#define Z80_Q_SET(x) (z80_af.b.l=(x))
 	#define Z80_Q_RST()
 #endif
 
@@ -2928,7 +2928,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 								xy->b.l=Z80_RD_PC; ++z80_pc.w;
 								break;
 							case 0x36: // LD (IX+$XX),$NN
-								{ Z80_WZ_XY_1X(2); BYTE b=Z80_RD_PC; Z80_POKE(z80_wz,b); ++z80_pc.w; }
+								{ Z80_WZ_XY; BYTE b=Z80_RD_PC; Z80_MREQ_1X(2,z80_pc.w); Z80_POKE(z80_wz,b); ++z80_pc.w; }
 								break;
 							case 0x09: // ADD IX,BC
 								Z80_ADD2(xy->w,z80_bc.w);
@@ -3796,7 +3796,7 @@ void z80_debug_show(void) // redraw debug screen
 	}
 	z80_debug_hard(z80_debug_page,-9-1-20,0);
 	debug_locate(6,length(z80_debug_cache)-1);
-	debug_printi("... EDFF%c",z80_debug_edfftrap?'+':'-'); debug_printi(" Timer: %010i",main_t);
+	debug_printi("... EDFF%c",z80_debug_edfftrap?'+':'-'); debug_printi(" Timer: %010u",main_t);
 	debug_printi(" (%03X,",video_pos_x&0xFFF); debug_printi("%03X) -- H: help",video_pos_y&0xFFF);
 	onscreen_debug(z80_debug_grfx?z80_debug_grfxmode:-1);
 }

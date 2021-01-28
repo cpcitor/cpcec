@@ -127,7 +127,6 @@ HGDIOBJ session_dbg=NULL;
 	LPDIRECTDRAWCLIPPER lpddclip=NULL;
 	LPDIRECTDRAWSURFACE lpddfore=NULL,lpddback=NULL;
 	DDSURFACEDESC ddsd;
-
 	LPDIRECTDRAWSURFACE lpdd_dbg=NULL;
 #endif
 
@@ -486,25 +485,25 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 				session_event=wparam&0xBFFF; // cfr infra: bit 7 means CONTROL KEY OFF
 			}
 			break;
-		case WM_CHAR:
-			if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant for the debugger, see below
-				session_event=wparam>32&&wparam<=255?wparam:0; // exclude SPACE and non-visible codes!
-			break;
 		case WM_KEYDOWN:
 			{
 				int vkc=GetKeyState(VK_CONTROL)<0;
 				session_shift=GetKeyState(VK_SHIFT)<0;
-				if (session_signal&SESSION_SIGNAL_DEBUG)
+				if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant inside debugger, see below
 					session_event=debug_xlat(((lparam>>16)&127)+((lparam>>17)&128));
 				int k=session_key_n_joy(((lparam>>16)&127)+((lparam>>17)&128));
 				if (k<128) // normal key
 				{
-					if (!(session_signal&SESSION_SIGNAL_DEBUG))
+					if (!(session_signal&SESSION_SIGNAL_DEBUG)) // only relevant outside debugger
 						kbd_bit_set(k);
 				}
-				else if (!session_event) // special key
+				else if (!session_event) // special key, but only if not already set by debugger
 					session_event=(k-(vkc?128:0))<<8;
 			}
+			break;
+		case WM_CHAR: // always follows WM_KEYDOWN
+			if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant inside debugger
+				session_event=wparam>32&&wparam<=255?wparam:0; // exclude SPACE and non-visible codes!
 			break;
 		case WM_KEYUP:
 			{
@@ -531,8 +530,11 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 	return 0;
 }
 
+OSVERSIONINFO win32_version; char session_version[8];
 INLINE char* session_create(char *s) // create video+audio devices and set menu; 0 OK, !0 ERROR
 {
+	win32_version.dwOSVersionInfoSize=sizeof(win32_version); GetVersionEx(&win32_version);
+	sprintf(session_version,"%i.%i",win32_version.dwMajorVersion,win32_version.dwMinorVersion);
 	HMENU session_submenu=NULL;
 	char c,*t; int i;
 	/*if (!session_softblit)*/ while (c=*s++)
@@ -626,7 +628,7 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 				ddsd.ddsCaps.dwCaps=DDSCAPS_OFFSCREENPLAIN|DDSCAPS_SYSTEMMEMORY;//DDSCAPS_VIDEOMEMORY;//
 				IDirectDraw_CreateSurface(lpdd,&ddsd,&lpdd_dbg,NULL);
 				IDirectDrawSurface_Lock(lpdd_dbg,0,&ddsd,DDLOCK_SURFACEMEMORYPTR|DDLOCK_WAIT,0),debug_frame=ddsd.lpSurface;
-				//session_softblit|=ddsd.lPitch!=4*VIDEO_PIXELS_X; // success (2/2)
+				session_softblit|=ddsd.lPitch!=4*VIDEO_PIXELS_X; // success (2/2)
 			}
 		}
 	}
@@ -798,7 +800,8 @@ INLINE void session_render(void) // update video, audio and timers
 		}
 		if (waveOutGetPosition(session_wo,&session_mmtime,sizeof(MMTIME))) // MMSYSERR_NOERROR?
 			;//session_audio=0,audio_disabled=-1; // audio device is lost! // can this really happen!?
-		i=session_mmtime.u.sample,j=AUDIO_PLAYBACK; // questionable -- this will break the timing every 13 hours of emulation at 44100 Hz :-(
+		static int u=0; if (!u) u=session_mmtime.u.sample; // reference
+		i=session_mmtime.u.sample-u,j=AUDIO_PLAYBACK; // questionable -- this will break the timing every 13 hours of emulation at 44100 Hz :-(
 		//static int k=0; if ((i-k)<AUDIO_PLAYBACK/VIDEO_PLAYBACK/2) audio_disabled|=8; else audio_disabled&=~8,k=i; // if buffer is full, skip the next audio frame!
 	}
 	else // use internal tick count as clock
@@ -831,11 +834,13 @@ INLINE void session_render(void) // update video, audio and timers
 	{
 		if (performance_t)
 		{
-			sprintf(session_tmpstr,"%s | %s | %g%% CPU %g%% %s",session_caption,session_info,performance_f*100.0/VIDEO_PLAYBACK,performance_b*100.0/VIDEO_PLAYBACK,
+			sprintf(session_tmpstr,"%s | %s | %g%% CPU %g%% %s %s",
+				session_caption,session_info,
+				performance_f*100.0/VIDEO_PLAYBACK,performance_b*100.0/VIDEO_PLAYBACK,
 			#ifdef DDRAW
 				lpddback?"DDRAW":
 			#endif
-				session_hardblit?"GDI":"gdi");
+				session_hardblit?"GDI":"gdi",session_version);
 			SetWindowText(session_hwnd,session_tmpstr);
 		}
 		performance_t=i,performance_f=performance_b=session_paused=0;
@@ -1021,21 +1026,32 @@ int session_list(int i,char *s,char *t) // `s` is a list of ASCIZ entries, `i` i
 // file dialog ------------------------------------------------------ //
 
 OPENFILENAME session_ofn;
+int getftype(char *s) // <0 = not exist, 0 = file, >0 = directory
+{
+	if (!s||!*s) return -1; // not even a valid path!
+	int i=GetFileAttributes(s); return i>0?i&FILE_ATTRIBUTE_DIRECTORY:i; // not i>=0!
+}
 int session_filedialog(char *r,char *s,char *t,int q,int f) // auxiliar function, see below
 {
 	memset(&session_ofn,0,sizeof(session_ofn));
 	session_ofn.lStructSize=sizeof(OPENFILENAME);
 	session_ofn.hwndOwner=session_hwnd;
-	if (r!=(char *)session_tmpstr)
-		strcpy(session_tmpstr,r);
-	if (r=strrchr(session_tmpstr,'\\'))
-		strcpy(session_parmtr,++r),*r=0;
+	if (r!=(char*)session_tmpstr)
+		strcpy(session_tmpstr,r); // copy path, if required
+	int i=strlen(session_tmpstr); // sanitize path
+	if (i&&session_tmpstr[--i]=='\\') // pure path?
+		session_tmpstr[i]=0;
+	*session_parmtr=0; // no file by default
+	if ((i=getftype(session_tmpstr))<0)
+		strcpy(session_tmpstr,"."); // invalid path: no path, no file
+	else if (i>0)
+		; // directory: path only
+	else if (r=strrchr(session_tmpstr,'\\'))
+		strcpy(session_parmtr,++r),*r=0; // file with path
 	else
-		strcpy(session_parmtr,session_tmpstr),strcpy(session_tmpstr,".\\");
-	if (!strcmp(session_parmtr,".")||strchr(session_parmtr,'|')) // BUG: Win10 cancels showing a file selector if the source FILENAME is "." (valid path but invalid file) or plain invalid
-		*session_parmtr=0;
+		strcpy(session_parmtr,session_tmpstr),strcpy(session_tmpstr,"."); // file without path
 	strcpy(session_substr,s);
-	strcpy(&session_substr[strlen(s)+1],s);
+	strcpy(&session_substr[strlen(s)+1],s); // one NULL char between two copies of the same string
 	session_substr[strlen(s)*2+2]=session_substr[strlen(s)*2+3]=0;
 	//printf("T:%s // P:%s // S:%s\n",session_tmpstr,session_parmtr,session_substr); // tmpstr: "C:\ABC"; parmtr: "XYZ.EXT"; substr: "*.EX1;*.EX2"(x2)
 	session_ofn.lpstrFilter=session_substr;

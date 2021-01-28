@@ -822,3 +822,6 @@ Soccer") and fixing a bug in Z80 instruction CPI introduced in version 20210105
 - 20210115 -- minor patch fixing a bug in the CPC PIO: "Inertie" sends a value
 to port A, then reads the same value back instead of receiving a PSG register or
 keyboard bits.
+- 20210127 -- minor patch fixing bugs in the Spectrum timing ("LD (IX+n1),n2"
+and Z80_PRAE_SEND: thanks to Azesmbog for the FPGA test report) and the CPC tape
+analysis (conflict between Mikrogen and Hi-Tec).

@@ -301,7 +301,7 @@ void disc_sector_loadgaps(void) // used by READ TRACK
 		disc_length=disc_lengthfull;
 		logprintf("(GAP!:%04X) ",i);
 		memset(&disc_buffer[disc_length],0x4E,i); // first layer: enough to satisfy "Conspiration de l'an III"
-		memset(&disc_buffer[disc_length+i-12-3-7-22],0,12); // second layer: required by "E.X.I.T." and "Le Nécromancien"
+		memset(&disc_buffer[disc_length+i-12-3-7-22],0,12); // second layer: required by "E.X.I.T." and "Le Necromancien"
 		//memset(&disc_buffer[disc_length+i-3-7-22],0xA1,3); // third layer, it happens always, but not sure if necessary
 		disc_lengthfull=disc_length+=i;
 	}
@@ -647,7 +647,7 @@ void disc_data_send(BYTE b) // DATA I/O
 					}
 					else // disc is ready, track is valid
 					{
-						disc_sector_last=equalsii(&disc_track_table[disc_trueunithead][0x20],0x0401),disc_sector_loadgaps(); // kludge: "Le Nécromancien" expects READ TRACK to begin at the second sector in track 0
+						disc_sector_last=equalsii(&disc_track_table[disc_trueunithead][0x20],0x0401),disc_sector_loadgaps(); // kludge: "Le Necromancien" expects READ TRACK to begin at the second sector in track 0
 					}
 					break;
 				case 0x06: // READ DATA

@@ -871,3 +871,6 @@ de VSYNC en CRTC 1 ("Pheelone").
 - 20210115 -- parche menor que corrige un error en el PIO de CPC: "Inertie"
 manda un valor al puerto A, y luego lee el mismo valor en lugar de recibir un
 registro del PSG o bits del teclado.
+- 20210127 -- parche menor que corrige errores en los tiempos de Spectrum ("LD
+(IX+n1),n2" y Z80_PRAE_SEND: gracias a Azesmbog por avisar de la prueba FPGA) y
+el análisis de cinta de CPC (conflicto entre Mikrogen y Hi-Tec).

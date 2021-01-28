@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20210115"//"2555"
+#define MY_VERSION "20210127"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -229,12 +229,12 @@ BYTE *ula_screen; int ula_bitmap,ula_attrib; // VRAM pointers
 
 BYTE ula_clash[4][1<<16],*ula_clash_mreq[5],*ula_clash_iorq[5]; // the fifth entry stands for constant clashing
 int ula_clash_z; // 16-bit cursor that follows the ULA clash map
-int ula_clash_delta; // ULA adjustment for attribute-based effects
+int ula_clash_delta,ula_clash_gamma; // ULA adjustment for attribute and border effects
 int ula_clash_disabled=0;
+int ula_limit_x=0,ula_limit_y=0; // horizontal+vertical limits
 void ula_setup_clash(int i,int j,int l,int x0,int x1,int x2,int x3,int x4,int x5,int x6,int x7)
 {
-	for (int y=0;y<192;++y)
-	{
+	for (int y=0;y<192;++y,j+=l-128)
 		for (int x=0;x<16;++x)
 		{
 			ula_clash[i][j++]=x0;
@@ -246,8 +246,6 @@ void ula_setup_clash(int i,int j,int l,int x0,int x1,int x2,int x3,int x4,int x5
 			ula_clash[i][j++]=x6;
 			ula_clash[i][j++]=x7;
 		}
-		j+=l-128;
-	}
 }
 void ula_setup(void)
 {
@@ -255,6 +253,19 @@ void ula_setup(void)
 	ula_setup_clash(1,14335,224,6,5,4,3,2,1,0,0); // ULA v1: 48k
 	ula_setup_clash(2,14361,228,6,5,4,3,2,1,0,0); // ULA v2: 128k,PLUS2
 	ula_setup_clash(3,14365,228,1,0,7,6,5,4,3,2); // ULA v3: PLUS3
+}
+void ula_update(void) // update ULA settings according to model
+{
+	ula_clash_gamma=type_id?2:1;
+	ula_clash_delta=type_id<3?!type_id?4:3:2;
+	// lowest valid ULA deltas for V1, V2 and V3
+	// Black Lamp (48K)	4	*	*
+	// Black Lamp (128K)	*	2	2
+	// Sly Spy (128K/DISC)	*	3	1
+	// LED Storm (DISC)	*	0	0
+	ula_limit_x=type_id?57:56; // characters per scanline
+	ula_limit_y=type_id?311:312; // scanlines per frame
+	TICKS_PER_SECOND=((TICKS_PER_FRAME=4*ula_limit_x*ula_limit_y)*VIDEO_PLAYBACK);
 }
 
 const int mmu_ram_mode[4][4]= // relative offsets of every bank for each PLUS3 RAM mode
@@ -321,23 +332,14 @@ void video_clut_update(void) // precalculate palette following `video_type`
 }
 
 int z80_irq,z80_active=0; // internal HALT flag: <0 EXPECT NMI!, 0 IGNORE IRQS, >0 ACCEPT IRQS, >1 EXPECT IRQ!
-int irq_delay=0,ula_limit_x=0,ula_limit_y=0; // IRQ counter, horizontal+vertical limits
+int irq_delay=0; // IRQ counter
 
 void ula_reset(void) // reset the ULA
 {
-	ula_limit_x=type_id?57:56; // characters per scanline
-	ula_limit_y=type_id?311:312; // scanlines per frame
-	TICKS_PER_SECOND=((TICKS_PER_FRAME=4*ula_limit_x*ula_limit_y)*VIDEO_PLAYBACK);
 	ula_v1=ula_v2=ula_v3=0;
 	video_clut_update();
-	mmu_update();
+	ula_update(); mmu_update();
 	ula_bitmap=0; ula_attrib=0x1800;
-	ula_clash_delta=type_id<3?!type_id?4:3:2;
-	// lowest valid ULA deltas for V1, V2 and V3
-	// Black Lamp (48K)	4	*	*
-	// Black Lamp (128K)	*	2	2
-	// Sly Spy (128K/DISC)	*	3	1
-	// LED Storm (DISC)	*	0	0
 }
 
 // 0xBFFD,0xFFFD: PSG AY-3-8910 ------------------------------------- //
@@ -387,13 +389,12 @@ int ula_flash,ula_count_x=0,ula_count_y=0; // flash+horizontal+vertical counters
 int ula_pos_x=0,ula_pos_y=0,ula_scr_x,ula_scr_y=0; // screen bitmap counters
 int ula_snow_disabled=0,ula_snow_z,ula_snow_a;
 BYTE ula_clash_attrib[32];//,ula_clash_bitmap[32];
-int ula_clash_alpha=0;
+int ula_clash_alpha=0,ula_clash_omega=0;
 
 INLINE void video_main(int t) // render video output for `t` clock ticks; t is always nonzero!
 {
 	int b,a;
-	static int r=0; r+=t;
-	do
+	for (ula_clash_omega+=t;ula_clash_omega>=4;ula_clash_omega-=4)
 	{
 		if (irq_delay&&(irq_delay-=4)<=0)
 			z80_irq=irq_delay=0; // IRQs are lost after few microseconds
@@ -478,7 +479,6 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 			++video_pos_z; session_signal|=SESSION_SIGNAL_FRAME+session_signal_frames; // end of frame!
 		}
 	}
-	while ((r-=4)>=0);
 	ula_temp=a; // ditto! required for "Cobra" and "Arkanoid"!
 }
 
@@ -603,13 +603,13 @@ void z80_sync(int t) // the Z80 asks the hardware/video/audio to catch up
 
 void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 {
-	if ((p&3)==2) // 0x??FE, ULA 48K
+	if ((p&1)==0) // 0x??FE, ULA 48K
 	{
 		ula_v1_send(b);
 		tape_output=(b>>3)&1; // tape record signal
 	}
 	//else if ((p&15)==13) // 0x??FD, MULTIPLE DEVICES
-	if ((p&14)==12)
+	if ((p&2)==0)
 	{
 		if (type_id&&!(ula_v2&32)) // 48K mode forbids further changes!
 		{
@@ -990,7 +990,7 @@ WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 #define Z80_PRAE_RECV(w) do{ Z80_IORQ(1,w); if (w&1) Z80_IORQ_1X(3,w); else Z80_MREQ_PAGE(3,4); Z80_SYNC_IO(0); }while(0)
 #define Z80_RECV z80_recv
 #define Z80_POST_RECV(w)
-#define Z80_PRAE_SEND(w,b) do{ if (((w+1)&3)>=2) audio_dirty=1; Z80_IORQ(1,w), Z80_SYNC_IO(2); }while(0) // the ULA reacts 2 T after the OUT: 0 breaks ULA128, 1 breaks SCROLL17, 3 breaks ULA48!
+#define Z80_PRAE_SEND(w,b) do{ if (((w+1)&3)>=2) audio_dirty=1; Z80_IORQ(1,w), Z80_SYNC_IO(ula_clash_gamma); }while(0) // the ULA reacts 1 T after the OUT on 48K, and 2 on 128K: 0 breaks ULA128, 2 breaks FPGA48, 3 breaks ULA48!
 #define Z80_SEND z80_send
 #define Z80_POST_SEND(w) do{ if (w&1) Z80_IORQ_1X(3,w); else Z80_MREQ_PAGE(3,4); }while(0)
 // fine timings
@@ -1351,7 +1351,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 		}
 	}
 	z80_irq=z80_active=0; // avoid nasty surprises!
-	mmu_update(); // adjust RAM and ULA models
+	ula_update(); mmu_update(); // adjust RAM and ULA models
 	psg_all_update();
 	z80_debug_reset();
 	if (snap_path!=s)
@@ -1709,7 +1709,7 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 			break;
 		case 0x8511:
 			ula_clash_disabled=!ula_clash_disabled;
-			mmu_update();
+			ula_update(); mmu_update();
 			break;
 		case 0x8512:
 			ula_snow_disabled=!ula_snow_disabled;
@@ -1970,14 +1970,14 @@ int main(int argc,char *argv[])
 			{
 				switch (argv[i][j++])
 				{
-					case 'C':
-						video_type=(BYTE)(argv[i][j++]-'0');
-						if (video_type<0||video_type>4)
-							i=argc; // help!
-						break;
 					case 'c':
 						video_scanline=(BYTE)(argv[i][j++]-'0');
 						if (video_scanline<0||video_scanline>3)
+							i=argc; // help!
+						break;
+					case 'C':
+						video_type=(BYTE)(argv[i][j++]-'0');
+						if (video_type<0||video_type>4)
 							i=argc; // help!
 						break;
 					case 'd':
@@ -1993,11 +1993,11 @@ int main(int argc,char *argv[])
 						break;
 						;
 						;
-					case 'J':
-						session_stick=0;
-						break;
 					case 'j':
 						session_key2joy=1;
+						break;
+					case 'J':
+						session_stick=0;
 						break;
 					case 'K':
 						psg_disabled=1;
@@ -2010,13 +2010,13 @@ int main(int argc,char *argv[])
 					case 'O':
 						onscreen_flag=0;
 						break;
-					case 'R':
-						session_fast=1;
-						break;
 					case 'r':
 						video_framelimit=(BYTE)(argv[i][j++]-'0');
 						if (video_framelimit<0||video_framelimit>9)
 							i=argc; // help!
+						break;
+					case 'R':
+						session_fast=1;
 						break;
 					case 'S':
 						session_audio=0;
@@ -2149,7 +2149,7 @@ int main(int argc,char *argv[])
 			audio_queue=0; // wipe audio queue and force a reset
 			psg_writelog(); session_writefilm();
 			ula_snow_a=(!ula_snow_disabled&&z80_ir.b.h>=0x40&&z80_ir.b.h<0x80)?main_t&ULA_SNOW_STEP_8BIT:0; // random step
-			ula_clash_z=(ula_clash_z&3)+(ula_count_y*ula_limit_x+ula_pos_x)*4;
+			ula_clash_z=ula_clash_omega/*(ula_clash_z&3)*/+(ula_count_y*ula_limit_x+ula_pos_x)*4;
 			if (tape_type<0&&tape&&!z80_iff.b.l) // tape is recording?
 				tape_enabled|=4;
 			else if (tape_enabled>0) // tape is still busy?

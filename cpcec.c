@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20210115"//"2555"
+#define MY_VERSION "20210127"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -128,7 +128,7 @@ const unsigned char kbd_map_xlt[]=
 	KBCODE_F5	,0x85,	KBCODE_F6	,0x86,	KBCODE_F7	,0x87,	KBCODE_F8	,0x88,
 	KBCODE_F9	,0x89,	KBCODE_HOLD	,0x8F,	KBCODE_F11	,0x8B,	KBCODE_F12	,0x8C,
 	KBCODE_X_ADD	,0x91,	KBCODE_X_SUB	,0x92,	KBCODE_X_MUL	,0x93,	KBCODE_X_DIV	,0x94,
-	KBCODE_PRIOR	,0x95,	KBCODE_NEXT	,0x96,	KBCODE_HOME	,0x97,	KBCODE_END	,0x98,
+	//KBCODE_PRIOR	,0x95,	KBCODE_NEXT	,0x96,	KBCODE_HOME	,0x97,	KBCODE_END	,0x98,
 	// actual keys
 	KBCODE_1	,0x40,	KBCODE_Q	,0x43,	KBCODE_A	,0x45,	KBCODE_Z	,0x47,
 	KBCODE_2	,0x41,	KBCODE_W	,0x3B,	KBCODE_S	,0x3C,	KBCODE_X	,0x3F,
@@ -819,7 +819,7 @@ void video_main_sprites(void)
 }
 void video_main_borders(void)
 {
-	if (plus_sscr&128&&plus_sprite_offset>VIDEO_OFFSET_X-16) // render extra border
+	if ((plus_sscr&128)&&plus_sprite_offset>VIDEO_OFFSET_X-16) // render extra border
 		for (int i=0;i<16;++i)
 			*plus_sprite_target++=plus_sprite_border;
 	video_target-=plus_sprite_adjust; // undo excess pixels
@@ -1618,12 +1618,12 @@ const BYTE z80_tape_fastdumper[][24]=
 	/*  7 */ {  +14,  10,0X73,0X23,0X1E,0X01,0XD9,0X1B,0X7A,0XB3,0XD9,0X3E,  +1,   2,0X20,0XE5 }, // CODEMASTERS1,OCEAN LEVELS (DALEY THOMPSON'S OLYMPIC CHALLENGE)
 	/*  8 */ {  -10,   6,0XDD,0X75,0X00,0XDD,0X23,0X1B, +17,   8,0X00,0X00,0X00,0X00,0X7A,0XB3,0X20,0XE1 }, // RICOCHET
 	/*  9 */ {  - 8,   4,0XDD,0X23,0X1B,0X08, +18,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XCA }, // MASTERTRONIC, CODEMASTERS2
-	/* 10 */ {  -14,  11,0xDD,0x75,0x00,0xDD,0x23,0x1B,0x7A,0xB3,0x37,0xC8,0x06, +17,    2,0x18,0xE2 }, // HI-TEC
+	/* 10 */ {  -14,  11,0xDD,0x75,0x00,0xDD,0x23,0x1B,0x7A,0xB3,0x37,0xC8,0x06, +17,   2,0x18,0xE2 }, // HI-TEC
 	/* 11 */ {  +14,  11,0XDD,0X75,0X00,0XDD,0X23,0X2E,0X01,0X1B,0X7A,0XB3,0X3E,  +1,   4,0X00,0X00,0X20,0XE2 }, // SPEEDLOCK LEVELS
 	/* 12 */ {  -10,   7,0XDD,0X75,0X00,0XDD,0X23,0X1B,0X06, +17,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XE1 }, // CODEMASTERS3
 	/* 13 */ {  -10,   7,0XDD,0X75,0X00,0XDD,0X23,0X1B,0X06, +17,   6,0X7C,0XAD,0X67,0X7A,0X3C,0X20 }, // GREMLIN 128K
 	/* 14 */ {  - 8,   4,0XDD,0X23,0X1B,0X08, +18,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XD1 }, // GREMLIN OLD LEVELS
-	/* 15 */ {  -22,   4,0XDD,0X75,0X00,0X18, +10,   5,0XDD,0X23,0X1B,0X08,0X06 }, // MIKROGEN
+	/* 15 */ {  -22,   4,0XDD,0X75,0X00,0X18, +10,   5,0XDD,0X23,0X1B,0X08,0X06, +20,   5,0x7C,0XAD,0X67,0X7A,0XB3 }, // MIKROGEN
 	/* 16 */ {  -13,   8,0XDD,0X75,0X00,0XDD,0X23,0X1B,0X2E,0x01, +14,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XE3 }, // MINILOAD ++ (NORMAL)
 	/* 17 */ {  -13,   8,0XDD,0X75,0X00,0XDD,0X2B,0X1B,0X2E,0x01, +14,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XE3 }, // MINILOAD -- (NORMAL)
 	/* 18 */ {  -13,   8,0XDD,0X75,0X00,0XDD,0X23,0X1B,0X2E,0x01, +18,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XDF }, // MINILOAD ++ (CUSTOM)
@@ -1914,9 +1914,12 @@ INLINE void z80_tape_fastload(void)
 			case 14: // HI-TEC ("INTERCHANGE", "JONNY QUEST") // INC B' // XOR C':JP NS,..
 				if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&((i=z80_tape_fastfeed(z80_tape_spystack()))==7||i==23))
 				{
-					if ((i=z80_tape_fastdump(z80_tape_spystack()))==10||i==15)
+					if ((i=z80_tape_fastdump(z80_tape_spystack()))==10) // HI-TEC doesn't check the parity
 						while (tape_bits>15&&z80_de2.b.l>1)
 							POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de2.w;
+					else if (i==15) // MIKROGEN does (cfr. "SPHERICAL")
+						while (tape_bits>15&&z80_de2.b.l>1)
+							z80_hl2.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de2.w;
 					j=fasttape_feed(),tape_feedskip=z80_hl2.b.l=128+(j>>1),z80_bc2.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc2.b.l>>7,15);
 				}
 				else
@@ -3860,14 +3863,14 @@ int main(int argc,char *argv[])
 			{
 				switch (argv[i][j++])
 				{
-					case 'C':
-						video_type=(BYTE)(argv[i][j++]-'0');
-						if (video_type<0||video_type>4)
-							i=argc; // help!
-						break;
 					case 'c':
 						video_scanline=(BYTE)(argv[i][j++]-'0');
 						if (video_scanline<0||video_scanline>3)
+							i=argc; // help!
+						break;
+					case 'C':
+						video_type=(BYTE)(argv[i][j++]-'0');
+						if (video_type<0||video_type>4)
 							i=argc; // help!
 						break;
 					case 'd':
@@ -3878,19 +3881,19 @@ int main(int argc,char *argv[])
 						if (crtc_type<0||crtc_type>4)
 							i=argc; // help!
 						break;
-					case 'J':
-						session_stick=0;
-						break;
 					case 'j':
 						session_key2joy=1;
 						break;
-					case 'K':
-						gate_ram_depth=0;
+					case 'J':
+						session_stick=0;
 						break;
 					case 'k':
 						gate_ram_depth=(BYTE)(argv[i][j++]-'0');
 						if (gate_ram_depth<0||gate_ram_depth>4)
 							i=argc; // help!
+						break;
+					case 'K':
+						gate_ram_depth=0;
 						break;
 					case 'm':
 						type_id=(BYTE)(argv[i][j++]-'0');
@@ -3900,13 +3903,13 @@ int main(int argc,char *argv[])
 					case 'O':
 						onscreen_flag=0;
 						break;
-					case 'R':
-						session_fast=1;
-						break;
 					case 'r':
 						video_framelimit=(BYTE)(argv[i][j++]-'0');
 						if (video_framelimit<0||video_framelimit>9)
 							i=argc; // help!
+						break;
+					case 'R':
+						session_fast=1;
 						break;
 					case 'S':
 						session_audio=0;
