@@ -16,7 +16,8 @@
 
 // BEGINNING OF Z80 EMULATION ======================================= //
 
-WORD z80_wz; //WORD z80_wz2; // internal register WZ/MEMPTR // is WZ dual?
+WORD z80_wz; // internal register WZ/MEMPTR
+//WORD z80_wz2; // is WZ dual?
 #if Z80_XCF_BUG
 	BYTE z80_q; // internal register Q
 	#define Z80_Q_SET(x) (z80_q=z80_af.b.l=(x))
@@ -57,11 +58,7 @@ void z80_debug_close(void)
 		z80_debug_logfile=NULL;
 	}
 }
-
-void z80_reset_breakpoints(void)
-{
-	MEMZERO(z80_breakpoints);
-}
+#define z80_reset_breakpoints() MEMZERO(z80_breakpoints)
 
 void z80_setup(void) // setup the Z80
 {

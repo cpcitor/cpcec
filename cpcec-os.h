@@ -16,7 +16,7 @@
 // or the equivalent options as defined by your preferred compiler.
 // Optional DirectDraw support is enabled by appending "-DDDRAW -lddraw"
 // Succesfully tested compilers: GCC 4.6.3 (-std=gnu99), 4.9.2, 5.1.0,
-// 8.3.0 ; TCC 0.9.27; CLANG 3.7.1, 7.0.1 ; Pelles C 4.50.113 ...
+// 8.3.0 ; TCC 0.9.27; CLANG 3.7.1, 7.0.1 ; Pelles C 4.50.113 ; etc.
 
 char session_caption[]=MY_CAPTION " " MY_VERSION;
 unsigned char session_scratch[1<<18]; // at least 256k!
@@ -765,7 +765,6 @@ INLINE void session_render(void) // update video, audio and timers
 			else
 				j=0; // joystick failure, release its keys
 			memset(joy_bit,0,sizeof(joy_bit));
-			//for (i=0;i<length(kbd_joy);++i) joy_bit_res(kbd_joy[i]); // clean keys, allow redundancy
 			for (i=0;i<length(kbd_joy);++i)
 				if (j&(1<<i))
 					joy_bit_set(kbd_joy[i]); // key is down
@@ -802,7 +801,6 @@ INLINE void session_render(void) // update video, audio and timers
 			;//session_audio=0,audio_disabled=-1; // audio device is lost! // can this really happen!?
 		static int u=0; if (!u) u=session_mmtime.u.sample; // reference
 		i=session_mmtime.u.sample-u,j=AUDIO_PLAYBACK; // questionable -- this will break the timing every 13 hours of emulation at 44100 Hz :-(
-		//static int k=0; if ((i-k)<AUDIO_PLAYBACK/VIDEO_PLAYBACK/2) audio_disabled|=8; else audio_disabled&=~8,k=i; // if buffer is full, skip the next audio frame!
 	}
 	else // use internal tick count as clock
 		i=GetTickCount(),j=1000; // questionable for similar reasons, albeit every 23 days :-(

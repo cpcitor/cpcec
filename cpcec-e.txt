@@ -644,7 +644,7 @@ the port logic of CPCEC ("Knight Rider", OUT &0088,&88 must not reach the Gate
 Array, but "Hero Quest", OUT &00C0,&C0 must reach it). The CRTC types 0 and 2
 have improved ("Face Hugger Ultimate Megademo: Tantrum", "5KB Megademo 3",
 "Power System Megademo: Glooms"...) but cannot handle "Pinball Dreams" yet,
-unlike CRTC 3 and 4, that together with CRTC 1 support this game now.
+unlike CRTC types 3 and 4, that together with CRTC1 support this game now.
 - 20191227 -- fourteenth public release. Visual improvements: the green screen
 palette is closer to the original, the vertical filters ("Y-Masking") are
 compatible with the interlaced modes, mixing X-Masking and Y-Masking together
@@ -706,7 +706,7 @@ port logic -"Overflow Preview 3"-) and the debugger: disassembly parameters are
 vertically aligned and the hardware information panel is aligned to the ASCII
 memory dump. Fixed a bug in the ZIP archive header seeker, too.
 - 20200420 -- minor patch fixing the HSYNC signals' black stripes from "Chany
-Dream End Megademo" on CRTC 1, "Onescreen Colonies" on CRTC 0, etc., as well as
+Dream End Megademo" on CRTC1, "Onescreen Colonies" on CRTC0, etc., as well as
 the value of MEMPTR in JR cc,$RR and DJNZ $RR and the logic of BIT n,r,(IX+$XX):
 the error rates of ZXSEC in the 2012 RAXOFT tests are Z80FULL 10/152, Z80CCF
 70/152 and Z80MEMPTR 4/152.
@@ -825,3 +825,6 @@ keyboard bits.
 - 20210127 -- minor patch fixing bugs in the Spectrum timing ("LD (IX+n1),n2"
 and Z80_PRAE_SEND: thanks to Azesmbog for the FPGA test report) and the CPC tape
 analysis (conflict between Mikrogen and Hi-Tec).
+- 20210129 -- minor patch fixing a bug in the CPC PIO ("Super Cars" had stopped
+working in version 20210115) and improving CRTC1 compatibility (first part of
+"Ecstasy Demo").

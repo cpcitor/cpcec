@@ -672,10 +672,10 @@ joystick de ZXSEC es Sinclair 2 por defecto.
 - 20191130 -- parche menor para corregir un bug al ejecutar CPCEC y ZXSEC en una
 pantalla de menos de 600 px de altura, otro al grabar un fichero WAV, y otro más
 en la lógica de puertos de CPCEC ("Knight Rider": OUT &0088,&88 no debe alcanzar
-el Gate Array, pero "Hero Quest", OUT &00C0,&C0 sí debe). Los tipos CRTC 0 y 2
-han mejorado ("Face Hugger Ultimate Megademo: Tantrum", "5KB Megademo 3", "Power
-System Megademo: Glooms"...) pero todavía son incompatibles con "Pinball
-Dreams", a diferencia de CRTC 3 y 4, que junto a CRTC 1 ya pueden con este
+el Gate Array, pero "Hero Quest", OUT &00C0,&C0 sí debe). Los tipos de CRTC 0 y
+2 han mejorado ("Face Hugger Ultimate Megademo: Tantrum", "5KB Megademo 3",
+"Power System Megademo: Glooms"...) pero todavía son incompatibles con "Pinball
+Dreams", a diferencia de los CRTCs 3 y 4, que junto a CRTC1 ya pueden con este
 juego.
 - 20191227 -- decimocuarta versión pública. Mejoras visuales: la paleta de
 fósforo verde es más cercana al original, los filtros verticales ("Y-Masking")
@@ -743,7 +743,7 @@ verticalmente y el panel de información de hardware está alineado al volcado
 ASCII de memoria. También corrige un error en el buscador de cabeceras de
 archivos ZIP.
 - 20200420 -- parche menor que corrige las barras negras de las señales HSYNC de
-"Chany Dream End Megademo" en CRTC 1, "Onescreen Colonies" en CRTC 0, etc., así
+"Chany Dream End Megademo" en CRTC1, "Onescreen Colonies" en CRTC0, etc., así
 como el valor de MEMPTR en JR cc,$RR y DJNZ $RR y la lógica de BIT n,r,(IX+$XX):
 las cuotas de error de ZXSEC en las pruebas de 2012 RAXOFT son Z80FULL 10/152,
 Z80CCF 70/152 y Z80MEMPTR 4/152.
@@ -867,10 +867,13 @@ soporte de joystick de Win32, y que hace el CTC de Playcity más reactivo.
 Playcity ("Alcon 2020" solamente usa el chip izquierdo), añade simulación de ROM
 a los cartuchos Dandanator ("CPC Soccer") y corrige un bug en la instrucción de
 Z80 CPI aparecido en la versión 20210105 (pruebas RAXOFT) y otro en la duración
-de VSYNC en CRTC 1 ("Pheelone").
+de VSYNC en CRTC1 ("Pheelone").
 - 20210115 -- parche menor que corrige un error en el PIO de CPC: "Inertie"
 manda un valor al puerto A, y luego lee el mismo valor en lugar de recibir un
 registro del PSG o bits del teclado.
 - 20210127 -- parche menor que corrige errores en los tiempos de Spectrum ("LD
 (IX+n1),n2" y Z80_PRAE_SEND: gracias a Azesmbog por avisar de la prueba FPGA) y
 el análisis de cinta de CPC (conflicto entre Mikrogen y Hi-Tec).
+- 20210129 -- parche menor que corrige un error en el PIO de CPC ("Super Cars"
+había dejado de funcionar en la versión 20210115) y mejora la compatibilidad de
+CRTC1 (primera parte de "Ecstasy Demo").

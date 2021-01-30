@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20210127"//"2555"
+#define MY_VERSION "20210129"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -511,11 +511,12 @@ INLINE void crtc_table_send(BYTE i)
 				}
 				break;
 			case 9:
-				if (!(crtc_type&5)&&crtc_status&CRTC_STATUS_R4_OK&&crtc_status&CRTC_STATUS_R9_OK) // including the third condition harms CROCO CHANEL 1 part 4.
+				if (!(crtc_type&5)&&(crtc_status&CRTC_STATUS_R4_OK)&&(crtc_status&CRTC_STATUS_R9_OK)) // including the third condition harms CROCO CHANEL 1 part 4.
 					;//printf("R9:%02X/%02X,%02X/%02X  ",crtc_count_r4,crtc_table[4],crtc_count_r9,crtc_table[9]);
 				else if (crtc_count_r9==i)
 					crtc_status|=CRTC_STATUS_R9_OK;
-				else if (crtc_count_r9>i&&crtc_type==3&&crtc_count_r9&8) // PLUS ASIC doesn't always accept overflows! (cfr. HSP_STRESS.CPR)
+				else if (crtc_count_r9>i&&((crtc_type==3&&(crtc_count_r9&8)) // PLUS ASIC doesn't always accept overflows! (cfr. HSP_STRESS.CPR)
+					||(crtc_type==1&&crtc_count_r9==1&&crtc_table[8]==1))) // ECSTASY DEMO part 1 (CRTC1) does R9=0 when C9==1. Interestingly, C4==0,R8==1; related?
 					crtc_status|=CRTC_STATUS_R9_OK;
 				else
 					crtc_status&=~CRTC_STATUS_R9_OK;
@@ -1238,7 +1239,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 			if (video_pos_y>=video_vsync_max||(video_pos_y>=video_vsync_min&&gate_count_r3y>0)) // VBLANK?
 			{
 				if (!video_framecount) video_endscanlines(video_table[video_type][20]); // 'T' = BLACK
-				crtc_status=((crtc_table[8]&1)&&(crtc_table[4]&32))?(crtc_status^CRTC_STATUS_REG_8):(crtc_status&~CRTC_STATUS_REG_8); // "CLEVER & SMART": screen shakes!, but ECSTASY DEMO 1 doesn't shake
+				crtc_status=((crtc_table[8]&1)&&(crtc_table[4]&32))?(crtc_status^CRTC_STATUS_REG_8):(crtc_status&~CRTC_STATUS_REG_8); // "CLEVER & SMART" shakes the screen, but ECSTASY DEMO 1 doesn't!
 				video_newscanlines(video_pos_x,(crtc_status&CRTC_STATUS_REG_8)?2:0); // vertical reset
 				++video_pos_z; session_signal|=SESSION_SIGNAL_FRAME+session_signal_frames; // end of frame!
 			}
@@ -1535,10 +1536,15 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 					if (!plus_enabled) // CRTC3 has a PIO bug! CRTC0,CRTC1,CRTC2,CRTC4 have a good PIO
 						pio_port_a=pio_port_b=pio_port_c=0; // reset all ports!
 				}
-				else if (b&1)
-					pio_port_c|=(1<<((b>>1)&7)); // SET BIT
 				else
-					pio_port_c&=~(1<<((b>>1)&7)); // RESET BIT
+				{
+					if (b&1)
+						pio_port_c|=(1<<((b>>1)&7)); // SET BIT
+					else
+						pio_port_c&=~(1<<((b>>1)&7)); // RESET BIT
+					if ((pio_port_c&0xC0)==0x40)
+						pio_port_a=~autorun_kbd_bit(pio_port_c&15); // "SUPER CARS" does this
+				}
 			}
 			tape_output=(pio_port_c&32)&&tape; // tape record signal
 		}
