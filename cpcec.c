@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20210129"//"2555"
+#define MY_VERSION "20210219"//"1555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -429,7 +429,7 @@ int crtc_line; // virtual PLUS variable, a shortcut of CRTC registers 4 and 9 us
 
 void crtc_invis_update(void)
 {
-	if (crtc_type==1?crtc_table[6]:~crtc_table[8]&48)
+	if (crtc_type!=1?~crtc_table[8]&48:crtc_table[6])
 	{
 		CRTC_STATUS_INVIS_RES;
 		crtc_status&=~CRTC_STATUS_INVIS;
@@ -444,7 +444,7 @@ void crtc_syncs_update(void)
 {
 	crtc_limit_r3x=crtc_table[3]&15; if (!crtc_limit_r3x&&crtc_type==3) crtc_limit_r3x=16;
 	crtc_limit_r3y=(crtc_type<1||crtc_type>2)?crtc_table[3]>>4:
-		crtc_table[4]==62&&crtc_table[9]==4&&!crtc_table[5]?15:0; // kludge: '15' (possibly 13) rather than '0' fixes PHEELONE (315 scanlines rather than 312) on CRTC1
+		crtc_table[4]==62&&crtc_table[9]==4&&!crtc_table[5]?15:0; // kludge: 15 (possibly 13 =16-(315-312)) rather than 0 fixes PHEELONE on CRTC1 (315 scanlines rather than 312)
 	video_vsync_min=crtc_hold<0?VIDEO_VSYNC_LO-(VIDEO_LENGTH_Y-VIDEO_VSYNC_LO):VIDEO_VSYNC_LO;
 	video_vsync_max=crtc_hold>0?VIDEO_VSYNC_HI+(VIDEO_LENGTH_Y-VIDEO_VSYNC_LO):VIDEO_VSYNC_HI;
 }
@@ -516,7 +516,7 @@ INLINE void crtc_table_send(BYTE i)
 				else if (crtc_count_r9==i)
 					crtc_status|=CRTC_STATUS_R9_OK;
 				else if (crtc_count_r9>i&&((crtc_type==3&&(crtc_count_r9&8)) // PLUS ASIC doesn't always accept overflows! (cfr. HSP_STRESS.CPR)
-					||(crtc_type==1&&crtc_count_r9==1&&crtc_table[8]==1))) // ECSTASY DEMO part 1 (CRTC1) does R9=0 when C9==1. Interestingly, C4==0,R8==1; related?
+					||(crtc_type==1&&crtc_count_r9==1&&crtc_table[8]==1))) // ECSTASY DEMO part 1 (CRTC1) does R9=0 when C9==1, C4==0 and R8==1 (cfr. Longshot)
 					crtc_status|=CRTC_STATUS_R9_OK;
 				else
 					crtc_status&=~CRTC_STATUS_R9_OK;
@@ -617,7 +617,7 @@ void mmu_update(void) // update the MMU tables with all the new offsets
 	if (mem_dandanator) // emulate the Dandanator (and more exactly its CPC-only memory map) only when a card is loaded
 	{
 		//if (dandanator_config[5]&0x73)
-			logprintf("DAN! %02X%02X,%02X,%02X ",dandanator_config[4],dandanator_config[5],dandanator_config[6],dandanator_config[7]);
+			//logprintf("DAN! %02X%02X,%02X,%02X ",dandanator_config[4],dandanator_config[5],dandanator_config[6],dandanator_config[7]);
 		if (!(dandanator_config[5]&32)) // enabled?
 		{
 			if (!(dandanator_config[6]&32))
@@ -625,13 +625,13 @@ void mmu_update(void) // update the MMU tables with all the new offsets
 				if (dandanator_config[5]&4) // the order is important; checking bit 0 first breaks "THE SWORD OF IANNA" when the first level begins
 				{
 					mmu_rom[2]=&mem_dandanator[((dandanator_config[6]&31)<<14)-0x8000];
-					//if ((dandanator_config[4]&2)&&dandanator_canwrite) mmu_ram[2]=mmu_rom[2],dandanator_dirty=1;
+					//if ((dandanator_config[4]&2)&&(dandanator_config[6]&30)&&dandanator_canwrite) mmu_ram[2]=mmu_rom[2],dandanator_dirty=1;
 				}
-				else if (!(dandanator_config[5]&1))
+				else if (!(dandanator_config[5]&1)) // must check this for "MOJON TWINS ROMSET" to work
 				{
 					mmu_rom[0]=&mem_dandanator[((dandanator_config[6]&31)<<14)-0x0000];
 					if ((dandanator_config[4]&2)&&(dandanator_config[6]&30)&&dandanator_canwrite) // forbid writing on pages 0 and 1 (!?)
-						logprintf("R/W %02X%02X%02X%02X\n",dandanator_config[4],dandanator_config[5],dandanator_config[6],dandanator_config[7]),
+						//logprintf("R/W %02X%02X%02X%02X\n",dandanator_config[4],dandanator_config[5],dandanator_config[6],dandanator_config[7]),
 						mmu_ram[0]=mmu_rom[0],dandanator_dirty=1;
 				}
 			}
@@ -640,19 +640,19 @@ void mmu_update(void) // update the MMU tables with all the new offsets
 				if (dandanator_config[5]&8) // the order is important again: checking bit 1 first breaks "MOJON TWINS ROMSET" and other snapshot packs
 				{
 					mmu_rom[3]=&mem_dandanator[((dandanator_config[7]&31)<<14)-0xC000];
-					//if ((dandanator_config[4]&2)&&dandanator_canwrite) mmu_ram[3]=mmu_rom[3],dandanator_dirty=1;
+					//if ((dandanator_config[4]&2)&&(dandanator_config[6]&30)&&dandanator_canwrite) mmu_ram[3]=mmu_rom[3],dandanator_dirty=1;
 				}
-				else if (!(dandanator_config[5]&2))
+				else //if (!(dandanator_config[5]&2)) // must NOT check this, otherwise CUAUHTEMOC 64K stops working
 				{
 					mmu_rom[1]=&mem_dandanator[((dandanator_config[7]&31)<<14)-0x4000];
-					//if ((dandanator_config[4]&2)&&dandanator_canwrite) mmu_ram[1]=mmu_rom[1],dandanator_dirty=1;
+					//if ((dandanator_config[4]&2)&&(dandanator_config[6]&30)&&dandanator_canwrite) mmu_ram[1]=mmu_rom[1],dandanator_dirty=1;
 				}
 			}
 		}
 		else if (dandanator_config[5]&16) // rombox?
 		{
 			if (!(gate_mcr&4)) // "poor-man rombox" (LO)
-				mmu_rom[0]=&mem_dandanator[0x70000+((dandanator_config[0]&24)<<11)-0x0000];
+				mmu_rom[0]=&mem_dandanator[0x70000+((dandanator_config[4]&24)<<11)-0x0000];
 			if (!(gate_mcr&8)) // "poor-man rombox" (HI)
 				mmu_rom[3]=&mem_dandanator[((dandanator_config[7]&31)<<14)-0xC000];
 		}
@@ -1239,7 +1239,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 			if (video_pos_y>=video_vsync_max||(video_pos_y>=video_vsync_min&&gate_count_r3y>0)) // VBLANK?
 			{
 				if (!video_framecount) video_endscanlines(video_table[video_type][20]); // 'T' = BLACK
-				crtc_status=((crtc_table[8]&1)&&(crtc_table[4]&32))?(crtc_status^CRTC_STATUS_REG_8):(crtc_status&~CRTC_STATUS_REG_8); // "CLEVER & SMART" shakes the screen, but ECSTASY DEMO 1 doesn't!
+				crtc_status=((crtc_table[8]&1)&&(crtc_table[4]&32))?(crtc_status^CRTC_STATUS_REG_8):(crtc_status&~CRTC_STATUS_REG_8); // "CLEVER & SMART" shakes screen, ECSTASY DEMO 1 doesn't!
 				video_newscanlines(video_pos_x,(crtc_status&CRTC_STATUS_REG_8)?2:0); // vertical reset
 				++video_pos_z; session_signal|=SESSION_SIGNAL_FRAME+session_signal_frames; // end of frame!
 			}
@@ -1638,6 +1638,8 @@ const BYTE z80_tape_fastdumper[][24]=
 	/* 21 */ {  -13,   8,0xDD,0X75,0X00,0XDD,0X2B,0X1B,0X2E,0X01, +15,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XE2 }, // TINYTAPE -- (COUNTER)
 	/* 22 */ {  +10,  10,0X7C,0XAD,0X67,0XDD,0X75,0X00,0XDD,0X23,0X18,0XE5 }, // TINYTAPE ++ (NO COUNTER)
 	/* 23 */ {  +10,  10,0X7C,0XAD,0X67,0XDD,0X75,0X00,0XDD,0X2B,0X18,0XE5 }, // TINYTAPE -- (NO COUNTER)
+	/* 24 */ {  -13,   8,0xDD,0X74,0X00,0XDD,0X23,0X1B,0X2E,0X01, +15,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XE2 }, // TINYTAPE ++ (XORMODE)
+	/* 25 */ {  -13,   8,0xDD,0X74,0X00,0XDD,0X2B,0X1B,0X2E,0X01, +15,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XE2 }, // TINYTAPE -- (XORMODE)
 };
 int z80_tape_fastdump(WORD p)
 {
@@ -1893,7 +1895,10 @@ INLINE void z80_tape_fastload(void)
 				{
 					if ((i=z80_tape_fastdump(z80_tape_spystack()))>=16&&i<=23)
 						while (tape_bits>15&&(i>=20||z80_de.b.l>1))
-							z80_hl.b.h^=POKE(z80_ix.w)=fasttape_dump(),(i&1)?--z80_ix.w:++z80_ix.w,(i<22)?--z80_de.w:0;
+							z80_hl.b.h^=POKE(z80_ix.w)=fasttape_dump(),(i&1)?--z80_ix.w:++z80_ix.w,(i<22)&&--z80_de.w;
+					else if (i>=24&&i<=25)
+						while (tape_bits>15&&(i>=20||z80_de.b.l>1))
+							POKE(z80_ix.w)=z80_hl.b.h^=fasttape_dump(),(i&1)?--z80_ix.w:++z80_ix.w,--z80_de.w;
 					j=fasttape_feed(),tape_feedskip=z80_hl.b.l=128+(j>>1),z80_bc.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc.b.l>>7,14);
 				}
 				else
@@ -2104,20 +2109,18 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 	}
 	if (!(p&0x0800)) // 0xF400-0xF700, PIO 8255
 	{
-		switch (p&0x0300)
+		if (!(p&0x0200))
 		{
-			case 0x0000: // 0xF400, PIO PORT A
-				if (psg_index==14) // READ PSG REGISTER
-					b&=pio_port_a; // index 14 is keyboard port!
-				else if (pio_control&0x10) // READ PSG REGISTER
-					b&=psg_table_recv();
-				//if (pio_control&0x10) // READ PSG REGISTER
-					//b&=psg_index==14?(~autorun_kbd_bit(pio_port_c&15)):psg_table_recv(); // index 14 is keyboard port!
-				else if (!plus_enabled)
-					b=0; // "TIRE AU FLAN" expects this!? Is it nonzero on PLUS!?
-				break;
-			case 0x0100: // 0xF500, PIO PORT B
-				if (pio_control&2||plus_enabled) // PLUS ASIC CRTC3 has a PIO bug!
+			if (!(p&0x0100)) // 0xF400, PIO PORT A
+			{
+				if ((pio_control&0x10)||plus_enabled) // "TIRE AU FLAN" expects this to detect PLUS!
+					b&=pio_port_a=psg_index==14?~autorun_kbd_bit(pio_port_c&15):psg_table_recv(); // READ PSG REGISTER // index 14 is keyboard port!
+				else
+					b&=pio_port_a;
+			}
+			else // 0xF500, PIO PORT B
+			{
+				if ((pio_control&2)||plus_enabled) // PLUS ASIC CRTC3 has a PIO bug!
 				{
 					if (tape)//&&!z80_iff.b.l) // at least one tape loader enables interrupts!!!
 						if (tape_fastload) // call only when this flag is on
@@ -2125,30 +2128,24 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 					// VSYNC (0x01; CRTC2 MISSES IT DURING HORIZONTAL OVERFLOW!)
 					b&=(crtc_status&CRTC_STATUS_VSYNC? // gate_status&CRTC_STATUS_VSYNC ???
 						(crtc_type!=2||crtc_limit_r2+crtc_limit_r3x!=crtc_table[0]+1): // CRTC2 fails if HSYNC sets and H_OFF resets at once!
-						((crtc_table[8]&3)==3&&irq_timer<3&&video_pos_y>=VIDEO_LENGTH_Y*5/12&&video_pos_y<VIDEO_LENGTH_Y*7/12)) // interlaced CRTC VSYNC!
+						((crtc_table[8]&1)&&irq_timer<3&&video_pos_y>=VIDEO_LENGTH_Y*5/12&&video_pos_y<VIDEO_LENGTH_Y*7/12)) // interlaced CRTC VSYNC!
 						+((tape_delay|tape_status)?0xDE:0x5E); // + AMSTRAD MODEL (0x1E) + PRINTER IS OFFLINE (0x40) + TAPE SIGNAL (0x00/0x80)
 				}
 				else
 					b&=pio_port_b; // CRTC0,CRTC1,CRTC2,CRTC4 have a good PIO
-				break;
-			case 0x0200: // 0xF600, PIO PORT C
+			}
+		}
+		else
+		{
+			if (!(p&0x0100)) // 0xF600, PIO PORT C
 				b&=(pio_control&1)?15|(pio_port_c&~15):pio_port_c; // ?
-				break;
+			//else
 		}
 	}
 	if (!(p&0x0400)) // 0xFB00, FDC 765
-	{
 		if (!disc_disabled)
-			switch (p&0x0381) // 0xF87E+n
-			{
-				case 0x0300: // 0xFB7E: STATUS
-					b&=disc_data_info();
-					break;
-				case 0x0301: // 0xFB7F: DATA I/O
-					b&=disc_data_recv();
-					break;
-			}
-	}
+			if ((p&0x0380)==0x0300) // 0xFB7F: DATA I/O // 0xFB7E: STATUS
+					b&=p&1?disc_data_recv():disc_data_info(); // 0xF87E+n
 	if (p==0xFEFE)
 		b=0xCE; // emulator ID styled after the old CPCE
 	return b;
@@ -2247,35 +2244,116 @@ int z80_debug_hard_tab(char *t)
 {
 	return sprintf(t,"    ");
 }
+#ifdef Z80_CPC_DANDANATOR
+int z80_debug_hard_dan8(char *t,int i)
+{
+	*t++=' ';
+	for (int n=256;n>>=1;)
+		*t++=i&n?'1':'0';
+	*t++=' ';
+	return 10;
+}
+int z80_debug_hard_danmap(char *t,BYTE *m,int o)
+{
+	int i; m=&m[o];
+	if (m>=&mem_ram[0]&&m<&mem_ram[length(mem_ram)])
+		i=(m-mem_ram)>>14,
+		*t++='r',
+		*t++='a',
+		*t++='m',
+		*t++=hex16(i/16),
+		*t++=hex16(i%16);
+	else
+	if (m>=&mem_rom[0]&&m<&mem_rom[length(mem_rom)])
+		i=(m-mem_rom)>>14,
+		*t++='r',
+		*t++='o',
+		*t++='m',
+		*t++=hex16(i/16),
+		*t++=hex16(i%16);
+	else
+	if (m>=&mem_dandanator[0]&&m<&mem_dandanator[512<<10])
+		i=(m-mem_dandanator)>>14,
+		*t++='d',
+		*t++='a',
+		*t++='n',
+		*t++=hex16(i/16),
+		*t++=hex16(i%16);
+	else
+		*t++='?',
+		*t++='?',
+		*t++='?',
+		*t++='?',
+		*t++='?';
+	return 5;
+}
+#endif
 void z80_debug_hard(int q,int x,int y)
 {
 	int i; char s[16*20],*t;
-	if (q&1&&plus_enabled)
+	if (q&1)
 	{
-		t=s+sprintf(s,"PLUS: M:%02X D:%02X I:%02X",plus_gate_mcr,plus_dcsr,z80_irq);
-		t+=sprintf(t,"    SSSL:%02X SCAN:%03X",plus_sssl,crtc_line);
-		t+=sprintf(t,"    SSSS:%04X PRI:%02X",(WORD)mgetmm(plus_ssss),plus_pri);
-		t+=sprintf(t,"    SSCR:%02X IVR:%02X %c",plus_sscr,plus_ivr,plus_gate_enabled?'+':'@'+plus_gate_counter);
-		//t+=sprintf(t,"DMAS:               ");
-		for (i=0;i<3;++i)
-			t+=sprintf(t," DMA%c %04X:%03X.%02X/%02X",
-				48+i,
-				mgetii(&plus_dmas[i*4+0]),
-				plus_dma_regs[i][2],
-				plus_dma_regs[i][3],
-				plus_dmas[i*4+2]
-			);
-		for (i=0;i<8;++i)
-			t+=sprintf(t," %03X,%03X:%1X %03X,%03X:%1X"
-			,(mgetii(&plus_sprite_xyz[i*16+ 0]))&0xFFF
-			,(mgetii(&plus_sprite_xyz[i*16+ 2]))&0xFFF
-			,plus_sprite_xyz[i*16+ 4]&15
-			,(mgetii(&plus_sprite_xyz[i*16+ 8]))&0xFFF
-			,(mgetii(&plus_sprite_xyz[i*16+10]))&0xFFF
-			,plus_sprite_xyz[i*16+12]&15
-			);
+		#ifdef Z80_CPC_DANDANATOR
+		if (mem_dandanator)
+		{
+			t=s+sprintf(s,"DANDANATOR:         "
+				"      PENDING:      "
+				" ZONE 0/B  ZONE 1/C ");
+			t+=z80_debug_hard_dan8(t,dandanator_config[2]); t[-9]='-'; t[-8]='-';
+			t+=z80_debug_hard_dan8(t,dandanator_config[3]); t[-9]='-'; t[-8]='-';
+			t+=sprintf(t,
+				" CONFIG.1  CONFIG.0 ");
+			t+=z80_debug_hard_dan8(t,dandanator_config[1]); t[-9]='-';
+			t+=z80_debug_hard_dan8(t,dandanator_config[0]); t[-9]='-'; t[-8]='-'; t[-7]='-';
+			t+=sprintf(t,
+				"      CURRENT:      "
+				" ZONE 0/B  ZONE 1/C ");
+			t+=z80_debug_hard_dan8(t,dandanator_config[6]); t[-9]='-'; t[-8]='-';
+			t+=z80_debug_hard_dan8(t,dandanator_config[7]); t[-9]='-'; t[-8]='-';
+			t+=sprintf(t,
+				" CONFIG.1  CONFIG.0 ");
+			t+=z80_debug_hard_dan8(t,dandanator_config[5]); t[-9]='-';
+			t+=z80_debug_hard_dan8(t,dandanator_config[4]); t[-9]='-'; t[-8]='-'; t[-7]='-';
+			t+=z80_debug_hard_danmap(t,mmu_rom[0],0x0000);
+			t+=z80_debug_hard_danmap(t,mmu_rom[1],0x4000);
+			t+=z80_debug_hard_danmap(t,mmu_rom[2],0x8000);
+			t+=z80_debug_hard_danmap(t,mmu_rom[3],0xC000);
+			t+=z80_debug_hard_danmap(t,mmu_ram[0],0x0000);
+			t+=z80_debug_hard_danmap(t,mmu_ram[1],0x4000);
+			t+=z80_debug_hard_danmap(t,mmu_ram[2],0x8000);
+			t+=z80_debug_hard_danmap(t,mmu_ram[3],0xC000);
+			*t=0;
+		}
+		else
+		#endif
+		if (plus_enabled)
+		{
+			t=s+sprintf(s,"PLUS: M:%02X D:%02X I:%02X",plus_gate_mcr,plus_dcsr,z80_irq);
+			t+=sprintf(t,"    SSSL:%02X SCAN:%03X",plus_sssl,crtc_line);
+			t+=sprintf(t,"    SSSS:%04X PRI:%02X",(WORD)mgetmm(plus_ssss),plus_pri);
+			t+=sprintf(t,"    SSCR:%02X IVR:%02X %c",plus_sscr,plus_ivr,plus_gate_enabled?'+':'@'+plus_gate_counter);
+			//t+=sprintf(t,"DMAS:               ");
+			for (i=0;i<3;++i)
+				t+=sprintf(t," DMA%c %04X:%03X.%02X/%02X",
+					48+i,
+					mgetii(&plus_dmas[i*4+0]),
+					plus_dma_regs[i][2],
+					plus_dma_regs[i][3],
+					plus_dmas[i*4+2]
+				);
+			for (i=0;i<8;++i)
+				t+=sprintf(t," %03X,%03X:%1X %03X,%03X:%1X"
+				,(mgetii(&plus_sprite_xyz[i*16+ 0]))&0xFFF
+				,(mgetii(&plus_sprite_xyz[i*16+ 2]))&0xFFF
+				,plus_sprite_xyz[i*16+ 4]&15
+				,(mgetii(&plus_sprite_xyz[i*16+ 8]))&0xFFF
+				,(mgetii(&plus_sprite_xyz[i*16+10]))&0xFFF
+				,plus_sprite_xyz[i*16+12]&15
+				);
+		}
+		else q=0; // fallback
 	}
-	else
+	if (!(q&1))
 	{
 		t=s+sprintf(s,"GATE:               ""%02X: ",gate_index);
 		for (i=0;i<8;++i)
@@ -2325,13 +2403,25 @@ void onscreen_grafx_step0(VIDEO_UNIT *t,BYTE b)
 }
 void onscreen_grafx_step1(VIDEO_UNIT *t,BYTE b)
 {
-	*  t=video_clut[gate_mode1[0][b]];
-	*++t=video_clut[gate_mode1[1][b]];
-	*++t=video_clut[gate_mode1[2][b]];
-	*++t=video_clut[gate_mode1[3][b]];
+	t[0]=video_clut[gate_mode1[0][b]];
+	t[1]=video_clut[gate_mode1[1][b]];
+	t[2]=video_clut[gate_mode1[2][b]];
+	t[3]=video_clut[gate_mode1[3][b]];
+}
+VIDEO_UNIT onscreen_grafx_mode2[4];
+void onscreen_grafx_step2(VIDEO_UNIT *t,BYTE b)
+{
+	t[0]=onscreen_grafx_mode2[b>>6];
+	t[1]=onscreen_grafx_mode2[(b>>4)&3];
+	t[2]=onscreen_grafx_mode2[(b>>2)&3];
+	t[3]=onscreen_grafx_mode2[b&3];
 }
 WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 {
+	onscreen_grafx_mode2[0]=video_clut[0];
+	onscreen_grafx_mode2[1]=VIDEO_FILTER_AVG(video_clut[0],video_clut[1]);
+	onscreen_grafx_mode2[2]=VIDEO_FILTER_AVG(video_clut[1],video_clut[0]);
+	onscreen_grafx_mode2[3]=video_clut[1];
 	VIDEO_UNIT *vv=v;
 	WORD s=onscreen_grafx_addr; if (!(q&1))
 	{
@@ -2340,14 +2430,18 @@ WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 			while (xx+lx<=mx)
 			{
 				for (int y=0;y<my;++y)
-					for (int x=0;x<lx;x+=4)
-					{
-						if (gate_status&1)
-							onscreen_grafx_step1(&v[xx+x+y*ww],POKE(s));
-						else
-							onscreen_grafx_step0(&v[xx+x+y*ww],POKE(s));
-						++s;
-					}
+					for (int x=0;x<lx;x+=4,++s)
+						switch (gate_status&3)
+						{
+							case 1:
+								onscreen_grafx_step1(&v[xx+x+y*ww],POKE(s));
+								break;
+							case 2:
+								onscreen_grafx_step2(&v[xx+x+y*ww],POKE(s));
+								break;
+							default:
+								onscreen_grafx_step0(&v[xx+x+y*ww],POKE(s));
+						}
 				xx+=lx;
 			}
 		// fill remainders
@@ -2366,14 +2460,18 @@ WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 			while (yy+ly<=my)
 			{
 				for (int x=0;x<mx;x+=4)
-					for (int y=0;y<ly;++y)
-					{
-						if (gate_status&1)
-							onscreen_grafx_step1(&v[x+(yy+y)*ww],POKE(s));
-						else
-							onscreen_grafx_step0(&v[x+(yy+y)*ww],POKE(s));
-						++s;
-					}
+					for (int y=0;y<ly;++y,++s)
+						switch (gate_status&3)
+						{
+							case 1:
+								onscreen_grafx_step1(&v[x+(yy+y)*ww],POKE(s));
+								break;
+							case 2:
+								onscreen_grafx_step2(&v[x+(yy+y)*ww],POKE(s));
+								break;
+							default:
+								onscreen_grafx_step0(&v[x+(yy+y)*ww],POKE(s));
+						}
 				yy+=ly;
 			}
 		// fill remainders
@@ -2631,9 +2729,6 @@ char bios_path[STRMAX]="";
 
 void bios_ignore_amsdos(FILE *f) // just in case some ROM files still include AMSDOS headers (i.e. the first 128 bytes)
 {
-	#if 0 // the simple way
-	fseek(f,0,SEEK_END); int i=ftell(f); fseek(f,i&128,SEEK_SET);
-	#else // the proper way
 	unsigned char bios_amsdos[128]; fread1(bios_amsdos,128,f);
 	int checksum=0;
 	for (int i=0;i<67;++i) checksum+=bios_amsdos[i];
@@ -2641,7 +2736,6 @@ void bios_ignore_amsdos(FILE *f) // just in case some ROM files still include AM
 		logprintf("ROM with AMSDOS header, checksum %04X.\n",checksum); // it's AMSDOS, ignore
 	else
 		fseek(f,0,SEEK_SET); // not AMSDOS, restore
-	#endif
 }
 
 int bios_load(char *s) // load a cartridge file or a firmware ROM file. 0 OK, !0 ERROR
@@ -2855,12 +2949,12 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 	CRTC_FLAG_REG8_BLANKING   = $80;
 	CRTC_FLAG_VTA_ACTIVE     = $100;
 	CRTC_FLAG_WINAPE_ICSR   = $8000; */
-	i=(crtc_status&CRTC_STATUS_VSYNC?1:0)+(crtc_status&CRTC_STATUS_HSYNC?2:0)+(crtc_status&CRTC_STATUS_V_T_A?256:0);
-	header[0xB0]=i; header[0xB1]=i>>8;
+	header[0xB0]=(crtc_status&CRTC_STATUS_VSYNC?1:0)+(crtc_status&CRTC_STATUS_HSYNC?2:0);
+	header[0xB1]=(crtc_status&CRTC_STATUS_V_T_A?1:0); // =256/256
 
 	header[0xB2]=irq_delay;
 	header[0xB3]=irq_timer;
-	header[0xB4]=!!z80_irq;
+	header[0xB4]=!!z80_irq; // reduce all IRQ combinations to TRUE or FALSE
 	header[0xB5]=z80_irq; // compare plus_dcsr with ICSR
 	header[0xB6]=!(header[0xB7]=plus_enabled);
 	strcpy(&header[0xE0],session_caption);
@@ -3020,8 +3114,8 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 		crtc_count_r5=header[0xAD];
 		crtc_count_r3x=header[0xAE];
 		crtc_count_r3y=header[0xAF];
-		i=mgetii(&header[0xB0]);
-		crtc_status=(i&1?CRTC_STATUS_VSYNC:0)+(i&2?CRTC_STATUS_HSYNC:0)+(i&256?CRTC_STATUS_V_T_A:0)
+		crtc_status=(header[0xB0]&1?CRTC_STATUS_VSYNC:0)+(header[0xB0]&2?CRTC_STATUS_HSYNC:0)
+			+(header[0xB1]&1?CRTC_STATUS_V_T_A:0)
 			+(crtc_count_r0==crtc_table[0]?CRTC_STATUS_R0_OK:0)
 			+(crtc_count_r4==crtc_table[4]?CRTC_STATUS_R4_OK:0)+(crtc_count_r9==crtc_table[9]?CRTC_STATUS_R9_OK:0)
 			+(crtc_count_r0>=crtc_table[1]?CRTC_STATUS_H_OFF:0)
@@ -3313,6 +3407,7 @@ char session_menudata[]=
 	"0x0B02 Half scanlines\n"
 	"0x0B03 Simple interlace\n"
 	"0x0B04 Double interlace\n"
+	"0x0B08 Blend scanlines\n"
 	"=\n"
 	"0x9100 Raise frameskip\tNum.+\n"
 	"0x9200 Lower frameskip\tNum.-\n"
@@ -3386,6 +3481,7 @@ void session_menuinfo(void)
 	session_menucheck(0x8A02,!session_softblit);
 	session_menuradio(0x8B01+video_type,0x8B01,0x8B05);
 	session_menuradio(0x0B01+video_scanline,0x0B01,0x0B04);
+	session_menucheck(0x0B08,video_scanblend);
 	session_menucheck(0x8902,video_filter&VIDEO_FILTER_Y_MASK);
 	session_menucheck(0x8903,video_filter&VIDEO_FILTER_X_MASK);
 	session_menucheck(0x8904,video_filter&VIDEO_FILTER_SMUDGE);
@@ -3402,6 +3498,7 @@ void session_menuinfo(void)
 	}
 	#endif
 	#endif
+	video_resetscanline(); // video scanline cfg
 	z80_multi=1+z80_turbo; // setup overclocking
 	sprintf(session_info,"%i:%iK %s%c %0.1fMHz"//" | disc %s | tape %s | %s"
 		,gate_ram_dirty,gate_ram_kbyte[gate_ram_depth],plus_enabled?"ASIC":"CRTC",48+crtc_type,4.0*z80_multi);
@@ -3670,13 +3767,6 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 			}
 			break;
 		case 0x0800: // ^F8: REMOVE TAPE
-			;
-			;
-			;
-			;
-			;
-			;
-			;
 			tape_close();
 			break;
 		case 0x8900: // F9: DEBUG
@@ -3717,11 +3807,11 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 		case 0x8A02: // VIDEO ACCELERATION / SOFTWARE RENDER (*needs restart)
 			session_softblit=!session_softblit;
 			break;
-		case 0x8B01:
-		case 0x8B02:
-		case 0x8B03:
-		case 0x8B04:
-		case 0x8B05:
+		case 0x8B01: // MONOCHROME
+		case 0x8B02: // DARK PALETTE
+		case 0x8B03: // NORMAL PALETTE
+		case 0x8B04: // BRIGHT PALETTE
+		case 0x8B05: // GREEN SCREEN
 			video_type=(k&15)-1;
 			video_clut_update();
 			break;
@@ -3729,21 +3819,24 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 			video_type=(video_type+(session_shift?length(video_table)-1:1))%length(video_table);
 			video_clut_update();
 			break;
-		case 0x0B01:
-		case 0x0B02:
-		case 0x0B03:
-		case 0x0B04:
+		case 0x0B01: // ALL SCANLINES
+		case 0x0B02: // HALF SCANLINES
+		case 0x0B03: // SIMPLE INTERLACE
+		case 0x0B04: // DOUBLE INTERLACE
 			video_scanline=(video_scanline&~3)+(k&15)-1;
+			break;
+		case 0x0B08: // BLEND SCANLINES
+			video_scanblend=!video_scanblend;
 			break;
 		case 0x0B00: // ^F11: SCANLINES
 			if (session_shift)
 				video_filter=(video_filter+1)&7;
-			else
-				video_scanline=(video_scanline+1)&3;
+			else if (!(video_scanline=(video_scanline+1)&3))
+				video_scanblend=!video_scanblend;
 			break;
 		case 0x8C01:
 			if (!session_recording)
-				session_filmscale=3-session_filmscale;
+				session_filmscale=3-session_filmscale; // toggle 1 and 2
 			break;
 		case 0x8C02:
 			if (!session_recording)
@@ -3871,8 +3964,10 @@ int main(int argc,char *argv[])
 				{
 					case 'c':
 						video_scanline=(BYTE)(argv[i][j++]-'0');
-						if (video_scanline<0||video_scanline>3)
+						if (video_scanline<0||video_scanline>7)
 							i=argc; // help!
+						else
+							video_scanblend=video_scanline&4,video_scanline&=3;
 						break;
 					case 'C':
 						video_type=(BYTE)(argv[i][j++]-'0');
@@ -3955,7 +4050,7 @@ int main(int argc,char *argv[])
 		return
 			printfusage("usage: " MY_CAPTION
 			" [option..] [file..]\n"
-			"\t-cN\tscanline type (0..3)\n"
+			"\t-cN\tscanline type (0..7)\n"
 			"\t-CN\tcolour palette (0..4)\n"
 			"\t-d\tdebug\n"
 			"\t-gN\tset CRTC type (0..4)\n"
@@ -4039,6 +4134,13 @@ int main(int argc,char *argv[])
 					if (video_threshold>VIDEO_LENGTH_X/4)
 						onscreen_bool(-4,-6,1,1,0);
 				}
+				#ifdef SDL2
+				if (session_audio) // SDL2 audio queue
+				{
+					if ((j=session_audioqueue)<0) j=0; else if (j>AUDIO_N_FRAMES) j=AUDIO_N_FRAMES;
+					onscreen_bool(+11,-2,j,1,1); onscreen_bool(j+11,-2,AUDIO_N_FRAMES-j,1,0);
+				}
+				#endif
 			}
 			video_threshold=VIDEO_LENGTH_X/4; // softer HSYNC threshold
 			// update session and continue

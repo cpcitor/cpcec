@@ -877,3 +877,12 @@ el análisis de cinta de CPC (conflicto entre Mikrogen y Hi-Tec).
 - 20210129 -- parche menor que corrige un error en el PIO de CPC ("Super Cars"
 había dejado de funcionar en la versión 20210115) y mejora la compatibilidad de
 CRTC1 (primera parte de "Ecstasy Demo").
+- 20210219 -- parche menor que añade una nueva opción, "Video: Blend scanlines"
+que maneja los efectos Gigascreen (demos de Spectrum "Mescaline Synesthesia" y
+"Tiratok", demos de CPC "Batman Forever" y "Mad Leprechaun") y que cambia la
+sincronización de sonido en SDL2. El generador de sonido del chip AY ahora es un
+LFSR. Los ficheros SNA grabados desde Spectrum Plus3 activan el bit 4 del byte
+0x0C01E para indicar que el snapshot requiere un Plus3 (huevo de Pascua "Hello
+There I'm a +3"). El debugger de CPC añade un panel de información (tecla 'X')
+con el estado del Dandanator, y el visor de gráficos puede mostrar imágenes de
+MODE 2.

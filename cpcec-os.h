@@ -24,9 +24,8 @@ unsigned char session_scratch[1<<18]; // at least 256k!
 #define INLINE // 'inline' is useless in TCC and GCC4, and harmful in GCC5!
 INLINE int ucase(int i) { return i>='a'&&i<='z'?i-32:i; }
 INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
+INLINE int hex16(int i) { return i<10?'0'+i:'7'+i; }
 #define length(x) (sizeof(x)/sizeof(*(x)))
-
-#define AUDIO_N_FRAMES 8 // safe on Windows and other systems
 
 #include "cpcec-a7.h" //unsigned char *onscreen_chrs;
 #define ONSCREEN_SIZE (sizeof(onscreen_chrs)/96)
@@ -66,14 +65,17 @@ INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 
 #define MESSAGEBOX_WIDETAB "\t" // expect proportional font
 
+#define AUDIO_N_FRAMES 8 // safe on almost all Windows machines
+
 // general engine constants and variables --------------------------- //
 
 #define VIDEO_UNIT DWORD // 0x00RRGGBB style
 #define VIDEO1(x) (x) // no conversion required!
 
-#define VIDEO_FILTER_AVG(x,y) (((((x&0xFF00FF)*3+(y&0xFF00FF)+(x<y?0x30003:0))&0x3FC03FC)+(((x&0xFF00)*3+(y&0xFF00)+(x<y?0x300:0))&0x3FC00))>>2) // faster
-#define VIDEO_FILTER_STEP(r,x,y) r=VIDEO_FILTER_AVG(x,y),x=r // hard interpolation
-//#define VIDEO_FILTER_STEP(r,x,y) r=VIDEO_FILTER_AVG(x,y),x=y // soft interpolation
+#define VIDEO_FILTER_AVG(x,y) (((((x&0xFF00FF)+(y&0xFF00FF)+(x<y?0x10001:0))&0x1FE01FE)+(((x&0xFF00)+(y&0xFF00)+(x<y?0x100:0))&0x1FE00))>>1) // 50:50
+#define VIDEO_FILTER_BLUR(x,y) (((((x&0xFF00FF)*3+(y&0xFF00FF)+(x<y?0x20002:0))&0x3FC03FC)+(((x&0xFF00)*3+(y&0xFF00)+(x<y?0x200:0))&0x3FC00))>>2) // 25:75
+#define VIDEO_FILTER_STEP(r,x,y) r=VIDEO_FILTER_BLUR(x,y),x=r // hard interpolation
+//#define VIDEO_FILTER_STEP(r,x,y) r=VIDEO_FILTER_BLUR(x,y),x=y // soft interpolation
 #define VIDEO_FILTER_X1(x) (((x>>1)&0x7F7F7F)+0x2B2B2B)
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0x3F3F3F)+0x404040) // heavier
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0x3F3F3F)*3+0x161616) // lighter
@@ -285,6 +287,7 @@ void session_debug_show(void);
 int session_debug_user(int k); // debug logic is a bit different: 0 UNKNOWN COMMAND, !0 OK
 int debug_xlat(int k); // translate debug keys into codes. Must be defined later on!
 INLINE void audio_playframe(int q,AUDIO_UNIT *ao); // handle the sound filtering; is defined in CPCEC-RT.H!
+#define session_audioqueue audio_session // the audio device is the timer
 
 void session_please(void) // stop activity for a short while
 {
@@ -683,11 +686,10 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 			memset(audio_frame=audio_memory,AUDIO_ZERO,sizeof(audio_memory));
 			session_wh.lpData=(BYTE *)audio_memory;
 			session_wh.dwBufferLength=AUDIO_N_FRAMES*AUDIO_LENGTH_Z*wfex.nBlockAlign;
-			session_wh.dwFlags=WHDR_BEGINLOOP|WHDR_ENDLOOP;
+			session_wh.dwFlags=WHDR_BEGINLOOP|WHDR_ENDLOOP; // circular buffer
 			session_wh.dwLoops=-1; // loop forever!
 			waveOutPrepareHeader(session_wo,&session_wh,sizeof(WAVEHDR));
-			waveOutWrite(session_wo,&session_wh,sizeof(WAVEHDR));
-			session_timer=0;
+			session_timer=waveOutWrite(session_wo,&session_wh,sizeof(WAVEHDR)); // should be zero!
 		}
 	}
 	session_please();
@@ -780,7 +782,7 @@ INLINE void session_render(void) // update video, audio and timers
 	}
 	if (session_wavefile) // record audio output, if required
 	{
-		session_writewave(audio_target);//audio_frame
+		session_writewave(audio_target);
 		audio_frame=audio_buffer; // secondary buffer
 	}
 	else
@@ -797,7 +799,7 @@ INLINE void session_render(void) // update video, audio and timers
 			SetPriorityClass(GetCurrentProcess(),(o=session_fast|audio_disabled)?BELOW_NORMAL_PRIORITY_CLASS:ABOVE_NORMAL_PRIORITY_CLASS);
 			//SetThreadPriority(GetCurrentThread(),(o=session_fast|audio_disabled)?THREAD_PRIORITY_NORMAL:THREAD_PRIORITY_ABOVE_NORMAL);
 		}
-		if (waveOutGetPosition(session_wo,&session_mmtime,sizeof(MMTIME))) // MMSYSERR_NOERROR?
+		if (waveOutGetPosition(session_wo,&session_mmtime,sizeof(MMTIME))) // !=MMSYSERR_NOERROR
 			;//session_audio=0,audio_disabled=-1; // audio device is lost! // can this really happen!?
 		static int u=0; if (!u) u=session_mmtime.u.sample; // reference
 		i=session_mmtime.u.sample-u,j=AUDIO_PLAYBACK; // questionable -- this will break the timing every 13 hours of emulation at 44100 Hz :-(
@@ -824,8 +826,6 @@ INLINE void session_render(void) // update video, audio and timers
 	{
 		if (session_audio)
 			waveOutRestart(session_wo);
-		//else
-			//session_timer=GetTickCount();
 		session_wait=0;
 	}
 	if ((i=GetTickCount())>(performance_t+1000)) // performance percentage
@@ -1051,7 +1051,7 @@ int session_filedialog(char *r,char *s,char *t,int q,int f) // auxiliar function
 	strcpy(session_substr,s);
 	strcpy(&session_substr[strlen(s)+1],s); // one NULL char between two copies of the same string
 	session_substr[strlen(s)*2+2]=session_substr[strlen(s)*2+3]=0;
-	//printf("T:%s // P:%s // S:%s\n",session_tmpstr,session_parmtr,session_substr); // tmpstr: "C:\ABC"; parmtr: "XYZ.EXT"; substr: "*.EX1;*.EX2"(x2)
+	// tmpstr: "C:\ABC"; parmtr: "XYZ.EXT"; substr: "*.EX1;*.EX2"(x2)
 	session_ofn.lpstrFilter=session_substr;
 	session_ofn.nFilterIndex=1;
 	session_ofn.lpstrFile=session_parmtr;

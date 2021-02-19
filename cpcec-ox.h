@@ -19,13 +19,13 @@
 
 #include <SDL2/SDL.h>
 
-#define strcasecmp SDL_strcasecmp
 #ifdef _WIN32
 	#define STRMAX 288 // widespread in Windows
 	#define PATHCHAR '\\' // WIN32
 	#include <windows.h> // FindFirstFile...
 	#include <io.h> // _chsize(),_fileno()...
 	#define fsetsize(f,l) _chsize(_fileno(f),(l))
+	#define strcasecmp _stricmp // SDL_strcasecmp
 #else
 	#ifdef PATH_MAX
 		#define STRMAX PATH_MAX
@@ -49,9 +49,10 @@
 #define VIDEO_UNIT DWORD // 0x00RRGGBB style
 #define VIDEO1(x) (x) // no conversion required!
 
-#define VIDEO_FILTER_AVG(x,y) (((((x&0xFF00FF)*3+(y&0xFF00FF)+(x<y?0x30003:0))&0x3FC03FC)+(((x&0xFF00)*3+(y&0xFF00)+(x<y?0x300:0))&0x3FC00))>>2) // faster
-#define VIDEO_FILTER_STEP(r,x,y) r=VIDEO_FILTER_AVG(x,y),x=r // hard interpolation
-//#define VIDEO_FILTER_STEP(r,x,y) r=VIDEO_FILTER_AVG(x,y),x=y // soft interpolation
+#define VIDEO_FILTER_AVG(x,y) (((((x&0xFF00FF)+(y&0xFF00FF)+(x<y?0x10001:0))&0x1FE01FE)+(((x&0xFF00)+(y&0xFF00)+(x<y?0x100:0))&0x1FE00))>>1) // 50:50
+#define VIDEO_FILTER_BLUR(x,y) (((((x&0xFF00FF)*3+(y&0xFF00FF)+(x<y?0x20002:0))&0x3FC03FC)+(((x&0xFF00)*3+(y&0xFF00)+(x<y?0x200:0))&0x3FC00))>>2) // 25:75
+#define VIDEO_FILTER_STEP(r,x,y) r=VIDEO_FILTER_BLUR(x,y),x=r // hard interpolation
+//#define VIDEO_FILTER_STEP(r,x,y) r=VIDEO_FILTER_BLUR(x,y),x=y // soft interpolation
 #define VIDEO_FILTER_X1(x) (((x>>1)&0x7F7F7F)+0x2B2B2B)
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0x3F3F3F)+0x404040) // heavier
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0x3F3F3F)*3+0x161616) // lighter
@@ -228,6 +229,7 @@ void session_debug_show(void);
 int session_debug_user(int k); // debug logic is a bit different: 0 UNKNOWN COMMAND, !0 OK
 int debug_xlat(int k); // translate debug keys into codes. Must be defined later on!
 INLINE void audio_playframe(int q,AUDIO_UNIT *ao); // handle the sound filtering; is defined in CPCEC-RT.H!
+int session_audioqueue; // unlike in Windows, we cannot use the audio device as the timer in SDL
 
 void session_please(void) // stop activity for a short while
 {
@@ -281,7 +283,7 @@ SDL_Texture *session_dbg=NULL;
 SDL_Texture *session_dib=NULL,*session_gui_dib=NULL; SDL_Renderer *session_blitter=NULL;
 SDL_Rect session_ideal; // used for calculations, see below
 
-void session_backup(VIDEO_UNIT *t); // make a clipped copy of the current screen. Must be defined later on!
+void session_backupvideo(VIDEO_UNIT *t); // make a clipped copy of the current screen. Must be defined later on!
 void session_redraw(BYTE q)
 {
 	int xx,yy; // calculate window area
@@ -297,6 +299,8 @@ void session_redraw(BYTE q)
 			xx=(xx/(VIDEO_PIXELS_X*62/64))*VIDEO_PIXELS_X; // the MM/NN factor is a tolerance margin:
 			yy=(yy/(VIDEO_PIXELS_Y*62/64))*VIDEO_PIXELS_Y; // 61/64 allows 200% on windowed 1920x1080
 		}
+		if (!(xx*yy))
+			xx=VIDEO_PIXELS_X,yy=VIDEO_PIXELS_Y; // window area is too small!
 		session_ideal.x=(session_ideal.w-xx)/2; session_ideal.w=xx;
 		session_ideal.y=(session_ideal.h-yy)/2; session_ideal.h=yy;
 		SDL_Texture *s; VIDEO_UNIT *t; int ox,oy;
@@ -310,8 +314,8 @@ void session_redraw(BYTE q)
 		r.x=ox; r.w=VIDEO_PIXELS_X;
 		r.y=oy; r.h=VIDEO_PIXELS_Y;
 		SDL_UnlockTexture(s); // prepare for sending
-		SDL_RenderCopy(session_blitter,s,&r,&session_ideal); // send!
-		SDL_RenderPresent(session_blitter); // update window!
+		if (SDL_RenderCopy(session_blitter,s,&r,&session_ideal)>=0) // send! (warning: this operation has a memory leak on several SDL2 versions)
+			SDL_RenderPresent(session_blitter); // update window!
 		int dummy; SDL_LockTexture(s,NULL,(void**)&t,&dummy); // allow editing again
 		if (!q)
 			menus_frame=t;
@@ -495,12 +499,12 @@ void session_ui_loop(void) // get background painted again to erase old widgets
 	if (session_signal&SESSION_SIGNAL_DEBUG)
 		memcpy(menus_frame,debug_frame,sizeof(VIDEO_UNIT)*VIDEO_PIXELS_X*VIDEO_PIXELS_Y); // use the debugger as the background, rather than the emulation
 	else
-		session_backup(menus_frame);
+		session_backupvideo(menus_frame);
 }
 void session_ui_init(void) { session_kbdclear(); session_please(); session_ui_loop(); }
 void session_ui_exit(void) // wipe all widgets and restore the window contents
 {
-	if (session_signal&SESSION_SIGNAL_DEBUG)
+	if (session_signal&(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE)) // redraw if waiting
 		session_redraw(1);
 }
 
@@ -973,11 +977,11 @@ int session_ui_list(int item,char *s,char *t,void x(void),int q) // see session_
 					item=session_ui_maus_y<2?0:1;
 				break;
 			case -3: // mouse right click
-				if (x)
+				if (x&&session_ui_maus_x>=0&&session_ui_maus_x<session_ui_size_x&&session_ui_maus_y>0&&session_ui_maus_y<session_ui_size_y)
 					x(),dblclk=0,dirty=1;
 				else
 			case -2: // mouse left click
-				if (session_ui_maus_x<0||session_ui_maus_x>=session_ui_size_x)
+				if (session_ui_maus_x<0||session_ui_maus_x>=session_ui_size_x||(items<listh&&(session_ui_maus_y<0||session_ui_maus_y>=session_ui_size_y)))
 					item=-1,done=1; // quit!
 				else if (session_ui_maus_y<1) // scroll up?
 				{
@@ -1065,7 +1069,7 @@ char *session_ui_filedialog_sanitizepath(char *s) // restore PATHCHAR at the end
 void session_ui_filedialog_tabkey(void)
 {
 	char *l={"Read/Write\000Read-Only\000"};
-	int i=session_ui_list(session_ui_fileflags&1,l,"File access",NULL,0);
+	int i=session_ui_list(session_ui_fileflags&1,l,"File access",NULL,1);
 	if (i>=0)
 		session_ui_fileflags=i;
 }
@@ -1284,6 +1288,7 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 		if (session_audio=SDL_OpenAudioDevice(NULL,0,&spec,NULL,0))
 			audio_frame=audio_buffer;
 	}
+
 	session_timer=SDL_GetTicks();
 
 	#ifdef _WIN32
@@ -1572,28 +1577,20 @@ INLINE void session_render(void) // update video, audio and timers
 			video_framecount=-2; // automatic frameskip!
 		session_timer+=1000/VIDEO_PLAYBACK;
 	}
-
-	#ifdef SDL2_DOUBLE_QUEUE // audio buffer workaround (f.e. SlITaz v5)
-		#define AUDIO_N_FRAMEZ (AUDIO_N_FRAMES*2)
-	#else
-		#define AUDIO_N_FRAMEZ AUDIO_N_FRAMES
-	#endif
 	if (session_audio)
 	{
 		static BYTE s=1;
 		if (s!=audio_disabled)
 			if (s=audio_disabled) // silent mode needs cleanup
 				memset(audio_buffer,AUDIO_ZERO,sizeof(audio_buffer));
-		j=SDL_GetQueuedAudioSize(session_audio);
-		if (j<=sizeof(audio_buffer)*AUDIO_N_FRAMEZ) // buffer full?
-		{
-			/*audio_disabled&=~8*/; // buffer is ready!
+		#ifdef SDL2_DOUBLE_QUEUE // audio buffer workaround (f.e. SliTaz v5)
+			#define AUDIO_N_FRAMES 16
+		#else
+			#define AUDIO_N_FRAMES 8
+		#endif
+		session_audioqueue=SDL_GetQueuedAudioSize(session_audio)/sizeof(audio_buffer);
+		for (j=!session_audioqueue?AUDIO_N_FRAMES:session_audioqueue<=AUDIO_N_FRAMES?1:0;j>0;--j) // pump audio
 			SDL_QueueAudio(session_audio,audio_buffer,sizeof(audio_buffer));
-			if (j<=sizeof(audio_buffer)*AUDIO_N_FRAMEZ/2) // buffer not full enough?
-				i+=500/VIDEO_PLAYBACK; // force speedup by mangling the timer!
-		}
-		else
-			/*audio_disabled|=8*/; // buffer is full, no need to write the next frame!
 	}
 
 	if (session_wait) // resume activity after a pause

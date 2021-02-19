@@ -723,7 +723,7 @@ and Z80MEMPTR) score zero errors. Slightly more precise automatic frameskip.
 - 20200505 -- minor patch focused on the SDL2 toolkit: fixed a bug when
 confirming overwriting files, and improved file browsing across directories by
 pointing by default to the previous directory.
-- 20200509 -- minor patch improving the synchrony between Z80 and video on
+- 20200509 -- minor patch improving the synchronisation between Z80 and video on
 ZXSEC: the ULA48 test already worked before, but ULA128 had problems; now both
 work well. Added the option -W (use the full screen rather than a window) and
 improved the SDL2 handling of bigger windows.
@@ -828,3 +828,11 @@ analysis (conflict between Mikrogen and Hi-Tec).
 - 20210129 -- minor patch fixing a bug in the CPC PIO ("Super Cars" had stopped
 working in version 20210115) and improving CRTC1 compatibility (first part of
 "Ecstasy Demo").
+- 20210219 -- minor patch adding a new option, "Video: Blend scanlines" that
+handles Gigascreen effects (Spectrum demos "Mescaline Synesthesia" and
+"Tiratok", CPC demos "Batman Forever" and "Mad Leprechaun") and changing the
+sound synchronisation in SDL2. The AY chip noise generator is now a LFSR. SNA
+files saved from Spectrum Plus3 set bit 4 of byte 0x0C01E to state that the
+snapshot requires a Plus3 (Easter egg "Hello There I'm a +3"). The CPC debugger
+adds an information panel (key 'X') for Dandanator status, and its graphics
+viewer can show MODE 2 images.

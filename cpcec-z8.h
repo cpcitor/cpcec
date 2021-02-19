@@ -2539,9 +2539,9 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					#ifdef Z80_CPC_DANDANATOR
 					if (dandanator_config[1]&64) // RET trap is on? (used by game packs but not by "IANNA")
 					{
+						dandanator_config[1]&=~64; // disable RET trap
 						if (!(dandanator_config[5]&32)) // enabled?
-							mmu_dandanator();
-						dandanator_config[1]&=~64; // update MMU and disable RET trap
+							mmu_dandanator(); // update MMU
 					}
 					#endif
 					Z80_RET2;
@@ -3023,7 +3023,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							case 0x70: // LD (IX+$XX),B
 								Z80_WZ_XY_1X(5); Z80_POKE(z80_wz,z80_bc.b.h);
 								#ifdef Z80_CPC_DANDANATOR
-								if (dandanator_trap==z80_pc.w&&!(dandanator_config[1]&32)) // "FDFDFD70"
+								if (dandanator_trap==z80_pc.w/*&&!(dandanator_config[1]&32)*/) // "FDFDFD70"
 									if (!(dandanator_config[5]&32)) // enabled?
 									{
 										dandanator_config[2]=z80_bc.b.h;
@@ -3035,7 +3035,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							case 0x71: // LD (IX+$XX),C
 								Z80_WZ_XY_1X(5); Z80_POKE(z80_wz,z80_bc.b.l);
 								#ifdef Z80_CPC_DANDANATOR
-								if (dandanator_trap==z80_pc.w&&!(dandanator_config[1]&32)) // "FDFDFD71"
+								if (dandanator_trap==z80_pc.w/*&&!(dandanator_config[1]&32)*/) // "FDFDFD71"
 									if (!(dandanator_config[5]&32)) // enabled?
 									{
 										dandanator_config[3]=z80_bc.b.l;
@@ -3059,7 +3059,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							case 0x77: // LD (IX+$XX),A
 								Z80_WZ_XY_1X(5); Z80_POKE(z80_wz,z80_af.b.h);
 								#ifdef Z80_CPC_DANDANATOR
-								if (dandanator_trap==z80_pc.w&&!(dandanator_config[1]&32)) // "FDFDFD77"
+								if (dandanator_trap==z80_pc.w/*&&!(dandanator_config[1]&32)*/) // "FDFDFD77"
 									if (!(dandanator_config[5]&32)) // enabled?
 									{
 										if (z80_af.b.h&128)

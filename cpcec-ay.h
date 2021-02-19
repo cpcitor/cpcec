@@ -217,8 +217,8 @@ void psg_main(int t) // render audio output for `t` clock ticks
 		if (--psg_noise_count<=0) // update noise
 		{
 			psg_noise_count=psg_noise_limit;
-			psg_noise_state=(psg_noise_state^psg_noise_trash)&1;
-			psg_noise_trash=(psg_noise_trash>>1)+((psg_noise_trash^(psg_noise_trash>>3))<<16);
+			if (psg_noise_trash&1) psg_noise_trash+=0x48000; // LFSR x2
+			psg_noise_state=(psg_noise_state+(psg_noise_trash>>=1))&1;
 		}
 		audio_table[16]=audio_table[psg_hard_level^psg_hard_flag2^((psg_hard_style&2)?psg_hard_flag0:0)]; // update hard envelope
 		if (--psg_hard_count<=0) // update hard envelope
@@ -311,9 +311,11 @@ void playcity_main(AUDIO_UNIT *t,int l)
 			for (int x=dirty_l;x<=dirty_h;++x) // update all chips
 			{
 				if (--playcity_noise_count[x]<=0) // update noises
-					playcity_noise_count[x]=playcity_noise_limit[x],
-					playcity_noise_state[x]=(playcity_noise_state[x]^playcity_noise_trash[x])&1,
-					playcity_noise_trash[x]=(playcity_noise_trash[x]>>1)+((playcity_noise_trash[x]^(playcity_noise_trash[x]>>3))<<16);
+				{
+					playcity_noise_count[x]=playcity_noise_limit[x];
+					if (playcity_noise_trash[x]&1) playcity_noise_trash[x]+=0x48000; // LFSR x2
+					playcity_noise_state[x]=(playcity_noise_state[x]+(playcity_noise_trash[x]>>=1))&1;
+				}
 				playcity_hard_power[x]=playcity_hard_level[x]^playcity_hard_flag2[x]^((playcity_hard_style[x]&2)?playcity_hard_flag0[x]:0); // update hard envelopes
 				if (--playcity_hard_count[x]<=0)
 				{

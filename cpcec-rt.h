@@ -34,7 +34,7 @@ int fwrite1(void *t,int l,FILE *f) { int k=0,i; while (l&&(i=fwrite(t,1,l,f))) {
 
 // configuration functions ------------------------------------------ //
 
-int audio_mixmode=1; // 0 = pure mono, 1 = pure stereo, 2 = 50%, 3 = 25%
+int video_scanblend=0,audio_mixmode=1; // 0 = pure mono, 1 = pure stereo, 2 = 50%, 3 = 25%
 
 void session_detectpath(char *s) // detects session path using argv[0] as reference
 {
@@ -64,7 +64,7 @@ char *session_configread(char *t) // reads configuration file; s points to the p
 	//if (*s) // handle common parameters, if valid
 	{
 		if (!strcmp(session_parmtr,"polyphony")) return audio_mixmode=*s&3,NULL;
-		if (!strcmp(session_parmtr,"scanlines")) return video_scanline=*s&3,NULL;
+		if (!strcmp(session_parmtr,"scanlines")) return video_scanline=*s&3,video_scanblend=*s&4,NULL;
 		if (!strcmp(session_parmtr,"softaudio")) return audio_filter=*s&3,NULL;
 		if (!strcmp(session_parmtr,"softvideo")) return video_filter=*s&7,NULL;
 		if (!strcmp(session_parmtr,"zoomvideo")) return session_intzoom=*s&1,NULL;
@@ -74,7 +74,8 @@ char *session_configread(char *t) // reads configuration file; s points to the p
 }
 void session_configwrite(FILE *f) // save common parameters
 {
-	fprintf(f,"polyphony %i\nscanlines %i\nsoftaudio %i\nsoftvideo %i\nzoomvideo %i\nsafevideo %i\n",audio_mixmode,video_scanline,audio_filter,video_filter,session_intzoom,session_softblit);
+	fprintf(f,"polyphony %i\nscanlines %i\nsoftaudio %i\nsoftvideo %i\nzoomvideo %i\nsafevideo %i\n",
+		audio_mixmode,(video_scanline&3)+(video_scanblend?4:0),audio_filter,video_filter,session_intzoom,session_softblit);
 }
 
 // auxiliary functions ---------------------------------------------- //
@@ -82,13 +83,7 @@ void session_configwrite(FILE *f) // save common parameters
 char *strrstr(char *h,char *n) // = strrchr + strstr
 {
 	char *z=h;
-	while (*h)
-		++h; // go to end
-	{
-		char *y=n;
-		while (*y)
-			--h,++y; // skip last bytes that cannot match
-	}
+	h+=strlen(h)-strlen(n); // skip last bytes that cannot match
 	while (h>=z)
 	{
 		char *s=h,*t=n;
@@ -180,12 +175,29 @@ INLINE void video_newscanlines(int x,int y)
 	if (video_interlacez=(video_interlaces&&(video_scanline&2)))
 		++video_pos_y,video_target+=VIDEO_LENGTH_X;
 }
+VIDEO_UNIT video_blend[VIDEO_PIXELS_Y/2*VIDEO_PIXELS_X];
+void video_resetscanline(void)
+{
+	static int blend=-1;
+	if (blend!=video_scanblend) // do we need to reset the blending buffer?
+		if (blend=video_scanblend)
+			for (int y=0;y<VIDEO_PIXELS_Y/2;++y)
+				memcpy(&video_blend[y*VIDEO_PIXELS_X],&video_frame[(VIDEO_OFFSET_Y+y*2)*VIDEO_LENGTH_X+VIDEO_OFFSET_X],sizeof(VIDEO_UNIT)*VIDEO_PIXELS_X);		
+}
 // do not manually unroll the following operations, GCC is smart enough to do a better job on its own: 1820% > 1780%!
 INLINE void video_drawscanline(void) // call between scanlines; memory caching makes this more convenient than gathering all operations in video_endscanlines()
 {
 	if (video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y)
 	{
-		VIDEO_UNIT va,vt,vz,*vi=video_target-video_pos_x+VIDEO_OFFSET_X,*vl=vi+VIDEO_PIXELS_X,*vo=video_target-video_pos_x+VIDEO_OFFSET_X+VIDEO_LENGTH_X,*vp;
+		VIDEO_UNIT va,vt,vz,*vi=video_target-video_pos_x+VIDEO_OFFSET_X,*vl=vi+VIDEO_PIXELS_X,
+			*vo=video_target-video_pos_x+VIDEO_OFFSET_X+VIDEO_LENGTH_X,*vp;
+		if (video_scanblend) // blend scanlines from previous and current frame!
+		{		
+			vp=&video_blend[(video_pos_y-VIDEO_OFFSET_Y)/2*VIDEO_PIXELS_X];
+			for (int x=0;x<VIDEO_PIXELS_X;++x)
+				va=*vp,vz=*vp++=*vi,*vi++=VIDEO_FILTER_AVG(va,vz);
+			vi-=VIDEO_PIXELS_X;
+		}
 		switch ((video_filter&7)+(video_scanlinez?0:8))
 		{
 			case 8+0: // nothing (full)
@@ -204,49 +216,30 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 				break;
 			case 8+VIDEO_FILTER_X_MASK:
 				while (vi<vl)
-					vt=*vi,*vo++=*vi++=VIDEO_FILTER_X1(vt),
-					*vo++=*vi++;
+					vt=*vi,*vo++=*vi++=VIDEO_FILTER_X1(vt),*vo++=*vi++;
 				break;
 			case 0+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK:
-				if (!video_interlacez)
-				{
-					if (video_pos_y&2) vi+=2;
-					while (vi<vl)
-						vt=*vi,*vi=VIDEO_FILTER_X1(vt),
-						vi+=4;
-					break;
-				}
-				// no `break`!
+				if (video_pos_y&2)
+					vi+=2;
+				while (vi<vl)
+					vt=*vi,*vi=VIDEO_FILTER_X1(vt),vi+=4;
+				break;
 			case 0+VIDEO_FILTER_X_MASK:
 				while (vi<vl)
-					vt=*vi,
-					*vi=VIDEO_FILTER_X1(vt),
-					vi+=2;
+					vt=*vi,*vi=VIDEO_FILTER_X1(vt),vi+=2;
 				break;
 			case 8+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK:
 				if (video_pos_y&2)
-					while (vi<vl)
-					{
-						vt=*vi++,*vo++=VIDEO_FILTER_X1(vt);
-						*vo++=*vi++;
-						vt=*vi,*vi++=*vo++=VIDEO_FILTER_X1(vt);
-						*vo++=*vi++;
-					}
-				else
-					while (vi<vl)
-					{
-						vt=*vi,*vi++=*vo++=VIDEO_FILTER_X1(vt);
-						*vo++=*vi++;
-						vt=*vi++,*vo++=VIDEO_FILTER_X1(vt);
-						*vo++=*vi++;
-					}
+					*vo++=*vi++,*vo++=*vi++;
+				while (vi<vl)
+					vt=*vi,*vi++=*vo++=VIDEO_FILTER_X1(vt),*vo++=*vi++,*vo++=*vi++,*vo++=*vi++;
 				break;
 			case 8+VIDEO_FILTER_SMUDGE:
 				vz=*(vp=(vi+2));
 				while (vp<vl)
 					va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vo++=*vi++=vt;
 				VIDEO_FILTER_STEP(vt,vz,vz),*vo++=*vi++=vt;
-				/*VIDEO_FILTER_STEP(vt,vz,vz),*/*vo++=*vi++=vt;
+				*vo++=*vi++=vt;
 				break;
 			case 0+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_SMUDGE:
 				if (video_interlacez)
@@ -255,7 +248,7 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 					while (vp<vl)
 						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=VIDEO_FILTER_X1(vt);
 					VIDEO_FILTER_STEP(vt,vz,vz),*vi++=VIDEO_FILTER_X1(vt);
-					/*VIDEO_FILTER_STEP(vt,vz,vz),*/*vi++=VIDEO_FILTER_X1(vt);
+					*vi++=VIDEO_FILTER_X1(vt);
 					break;
 				}
 				// no `break` here!
@@ -264,7 +257,7 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 				while (vp<vl)
 					va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=vt;
 				VIDEO_FILTER_STEP(vt,vz,vz),*vi++=vt;
-				/*VIDEO_FILTER_STEP(vt,vz,vz),*/*vi++=vt;
+				*vi++=vt;
 				break;
 			case 8+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_SMUDGE:
 				vz=*(vp=(vi+2));
@@ -272,7 +265,7 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 				while (vp<vl)
 					va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vo++=VIDEO_FILTER_X1(vt),*vi++=vt;
 				VIDEO_FILTER_STEP(vt,vz,vz),*vo++=VIDEO_FILTER_X1(vt),*vi++=vt;
-				/*VIDEO_FILTER_STEP(vt,vz,vz),*/*vo++=VIDEO_FILTER_X1(vt),*vi++=vt;
+				*vo++=VIDEO_FILTER_X1(vt),*vi++=vt;
 				break;
 			case 8+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
 				vz=*(vp=(vi+2));
@@ -280,55 +273,41 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 					va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vo++=*vi++=VIDEO_FILTER_X1(vt),
 					va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vo++=*vi++=vt;
 				VIDEO_FILTER_STEP(vt,vz,vz),*vo++=*vi++=VIDEO_FILTER_X1(vt);
-				/*VIDEO_FILTER_STEP(vt,vz,vz),*/*vo++=*vi++=vt;
+				*vo++=*vi++=vt;
 				break;
 			case 0+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
-				if (!video_interlacez)
-				{
-					vz=*(vp=(vi+2));
-					if (video_pos_y&2)
-						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=vt,
-						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=vt;
-					while (vp<vl)
-						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=VIDEO_FILTER_X1(vt),
-						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=vt,
-						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=vt,
-						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=vt;
-					VIDEO_FILTER_STEP(vt,vz,vz),*vi++=VIDEO_FILTER_X1(vt);
-					/*VIDEO_FILTER_STEP(vt,vz,vz),*/*vi++=vt;
-					break;
-				}
-				// no `break` here!
+				vz=*(vp=(vi+2));
+				if (video_pos_y&2)
+					va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=vt,
+					va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=vt;
+				while (vp<vl)
+					va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=VIDEO_FILTER_X1(vt),
+					va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=vt,
+					va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=vt,
+					va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=vt;
+				VIDEO_FILTER_STEP(vt,vz,vz),*vi++=VIDEO_FILTER_X1(vt);
+				*vi++=vt;
+				break;
 			case 0+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
 				vz=*(vp=(vi+2));
 				while (vp<vl)
 					va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=VIDEO_FILTER_X1(vt),
 					va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=vt;
 				VIDEO_FILTER_STEP(vt,vz,vz),*vi++=VIDEO_FILTER_X1(vt);
-				/*VIDEO_FILTER_STEP(vt,vz,vz),*/*vi++=vt;
+				*vi++=vt;
 				break;
 			case 8+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
 				vz=*(vp=(vi+2));
 				if (video_pos_y&2)
-				{
-					while (vp<vl)
-						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=vt,*vo++=VIDEO_FILTER_X1(vt),
-						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=*vo++=vt,
-						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=*vo++=VIDEO_FILTER_X1(vt),
-						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=*vo++=vt;
-					VIDEO_FILTER_STEP(vt,vz,vz),*vo++=vt,*vi++=VIDEO_FILTER_X1(vt);
-					/*VIDEO_FILTER_STEP(vt,vz,vz),*/*vi++=vt,*vo++=VIDEO_FILTER_X1(vt);
-				}
-				else
-				{
-					while (vp<vl)
-						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=*vo++=VIDEO_FILTER_X1(vt),
-						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=*vo++=vt,
-						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=vt,*vo++=VIDEO_FILTER_X1(vt),
-						va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=*vo++=vt;
-					VIDEO_FILTER_STEP(vt,vz,vz),*vo++=vt,*vi++=VIDEO_FILTER_X1(vt);
-					/*VIDEO_FILTER_STEP(vt,vz,vz),*/*vi++=vt,*vo++=VIDEO_FILTER_X1(vt);
-				}
+					va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=*vo++=vt,
+					va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=*vo++=vt;
+				while (vp<vl)
+					va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=*vo++=VIDEO_FILTER_X1(vt),
+					va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=*vo++=vt,
+					va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=*vo++=vt,
+					va=*vp++,VIDEO_FILTER_STEP(vt,vz,va),*vi++=*vo++=vt;
+				VIDEO_FILTER_STEP(vt,vz,vz),*vo++=vt,*vi++=VIDEO_FILTER_X1(vt);
+				*vi++=vt,*vo++=VIDEO_FILTER_X1(vt);
 				break;
 		}
 	}
@@ -1019,7 +998,7 @@ void debug_dumpxy(int x,int y,char *s) // dump text block
 	while (c);
 }
 
-void session_backup(VIDEO_UNIT *t) // make a clipped copy of the current screen; used by the debugger and the SDL2 UI
+void session_backupvideo(VIDEO_UNIT *t) // make a clipped copy of the current screen; used by the debugger and the SDL2 UI
 {
 	for (int y=0;y<VIDEO_PIXELS_Y;++y)
 		memcpy(&t[y*VIDEO_PIXELS_X],&video_frame[(VIDEO_OFFSET_Y+y)*VIDEO_LENGTH_X+VIDEO_OFFSET_X],sizeof(VIDEO_UNIT)*VIDEO_PIXELS_X);
@@ -1029,7 +1008,7 @@ char onscreen_debug_mask=0,onscreen_debug_mask_=-1;
 unsigned char onscreen_debug_chrs[sizeof(onscreen_chrs)];
 void onscreen_clear(void) // get a copy of the visible screen
 {
-	session_backup(debug_frame);
+	session_backupvideo(debug_frame);
 	if (video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-1)
 		for (int x=0,z=((video_pos_y&-2)-VIDEO_OFFSET_Y)*VIDEO_PIXELS_X;x<VIDEO_PIXELS_X;++x,++z)
 			debug_frame[z]=debug_frame[z+VIDEO_PIXELS_X]^=x&16?VIDEO1(0x00FFFF):VIDEO1(0xFF0000);

@@ -7,7 +7,7 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "XRF"
-#define MY_VERSION "20210108"//"1915"
+#define MY_VERSION "20210207"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -67,7 +67,7 @@ int video_x,video_y,audio_z,clock_z,flags_z,count_z; // dimensions and features 
 FILE *xrf_file=NULL; int xrf_length,xrf_cursor,xrf_count,xrf_dummy;
 BYTE *xrf_bitmap=NULL,*xrf_shadow=NULL,*xrf_chunk=NULL; // buffers
 #define XRF_CHUNKSIZE ((MAXVIDEOBYTES+MAXAUDIOBYTES)*9/8+32)
-#define xrf_decode0() !(a>>=1)&&(b=*w++,a=128)
+#define xrf_decode0() (!(a>>=1)&&(b=*w++,a=128))
 #define xrf_decode1() (xrf_decode0(),(b&a)?*w++:0)
 int xrf_decode(BYTE *t,BYTE *s,int *l,int x) // equally hacky decoder based on an 8-bit RLE and a pseudo Huffman filter!
 {

@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20210129"//"2555"
+#define MY_VERSION "20210219"//"1555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -603,13 +603,12 @@ void z80_sync(int t) // the Z80 asks the hardware/video/audio to catch up
 
 void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 {
-	if ((p&1)==0) // 0x??FE, ULA 48K
+	if (!(p&1)) // 0x??FE, ULA 48K
 	{
 		ula_v1_send(b);
 		tape_output=(b>>3)&1; // tape record signal
 	}
-	//else if ((p&15)==13) // 0x??FD, MULTIPLE DEVICES
-	if ((p&2)==0)
+	if (!(p&2)) // 0x??FD, MULTIPLE DEVICES
 	{
 		if (type_id&&!(ula_v2&32)) // 48K mode forbids further changes!
 		{
@@ -633,8 +632,8 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 						disc_data_send(b);
 			}
 		}
-		if (type_id||!psg_disabled) // !48K?
-			if (p&0x8000)
+		if (p&0x8000) // PSG 128K
+			if (type_id||!psg_disabled) // optional on 48K
 			{
 				if (p&0x4000) // 0xFFFD: SELECT PSG REGISTER
 					psg_table_select(b);
@@ -680,8 +679,9 @@ const BYTE z80_tape_fastfeeder[][24]=
 	/*  2 */ {   +0,   2,0xD0,0x3E,  +1,   1,0x3E,  +1,   4,0xB8,0xCB,0x15,0x06,  +1,   1,0xD2 }, // GREMLIN, SPEEDLOCK
 	/*  3 */ {   +0,   3,0x30,0x11,0x3E,  +1,   4,0xB8,0xCB,0x15,0x06,  +1,   1,0xD2 }, // BLEEPLOAD
 	/*  4 */ {   +0,   5,0xCA,0x3E,0x81,0x7B,0xFE,  +1,   5,0x3F,0xCB,0x15,0x30,0xDB }, // ABADIA
-	/*  5 */ {   +0,   2,0xD0,0x3E,  +1,   4,0xB8,0xCB,0x15,0x06,  +1,   2,0x30,0xF3 }, // TIMING TESTS 48K
+	/*  5 */ {   +0,   2,0xD0,0x3E,  +1,   4,0xB8,0xCB,0x15,0x06,  +1,   2,0x30,0xF3 }, // ABU SIMBEL PROFANATION, TIMING TESTS 48K
 	/*  6 */ {   +0,   1,0x30,  +1,   5,0x90,0xCB,0x15,0x30,0xF1 }, // TINYTAPE/MINILOAD
+	/*  7 */ {   +0,   1,0x30,  +3,   4,0xB8,0xCB,0x15,0x06,  +1,   2,0x30,0xF2 }, // MULTILOAD-GRANDSLAM
 };
 int z80_tape_fastfeed(WORD p)
 {
@@ -764,7 +764,7 @@ INLINE void z80_tape_fastload(void)
 		{
 			case  0: // ZX SPECTRUM FIRMWARE : (4+5+7+11+4+5+4+7+12+2)/4=15
 			case 10: // "HYDROFOOL" : (4+5+7+11+4+4+5+7+12+2)/4=15
-				if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_fastfeed(z80_tape_spystack())==0)
+				if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&((i=z80_tape_fastfeed(z80_tape_spystack()))==0||i==5))
 				{
 					if ((z80_af2.b.l&0x41)==0x41&&((j=z80_tape_fastdump(z80_tape_spystack()))==0||j==1))
 						while (tape_bits>15&&z80_de.b.l>1)
@@ -807,7 +807,10 @@ INLINE void z80_tape_fastload(void)
 					fasttape_add8(z80_bc.b.l>>6,50,&z80_bc.b.h,1);
 				break;
 			case  5: // MULTILOAD ("FINAL MATRIX") : (4+5+7+11+4+7+5+4+12+2)/4=15
-				fasttape_add8(z80_bc.b.l>>6,59,&z80_bc.b.h,1);
+				if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_fastfeed(z80_tape_spystack())==7)
+					j=fasttape_feed(),tape_feedskip=z80_hl.b.l=128+(j>>1),z80_bc.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc.b.l>>6,59); // MULTILOAD-GRANDSLAM ("SUPER CARS")
+				else
+					fasttape_add8(z80_bc.b.l>>6,59,&z80_bc.b.h,1);
 				break;
 			case  6: // "ABADIA DEL CRIMEN" : (4+5+11+7+4+10+2)/4=10
 				if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_fastfeed(z80_tape_spystack())==4)
@@ -871,17 +874,16 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 			b^=ula_v1_cache; // Issue 2/3 difference, see above
 	}
 	else if ((p&15)==13) // 0x??FD, MULTIPLE DEVICES
-		switch (p>>13)
+	{
+		if ((p&0xE000)==0x2000) // 0x2FFD: FDC STATUS ; 0x3FFD: FDC DATA I/O
 		{
-			case 1: // 0x2FFD: FDC STATUS ; 0x3FFD: FDC DATA I/O
-				if (type_id==3&&!disc_disabled) // PLUS3?
-					b=(p&0x1000)?disc_data_recv():disc_data_info();
-				break;
-			case 7: // 0xFFFD: READ PSG REGISTER
-				if (type_id||!psg_disabled) // !48K?
-					b=psg_table_recv();
-				break;
+			if (type_id==3&&!disc_disabled) // PLUS3?
+				b=(p&0x1000)?disc_data_recv():disc_data_info();
 		}
+		else if ((p&0xC000)==0xC000) // 0xFFFD: READ PSG REGISTER
+			if (type_id||!psg_disabled) // !48K?
+				b=psg_table_recv();
+	}
 	else if ((p&255)==255&&type_id<3) // NON-PLUS3: FLOATING BUS
 		b=ula_temp; // not completely equivalent to z80_bus()
 	//else logprintf("%04X! ",p);
@@ -927,14 +929,14 @@ void z80_debug_hard(int q,int x,int y)
 #define ONSCREEN_GRAFX_RATIO 8
 void onscreen_grafx_step(VIDEO_UNIT *t,BYTE b)
 {
-	*  t=b&128?VIDEO1(0):VIDEO1(0xFFFFFF);
-	*++t=b& 64?VIDEO1(0):VIDEO1(0xFFFFFF);
-	*++t=b& 32?VIDEO1(0):VIDEO1(0xFFFFFF);
-	*++t=b& 16?VIDEO1(0):VIDEO1(0xFFFFFF);
-	*++t=b&  8?VIDEO1(0):VIDEO1(0xFFFFFF);
-	*++t=b&  4?VIDEO1(0):VIDEO1(0xFFFFFF);
-	*++t=b&  2?VIDEO1(0):VIDEO1(0xFFFFFF);
-	*++t=b&  1?VIDEO1(0):VIDEO1(0xFFFFFF);
+	t[0]=b&128?VIDEO1(0):VIDEO1(0xFFFFFF); // avoid "*t++=*t++=..." bug in GCC 4.6
+	t[1]=b& 64?VIDEO1(0):VIDEO1(0xFFFFFF);
+	t[2]=b& 32?VIDEO1(0):VIDEO1(0xFFFFFF);
+	t[3]=b& 16?VIDEO1(0):VIDEO1(0xFFFFFF);
+	t[4]=b&  8?VIDEO1(0):VIDEO1(0xFFFFFF);
+	t[5]=b&  4?VIDEO1(0):VIDEO1(0xFFFFFF);
+	t[6]=b&  2?VIDEO1(0):VIDEO1(0xFFFFFF);
+	t[7]=b&  1?VIDEO1(0):VIDEO1(0xFFFFFF);
 }
 WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 {
@@ -1152,7 +1154,7 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 	{
 		SNAP_SAVE_Z80W(0,z80_pc);
 		header[2]=ula_v2;
-		header[3]=type_id==3?ula_v3:4; // using this byte for Plus3 config is both questionable and unreliable; most emus write 0 here :-(
+		header[3]=type_id==3?(ula_v3&15)+16:4; // using this byte for Plus3 config (here, just the 4 bottom bits plus a dummy 1) is both questionable and unreliable; most emus write 0 here :-(
 		fwrite1(header,4,f);
 		if (!(ula_v2&32)) // 128k?
 			for (i=0;i<8;++i)
@@ -1249,7 +1251,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 				psg_table_select(header[38]);
 				MEMLOAD(psg_table,&header[39]);
 				if (i>54&&header[34]>6)
-					type_id=3,ula_v3_send(header[86]); // PLUS3 configuration
+					type_id=3,ula_v3_send(header[86]&15); // PLUS3 configuration
 				else if (type_id==3)
 					type_id=2; // reduce PLUS3 to PLUS2
 			}
@@ -1330,12 +1332,11 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 		{
 			SNAP_LOAD_Z80W(0,z80_pc);
 			ula_v2_send(header[2]); // set 128k mode
-			if (!(header[2]&32)&&header[3]&&header[3]!=4) // possible Plus3 snapshot?
-			{
+			if ((!(header[2]&32)&&(header[3]&16))) // Plus3 snapshot?
 				if (type_id<3)//&&snap_extended
 					type_id=3,bios_reload();
-				ula_v3_send(header[3]); // this is unreliable! most emulators don't handle Plus3!
-			}
+			if (type_id==3)
+				ula_v3_send(header[3]&15); // this is unreliable! most emulators don't handle Plus3!
 			MEMNCPY(&mem_ram[(ula_v2&7)<<14],&mem_ram[0x00000],1<<14); // move bank 0 to active bank
 			for (i=0;i<8;++i)
 				if (i!=5&&i!=2&&i!=(ula_v2&7))
@@ -1461,6 +1462,7 @@ char session_menudata[]=
 	"0x8511 Memory contention\n"
 	"0x8512 ULA video noise\n"
 	"0x8513 Issue-2 ULA line\n"
+	"0x8514 AY-Melodik chip\n"
 	"0x851F Strict SNA files\n"
 	"Video\n"
 	"0x8A00 Full screen\tAlt+Return\n"
@@ -1486,6 +1488,7 @@ char session_menudata[]=
 	"0x0B02 Half scanlines\n"
 	"0x0B03 Simple interlace\n"
 	"0x0B04 Double interlace\n"
+	"0x0B08 Blend scanlines\n"
 	"=\n"
 	"0x9100 Raise frameskip\tNum.+\n"
 	"0x9200 Lower frameskip\tNum.-\n"
@@ -1548,6 +1551,7 @@ void session_menuinfo(void)
 	session_menucheck(0x8511,!(ula_clash_disabled));
 	session_menucheck(0x8512,!(ula_snow_disabled));
 	session_menucheck(0x8513,ula_v1_issue!=ULA_V1_ISSUE3);
+	session_menucheck(0x8514,!psg_disabled);
 	session_menucheck(0x851F,!(snap_extended));
 	session_menucheck(0x8901,onscreen_flag);
 	session_menucheck(0x8A00,session_fullscreen);
@@ -1555,6 +1559,7 @@ void session_menuinfo(void)
 	session_menucheck(0x8A02,!session_softblit);
 	session_menuradio(0x8B01+video_type,0x8B01,0x8B05);
 	session_menuradio(0x0B01+video_scanline,0x0B01,0x0B04);
+	session_menucheck(0x0B08,video_scanblend);
 	session_menucheck(0x8902,video_filter&VIDEO_FILTER_Y_MASK);
 	session_menucheck(0x8903,video_filter&VIDEO_FILTER_X_MASK);
 	session_menucheck(0x8904,video_filter&VIDEO_FILTER_SMUDGE);
@@ -1564,6 +1569,7 @@ void session_menuinfo(void)
 	for (int i=0;i<3;++i)
 		psg_stereo[i][0]=256+psg_stereos[audio_mixmode][i],psg_stereo[i][1]=256-psg_stereos[audio_mixmode][i];
 	#endif
+	video_resetscanline(); // video scanline cfg
 	z80_multi=1+z80_turbo; // setup overclocking
 	sprintf(session_info,"%i:%s ULAv%c %0.1fMHz"//" | disc %s | tape %s | %s"
 		,(!type_id||(ula_v2&32))?48:128,type_id?(type_id!=1?(type_id!=2?(!disc_disabled?"Plus3":"Plus2A"):"Plus2"):"128K"):"48K",ula_clash_disabled?'0':type_id?type_id>2?'3':'2':'1',3.5*z80_multi);
@@ -1717,6 +1723,9 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 		case 0x8513:
 			ula_v1_issue^=ULA_V1_ISSUE2^ULA_V1_ISSUE3;
 			break;
+		case 0x8514:
+			psg_disabled=!psg_disabled;
+			break;
 		case 0x851F:
 			snap_extended=!snap_extended;
 			break;
@@ -1838,11 +1847,11 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 		case 0x8A02: // VIDEO ACCELERATION / SOFTWARE RENDER (*needs restart)
 			session_softblit=!session_softblit;
 			break;
-		case 0x8B01:
-		case 0x8B02:
-		case 0x8B03:
-		case 0x8B04:
-		case 0x8B05:
+		case 0x8B01: // MONOCHROME
+		case 0x8B02: // DARK PALETTE
+		case 0x8B03: // NORMAL PALETTE
+		case 0x8B04: // BRIGHT PALETTE
+		case 0x8B05: // GREEN SCREEN
 			video_type=(k&15)-1;
 			video_clut_update();
 			break;
@@ -1850,17 +1859,20 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 			video_type=(video_type+(session_shift?length(video_table)-1:1))%length(video_table);
 			video_clut_update();
 			break;
-		case 0x0B01:
-		case 0x0B02:
-		case 0x0B03:
-		case 0x0B04:
+		case 0x0B01: // ALL SCANLINES
+		case 0x0B02: // HALF SCANLINES
+		case 0x0B03: // SIMPLE INTERLACE
+		case 0x0B04: // DOUBLE INTERLACE
 			video_scanline=(video_scanline&~3)+(k&15)-1;
+			break;
+		case 0x0B08: // BLEND SCANLINES
+			video_scanblend=!video_scanblend;
 			break;
 		case 0x0B00: // ^F11: SCANLINES
 			if (session_shift)
 				video_filter=(video_filter+1)&7;
-			else
-				video_scanline=(video_scanline+1)&3;
+			else if (!(video_scanline=(video_scanline+1)&3))
+				video_scanblend=!video_scanblend;
 			break;
 		case 0x8C01:
 			if (!session_recording)
@@ -1972,8 +1984,10 @@ int main(int argc,char *argv[])
 				{
 					case 'c':
 						video_scanline=(BYTE)(argv[i][j++]-'0');
-						if (video_scanline<0||video_scanline>3)
+						if (video_scanline<0||video_scanline>7)
 							i=argc; // help!
+						else
+							video_scanblend=video_scanline&4,video_scanline&=3;
 						break;
 					case 'C':
 						video_type=(BYTE)(argv[i][j++]-'0');
@@ -1991,8 +2005,6 @@ int main(int argc,char *argv[])
 					case 'I':
 						ula_v1_issue=ULA_V1_ISSUE2;
 						break;
-						;
-						;
 					case 'j':
 						session_key2joy=1;
 						break;
@@ -2056,7 +2068,7 @@ int main(int argc,char *argv[])
 		return
 			printfusage("usage: " MY_CAPTION
 			" [option..] [file..]\n"
-			"\t-cN\tscanline type (0..3)\n"
+			"\t-cN\tscanline type (0..7)\n"
 			"\t-CN\tcolour palette (0..4)\n"
 			"\t-d\tdebug\n"
 			"\t-g0\tset Kempston joystick\n"
@@ -2067,7 +2079,7 @@ int main(int argc,char *argv[])
 			"\t-I\temulate Issue-2 ULA line\n"
 			"\t-j\tenable joystick keys\n"
 			"\t-J\tdisable joystick\n"
-			"\t-K\tdisable AY chip in 48K\n"
+			"\t-K\tdisable AY-Melodik chip\n"
 			"\t-m0\tload 48K firmware\n"
 			"\t-m1\tload 128K firmware\n"
 			"\t-m2\tload +2 firmware\n"
@@ -2138,8 +2150,13 @@ int main(int argc,char *argv[])
 					onscreen_bool(-2,-5,1,3,kbd_bit_tst(kbd_joy[3]));
 					onscreen_bool(-4,-4,1,1,kbd_bit_tst(kbd_joy[4]));
 				}
-				;
-				;
+				#ifdef SDL2
+				if (session_audio) // SDL2 audio queue
+				{
+					if ((j=session_audioqueue)<0) j=0; else if (j>AUDIO_N_FRAMES) j=AUDIO_N_FRAMES;
+					onscreen_bool(+11,-2,j,1,1); onscreen_bool(j+11,-2,AUDIO_N_FRAMES-j,1,0);
+				}
+				#endif
 			}
 			// update session and continue
 			if (autorun_mode)
@@ -2157,8 +2174,6 @@ int main(int argc,char *argv[])
 			if (tape_closed)
 				tape_closed=0,session_dirtymenu=1; // tag tape as closed
 			tape_fastskip=tape_feedskip=audio_pos_z=0;
-			;
-			;
 			if (tape&&tape_skipload&&tape_enabled)
 				session_fast|=6,video_framelimit|=(MAIN_FRAMESKIP_MASK+1),video_interlaced|=2,audio_disabled|=2; // abuse binary logic to reduce activity
 			else
