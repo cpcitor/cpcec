@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20210219"//"1555"
+#define MY_VERSION "20210418"//"1355"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -115,7 +115,7 @@ unsigned short session_icon32xx16[32*32] = {
 // +-----------------------------------------------------------------------------------------+ +--------------+
 
 #define KBD_JOY_UNIQUE 6 // exclude repeated buttons
-const unsigned char kbd_joy[]= // ATARI norm: up, down, left, right, fire1-fire4
+unsigned char kbd_joy[]= // ATARI norm: up, down, left, right, fire1-fire4
 	{ 0x48,0x49,0x4A,0x4B,0x4C,0x4D,0x4C,0x4D }; // constant, joystick bits are hard-wired; last two fires are repeated
 
 #include "cpcec-os.h" // OS-specific code!
@@ -338,7 +338,8 @@ BYTE plus_gate_enabled; // locked/unlocked state: UNLOCKED if byte after SEQUENC
 BYTE plus_gate_mcr; // RMR2 register, that modifies the behavior of the original MRER (gate_mcr)
 WORD plus_dma_regs[3][4]; // loop counter,loop address,pause counter,pause scaler
 int plus_dma_index,plus_dma_delay,plus_dma_cache[3]; // DMA channel counters and timings
-BYTE plus_8k_bug; // ASIC IRQ bug flag //BYTE plus_dirtysprite; // tag sprite as "dirty"
+//BYTE plus_dirtysprite; // tag sprite as "dirty"
+BYTE plus_8k_bug; // ASIC IRQ bug flag
 
 // the following block is a hacky way to implement the entire Plus configuration RAM page:
 BYTE plus_bank[1<<14];
@@ -496,7 +497,7 @@ INLINE void crtc_table_send(BYTE i)
 			case 4:
 				if (!(crtc_type&5)&&crtc_status&CRTC_STATUS_R9_OK)//&&crtc_status&CRTC_STATUS_R4_OK) // including the third condition makes Pinball Dreams for CRTC 1 work fine on CRTC 0 when it shouldn't!
 				// PDTMD5 suggests "&1" rather than "&5" but disagrees with PINBALL DREAMS (?)
-					;//printf("R4:%02X/%02X,%02X/%02X  ",crtc_count_r4,crtc_table[4],crtc_count_r9,crtc_table[9]);
+					;//logprintf("R4:%02X/%02X,%02X/%02X  ",crtc_count_r4,crtc_table[4],crtc_count_r9,crtc_table[9]);
 				else if (crtc_count_r4==i)
 					crtc_status|=CRTC_STATUS_R4_OK;
 				else if (crtc_type!=3||crtc_count_r4<i)
@@ -512,7 +513,7 @@ INLINE void crtc_table_send(BYTE i)
 				break;
 			case 9:
 				if (!(crtc_type&5)&&(crtc_status&CRTC_STATUS_R4_OK)&&(crtc_status&CRTC_STATUS_R9_OK)) // including the third condition harms CROCO CHANEL 1 part 4.
-					;//printf("R9:%02X/%02X,%02X/%02X  ",crtc_count_r4,crtc_table[4],crtc_count_r9,crtc_table[9]);
+					;//logprintf("R9:%02X/%02X,%02X/%02X  ",crtc_count_r4,crtc_table[4],crtc_count_r9,crtc_table[9]);
 				else if (crtc_count_r9==i)
 					crtc_status|=CRTC_STATUS_R9_OK;
 				else if (crtc_count_r9>i&&((crtc_type==3&&(crtc_count_r9&8)) // PLUS ASIC doesn't always accept overflows! (cfr. HSP_STRESS.CPR)
@@ -616,8 +617,7 @@ void mmu_update(void) // update the MMU tables with all the new offsets
 	#ifdef Z80_CPC_DANDANATOR
 	if (mem_dandanator) // emulate the Dandanator (and more exactly its CPC-only memory map) only when a card is loaded
 	{
-		//if (dandanator_config[5]&0x73)
-			//logprintf("DAN! %02X%02X,%02X,%02X ",dandanator_config[4],dandanator_config[5],dandanator_config[6],dandanator_config[7]);
+		//if (dandanator_config[5]&0x73) logprintf("DAN! %02X%02X,%02X,%02X ",dandanator_config[4],dandanator_config[5],dandanator_config[6],dandanator_config[7]);
 		if (!(dandanator_config[5]&32)) // enabled?
 		{
 			if (!(dandanator_config[6]&32))
@@ -642,19 +642,17 @@ void mmu_update(void) // update the MMU tables with all the new offsets
 					mmu_rom[3]=&mem_dandanator[((dandanator_config[7]&31)<<14)-0xC000];
 					//if ((dandanator_config[4]&2)&&(dandanator_config[6]&30)&&dandanator_canwrite) mmu_ram[3]=mmu_rom[3],dandanator_dirty=1;
 				}
-				else //if (!(dandanator_config[5]&2)) // must NOT check this, otherwise CUAUHTEMOC 64K stops working
+				else //if (!(dandanator_config[5]&2)) // must NOT check this, otherwise "TESORO PERDIDO DE CUAUHTEMOC 64K" stops working
 				{
 					mmu_rom[1]=&mem_dandanator[((dandanator_config[7]&31)<<14)-0x4000];
 					//if ((dandanator_config[4]&2)&&(dandanator_config[6]&30)&&dandanator_canwrite) mmu_ram[1]=mmu_rom[1],dandanator_dirty=1;
 				}
 			}
 		}
-		else if (dandanator_config[5]&16) // rombox?
+		else if (dandanator_config[5]&16) // "poor-man" rombox? "CPCSOCCER" needs it
 		{
-			if (!(gate_mcr&4)) // "poor-man rombox" (LO)
-				mmu_rom[0]=&mem_dandanator[0x70000+((dandanator_config[4]&24)<<11)-0x0000];
-			if (!(gate_mcr&8)) // "poor-man rombox" (HI)
-				mmu_rom[3]=&mem_dandanator[((dandanator_config[7]&31)<<14)-0xC000];
+			if (!(gate_mcr&4)) mmu_rom[0]=&mem_dandanator[0x70000+((dandanator_config[4]&24)<<11)-0x0000];
+			if (!(gate_mcr&8)) mmu_rom[3]=&mem_dandanator[((dandanator_config[7]&31)<<14)-0xC000];
 		}
 	}
 	#endif
@@ -728,19 +726,19 @@ void pio_reset(void)
 // behind the PIO: PSG AY-3-8910 ------------------------------------ //
 
 #define PSG_TICK_STEP 8 // 1 MHz /2 /8 = 62500 Hz
-#define PSG_KHZ_CLOCK 1000
-#define PSG_MAIN_EXTRABITS 0
+#define PSG_KHZ_CLOCK 1000 // =16x
+#define PSG_MAIN_EXTRABITS 0 // not even the mixer-banging beeper of "TERMINUS" needs >0
 #if AUDIO_CHANNELS > 1
 int psg_stereo[3][2]; const int psg_stereos[][3]={{0,0,0},{+256,0,-256},{+128,0,-128},{+64,0,-64}}; // A left, B middle, C right
 #endif
-#define PSG_PLAYCITY 1
-int playcity_disabled=1,playcity_dirty,playcity_ctc_state[4]={0,0,0,0},playcity_ctc_flags[4]={0,0,0,0},playcity_ctc_count[4]={0,0,0,0},playcity_ctc_limit[4]={0,0,0,0};
+#define PSG_PLAYCITY 2000 // base clock in kHz
+int playcity_disabled=0,playcity_dirty,playcity_ctc_state[4]={0,0,0,0},playcity_ctc_flags[4]={0,0,0,0},playcity_ctc_count[4]={0,0,0,0},playcity_ctc_limit[4]={0,0,0,0};
 
 #include "cpcec-ay.h"
 
 // behind the PIO: TAPE --------------------------------------------- //
 
-#define TAPE_MAIN_TZX_STEP (35<<1) // amount of T units per packet // highest value before "MARMALADE" breaks down is 197, but remainder isn't 0
+#define TAPE_MAIN_TZX_STEP (35<<0) // amount of T units per packet // highest value before "MARMALADE" breaks down is 197, but remainder isn't 0
 #define tape_enabled (pio_port_c&16)
 int tape_delay=0; // tape motor delay
 #include "cpcec-k7.h"
@@ -1262,10 +1260,12 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 	if (plus_sprite_target) if (video_pos_x>plus_sprite_latest) video_main_sprites();
 }
 
-int digiblaster=0; //
-
+//int digiblaster=0;
 void audio_main(int t) // render audio output for `t` clock ticks; t is always nonzero!
 {
+	#if 1
+	psg_main(t,(tape_status^tape_output)<<12);
+	#else
 	AUDIO_UNIT *z=audio_target,k;
 	psg_main(t);
 	if (tape)
@@ -1281,6 +1281,7 @@ void audio_main(int t) // render audio output for `t` clock ticks; t is always n
 		while (z<audio_target)
 			*z++-=k;
 	}
+	#endif
 }
 
 // autorun runtime logic -------------------------------------------- //
@@ -1395,17 +1396,7 @@ void z80_sync(int t) // the Z80 asks the hardware/video/audio to catch up
 		//if (!disc_disabled)
 			disc_main(t);
 		if (tape_enabled) // TAPE MOTOR ON?
-		{
-			if ((tape_delay-=t)<0)
-				tape_delay=0;
-			if (tape_delay<=TICKS_PER_SECOND/15) // reject accidental "clicks" (cfr. "RUN THE GAUNTLET")
-				tape_main(t),audio_dirty|=(size_t)tape; // echo the tape signal thru sound!
-		}
-		else // delay later readings
-		{
-			if ((tape_delay+=t)>TICKS_PER_SECOND/14) // MINILOAD (>3) and Opera Soft (<25) tapes hinge on this!
-				tape_delay=TICKS_PER_SECOND/14;
-		}
+			tape_main(t),audio_dirty|=(size_t)tape; // echo the tape signal thru sound!
 		if (tt)
 		{
 			video_main(tt);
@@ -1489,7 +1480,7 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 		mmu_update();
 	}
 	if (!(p&0x1000)) // 0xEF00, PRINTER
-		/*audio_dirty=1,digiblaster=b*/; // *!*
+		/*audio_dirty=1,digiblaster=b*/; // *!* todo *!*
 	if (!(p&0x0800)) // 0xF400-0xF700, PIO 8255
 	{
 		if (!(p&0x0200))
@@ -1609,472 +1600,355 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 // * tape_skipload controls the physical method (disabling realtime, raising frameskip, etc. during tape operation)
 // * tape_fastload controls the logical method (detecting tape loaders and feeding them data straight from the tape)
 
-BYTE /*tape_fastfeed=1,*/tape_fastload=1,tape_skipload=1,tape_fastskip=0,tape_feedskip=0;
-BYTE z80_tape_fastindices[1<<16]; // full Z80 16-bit cache
+int tape_skipload=1,tape_fastload=1,tape_skipping=0;
+BYTE z80_tape_index[1<<16]; // full Z80 16-bit cache, 255 when unused
 
-const BYTE z80_tape_fastdumper[][24]=
-{
-	/*  0 */ {  + 3,  10,0XD0,0XDD,0X77,0X00,0XDD,0X23,0X15,0X1D,0X20,0XF3 }, // AMSTRAD CPC FIRMWARE
-	/*  1 */ {  - 8,   4,0XDD,0X23,0X1B,0X08, +17,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XCB }, // DINAMIC, GREMLIN OLD
-	/*  2 */ {  - 8,   4,0XDD,0X23,0X1B,0X08, +17,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XD2 }, // TOPO SOFT
-	/*  3 */ {  -26,   6,0XDD,0X75,0X00,0XDD,0X23,0X1B, +35,   7,0X08,0XAD,0X08,0X7A,0XB3,0X20,0XD0 }, // SPEEDLOCK1
-	/*  4 */ {  - 8,   4,0XDD,0X2B,0X1B,0X08, +17,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XCB }, // GRANDSLAM
-	/*  5 */ {  +18,  10,0XDD,0X74,0X00,0XDD,0X2B,0X1B,0X7B,0XB2,0X20,0XDE }, // OPERA SOFT 1
-	/*  6 */ {  +18,   4,0XDD,0X74,0X00,0X7C,  +6,   7,0XDD,0X2B,0X1B,0X7B,0XB2,0X20,0XD7 }, // OPERA SOFT 2
-	/*  7 */ {  +14,  10,0X73,0X23,0X1E,0X01,0XD9,0X1B,0X7A,0XB3,0XD9,0X3E,  +1,   2,0X20,0XE5 }, // CODEMASTERS1,OCEAN LEVELS (DALEY THOMPSON'S OLYMPIC CHALLENGE)
-	/*  8 */ {  -10,   6,0XDD,0X75,0X00,0XDD,0X23,0X1B, +17,   8,0X00,0X00,0X00,0X00,0X7A,0XB3,0X20,0XE1 }, // RICOCHET
-	/*  9 */ {  - 8,   4,0XDD,0X23,0X1B,0X08, +18,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XCA }, // MASTERTRONIC, CODEMASTERS2
-	/* 10 */ {  -14,  11,0xDD,0x75,0x00,0xDD,0x23,0x1B,0x7A,0xB3,0x37,0xC8,0x06, +17,   2,0x18,0xE2 }, // HI-TEC
-	/* 11 */ {  +14,  11,0XDD,0X75,0X00,0XDD,0X23,0X2E,0X01,0X1B,0X7A,0XB3,0X3E,  +1,   4,0X00,0X00,0X20,0XE2 }, // SPEEDLOCK LEVELS
-	/* 12 */ {  -10,   7,0XDD,0X75,0X00,0XDD,0X23,0X1B,0X06, +17,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XE1 }, // CODEMASTERS3
-	/* 13 */ {  -10,   7,0XDD,0X75,0X00,0XDD,0X23,0X1B,0X06, +17,   6,0X7C,0XAD,0X67,0X7A,0X3C,0X20 }, // GREMLIN 128K
-	/* 14 */ {  - 8,   4,0XDD,0X23,0X1B,0X08, +18,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XD1 }, // GREMLIN OLD LEVELS
-	/* 15 */ {  -22,   4,0XDD,0X75,0X00,0X18, +10,   5,0XDD,0X23,0X1B,0X08,0X06, +20,   5,0x7C,0XAD,0X67,0X7A,0XB3 }, // MIKROGEN
-	/* 16 */ {  -13,   8,0XDD,0X75,0X00,0XDD,0X23,0X1B,0X2E,0x01, +14,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XE3 }, // MINILOAD ++ (NORMAL)
-	/* 17 */ {  -13,   8,0XDD,0X75,0X00,0XDD,0X2B,0X1B,0X2E,0x01, +14,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XE3 }, // MINILOAD -- (NORMAL)
-	/* 18 */ {  -13,   8,0XDD,0X75,0X00,0XDD,0X23,0X1B,0X2E,0x01, +18,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XDF }, // MINILOAD ++ (CUSTOM)
-	/* 19 */ {  -13,   8,0XDD,0X75,0X00,0XDD,0X2B,0X1B,0X2E,0x01, +18,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XDF }, // MINILOAD -- (CUSTOM)
-	/* 20 */ {  -13,   8,0xDD,0X75,0X00,0XDD,0X23,0X1B,0X2E,0X01, +15,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XE2 }, // TINYTAPE ++ (COUNTER)
-	/* 21 */ {  -13,   8,0xDD,0X75,0X00,0XDD,0X2B,0X1B,0X2E,0X01, +15,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XE2 }, // TINYTAPE -- (COUNTER)
-	/* 22 */ {  +10,  10,0X7C,0XAD,0X67,0XDD,0X75,0X00,0XDD,0X23,0X18,0XE5 }, // TINYTAPE ++ (NO COUNTER)
-	/* 23 */ {  +10,  10,0X7C,0XAD,0X67,0XDD,0X75,0X00,0XDD,0X2B,0X18,0XE5 }, // TINYTAPE -- (NO COUNTER)
-	/* 24 */ {  -13,   8,0xDD,0X74,0X00,0XDD,0X23,0X1B,0X2E,0X01, +15,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XE2 }, // TINYTAPE ++ (XORMODE)
-	/* 25 */ {  -13,   8,0xDD,0X74,0X00,0XDD,0X2B,0X1B,0X2E,0X01, +15,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XE2 }, // TINYTAPE -- (XORMODE)
+BYTE z80_tape_fastload[][32] = { // codes that read pulses : <offset, length, data> x N) -------------------------------------------------------------- MAXIMUM WIDTH //
+	/*  0 */ {  -8,   5,0X79,0XC6,0X02,0X4F,0X38,  +1,   7,0XED,0X78,0XAD,0XE6,0X80,0X20,0XF3 }, // AMSTRAD CPC FIRMWARE
+	/*  1 */ { -15,   5,0X04,0XC8,0X3E,0XF4,0XDB,  +1,   8,0XE6,0X04,0XEE,0X04,0XC0,0X3E,0XF5,0XDB,  +1,   5,0XA9,0XE6,0X80,0X28,0XEC }, // TOPO
+	/*  2 */ {  -5,  12,0X04,0XC8,0XD9,0XED,0X78,0XD9,0X1F,0XA9,0XE6,0X40,0X28,0XF4 }, // DINAMIC
+	/*  3 */ {  -6,   5,0X04,0XC8,0X3E,0XF5,0XDB,  +1,   7,0X1F,0XC8,0XA9,0XE6,0X40,0X28,0XF3 }, // ALKATRAZ
+	/*  4 */ {  -4,   8,0X1C,0XC8,0XED,0X78,0XE6,0X80,0XBA,0XCA,-128, -10 }, // "LA ABADIA DEL CRIMEN"
+	/*  5 */ {  -6,   5,0X04,0XC8,0X3E,0XF5,0XDB,  +1,   6,0XA9,0XE6,0X80,0XD8,0X28,0XF4 }, // MULTILOAD
+	/*  6 */ {  -5,   9,0X01,0X00,0XF5,0XED,0X78,0XCB,0X7F,0X20,0XF7 }, // OPERA V1+V2 1/2
+	/*  7 */ {  -5,   9,0X01,0X00,0XF5,0XED,0X78,0X2C,0XCB,0X7F,0X28,0XF6 }, // OPERA V1+V2 2/2
+	/*  8 */ {  -2,   3,0XED,0X78,0XFA,-128,  -5 }, // OPERA V3 1/2, GREMLIN (GAP)
+	/*  9 */ {  -3,   4,0X2C,0XED,0X78,0XF2,-128,  -6 }, // OPERA V3 2/2
+	/* 10 */ {  -4,   8,0X24,0XC8,0XED,0X78,0XA9,0XE6,0X80,0XCA,-128, -10 }, // UNILODE
+	/* 11 */ {  -6,  11,0X24,0XC8,0X06,0XF5,0XED,0X78,0XA9,0XE6,0X80,0X28,0XF5 }, // SPEEDLOCK V1+V2+V3
+	/* 12 */ {  -3,   5,0X1C,0XED,0X78,0XA9,0XF2,-128,  -7 }, // BLEEPLOAD SINGLE+DOUBLE
+	/* 13 */ {  -3,   5,0X2C,0XED,0X78,0XA9,0XF2,-128,  -7 }, // BLEEPLOAD MUSICAL
+	/* 14 */ {  -2,   4,0XED,0X78,0XA9,0XF2,-128,  -6 }, // BLEEPLOAD GAP
+	/* 15 */ {  -5,  11,0X04,0XC8,0XD9,0XED,0X78,0XD9,0XA9,0XE6,0X80,0X28,0XF5 }, // MIKRO-GEN
+	/* 16 */ {  -7,  10,0X04,0XC8,0XD9,0X06,0XF5,0XED,0X78,0XD9,0XA9,0XF2,-128, -12 }, // HI-TEC
+	/* 17 */ {  -6,   5,0X04,0XC8,0X3E,0XF5,0XDB,  +1,   7,0X1F,0X1F,0XA9,0XE6,0X20,0X28,0XF3 }, // ZYDROLOAD
+	/* 18 */ {  -6,   5,0X04,0XC8,0X3E,0XF5,0XDB,  +1,   5,0XA9,0XE6,0X80,0X28,0XF5 }, // MINILOAD-CPC
+	/* 19 */ {  -3,   4,0X0C,0XED,0X78,0XFA,-128,  -6 }, // GREMLIN 1/2
+	/* 20 */ {  -3,   4,0X0C,0XED,0X78,0XF2,-128,  -6 }, // GREMLIN 2/2
+	/* 21 */ {  -7,  14,0X04,0XC8,0X37,0X00,0XD9,0XED,0X78,0XD9,0X00,0XA9,0XE6,0X80,0X28,0XF2 }, // BINARY DESIGN, CODEMASTERS
+	/* 22 */ {  -7,  13,0X04,0XC8,0XD9,0X06,0XF5,0XED,0X78,0XD9,0XA9,0XE6,0X80,0X28,0XF3 }, // CODEMASTERS 1/3
+	/* 23 */ {  -6,   8,0X14,0XC8,0X06,0XF5,0XED,0X78,0XA9,0XF2,-128, -10 }, // CODEMASTERS 2/3
+	/* 24 */ {  -6,   5,0X04,0XC8,0X3E,0XF5,0XDB,  +1,   9,0X1F,0X00,0X00,0X00,0XA9,0XE6,0X40,0X28,0XF1 }, // CODEMASTERS 3/3
+	/* 25 */ {  -6,   8,0X24,0XC8,0X06,0XF5,0XED,0X78,0XA9,0XF2,-128, -10 }, // SPEEDLOCK LEVELS
+	/* 26 */ {  -2,   7,0XED,0X78,0XE6,0X80,0XA9,0X28,0XF9 }, // EH SERVICES 1/2
+	/* 27 */ {  -9,   6,0XED,0X5F,0XFD,0XBE,0X00,0X30,  +1,   7,0XED,0X78,0XE6,0X80,0XA9,0X28,0XF2 }, // EH SERVICES 2/2
+	/* 28 */ {  -4,   9,0X3E,0XF5,0XDB,0X00,0X07,0X38,0X02,0X10,0XF7 }, // "PUFFY'S SAGA" 1/2
+	/* 29 */ {  -4,   9,0X3E,0XF5,0XDB,0X00,0X07,0X30,0X02,0X10,0XF7 }, // "PUFFY'S SAGA" 2/2
+	/* 30 */ {  -5,  13,0X04,0XC8,0XD9,0XED,0X78,0XD9,0X00,0X00,0XA9,0XE6,0X80,0X28,0XF3 }, // RAINBOW ARTS
+	/* 31 */ {  -5,  13,0X04,0XC8,0XD9,0XED,0X78,0XD9,0X1F,0X00,0XA9,0XE6,0X40,0X28,0XF3 }, // GREMLIN OLD
+	/* 32 */ {  -6,  16,0X04,0XC8,0XD9,0X42,0XED,0X78,0XD9,0XF6,0X01,0X1F,0XD0,0XA9,0XE6,0X40,0X28,0XF0 }, // ICON DESIGN
 };
-int z80_tape_fastdump(WORD p)
+BYTE z80_tape_fastfeed[][32] = { // codes that build bytes
+	/*  0 */ {  -9,   1,0X2A,  +5,   1,0XDC,  +2,   8,0X30,0X0D,0X7C,0X91,0X9F,0XCB,0X12,0XCD,  +2,   3,0X1D,0X20,0XEA }, // AMSTRAD CPC FIRMWARE
+	/*  1 */ {  -0,   2,0XD0,0X3E,  +1,   4,0XB8,0XCB,0X15,0X06,  +1,   2,0X30,0XF3 }, // TOPO + DINAMIC
+	/*  2 */ {  -0,   1,0X3E,  +1,   4,0XB8,0XCB,0X15,0X06,  +1,   1,0XD2,-128, -13 }, // GRANDSLAM
+	/*  3 */ {  -5,   1,0X06,  +4,   1,0XD2,  +2,   1,0X3E,  +1,   7,0XB8,0XCB,0X15,0X3E,0X00,0X00,0X3E,  +1,   1,0XD2,-128, -21 }, // ALKATRAZ
+	/*  4 */ { -26,   1,0X3E,  +1,   1,0XCD, +13,   1,0X3E, +12,   2,0X7B,0XFE,  +1,   5,0X3F,0XCB,0X15,0X30,0XDB }, // "LA ABADIA DEL CRIMEN"
+	/*  5 */ {  -0,   2,0XD0,0X3E,  +1,   4,0XB8,0XCB,0X15,0X06,  +1,   1,0XD2,-128, -14 }, // TEQUE + ZYDROLOAD
+	/*  6 */ {  -7,   2,0XC5,0XCD,  +5,   2,0X7D,0XFE,  +1,   7,0X3F,0XCB,0X14,0XAC,0XE6,0X1F,0XCD,  +2,   3,0XC1,0X10,0XEA }, // OPERA
+	/*  7 */ { -12,   1,0X3E,  +1,   1,0XCD,  +2,   3,0XD0,0XE5,0X3E,  +4,   3,0XE1,0XD0,0X3E,  +1,   4,0XBC,0XCB,0X15,0X26,  +1,   1,0XD2,-128, -24 }, // SPEEDLOCK V1
+	/*  8 */ { -13,   1,0X3E,  +1,   1,0XCD,  +2,   4,0XD0,0X00,0X00,0X3E,  +4,   2,0XD0,0X3E,  +1,   4,0XBC,0XCB,0X15,0X26,  +1,   1,0XD2,-128, -24 }, // SPEEDLOCK V2
+	/*  9 */ { -11,   1,0X3E,  +1,   1,0XCD,  +2,   2,0XD0,0X3E,  +4,   2,0XD0,0X3E,  +1,   4,0XBC,0XCB,0X15,0X26,  +1,   1,0XD2,-128, -22 }, // SPEEDLOCK V3
+	/* 10 */ {  -6,   1,0XCD,-128, +13,  +0,   1,0XCD,-128, +12,  +0,   1,0X3E,  +1,   5,0XBB,0XCB,0X12,0X30,0XF3 }, // BLEEPLOAD DOUBLE 1/2
+	/* 11 */ {  -6,   1,0XCD,-128, +14,  +0,   1,0XCD,-128, +13,  +0,   1,0X3A,  +2,   5,0XBB,0XCB,0X12,0X30,0XF2 }, // BLEEPLOAD DOUBLE 2/2
+	/* 12 */ {  -0,   2,0XD0,0X3E,  +1,   4,0XBC,0XCB,0X15,0X26,  +1,   2,0X30,0XF3 }, // RICOCHET
+	/* 13 */ {  -0,   1,0XD2,  +2,   1,0X3E,  +1,   4,0XB8,0XCB,0X15,0X06,  +1,   1,0XD2,-128, -16 }, // MIKRO-GEN
+	/* 14 */ {  -5,   1,0X06,  +4,   1,0XD2,  +2,   1,0X3E,  +1,   4,0XB8,0XCB,0X15,0X3E,  +1,   1,0XD2,-128, -18 }, // HEXAGON
+	/* 15 */ {  -9,   1,0X2A,  +5,   1,0XDC,  +2,  10,0X30,0X0A,0X7C,0X91,0X9F,0XCB,0X12,0X1D,0X20,0XED }, // CASSYS
+	/* 16 */ {  -5,   1,0X3E,  +4,   1,0X30,  +1,   1,0X3E,  +1,   4,0XBA,0XCB,0X13,0X16,  +1,   2,0X30,0XF0 }, // CODEMASTERS
+	/* 17 */ {  -5,   1,0X3E,  +4,   1,0X30,  +1,   1,0X3E,  +1,   4,0XBC,0XCB,0X15,0X26,  +1,   2,0X30,0XF0 }, // SPEEDLOCK LEVELS
+	/* 18 */ {  -0,   1,0X30,  +1,   5,0X90,0XCB,0X15,0X30,0XF1 }, // MINILOAD-CPC 1/2
+	/* 19 */ {  -0,   6,0XD0,0X90,0XCB,0X15,0X30,0XF2 }, // MINILOAD-CPC 2/2
+	/* 20 */ {  -0,   1,0XFE,  +1,   4,0X3F,0XCB,0X13,0XD2,-128, -11 }, // GREMLIN
+};
+BYTE z80_tape_fastdump[][32] = { // codes that fill blocks
+	/*  0 */ {  -0,  10,0XD0,0XDD,0X77,0X00,0XDD,0X23,0X15,0X1D,0X20,0XF3 }, // AMSTRAD CPC FIRMWARE
+	/*  1 */ { -29,   8,0X08,0X20,0X05,0XDD,0X75,0X00,0X18,0X0A, +10,   5,0XDD,0X23,0X1B,0X08,0X06, +16,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XD2 }, // TOPO
+	/*  2 */ { -36,  10,0X08,0X20,0X07,0X30,0X0F,0XDD,0X75,0X00,0X18,0X0F, +15,   3,0XDD,0X23,0X1B, +18,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XCB }, // DINAMIC
+	/*  3 */ { -36,  10,0X08,0X20,0X07,0X30,0X0F,0XDD,0X75,0X00,0X18,0X0F, +15,   3,0XDD,0X2B,0X1B, +18,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XCB }, // GRANDSLAM
+	/*  4 */ {  -0,  12,0XDD,0X75,0X00,0XDD,0X2B,0XE1,0X2B,0X7C,0XB5,0XC8,0XE5,0XC3,-128, -17 }, // "LA ABADIA DEL CRIMEN"
+	/*  5 */ { -36,  10,0X08,0X20,0X07,0X30,0X0F,0XDD,0X75,0X00,0X18,0X0F, +15,   3,0XDD,0X23,0X1B, +19,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XCA }, // TEQUE
+	/*  6 */ {  -9,   2,0X06,0X08, +22,  10,0XDD,0X74,0X00,0XDD,0X2B,0X1B,0X7B,0XB2,0X20,0XDE }, // OPERA V1
+	/*  7 */ {  -9,   2,0X06,0X08, +22,  17,0XDD,0X74,0X00,0X7C,0XD9,0X5F,0X16,0X00,0X19,0XD9,0XDD,0X2B,0X1B,0X7B,0XB2,0X20,0XD7 }, // OPERA V2
+	/*  8 */ { -29,   7,0XDD,0X75,0X00,0XDD,0X23,0X1B,0X26,  +3,   4,0X2E,0X01,0X00,0X3E,  +1,   2,0X18,0X02, +24,   7,0X08,0XAD,0X08,0X7A,0XB3,0X20,0XD0 }, // SPEEDLOCK V1
+	/*  9 */ { -13,   7,0XDD,0X75,0X00,0XDD,0X23,0X1B,0X26,  +1,   2,0X2E,0X01, +16,   5,0X00,0X7A,0XB3,0X20,0XE1 }, // RICOCHET
+	/* 10 */ { -13,   7,0XDD,0X75,0X00,0XDD,0X23,0X1B,0X06,  +1,   2,0X2E,0X01, +14,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XE1 }, // CODEMASTERS
+	/* 11 */ { +11,  11,0XDD,0X75,0X00,0XDD,0X23,0X2E,0X01,0X1B,0X7A,0XB3,0X3E,  +1,   4,0X00,0X00,0X20,0XE2 }, // SPEEDLOCK LEVELS
+	/* 12 */ {  -5,   1,0X06,  +4,  11,0XD0,0XDD,0X75,0X00,0XDD,0X23,0X1B,0X7A,0XB3,0X20,0XF0 }, // RAINBOW ARTS
+};
+
+WORD z80_tape_spystack(WORD d) { d+=z80_sp.w; WORD i=PEEK(d); ++d; return i+256*PEEK(d); } // must keep everything 16-bit!
+int z80_tape_testfeed(WORD p)
 {
-	p-=3; // avoid clashes with z80_tape_fastfeed()
-	int i=z80_tape_fastindices[p]-192; // avoid clashing with z80_tape_fastfeed!
-	if (i<0||i>length(z80_tape_fastdumper)) // already in the cache?
+	int i; if ((i=z80_tape_index[p])>length(z80_tape_fastfeed))
 	{
-		for (i=0;i<length(z80_tape_fastdumper);++i)
-			if (fasttape_test(z80_tape_fastdumper[i],p))
-				break;
-		logprintf("FASTDUMP %04X:%02i\n",p,i<length(z80_tape_fastdumper)?i:-1);
+		for (i=0;i<length(z80_tape_fastfeed)&&!fasttape_test(z80_tape_fastfeed[i],p);++i) ;
+		z80_tape_index[p]=i; logprintf("FASTFEED: %04X=%02i\n",p,(i<length(z80_tape_fastfeed))?i:-1);
 	}
-	return z80_tape_fastindices[p]=i+192,i;
+	return i;
 }
-
-const BYTE z80_tape_fastfeeder[][24]=
+int z80_tape_testdump(WORD p)
 {
-	/*  0 */ {   +0,   8,0X30,0X0D,0X7C,0X91,0X9F,0XCB,0X12,0XCD,  +2,   3,0X1D,0X20,0XEA }, // AMSTRAD CPC FIRMWARE
-	/*  1 */ {   +0,   2,0XD0,0X3E,  +1,   4,0XB8,0XCB,0X15,0X06,  +1,   2,0X30,0XF3 }, // DINAMIC, TOPO SOFT
-	/*  2 */ {   +0,   1,0X3E,  +1,   4,0XB8,0XCB,0X15,0X06,  +1,   1,0XD2,-128, -11 }, // GRANDSLAM
-	/*  3 */ {   +0,   3,0XE1,0XD0,0X3E,  +1,   4,0XBC,0XCB,0X15,0X26,  +1,   1,0XD2,-128, -22 }, // SPEEDLOCK1
-	/*  4 */ {   +0,   2,0XD0,0X3E,  +1,   4,0XBC,0XCB,0X15,0X26,  +1,   1,0XD2 }, // SPEEDLOCK2
-	/*  5 */ {   +0,   3,0X30,0X1E,0X3E,  +1,   4,0XBA,0XCB,0X13,0X16,  +1,   2,0X30,0XF0 }, // OCEAN LEVELS (DALEY THOMPSON'S OLYMPIC CHALLENGE)
-	/*  6 */ {   +0,   3,0X30,0X1D,0X3E,  +1,   4,0XBA,0XCB,0X13,0X16,  +1,   2,0X30,0XF0 }, // OCEAN LEVELS (OPERATION WOLF)
-	/*  7 */ {   +0,   2,0XD0,0X3E,  +1,   4,0XB8,0XCB,0X15,0X06,  +1,   1,0XD2 }, // HI-TEC, RAINBOW ARTS, CODEMASTERS2, CODEMASTERS3, SUPERTRUX
-	/*  8 */ {   +0,   3,0X30,0X26,0X3E,  +1,   4,0XBC,0XCB,0X15,0X26,  +1,   2,0X30,0XF0 }, // SPEEDLOCK LEVELS 1
-	/*  9 */ {   +0,   3,0X30,0X1F,0X3E,  +1,   4,0XBA,0XCB,0X13,0X16,  +1,   2,0X30,0XF0 }, // CODEMASTERS1
-	/* 10 */ {   +0,   3,0X30,0X32,0X3E,  +1,   4,0XB8,0XCB,0X15,0X06,  +1,   2,0X30,0XF2 }, // GREMLIN 128K
-	/* 11 */ {   +0,   3,0X30,0X33,0X3E,  +1,   4,0XB8,0XCB,0X15,0X06,  +1,   2,0X30,0XF2 }, // GREMLIN 128K LEVELS
-	/* 12 */ {   +0,   1,0X30,  +1,   5,0X90,0XCB,0X15,0X30,0XF1 }, // TINYTAPE
-	/* 13 */ {   +0,   6,0XD0,0X90,0XCB,0X15,0X30,0XF2 }, // MINILOAD
-	/* 14 */ {   +0,   1,0XD2,  +2,   1,0X3E,  +1,   9,0XB8,0XCB,0X15,0X3E,0X00,0X00,0X3E,0X15,0XD2,-128, -19 }, // ALKATRAZ
-	/* 15 */ {   +0,   2,0XD0,0X3E,  +1,   4,0XBC,0XCB,0X15,0X26,  +1,   2,0X30,0XF3 }, // RICOCHET
-	/* 16 */ {   -5,   3,0x1E,0x01,0xCD,  +2,   1,0XFE,  +1,   4,0X3F,0XCB,0X13,0XD2,-128,  -9 }, // GREMLIN 1+2 ("BASIL", "MASK")
-	/* 17 */ {   +0,   2,0X7D,0XFE,  +1,   7,0X3F,0XCB,0X14,0XAC,0XE6,0X1F,0XCD,  +2,   3,0XC1,0X10,0XEA }, // OPERA SOFT
-	/* 18 */ {   +0,   1,0XD2,  +2,   1,0X3E,  +1,  +4,0XB8,0XCB,0X15,0X3E,  +1,  +1,0XD2,-128, -16 }, // HEXAGON
-	/* 19 */ {   +0,  10,0X30,0X0A,0X7C,0X91,0X9F,0XCB,0X12,0X1D,0X20,0XED }, // CASSYS
-	/* 20 */ {   -8,   3,0X16,0X01,0XCD,  +5,   1,0X3A,  +2,   5,0XBB,0XCB,0X12,0X30,0XF2 }, // BLEEPLOAD 2(1)
-	/* 21 */ {   -8,   3,0X16,0X01,0XCD,  +5,   1,0X3E,  +1,   5,0XBB,0XCB,0X12,0X30,0XF3 }, // BLEEPLOAD 2(2)
-	/* 22 */ {   +0,   2,0XD0,0X3E,  +1,   4,0XBA,0XCB,0X13,0X16,  +1,   2,0X30,0XF1 }, // OCEAN LEVELS (SLY SPY)
-	/* 23 */ {   +0,   1,0XD2,  +2,   1,0X3E,  +1,   4,0XB8,0XCB,0X15,0X06,  +1,   1,0XD2 }, // MIKROGEN
-};
-int z80_tape_fastfeed(WORD p)
-{
-	//if (!tape_fastfeed) return -1;
-	int i=z80_tape_fastindices[p]-128;
-	if (i<0||i>length(z80_tape_fastfeeder)) // already in the cache?
+	int i; if ((i=z80_tape_index[p-1])>length(z80_tape_fastdump)) // the offset avoid conflicts with TABLE2
 	{
-		for (i=0;i<length(z80_tape_fastfeeder);++i)
-			if (fasttape_test(z80_tape_fastfeeder[i],p))
-				break;
-		logprintf("FASTFEED %04X:%02i\n",p,i<length(z80_tape_fastfeeder)?i:-1);
+		for (i=0;i<length(z80_tape_fastdump)&&!fasttape_test(z80_tape_fastdump[i],p);++i) ;
+		z80_tape_index[p-1]=i; logprintf("FASTDUMP: %04X=%02i\n",p,(i<length(z80_tape_fastdump))?i:-1);
 	}
-	return z80_tape_fastindices[p]=i+128,i;
+	return i;
 }
-WORD z80_tape_spystack(void)
+void z80_tape_fastload_ccitt(int mask8) // the AMSTRAD CPC firmware keeps its own checksum
 {
-	BYTE i=PEEK(z80_sp.w+0);
-	return i+(PEEK(z80_sp.w+1)<<8);
-}
-WORD z80_tape_spystackadd(int n)
-{
-	BYTE i=PEEK(z80_sp.w+n+0);
-	return i+(PEEK(z80_sp.w+n+1)<<8);
-}
-
-const BYTE z80_tape_fastloader[][24]= // format: chains of {offset relative to the PC of the trapped IN opcode, size, string of opcodes}; extra -128 stands for PC of the first byte
-{
-	/*  0 */ {   -8,  13,0X79,0XC6,0X02,0X4F,0X38,0X0E,0XED,0X78,0XAD,0XE6,0X80,0X20,0XF3 }, // AMSTRAD CPC FIRMWARE
-	/*  1 */ {   -5,  12,0X04,0XC8,0XD9,0XED,0X78,0XD9,0X1F,0XA9,0XE6,0X40,0X28,0XF4 }, // DINAMIC
-	/*  2 */ {  -15,  20,0X04,0XC8,0X3E,0XF4,0XDB,0X00,0XE6,0X04,0XEE,0X04,0XC0,0X3E,0XF5,0XDB,0X00,0XA9,0XE6,0X80,0X28,0XEC }, // TOPO
-	/*  3 */ {   -6,  12,0X04,0XC8,0X3E,0XF5,0XDB,0X00,0XA9,0XE6,0X80,0XD8,0X28,0XF4 }, // MULTILOAD
-	/*  4 */ {   -6,  11,0X24,0XC8,0X06,0XF5,0XED,0X78,0XA9,0XE6,0X80,0X28,0XF5 }, // SPEEDLOCK
-	/*  5 */ {   -6,  12,0X04,0XC8,0X3E,0XF5,0XDB,0XFF,0X1F,0XC8,0XA9,0XE6,0X40,0X28 }, // ALKATRAZ, HEXAGON
-	/*  6 */ {   -6,   8,0X14,0XC8,0X06,0XF5,0XED,0X78,0XA9,0XF2,-128,  -8 }, // CODEMASTERS1
-	/*  7 */ {   -7,  14,0X04,0XC8,0X37,0X00,0XD9,0XED,0X78,0XD9,0X00,0XA9,0XE6,0X80,0X28,0XF2 }, // MASTERTRONIC,CODEMASTERS0
-	/*  8 */ {   -6,   5,0X04,0XC8,0X3E,0XF5,0XDB,  +1,   5,0XA9,0XE6,0X80,0X28,0XF5 }, // TINYTAPE/MINILOAD
-	/*  9 */ {   -3,   5,0X1C,0XED,0X78,0XA9,0XF2,-128,  -5 }, // BLEEPLOAD(1+2)
-	/* 10 */ {   -6,  15,0X04,0XC8,0X3E,0XF5,0XDB,0X00,0X1F,0X00,0X00,0X00,0XA9,0XE6,0X40,0X28,0XF1 }, // CODEMASTERS2
-	/* 11 */ {   -5,  11,0X04,0XC8,0XD9,0XED,0X78,0XD9,0XA9,0XE6,0X80,0X28,0XF5 }, // MIKROGEN
-	/* 12 */ {   -3,   5,0X2C,0XED,0X78,0XA9,0XF2,-128,  -5 }, // BLEEPLOAD1-MUSICAL
-	/* 13 */ {   -4,   8,0X24,0XC8,0XED,0X78,0XA9,0XE6,0X80,0XCA,-128,  -8 }, // UNILODE
-	/* 14 */ {   -7,  10,0X04,0XC8,0XD9,0X06,0XF5,0XED,0X78,0XD9,0XA9,0XF2,-128, -10 }, // HI-TEC, RAINBOW ARTS
-	/* 15 */ {   -6,  13,0X04,0XC8,0X3E,0XF5,0XDB,0XFF,0X1F,0X1F,0XA9,0XE6,0X20,0X28,0XF3 }, // ZYDROLOAD
-	/* 16 */ {   -5,   9,0X01,0X00,0XF5,0XED,0X78,0XCB,0X7F,0X20,0XF7 }, // OPERA1 1/2
-	/* 17 */ {   -5,  10,0X01,0X00,0XF5,0XED,0X78,0X2C,0XCB,0X7F,0X28,0XF6 }, // OPERA1 2/2
-	/* 18 */ {   -2,   4,0XED,0X78,0XA9,0XF2,-128,  -4 }, // BLEEPLOAD1-GAPS
-	/* 19 */ {   -2,   3,0XED,0X78,0XFA,-128,  -3 }, // OPERA2 1/2 + MARMELADE 1/2
-	/* 20 */ {   -3,   4,0X2C,0XED,0X78,0XF2,-128,  -4 }, // OPERA2 2/2
-	/* 21 */ {   -5,  13,0X04,0XC8,0XD9,0XED,0X78,0XD9,0X00,0X00,0XA9,0XE6,0X80,0X28,0XF3 }, // RAINBOW ARTS
-	/* 22 */ {   -4,   9,0X14,0XC8,0XED,0X78,0XA9,0XE6,0X80,0X28,0XF7 }, // HALFLOAD
-	/* 23 */ {   -3,   4,0X0C,0XED,0X78,0XFA,-128,  -4 }, // GREMLIN 1/2
-	/* 24 */ {   -3,   4,0X0C,0XED,0X78,0XF2,-128,  -4 }, // GREMLIN 2/2
-	/* 25 */ {   -2,   3,0XED,0X78,0XF2,-128,  -3 }, // GREMLIN SKIP + MARMELADE 2/2
-	/* 26 */ {   -6,  13,0X04,0XC8,0X3E,0XF5,0XDB,0X00,0X07,0XA9,0XE6,0X01,0X00,0X28,0XF3 }, // GREMLIN 128K
-	/* 27 */ {   -5,  13,0X04,0XC8,0XD9,0XED,0X78,0XD9,0X1F,0X00,0XA9,0XE6,0X40,0X28,0XF3 }, // GREMLIN OLD
-	/* 28 */ {   -4,   9,0X3E,0XF5,0XDB,0X00,0X07,0X38,0X02,0X10,0XF7 }, // "PUFFY'S SAGA" 1/2
-	/* 29 */ {   -4,   9,0X3E,0XF5,0XDB,0X00,0X07,0X30,0X02,0X10,0XF7 }, // "PUFFY'S SAGA" 2/2
-	/* 30 */ {   -8,  13,0X79,0XC6,0X02,0X4F,0X38,0X17,0XED,0X78,0XAD,0XE6,0X80,0X20,0XF3 }, // "KORONIS RIFT"
-	/* 31 */ {   -5,   7,0X0C,0X28,0X0B,0XED,0X78,0XAD,0XF2,-128,  -7 }, // "TWINWORLD"
-	/* 32 */ {   -4,   8,0X14,0XC8,0XED,0X78,0XE6,0X80,0XA9,0XCA,-128,  -8 }, // "SPLIT PERSONALITIES"
-	/* 33 */ {   -4,   9,0X06,0XF5,0XED,0X78,0XE6,0X80,0XA9,0X28,0XF9 }, // TITUS 1/X
-	/* 34 */ {   -2,   5,0XED,0X78,0XE6,0X80,0X4F }, // TITUS 2/X (JUST TO DETECT IT)
-	/* 35 */ {   -9,  14,0XED,0X5F,0XFD,0XBE,0X00,0X30,0X12,0XED,0X78,0XE6,0X80,0XA9,0X28,0XF2 }, // TITUS 3/X
-	/* 36 */ {   -9,  14,0XED,0X5F,0XFD,0XBE,0X00,0X30,0X11,0XED,0X78,0XE6,0X80,0XA9,0X28,0XF2 }, // TITUS 4/X
-	/* 37 */ {   -2,  15,0XED,0X78,0XE6,0X80,0XA9,0X20,0X08,0X00,0X00,0X3E,0X04,0X83,0X5F,0X18,0XF1 }, // TITUS 5/X
-	/* 38 */ {   -7,  13,0X04,0XC8,0XD9,0X06,0XF5,0XED,0X78,0XD9,0XA9,0XE6,0X80,0X28,0XF3 }, // CODEMASTERS3
-	/* 39 */ {   -6,   8,0X24,0XC8,0X06,0XF5,0XED,0X78,0XA9,0XF2,-128,  -8 }, // SPEEDLOCK LEVELS
-	/* 40 */ {   -6,   5,0X04,0XC8,0X3E,0XF5,0XDB,  +1,   7,0X00,0XA9,0XD8,0XE6,0X80,0X28,0XF3 }, // SUPERTRUX 1/2
-	/* 41 */ {   -6,   5,0X04,0XC8,0X3E,0XF5,0XDB,  +1,   6,0X00,0XA9,0XE6,0X80,0X28,0XF4 }, // SUPERTRUX 2/2
-	/* 42 */ {   -7,  10,0X06,0XF5,0X0C,0X28,0X14,0XED,0X78,0X17,0X30,0XF8 }, // AUDIOGENIC 1/2
-	/* 43 */ {   -5,   8,0X0C,0X28,0X0C,0XED,0X78,0X17,0X38,0XF8 }, // AUDIOGENIC 2/2
-	/* 44 */ {   -6,  13,0X04,0XC8,0X3E,0XF5,0XDB,0XFF,0XB7,0XD8,0XA9,0XE6,0X80,0X28,0XF3 }, // BIRDIE
-};
-void z80_tape_fastload_ccitt(int mask8)
-{
-	WORD x=type_id?0xB1EB:0xB8D3; // CCITT 16-bit checksum location
-	WORD crc16=mgetii(&PEEK(x));
-	while (mask8&0xFF)
-	{
+	WORD x=type_id?0xB1EB:0xB8D3,crc16=mgetii(&PEEK(x)); // CCITT 16-bit checksum location
+	do
 		if ((mask8^crc16)&0x8000)
 			crc16=(crc16<<1)^0x1021;
 		else
 			crc16<<=1;
-		mask8<<=1;
-	}
+	while ((mask8<<=1)&0xFF);
 	mputii(&POKE(x),crc16);
 }
-INLINE void z80_tape_fastload(void)
+
+void z80_tape_trap(void)
 {
-	int i;
-	if ((i=z80_tape_fastindices[z80_pc.w])<0||i>length(z80_tape_fastloader))
+	int i,j,k;
+	if ((i=z80_tape_index[z80_pc.w])>length(z80_tape_fastload))
 	{
-		for (i=0;i<length(z80_tape_fastloader);++i)
-			if (fasttape_test(z80_tape_fastloader[i],z80_pc.w))
-				break;
-		z80_tape_fastindices[z80_pc.w]=i;
-		logprintf("FASTLOAD %04X:%02i\n",z80_pc.w,i<length(z80_tape_fastloader)?i:-1);
+		for (i=0;i<length(z80_tape_fastload)&&!fasttape_test(z80_tape_fastload[i],z80_pc.w);++i) ;
+		z80_tape_index[z80_pc.w]=i; logprintf("FASTLOAD: %04X=%02i\n",z80_pc.w,(i<length(z80_tape_fastload))?i:-1);
 	}
-	if (i<length(z80_tape_fastloader))
+	if (i>=length(z80_tape_fastload)) return; // only known methods can reach here!
+	if (!tape_skipping) tape_skipping=-1;
+	switch (i)
 	{
-		tape_fastskip=1;
-		if (i!=3) // MULTILOAD expects IRQs!
-			z80_irq=irq_timer=0;
-	}
-	//if (tape_fastload) // examine always, although not always for speedup
-	{
-		int j;
-		switch (i) // is it a tape loader that we can optimize?
-		{
-			case 0: // AMSTRAD CPC FIRMWARE, CASSYS ("WONDER BOY"), HEWSON ("EXOLON","NEBULUS") // ADD C,$02 // XOR L:AND $80:JR NZ,..
-			case 30: // "KORONIS RIFT" // ADD C,$02 // XOR L:AND $80:JR NZ,..
-				if (z80_de.b.l==0x08&&FASTTAPE_CAN_FEED()&&(((i=z80_tape_fastfeed(z80_tape_spystack()))==0&&!(gate_mcr&4))||(i==19)))
-				{
-					if (i==0)
+		case  0: // AMSTRAD CPC FIRMWARE, CASSYS ("WONDER BOY"), HEWSON ("EXOLON", "NEBULUS"...)
+			if (z80_de.b.l==0x08&&FASTTAPE_CAN_FEED()&&(((j=z80_tape_testfeed(z80_tape_spystack(0)))==0&&!(gate_mcr&4))||j==15))
+			{
+				if (z80_tape_testdump(z80_tape_spystack(4))==0)
+					while (FASTTAPE_CAN_DUMP()&&POKE(z80_sp.w+2)>1)
 					{
-						// DE is kept in the stack :-( E!=0 means there are bytes to write on memory
-						if (z80_tape_fastdump(z80_tape_spystackadd(4))==0)
-							while (tape_bits>15&&POKE(z80_sp.w+2)>1)
-							{
-								j=fasttape_dump();
-								POKE(z80_ix.w)=j;
-								z80_tape_fastload_ccitt((j<<8)+1);
-								++z80_ix.w;
-								--POKE(z80_sp.w+2);
-								--POKE(z80_sp.w+3);
-							}
-						j=fasttape_feed();
-						z80_tape_fastload_ccitt((j<<8)+2);
+						k=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--POKE(z80_sp.w+2),--POKE(z80_sp.w+3);
+						if (j==0) z80_tape_fastload_ccitt((k<<8)+1);
 					}
-					else
-						j=fasttape_feed();
-					z80_de.b.h=j>>1,tape_feedskip=z80_de.b.l=1,z80_bc.b.l=j&1?-1:0,FASTTAPE_FEED_END(!(z80_hl.b.l>>7),16);
-				}
-				else if (!(gate_mcr&4)&&z80_tape_spystack()<=(type_id?0x2AA0:0x2930))
-					fasttape_skipbits(); // if the ROM is expecting the PILOT, throw BYTES and PAUSE away!
-				else
-					z80_r7+=fasttape_add8(!(z80_hl.b.l>>7),16,&z80_bc.b.l,2)*10;
-				break;
-			case 1: // DINAMIC ("ABU SIMBEL PROFANATION"), GREMLIN ("BOUNDER", "FUTURE KNIGHT"), GRANDSLAM ("PACMANIA") // INC B' // XOR C':AND $40:JR Z,..
-				if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&((i=z80_tape_fastfeed(z80_tape_spystack()))==1||i==2||i==7))
-				{
-					if (((j=z80_tape_fastdump(z80_tape_spystack()))==1||j==4||j==9)&&(z80_af2.b.l&0x41)==0x41)
-						while (tape_bits>15&&z80_de2.b.l>1)
-							z80_hl2.b.h^=POKE(z80_ix.w)=fasttape_dump(),(j==4?--z80_ix.w:++z80_ix.w),--z80_de2.w;
-					j=fasttape_feed(),tape_feedskip=z80_hl2.b.l=128+(j>>1),z80_bc2.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc2.b.l>>6,16);
-				}
-				else
-					z80_r7+=fasttape_add8(z80_bc2.b.l>>6,16,&z80_bc2.b.h,1)*10;
-				break;
-			case 2: // TOPO ("MAD MIX GAME", "METROPOLIS"), ERBE ("DALEY THOMPSON'S OLYMPIC CHALLENGE", "DRAGON NINJA") // INC B // XOR C:AND $80:JR Z,..
-				if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_fastfeed(z80_tape_spystack())==1)
-				{
-					if (z80_tape_fastdump(z80_tape_spystack())==2&&z80_af2.b.l&0x40)
-						while (tape_bits>15&&z80_de.b.l>1)
-							z80_hl.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de.w;
-					j=fasttape_feed(),tape_feedskip=z80_hl.b.l=128+(j>>1),z80_bc.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc.b.l>>7,25);
-				}
-				else
-					z80_r7+=fasttape_add8(z80_bc.b.l>>7,25,&z80_bc.b.h,1)*12;
-				break;
-			case 3: // MULTILOAD ("TECHNICIAN TED", "DEFLEKTOR") // INC B // XOR C:AND $80:JR Z,..
-				z80_r7+=fasttape_add8(z80_bc.b.l>>7,16,&z80_bc.b.h,1)*8;
-				break;
-			case 4: // SPEEDLOCK ("DONKEY KONG", "ARKANOID"), RICOCHET ("ANARCHY", "RICK DANGEROUS 2") // INC H // XOR C:AND $80:JR Z,..
-				if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&((i=z80_tape_fastfeed(z80_tape_spystack()))==3||i==4||i==15))
-				{
-					if ((j=z80_tape_fastdump(z80_tape_spystack()))==3||j==8)
-						while (tape_bits>15&&z80_de.b.l>1)
-							z80_af2.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de.w;
-					j=fasttape_feed();
-					if (i==3)
-						POKE(z80_sp.w+2)=tape_feedskip=128+(j>>1),POKE(z80_sp.w+3)=j&1?-1:0;
-					else
-						tape_feedskip=z80_hl.b.l=128+(j>>1),z80_hl.b.h=j&1?-1:0;
-					FASTTAPE_FEED_END(z80_bc.b.l>>7,15);
-				}
-				else
-					z80_r7+=fasttape_add8(z80_bc.b.l>>7,15,&z80_hl.b.h,1)*8;
-				break;
-			case 5: // ALKATRAZ ("STREET FIGHTER", "E-MOTION") // INC B // XOR C:AND $40:JR Z,..
-				if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&((i=z80_tape_fastfeed(z80_tape_spystack()))==14||i==18))
-					j=fasttape_feed(),tape_feedskip=z80_hl.b.l=128+(j>>1),z80_bc.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc.b.l>>6,17);
-				else
-					fasttape_add8(z80_bc.b.l>>6,17,&z80_bc.b.h,1);
-				break;
-			case 6: // CODEMASTERS1 ("TREASURE ISLAND DIZZY"), OCEAN LEVELS ("DALEY THOMPSON'S OLYMPIC CHALLENGE") // INC D // XOR C:JP NS,..
-			case 22: // HALFLOAD ("JUSTIN") // INC D // XOR C:AND $80:JR Z,..
-			case 32: // "SPLIT PERSONALITIES" // XOR C:JP Z,... // INC D:RET Z
-				if (z80_de.b.l==0x01&&FASTTAPE_CAN_FEED()&&((i=z80_tape_fastfeed(z80_tape_spystack()))==5||i==6||i==9||i==22))
-				{
-					if (z80_tape_fastdump(z80_tape_spystack())==7)
-						while (tape_bits>15&&z80_de2.b.l>1)
-							POKE(z80_hl.w)=fasttape_dump(),++z80_hl.w,--z80_de2.w;
-					j=fasttape_feed(),tape_feedskip=z80_de.b.l=128+(j>>1),z80_de.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc.b.l>>7,13);
-				}
-				else
-					fasttape_add8(z80_bc.b.l>>7,13,&z80_de.b.h,1);
-				break;
-			case 7: // MASTERTRONIC ("DEFCOM", "RASTERSCAN") // INC B' // XOR C':AND $80:JR Z,..
-				if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_fastfeed(z80_tape_spystack())==7)
-				{
-					if (z80_tape_fastdump(z80_tape_spystack())==9&&(z80_af2.b.l&0x41)==0x41)
-						while (tape_bits>15&&z80_de2.b.l>1)
-							z80_hl2.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de2.w;
-					j=fasttape_feed(),tape_feedskip=z80_hl2.b.l=128+(j>>1),z80_bc2.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc2.b.l>>7,18);
-				}
-				else
-					fasttape_add8(z80_bc2.b.l>>7,18,&z80_bc2.b.h,1);
-				break;
-			case 8: // TINYTAPE/MINILOAD (CPCRETRODEV 2018 et al.) // INC B // XOR C:AND $80:JR Z,..
-				if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&((i=z80_tape_fastfeed(z80_tape_spystack()))==12||i==13))
-				{
-					if ((i=z80_tape_fastdump(z80_tape_spystack()))>=16&&i<=23)
-						while (tape_bits>15&&(i>=20||z80_de.b.l>1))
-							z80_hl.b.h^=POKE(z80_ix.w)=fasttape_dump(),(i&1)?--z80_ix.w:++z80_ix.w,(i<22)&&--z80_de.w;
-					else if (i>=24&&i<=25)
-						while (tape_bits>15&&(i>=20||z80_de.b.l>1))
-							POKE(z80_ix.w)=z80_hl.b.h^=fasttape_dump(),(i&1)?--z80_ix.w:++z80_ix.w,--z80_de.w;
-					j=fasttape_feed(),tape_feedskip=z80_hl.b.l=128+(j>>1),z80_bc.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc.b.l>>7,14);
-				}
-				else
-					fasttape_add8(z80_bc.b.l>>7,14,&z80_bc.b.h,1);
-				break;
-			case 9: // BLEEPLOAD(1+2) ("SENTINEL", "THRUST" V2) // INC E // XOR C:JP NS,..
-				if (z80_de.b.h==0x01&&FASTTAPE_CAN_FEED()&&((i=z80_tape_fastfeed(z80_tape_spystackadd(2)))==20||i==21)) // skip PUSH BC
-					j=fasttape_feed(),tape_feedskip=z80_de.b.h=128+(j>>1),z80_de.b.l=j&1?-1:0,FASTTAPE_FEED_END(z80_bc.b.l>>7,9);
-				else
-					fasttape_add8(z80_bc.b.l>>7,9,&z80_de.b.l,1);
-				break;
-			case 10: // CODEMASTERS2 ("KWIK SNAX", "BUBBLE DIZZY") // INC B // XOR C:AND $40:JR Z,..
-				if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_fastfeed(z80_tape_spystack())==7)
-				{
-					if (z80_tape_fastdump(z80_tape_spystack())==9&&(z80_af2.b.l&0x41)==0x41)
-						while (tape_bits>15&&z80_de.b.l>1)
-							z80_hl.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de.w;
-					j=fasttape_feed(),tape_feedskip=z80_hl.b.l=128+(j>>1),z80_bc.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc.b.l>>6,18);
-				}
-				else
-					fasttape_add8(z80_bc.b.l>>6,18,&z80_bc.b.h,1);
-				break;
-			case 11: // MIKROGEN ("FROST BYTE", "COP OUT") // INC B' // XOR C':AND $80:JR Z,..
-			case 14: // HI-TEC ("INTERCHANGE", "JONNY QUEST") // INC B' // XOR C':JP NS,..
-				if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&((i=z80_tape_fastfeed(z80_tape_spystack()))==7||i==23))
-				{
-					if ((i=z80_tape_fastdump(z80_tape_spystack()))==10) // HI-TEC doesn't check the parity
-						while (tape_bits>15&&z80_de2.b.l>1)
-							POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de2.w;
-					else if (i==15) // MIKROGEN does (cfr. "SPHERICAL")
-						while (tape_bits>15&&z80_de2.b.l>1)
-							z80_hl2.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de2.w;
-					j=fasttape_feed(),tape_feedskip=z80_hl2.b.l=128+(j>>1),z80_bc2.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc2.b.l>>7,15);
-				}
-				else
-					fasttape_add8(z80_bc2.b.l>>7,15,&z80_bc2.b.h,1);
-				break;
-			case 12: // BLEEPLOAD1-MUSICAL ("SPIKY HAROLD", "RASPUTIN") // INC L // XOR C:JP NS,..
-				fasttape_add8(z80_bc.b.l>>7,9,&z80_hl.b.l,1);
-				break;
-				break;
-			case 39: // SPEEDLOCK LEVELS ("RAINBOW ISLANDS")
-				if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_fastfeed(z80_tape_spystack())==8)
-				{
-					if (z80_tape_fastdump(z80_tape_spystack())==11)
-						while (tape_bits>15&&z80_de.b.l>1)
-							POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de.w;
-					j=fasttape_feed(),tape_feedskip=z80_hl.b.l=128+(j>>1),z80_hl.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc.b.l>>7,13);
-				}
-				else
-			case 13: // UNILODE ("YES PRIME MINISTER", "TRIVIAL PURSUIT") // INC H // XOR C:AND $80:JP Z,..
-					fasttape_add8(z80_bc.b.l>>7,13,&z80_hl.b.h,1);
-				break;
-			case 15: // ZYDROLOAD ("HOSTAGES", "NORTH & SOUTH") // INC B // XOR C:AND $20:JR Z,..
-				if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_fastfeed(z80_tape_spystack())==7)
-					j=fasttape_feed(),tape_feedskip=z80_hl.b.l=128+(j>>1),z80_bc.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc.b.l>>5,16);
-				else
-					fasttape_add8(z80_bc.b.l>>5,16,&z80_bc.b.h,1);
-				break;
-			case 16: // OPERA1 1/2 ("LIVINGSTONE SUPONGO", "GOODY") // NO COUNTER! // BIT 7,A:JR NZ,..
-				fasttape_skip(1,12);
-				break;
-			case 17: // OPERA1 2/2 // INC L // BIT 7,A:JR Z,..
-				if (FASTTAPE_CAN_FEED()&&PEEK(z80_sp.w+3)==0x08&&z80_tape_fastfeed(z80_tape_spystack())==17)
-				{
-					if ((i=z80_tape_fastdump(z80_tape_spystack()))==5||i==6)
-						while (tape_bits>15&&z80_de.b.l>1)
-							z80_hl2.w+=POKE(z80_ix.w)=fasttape_dump(),--z80_ix.w,--z80_de.w;
-					j=fasttape_feed(),POKE(z80_sp.w+3)=1,z80_hl.b.h=tape_feedskip=(j>>1),z80_hl.b.l=j&1?-2:0,FASTTAPE_FEED_END(0,13); // -2 avoids the later INC L!
-				}
-				else
-					fasttape_add8(0,13,&z80_hl.b.l,1);
-				break;
-			case 18: // BLEEPLOAD1-GAPS ("THRUST") // NO COUNTER! // XOR C:JP NS,..
-				fasttape_skip(z80_bc.b.l>>7,8);
-				break;
-			case 19: // OPERA2 1/2 ("MYTHOS") // COUNTER IS R7 // JP S,...
-				fasttape_add8(1,7,&z80_r7,3);
-				break;
-			case 20: // OPERA2 2/2 // INC L // JP NS,...
-				if (FASTTAPE_CAN_FEED()&&PEEK(z80_sp.w+3)==0x08&&z80_tape_fastfeed(z80_tape_spystack())==17)
-				{
-					if (z80_tape_fastdump(z80_tape_spystack())==6)
-						while (tape_bits>15&&z80_de.b.l>1)
-							z80_hl2.w+=POKE(z80_ix.w)=fasttape_dump(),--z80_ix.w,--z80_de.w;
-					j=fasttape_feed(),POKE(z80_sp.w+3)=1,z80_hl.b.h=tape_feedskip=(j>>1),z80_hl.b.l=j&1?-1:0,FASTTAPE_FEED_END(0,8);
-				}
-				else
-					fasttape_add8(0,8,&z80_hl.b.l,1);
-				break;
-			case 21: // RAINBOW ARTS ("ROCK 'N ROLL") // INC B' // XOR C':AND $80:JR Z,..
-			case 38: // CODEMASTERS3 ("SUPER SEYMOUR SAVES THE PLANET") // INC B' // XOR C':AND $80:JR Z,..
-				if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_fastfeed(z80_tape_spystack())==7)
-				{
-					if (z80_tape_fastdump(z80_tape_spystack())==12)
-						while (tape_bits>15&&z80_de2.b.l>1)
-							z80_hl2.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de2.w;
-					j=fasttape_feed(),tape_feedskip=z80_hl2.b.l=128+(j>>1),z80_bc2.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc2.b.l>>7,17);
-				}
-				else
-					fasttape_add8(z80_bc2.b.l>>7,17,&z80_bc2.b.h,1);
-				break;
-			case 23: // GREMLIN 1/2 ("BASIL THE MOUSE DETECTIVE") // INC C // JP S,...
-				fasttape_add8(1,8,&z80_bc.b.l,1);
-				break;
-			case 24: // GREMLIN 2/2 // INC C // JP NS,...
-				if (z80_de.b.l==0x01&&FASTTAPE_CAN_FEEDX()&&z80_tape_fastfeed(z80_tape_spystack())==16)
-					j=fasttape_feed(),tape_feedskip=z80_de.b.l=128+(j>>1),z80_bc.b.l=j&1?-1:0,FASTTAPE_FEED_END(0,8);
-				else
-					fasttape_add8(0,8,&z80_bc.b.l,1);
-				break;
-			case 25: // GREMLIN SKIP ("SAMURAI TRILOGY") // COUNTER IS R7 // JP NS,...
-				fasttape_add8(0,7,&z80_r7,3);
-				break;
-			case 26: // GREMLIN 128K ("SUPER CARS") // INC B // XOR C:AND $01:JR Z,..
-				if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&((i=z80_tape_fastfeed(z80_tape_spystack()))==10||i==11))
-				{
-					if (z80_tape_fastdump(z80_tape_spystack())==13)
-						while (tape_bits>15&&z80_de.b.l>1)
-							z80_hl.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de.w;
-					j=fasttape_feed(),tape_feedskip=z80_hl.b.l=128+(j>>1),z80_bc.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc.b.l,16);
-				}
-				else
-					fasttape_add8(z80_bc.b.l,16,&z80_bc.b.h,1);
-				break;
-			case 27: // GREMLIN OLD ("THING ON A SPRING") // INC B' // XOR C':AND $40:JR Z,..
-				if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&((i=z80_tape_fastfeed(z80_tape_spystack()))==2||i==7))
-				{
-					if (((i=z80_tape_fastdump(z80_tape_spystack()))==1||i==14)&&(z80_af2.b.l&0x41)==0x41)
-						while (tape_bits>15&&z80_de2.b.l>1)
-							z80_hl2.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de2.w;
-					j=fasttape_feed(),tape_feedskip=z80_hl2.b.l=128+(j>>1),z80_bc2.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc2.b.l>>6,17);
-				}
-				else
-					fasttape_add8(z80_bc2.b.l>>6,17,&z80_bc2.b.h,1);
-				break;
-			case 28: // "PUFFY'S SAGA" 1/2 // DJNZ ... // RLCA:JR C,...
-			case 29: // "PUFFY'S SAGA" 2/2 // DJNZ ... // RLCA:JR NC,...
-				fasttape_sub8(i==28,12,&z80_bc.b.h,1);
-				break;
-			case 31: // "TWINWORLD" // INC C:JR Z,... // XOR L:JP NS,...
-				fasttape_add8(z80_hl.b.l>>7,11,&z80_bc.b.l,1);
-				break;
-			case 33: // TITUS 1/X // COUNTER IS R7 // XOR C:JR Z,...
-				fasttape_add8(z80_bc.b.l>>7,10,&z80_r7,5);
-				break;
-			case 35: // TITUS 3/X // COUNTER IS R7, OPPOSITE LIMIT IS (IY+0) // XOR C:JR Z,...
-			case 36: // TITUS 4/X // COUNTER IS R7, OPPOSITE LIMIT IS (IY+0) // XOR C:JR Z,...
-				z80_r7+=5*10; tape_main(5*19); // 5 is a value that pleases both "ONE" and "BLUES BROTHERS"
-				break;
-			case 37: // TITUS 5/X // ADD E,$04 // XOR C:JR Z,...
-				fasttape_add8(z80_bc.b.l>>7,18,&z80_de.b.l,4);
-				break;
-			case 40: // SUPERTRUX // INC B // XOR C:AND $80:JR Z...
-				if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_fastfeed(z80_tape_spystack())==7)
-					j=fasttape_feed(),tape_feedskip=z80_hl.b.l=128+(j>>1),z80_bc.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc.b.l>>7,17);
-				else
-					fasttape_add8(z80_bc.b.l>>7,17,&z80_bc.b.h,1);
-				break;
-			case 41: // SUPERTRUX // INC B // XOR C:AND $80:JR Z...
-				if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_fastfeed(z80_tape_spystack())==7)
-					j=fasttape_feed(),tape_feedskip=z80_hl.b.l=128+(j>>1),z80_bc.b.h=j&1?-1:0,FASTTAPE_FEED_END(z80_bc.b.l>>7,15);
-				else
-					fasttape_add8(z80_bc.b.l>>7,15,&z80_bc.b.h,1);
-				break;
-			case 42: // AUDIOGENIC 1/2 (LONE WOLF)
-				fasttape_add8(0,11,&z80_bc.b.l,1);
-				break;
-			case 43: // AUDIOGENIC 2/2
-				fasttape_add8(1,11,&z80_bc.b.l,1);
-				break;
-			case 44: // BIRDIE
-				fasttape_add8(z80_bc.b.l>>7,17,&z80_bc.b.h,1);
-				break;
-		}
-		//if (n) logprintf("[%02i:x%03i] ",i,n);
+				k=fasttape_feed(!(z80_hl.b.l>>7),16),z80_de.b.h=k>>1,tape_skipping=z80_de.b.l=1,z80_bc.b.l=-(k&1);
+				if (j==0) z80_tape_fastload_ccitt((k<<8)+2);
+			}
+			else if (!(gate_mcr&4)&&z80_tape_spystack(0)<=(type_id?0x2AA0:0x2930))
+				fasttape_gotonext(); // if the ROM is expecting the PILOT, throw BYTES and PAUSE away!
+			else
+				z80_r7+=fasttape_add8(!(z80_hl.b.l>>7),16,&z80_bc.b.l,2)*10;
+			break;
+		case  1: // TOPO ("DESPERADO", "MAD MIX GAME", "VIAJE AL CENTRO DE LA TIERRA"...)
+			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==1)
+			{
+				if (z80_af2.b.l&0x40) if (z80_tape_testdump(z80_tape_spystack(0))==1)
+					while (FASTTAPE_CAN_DUMP()&&z80_de.b.l>1)
+						z80_hl.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de.w;
+				k=fasttape_feed(z80_bc.b.l>>7,25),tape_skipping=z80_hl.b.l=128+(k>>1),z80_bc.b.h=-(k&1);
+			}
+			else
+				z80_r7+=fasttape_add8(z80_bc.b.l>>7,25,&z80_bc.b.h,1)*12;
+			break;
+		case  2: // DINAMIC ("ABU SIMBEL PROFANATION", "GAME OVER", "PHANTIS"...), GRANDSLAM ("PACMANIA"...), HI-TEC ("CRYSTAL KINGDOM DIZZY")
+			if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&((j=z80_tape_testfeed(z80_tape_spystack(0)))==1||j==2||j==5))
+			{
+				if (z80_af2.b.l&0x40) if ((k=z80_tape_testdump(z80_tape_spystack(0)))==2||k==3||k==5)
+					while (FASTTAPE_CAN_DUMP()&&z80_de2.b.l>1)
+						z80_hl2.b.h^=POKE(z80_ix.w)=fasttape_dump(),k==3?--z80_ix.w:++z80_ix.w,--z80_de2.w;
+				k=fasttape_feed(z80_bc2.b.l>>6,16),tape_skipping=z80_hl2.b.l=128+(k>>1),z80_bc2.b.h=-(k&1);
+			}
+			else
+				fasttape_add8(z80_bc2.b.l>>6,16,&z80_bc2.b.h,1);
+			break;
+		case  3: // ALKATRAZ ("E-MOTION"...), HEXAGON ("ALIEN STORM"...)
+			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&((j=z80_tape_testfeed(z80_tape_spystack(0))))==3||j==14)
+				k=fasttape_feed(z80_bc.b.l>>6,17),tape_skipping=z80_hl.b.l=128+(k>>1),z80_bc.b.h=-(k&1);
+			else
+				fasttape_add8(z80_bc.b.l>>6,17,&z80_bc.b.h,1);
+			break;
+		case  4: // "LA ABADIA DEL CRIMEN"
+			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==4)
+			{
+				if (z80_tape_testdump(z80_tape_spystack(2))==4)
+					while (FASTTAPE_CAN_DUMP()&&PEEK(z80_sp.w+4)>1)
+						POKE(z80_ix.w)=fasttape_dump(),--z80_ix.w,--POKE(z80_sp.w+4);
+				k=fasttape_feed(z80_de.b.h>>7,13),tape_skipping=z80_hl.b.l=128+(k>>1),z80_de.b.l=-(k&1);
+			}
+			else
+				fasttape_add8(z80_de.b.h>>7,13,&z80_de.b.l,1);
+			break;
+		case  5: // MULTILOAD ("DEFLEKTOR"...)
+			z80_r7+=fasttape_add8(z80_bc.b.l>>7,16,&z80_bc.b.h,1)*8;
+			break;
+		case  6: // OPERA V1+V2 1/2 (V1: "GOODY"... V2: "ULISES"...)
+			fasttape_add8(1,12,&z80_r7,6);
+			break;
+		case  7: // OPERA V1+V2 2/2
+			if (PEEK(z80_sp.w+3)==0x08&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==6)
+			{
+				if ((k=z80_tape_testdump(z80_tape_spystack(0)))==6||k==7)
+					while (FASTTAPE_CAN_DUMP()&&z80_de.b.l>1)
+						z80_hl2.w+=POKE(z80_ix.w)=fasttape_dump(),--z80_ix.w,--z80_de.w; // k==6 doesn't touch Z80_HL2
+				k=fasttape_feed(0,13),POKE(z80_sp.w+3)=1,z80_hl.b.h=tape_skipping=(k>>1),z80_hl.b.l=k&1?-2:0; // -2 avoids the later INC L!
+			}
+			else
+				z80_r7+=fasttape_add8(0,13,&z80_hl.b.l,1)*7;
+			break;
+		case  8: // OPERA V3 1/2 ("MUNDIAL DE FUTBOL"...)
+			fasttape_add8(1,7,&z80_r7,3); // "MARMELADE" uses R as counter!
+			break;
+		case  9: // OPERA V3 2/2
+			if (PEEK(z80_sp.w+3)==0x08&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==6)
+			{
+				if (z80_tape_testdump(z80_tape_spystack(0))==7)
+					while (FASTTAPE_CAN_DUMP()&&z80_de.b.l>1)
+						z80_hl2.w+=POKE(z80_ix.w)=fasttape_dump(),--z80_ix.w,--z80_de.w;
+				k=fasttape_feed(0,8),POKE(z80_sp.w+3)=1,z80_hl.b.h=tape_skipping=(k>>1),z80_hl.b.l=-(k&1);
+			}
+			else
+				z80_r7+=fasttape_add8(0,8,&z80_hl.b.l,1)*4;
+			break;
+		case 10: // UNILODE ("TRIVIAL PURSUIT"...)
+			z80_r7+=fasttape_add8(z80_bc.b.l>>7,13,&z80_hl.b.h,1)*7;
+			break;
+		case 11: // SPEEDLOCK (V1: "DONKEY KONG"... V2: "WIZBALL"... V3: "THE ADDAMS FAMILY"...), RICOCHET ("RICK DANGEROUS 2"...)
+			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&((j=z80_tape_testfeed(z80_tape_spystack(0)))==7||j==8||j==9||j==12))
+			{
+				if ((k=z80_tape_testdump(z80_tape_spystack(0)))==8||k==9)
+					while (FASTTAPE_CAN_DUMP()&&z80_de.b.l>1)
+						z80_af2.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de.w; // some Ricochet versions ("OCTOPLEX") don't touch Z80_AF2
+				k=fasttape_feed(z80_bc.b.l>>7,15);
+				if (j==7) // SPEEDLOCK V1 uses the stack
+					POKE(z80_sp.w+2)=tape_skipping=128+(k>>1),POKE(z80_sp.w+3)=-(k&1);
+				else // all other versions use registers
+					tape_skipping=z80_hl.b.l=128+(k>>1),z80_hl.b.h=-(k&1);
+			}
+			else
+				z80_r7+=fasttape_add8(z80_bc.b.l>>7,15,&z80_hl.b.h,1)*8;
+			break;
+		case 12: // BLEEPLOAD (SINGLE: "CHIMERA"... DOUBLE: "SENTINEL", "THRUST (V2)"...)
+			if (z80_de.b.h==0x01&&FASTTAPE_CAN_FEED()&&((j=z80_tape_testfeed(z80_tape_spystack(2)))==10||j==11))
+				k=fasttape_feed(z80_bc.b.l>>7,9),tape_skipping=z80_de.b.h=128+(k>>1),z80_de.b.l=-(k&1);
+			else
+				fasttape_add8(z80_bc.b.l>>7,9,&z80_de.b.l,1);
+			break;
+		case 13: // BLEEPLOAD MUSICAL
+			fasttape_add8(z80_bc.b.l>>7,9,&z80_hl.b.l,1);
+			break;
+		case 14: // BLEEPLOAD GAP
+			fasttape_skip(z80_bc.b.l>>7,8);
+			break;
+		case 15: // MIKRO-GEN ("FROST BYTE"...)
+		case 16: // HI-TEC ("INTERCHANGE"...)
+			if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&((j=z80_tape_testfeed(z80_tape_spystack(0)))==13||j==5))
+				k=fasttape_feed(z80_bc2.b.l>>7,15),tape_skipping=z80_hl2.b.l=128+(k>>1),z80_bc2.b.h=-(k&1);
+			else
+				fasttape_add8(z80_bc2.b.l>>7,15,&z80_bc2.b.h,1);
+			break;
+		case 17: // ZYDROLOAD ("HOSTAGES"...)
+			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==5)
+				k=fasttape_feed(z80_bc.b.l>>5,16),tape_skipping=z80_hl.b.l=128+(k>>1),z80_bc.b.h=-(k&1);
+			else
+				fasttape_add8(z80_bc.b.l>>5,16,&z80_bc.b.h,1);
+			break;
+		case 18: // MINILOAD-CPC
+			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&((j=z80_tape_testfeed(z80_tape_spystack(0)))==18||j==19))
+				k=fasttape_feed(z80_bc.b.l>>7,14),tape_skipping=z80_hl.b.l=128+(k>>1),z80_bc.b.h=-(k&1);
+			else
+				z80_r7+=fasttape_add8(z80_bc.b.l>>7,14,&z80_bc.b.h,1)*7;
+			break;
+		case 19: // GREMLIN 1/2 ("BASIL THE GREAT MOUSE DETECTIVE", "SAMURAI TRILOGY"...)
+			fasttape_add8(1,8,&z80_bc.b.l,1);
+			break;
+		case 20: // GREMLIN 2/2
+			if (z80_de.b.l==0x01&&FASTTAPE_CAN_FEED()&&(z80_tape_testfeed(z80_tape_spystack(0)))==20)
+				k=fasttape_feed(0,8),tape_skipping=z80_de.b.l=128+(k>>1),z80_bc.b.l=-(k&1);
+			else
+				fasttape_add8(0,8,&z80_bc.b.l,1);
+			break;
+		case 21: // BINARY DESIGN ("DEFCOM"), CODEMASTERS ("MAGICLAND DIZZY")
+			if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&(z80_tape_testfeed(z80_tape_spystack(0)))==5)
+			{
+				if (z80_af2.b.l&0x40) if (z80_tape_testdump(z80_tape_spystack(0))==5)
+					while (FASTTAPE_CAN_DUMP()&&z80_de2.b.l>1)
+						z80_hl2.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de2.w;
+				k=fasttape_feed(z80_bc2.b.l>>7,18),tape_skipping=z80_hl2.b.l=128+(k>>1),z80_bc2.b.h=-(k&1);
+			}
+			else
+				fasttape_add8(z80_bc2.b.l>>7,18,&z80_bc2.b.h,1);
+			break;
+		case 22: // CODEMASTERS 1/3 ("SUPER SEYMOUR SAVES THE PLANET")
+			if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&(z80_tape_testfeed(z80_tape_spystack(0)))==5)
+			{
+				if (z80_tape_testdump(z80_tape_spystack(0))==10)
+					while (FASTTAPE_CAN_DUMP()&&z80_de2.b.l>1)
+						z80_hl2.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de2.w;
+				k=fasttape_feed(z80_bc2.b.l>>7,17),tape_skipping=z80_hl2.b.l=128+(k>>1),z80_bc2.b.h=-(k&1);
+			}
+			else
+				fasttape_add8(z80_bc2.b.l>>7,17,&z80_bc2.b.h,1);
+			break;
+		case 23: // CODEMASTERS 2/3 ("TREASURE ISLAND DIZZY")
+			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&(z80_tape_testfeed(z80_tape_spystack(0)))==16)
+				k=fasttape_feed(z80_bc.b.l>>7,13),tape_skipping=z80_de.b.l=128+(k>>1),z80_de.b.h=-(k&1);
+			else
+				fasttape_add8(z80_bc.b.l>>7,13,&z80_de.b.h,1);
+			break;
+		case 24: // CODEMASTERS 3/3 ("KWIK SNAX")
+			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&(z80_tape_testfeed(z80_tape_spystack(0)))==5)
+			{
+				if (z80_af2.b.l&0x40) if (z80_tape_testdump(z80_tape_spystack(0))==5)
+					while (FASTTAPE_CAN_DUMP()&&z80_de.b.l>1)
+						z80_hl.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de.w;
+				k=fasttape_feed(z80_bc.b.l>>6,18),tape_skipping=z80_hl.b.l=128+(k>>1),z80_bc.b.h=-(k&1);
+			}
+			else
+				fasttape_add8(z80_bc.b.l>>6,18,&z80_bc.b.h,1);
+			break;
+		case 25: // SPEEDLOCK LEVELS ("RAINBOW ISLANDS")
+			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&(z80_tape_testfeed(z80_tape_spystack(0)))==17)
+			{
+				if (z80_tape_testdump(z80_tape_spystack(0))==11)
+					while (FASTTAPE_CAN_DUMP()&&z80_de.b.l>1)
+						POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de.w;
+				k=fasttape_feed(z80_bc.b.l>>7,13),tape_skipping=z80_hl.b.l=128+(k>>1),z80_hl.b.h=-(k&1);
+			}
+			else
+				fasttape_add8(z80_bc.b.l>>7,13,&z80_hl.b.h,1);
+			break;
+		case 26: // EH SERVICES 1/2 ("ONE", "BLUES BROTHERS"...)
+			fasttape_add8(z80_bc.b.l>>7,10,&z80_r7,5);
+			break;
+		case 27: // EH SERVICES 2/2
+			z80_r7+=10,tape_main(20); // no fasttape_skip :-(
+			break;
+		case 28: // "PUFFY'S SAGA" 1/2
+		case 29: // "PUFFY'S SAGA" 2/2
+			j=(WORD)(z80_pc.w+1); // it self-modifies :-(
+			fasttape_sub8(PEEK(j)==0x30,12,&z80_bc.b.h,1);
+			break;
+		case 30: // RAINBOW ARTS ("ROCK'N ROLL")
+			if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&(z80_tape_testfeed(z80_tape_spystack(0)))==5)
+			{
+				if (z80_tape_testdump(z80_tape_spystack(2))==12)
+					while (FASTTAPE_CAN_DUMP()&&z80_de2.b.l>1)
+						POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de2.w;
+				k=fasttape_feed(z80_bc2.b.l>>7,17),tape_skipping=z80_hl2.b.l=128+(k>>1),z80_bc2.b.h=-(k&1);
+			}
+			else
+				fasttape_add8(z80_bc2.b.l>>7,17,&z80_bc2.b.h,1);
+			break;
+		case 31: // GREMLIN OLD ("WAY OF THE TIGER" V1...)
+			if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&((j=z80_tape_testfeed(z80_tape_spystack(0))))==2||j==5)
+				k=fasttape_feed(z80_bc2.b.l>>6,17),tape_skipping=z80_hl2.b.l=128+(k>>1),z80_bc2.b.h=-(k&1);
+			else
+				fasttape_add8(z80_bc2.b.l>>6,17,&z80_bc2.b.h,1);
+			break;
+		case 32: // ICON DESIGN ("RECKLESS RUFUS", "NETHER EARTH"...)
+			if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&((j=z80_tape_testfeed(z80_tape_spystack(0)))==1||j==5))
+				k=fasttape_feed(z80_bc2.b.l>>6,21),tape_skipping=z80_hl2.b.l=128+(k>>1),z80_bc2.b.h=-(k&1);
+			else
+				fasttape_add8(z80_bc2.b.l>>6,21,&z80_bc2.b.h,1);
+			break;
 	}
 }
 
@@ -2124,7 +1998,7 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 				{
 					if (tape)//&&!z80_iff.b.l) // at least one tape loader enables interrupts!!!
 						if (tape_fastload) // call only when this flag is on
-							z80_tape_fastload();
+							z80_tape_trap();
 					// VSYNC (0x01; CRTC2 MISSES IT DURING HORIZONTAL OVERFLOW!)
 					b&=(crtc_status&CRTC_STATUS_VSYNC? // gate_status&CRTC_STATUS_VSYNC ???
 						(crtc_type!=2||crtc_limit_r2+crtc_limit_r3x!=crtc_table[0]+1): // CRTC2 fails if HSYNC sets and H_OFF resets at once!
@@ -2355,14 +2229,14 @@ void z80_debug_hard(int q,int x,int y)
 	}
 	if (!(q&1))
 	{
-		t=s+sprintf(s,"GATE:               ""%02X: ",gate_index);
+		t=s+sprintf(s,"GATE:               " "%02X: ",gate_index);
 		for (i=0;i<8;++i)
 			t+=sprintf(t,"%02X",gate_table[i]);
 		t+=z80_debug_hard_tab(t);
 		for (;i<16;++i)
 			t+=sprintf(t,"%02X",gate_table[i]);
 		t+=sprintf(t,"    %02X %cBPP %02X:%02X:%02X",gate_table[16],"4212"[gate_status&3],0x80+gate_mcr,0xC0+gate_ram,gate_rom);
-		t+=sprintf(t,"CRTC:               ""%02X: ",crtc_index);
+		t+=sprintf(t,"CRTC:               " "%02X: ",crtc_index);
 		for (i=0;i<8;++i)
 			t+=sprintf(t,"%02X",crtc_table[i]);
 		t+=z80_debug_hard_tab(t);
@@ -2372,18 +2246,18 @@ void z80_debug_hard(int q,int x,int y)
 		t+=sprintf(t,
 		"   %c%02X:%02X:%02X%c%02X %04X" // VCC, R52, HDC, HCC, VMA
 		"   %c%02X%c%02X%c%02X%c%02X %04X" // VLC, VSC, VTAC, HSC, VDUR
-		,Z80_DEBUG_HARD_T_F(crtc_status&CRTC_STATUS_R4_OK),crtc_count_r4,irq_timer,((video_pos_x-VIDEO_OFFSET_X)/16+!!(plus_enabled))&0xFF,Z80_DEBUG_HARD_T_F(crtc_status&CRTC_STATUS_R0_OK),crtc_count_r0,crtc_screen+crtc_raster
+		,Z80_DEBUG_HARD_T_F(crtc_status&CRTC_STATUS_R4_OK),crtc_count_r4,irq_timer,((video_pos_x-VIDEO_OFFSET_X)/16+!!(plus_enabled))&0xFF,Z80_DEBUG_HARD_T_F(crtc_status&CRTC_STATUS_R0_OK),crtc_count_r0,(WORD)(crtc_screen+crtc_raster)
 		,Z80_DEBUG_HARD_T_F(crtc_status&CRTC_STATUS_R9_OK),crtc_count_r9,Z80_DEBUG_HARD_T_F(crtc_status&CRTC_STATUS_VSYNC),crtc_count_r3y,Z80_DEBUG_HARD_T_F(crtc_status&CRTC_STATUS_V_T_A)
 		,crtc_count_r5,Z80_DEBUG_HARD_T_F(crtc_status&CRTC_STATUS_HSYNC),crtc_count_r3x,(WORD)((video_pos_y-VIDEO_OFFSET_Y)/2+3)
 		);
-		t+=sprintf(t,"PSG:                ""%02X: ",psg_index);
+		t+=sprintf(t,"PSG:                " "%02X: ",psg_index);
 		for (i=0;i<8;++i)
 			t+=sprintf(t,"%02X",psg_table[i]);
 		t+=z80_debug_hard_tab(t);
 		for (;i<14;++i)
 			t+=sprintf(t,"%02X",psg_table[i]);
 		t+=sprintf(t,"----" "    PIO: %02X:%02X:%02X:%02X",pio_port_a,pio_port_b,pio_port_c,pio_control);
-		t+=sprintf(t,"FDC:  %02X - %04X:%04X""    %c ",disc_parmtr[0],(WORD)disc_offset,(WORD)disc_length,48+disc_phase);
+		t+=sprintf(t,"FDC:  %02X - %04X:%04X" "    %c ",disc_parmtr[0],(WORD)disc_offset,(WORD)disc_length,48+disc_phase);
 		for (i=0;i<7;++i)
 			t+=sprintf(t,"%02X",disc_result[i]);
 	}
@@ -2419,8 +2293,8 @@ void onscreen_grafx_step2(VIDEO_UNIT *t,BYTE b)
 WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 {
 	onscreen_grafx_mode2[0]=video_clut[0];
-	onscreen_grafx_mode2[1]=VIDEO_FILTER_AVG(video_clut[0],video_clut[1]);
-	onscreen_grafx_mode2[2]=VIDEO_FILTER_AVG(video_clut[1],video_clut[0]);
+	onscreen_grafx_mode2[1]=VIDEO_FILTER_HALF(video_clut[0],video_clut[1]);
+	onscreen_grafx_mode2[2]=VIDEO_FILTER_HALF(video_clut[1],video_clut[0]);
 	onscreen_grafx_mode2[3]=video_clut[1];
 	VIDEO_UNIT *vv=v;
 	WORD s=onscreen_grafx_addr; if (!(q&1))
@@ -2714,7 +2588,7 @@ void all_reset(void) // reset everything!
 	z80_sp.w=0xC000; // implicit in "No Exit" PLUS!
 	z80_imd=1; // implicit in "Pro Tennis Tour" PLUS!
 	crtc_table[0]=63; crtc_table[3]=0x8E; crtc_table[4]=38; crtc_table[9]=7; crtc_syncs_update(); // implicit in "GNG11B" (?)
-	MEMFULL(z80_tape_fastindices);
+	MEMFULL(z80_tape_index);
 	#ifdef PSG_PLAYCITY
 	playcity_reset(); playcity_dirty=0;
 	MEMZERO(playcity_ctc_count);
@@ -2920,7 +2794,7 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 	header[0x5A]=psg_index; // mistake in http://cpctech.cpc-live.com/docs/snapshot.html : INDEX can be invalid, it's the emulator's duty to behave accordingly
 	MEMSAVE(&header[0x5B],psg_table);
 	#ifdef PSG_PLAYCITY
-		header[0x5B+14]=playcity_disabled?0:(1+playcity_get_config()); // Playcity kludge: register 14 is always "tunneled" by the keyboard, we can use it.
+		header[0x5B+15]=playcity_disabled?0:(240+playcity_get_config()); // Playcity kludge: register 15 isn't used on CPC... is it?
 	#endif
 	header[0x6B]=gate_ram_dirty; header[0x6C]=gate_ram_dirty>>8; // in V3, this field is zero if MEM0..MEM8 chunks are used. Avoid them to stay compatible.
 	// V2 data
@@ -2938,7 +2812,7 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 	header[0xAE]=crtc_count_r3x;
 	header[0xAF]=crtc_count_r3y;
 
-/* Straight from Richard Wilson's http://www.cpcwiki.eu/forum/emulators/javacpc-desktop-available-as-beta!/msg9427/#msg9427
+/* straight from Richard Wilson's http://www.cpcwiki.eu/forum/emulators/javacpc-desktop-available-as-beta!/msg9427/#msg9427
 	CRTC_FLAG_VSYNC_ACTIVE    = $01;
 	CRTC_FLAG_HSYNC_ACTIVE    = $02;
 	CRTC_FLAG_HDISP_INACTIVE  = $04;
@@ -3089,8 +2963,8 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 	psg_table_select(header[0x5A]);
 	MEMLOAD(psg_table,&header[0x5B]);
 	#ifdef PSG_PLAYCITY
-	if (psg_table[14])
-		playcity_set_config(psg_table[14]-1),playcity_disabled=psg_table[14]=0; // Playcity kludge, see snap_save() below.
+	if (psg_table[15]>=240)
+		playcity_set_config(psg_table[15]-240),playcity_disabled=psg_table[15]=0; // Playcity kludge, see snap_save() below.
 	#endif
 	if (header[0x10]>1) // V2?
 	{
@@ -3309,8 +3183,11 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 
 // auxiliary user interface operations ------------------------------ //
 
+BYTE key2joy_flag=0;
+
 char txt_error_snap_save[]="Cannot save snapshot!";
 char snap_pattern[]="*.sna";
+char file_pattern[]="*.sna;*.rom;*.crt;*.cpr;*.ini;*.dsk;*.cdt;*.csw;*.wav";
 
 char session_menudata[]=
 	"File\n"
@@ -3355,6 +3232,7 @@ char session_menudata[]=
 	//"0x4901 Tape analysis+cheating\n"
 	"0x0901 Tape auto-rewind\n"
 	"0x0400 Virtual joystick\tCtrl+F4\n"
+	"0x0401 Flip joystick buttons\n"
 	"Settings\n"
 	"0x8501 CRTC type 0\n"
 	"0x8502 CRTC type 1\n"
@@ -3383,13 +3261,14 @@ char session_menudata[]=
 	#endif
 	"0x8510 Disc controller\n"
 	"0x8590 Strict disc writes\n"
+	"0x8591 Read-only as default\n"
 	"Video\n"
 	"0x8A00 Full screen\tAlt+Return\n"
 	"0x8A01 Zoom to integer\n"
 	"0x8A02 Video acceleration*\n"
 	"=\n"
 	"0x8901 Onscreen status\tShift+F9\n"
-	"0x8904 Interpolation\n"
+	"0x8904 Pixel filtering\n"
 	"0x8903 X-Masking\n"
 	"0x8902 Y-Masking\n"
 	"=\n"
@@ -3414,10 +3293,10 @@ char session_menudata[]=
 	"0x9300 Full frameskip\tNum.*\n"
 	"0x9400 No frameskip\tNum./\n"
 	"=\n"
-	"0x8C00 Save screenshot\tF12\n"
+	"0x8C00 Save BMP screenshot\tF12\n"
 	"0xCC00 Record XRF film\tShift+F12\n"
-	"0x8C01 Hi-res XRF mode\n"
-	"0x8C02 Hi-speed XRF mode\n"
+	"0x8C01 High resolution\n"
+	"0x8C02 High framerate\n"
 	"Audio\n"
 	"0x8400 Sound playback\tF4\n"
 	#if AUDIO_CHANNELS > 1
@@ -3446,8 +3325,8 @@ void session_menuinfo(void)
 	session_menucheck(0x8400,!(audio_disabled&1));
 	session_menuradio(0x8401+audio_filter,0x8401,0x8404);
 	session_menucheck(0x8600,!(session_fast&1));
-	session_menucheck(0x8C01,session_filmscale==1);
-	session_menucheck(0x8C02,session_filmtimer==1);
+	session_menucheck(0x8C01,!session_filmscale);
+	session_menucheck(0x8C02,!session_filmtimer);
 	session_menucheck(0xCC00,(size_t)session_filmfile);
 	session_menucheck(0x0C00,(size_t)session_wavefile);
 	session_menucheck(0x4C00,(size_t)psg_logfile);
@@ -3462,10 +3341,12 @@ void session_menuinfo(void)
 	session_menucheck(0x4900,tape_fastload);
 	//session_menucheck(0x4901,tape_fastfeed);
 	session_menucheck(0x0400,session_key2joy);
+	session_menucheck(0x0401,key2joy_flag);
 	session_menuradio(0x0601+z80_turbo,0x0601,0x0604);
 	session_menuradio(0x8501+crtc_type,0x8501,0x8505);
 	session_menuradio(0x8509+(crtc_hold<0?0:!crtc_hold?1:2),0x8509,0x850B);
-	session_menucheck(0x8590,!disc_tolerant);
+	session_menucheck(0x8590,!(disc_filemode&2));
+	session_menucheck(0x8591,disc_filemode&1);
 	session_menucheck(0x8510,!(disc_disabled&1));
 	#ifdef Z80_CPC_DANDANATOR
 	session_menucheck(0xC500,(size_t)mem_dandanator);
@@ -3485,6 +3366,8 @@ void session_menuinfo(void)
 	session_menucheck(0x8902,video_filter&VIDEO_FILTER_Y_MASK);
 	session_menucheck(0x8903,video_filter&VIDEO_FILTER_X_MASK);
 	session_menucheck(0x8904,video_filter&VIDEO_FILTER_SMUDGE);
+	kbd_joy[4]=kbd_joy[6]=0x4C+key2joy_flag;
+	kbd_joy[5]=kbd_joy[7]=0x4D-key2joy_flag;
 	#if AUDIO_CHANNELS > 1
 	session_menuradio(0xC401+audio_mixmode,0xC401,0xC404);
 	for (int i=0;i<3;++i)
@@ -3599,10 +3482,15 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 					session_message(txt_error_snap_save,txt_error);
 			break;
 		case 0x8300: // F3: LOAD ANY FILE.. // LOAD SNAPSHOT..
-			if (puff_session_getfile(session_shift?snap_path:autorun_path,session_shift?snap_pattern:"*.sna;*.rom;*.crt;*.cpr;*.ini;*.dsk;*.cdt;*.tzx;*.csw;*.wav",session_shift?"Load snapshot":"Load file"))
+			if (puff_session_getfile(session_shift?snap_path:autorun_path,session_shift?snap_pattern:file_pattern,session_shift?"Load snapshot":"Load file"))
 		case 0x8000: // DRAG AND DROP
+			{
+				if (globbing(puff_pattern,session_parmtr,1))
+					if (!puff_session_zipdialog(session_parmtr,file_pattern,"Load file"))
+						break;
 				if (any_load(session_parmtr,!session_shift))
 					session_message(txt_error_any_load,txt_error);
+			}
 			break;
 		case 0x0300: // ^F3: RELOAD SNAPSHOT
 			if (*snap_path)
@@ -3634,6 +3522,9 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 		case 0x0400: // ^F4: TOGGLE JOYSTICK
 			session_key2joy=!session_key2joy;
 			break;
+		case 0x0401: // FLIP JOYSTICK BUTTONS
+			key2joy_flag=!key2joy_flag;
+			break;
 		case 0x8501:
 		case 0x8502:
 		case 0x8503:
@@ -3647,25 +3538,20 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 			crtc_hold=(k&7)-2; crtc_syncs_update(); crtc_invis_update(); // -1,0,+1
 			break;
 		case 0x8590: // STRICT DISC WRITES
-			disc_tolerant=!disc_tolerant;
+			disc_filemode^=2;
+			break;
+		case 0x8591: // DEFAULT READ-ONLY
+			disc_filemode^=1;
 			break;
 		case 0x8510: // DISC CONTROLLER
 			disc_disabled^=1;
 			break;
 		case 0x8511: // 64K RAM
-			gate_ram_depth=0;
-			break;
 		case 0x8512: // 128K RAM
-			gate_ram_depth=1;
-			break;
 		case 0x8513: // 192K RAM
-			gate_ram_depth=2;
-			break;
 		case 0x8514: // 320K RAM
-			gate_ram_depth=3;
-			break;
 		case 0x8515: // 576K RAM
-			gate_ram_depth=4;
+			gate_ram_depth=(k&7)-1;
 			break;
 		case 0x8520: // PLAYCITY
 			if (playcity_disabled=!playcity_disabled)
@@ -3733,8 +3619,8 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 			break;
 		case 0x8700: // F7: INSERT DISC..
 			if (!disc_disabled)
-				if (s=puff_session_getfilereadonly(disc_path,"*.dsk",session_shift?"Insert disc into B:":"Insert disc into A:",1))
-					if (disc_open(s,!!session_shift,!session_filedialog_readonly))
+				if (s=puff_session_getfilereadonly(disc_path,"*.dsk",session_shift?"Insert disc into B:":"Insert disc into A:",disc_filemode&1))
+					if (disc_open(s,!!session_shift,!session_filedialog_get_readonly()))
 						session_message("Cannot open disc!",txt_error);
 			break;
 		case 0x0700: // ^F7: EJECT DISC
@@ -3750,7 +3636,7 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 					if (tape_create(s))
 						session_message("Cannot create tape!",txt_error);
 			}
-			else if (s=puff_session_getfile(tape_path,"*.cdt;*.tzx;*.csw;*.wav","Insert tape"))
+			else if (s=puff_session_getfile(tape_path,"*.cdt;*.csw;*.wav","Insert tape"))
 				if (tape_open(s))
 					session_message("Cannot open tape!",txt_error);
 			break;
@@ -3836,11 +3722,11 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 			break;
 		case 0x8C01:
 			if (!session_recording)
-				session_filmscale=3-session_filmscale; // toggle 1 and 2
+				session_filmscale=!session_filmscale;
 			break;
 		case 0x8C02:
 			if (!session_recording)
-				session_filmtimer=3-session_filmtimer; // toggle 1 and 2
+				session_filmtimer=!session_filmtimer;
 			break;
 		case 0x8C00: // F12: SAVE SCREENSHOT OR RECORD XRF FILM
 			if (!session_shift)
@@ -3891,10 +3777,11 @@ void session_configreadmore(char *s)
 	else if (!strcasecmp(session_parmtr,"type")) { if ((i=*s&15)<length(bios_system)) type_id=i; }
 	else if (!strcasecmp(session_parmtr,"crtc")) { if ((i=*s&15)<5) crtc_type=i; }
 	else if (!strcasecmp(session_parmtr,"bank")) { if ((i=*s&15)<5) gate_ram_depth=i; }
-	else if (!strcasecmp(session_parmtr,"xfdc")) disc_tolerant=*s&1;
 	#ifdef PSG_PLAYCITY
 	else if (!strcasecmp(session_parmtr,"plct")) playcity_disabled=!(*s&1);
 	#endif
+	else if (!strcasecmp(session_parmtr,"fdcw")) disc_filemode=*s&3;
+	else if (!strcasecmp(session_parmtr,"joy1")) key2joy_flag=*s&1;
 	else if (!strcasecmp(session_parmtr,"file")) strcpy(autorun_path,s);
 	else if (!strcasecmp(session_parmtr,"snap")) strcpy(snap_path,s);
 	else if (!strcasecmp(session_parmtr,"tape")) strcpy(tape_path,s);
@@ -3903,14 +3790,13 @@ void session_configreadmore(char *s)
 	#ifdef Z80_CPC_DANDANATOR
 	else if (!strcasecmp(session_parmtr,"dntr")) strcpy(dandanator_path,s);
 	#endif
-	else if (!strcasecmp(session_parmtr,"info")) onscreen_flag=*s&1;
 	else if (!strcasecmp(session_parmtr,"palette")) { if ((i=*s&15)<length(video_table)) video_type=i; }
-	else if (!strcasecmp(session_parmtr,"autorewind")) tape_rewind=*s&1;
+	else if (!strcasecmp(session_parmtr,"rewind")) tape_rewind=*s&1;
 	else if (!strcasecmp(session_parmtr,"debug")) z80_debug_configread(strtol(s,NULL,10));
 }
 void session_configwritemore(FILE *f)
 {
-	fprintf(f,"type %i\ncrtc %i\nbank %i\nxfdc %i\n"
+	fprintf(f,"type %i\ncrtc %i\nbank %i\nfdcw %i\njoy1 %i\n"
 	#ifdef PSG_PLAYCITY
 		"plct %i\n"
 	#endif
@@ -3918,8 +3804,8 @@ void session_configwritemore(FILE *f)
 	#ifdef Z80_CPC_DANDANATOR
 		"dntr %s\n"
 	#endif
-		"info %i\npalette %i\nautorewind %i\ndebug %i\n",
-		type_id,crtc_type,gate_ram_depth,disc_tolerant,
+		"palette %i\nrewind %i\ndebug %i\n",
+		type_id,crtc_type,gate_ram_depth,disc_filemode,key2joy_flag,
 	#ifdef PSG_PLAYCITY
 		!playcity_disabled,
 	#endif
@@ -3927,11 +3813,11 @@ void session_configwritemore(FILE *f)
 	#ifdef Z80_CPC_DANDANATOR
 		dandanator_path,
 	#endif
-		onscreen_flag,video_type,tape_rewind,z80_debug_configwrite());
+		video_type,tape_rewind,z80_debug_configwrite());
 }
 
 #if defined(DEBUG) || defined(SDL_MAIN_HANDLED)
-void printferror(char *s) { printf("Error: %s\n",s); }
+void printferror(char *s) { printf("error: %s\n",s); }
 #define printfusage(s) printf(MY_CAPTION " " MY_VERSION " " MY_LICENSE "\n" s)
 #else
 void printferror(char *s) { sprintf(session_tmpstr,"Error: %s\n",s); session_message(session_tmpstr,txt_error); }
@@ -4033,6 +3919,9 @@ int main(int argc,char *argv[])
 					case '+':
 						session_intzoom=1;
 						break;
+					case '$':
+						session_hidemenu=1;
+						break;
 					case '!':
 						session_softblit=1;
 						break;
@@ -4093,7 +3982,7 @@ int main(int argc,char *argv[])
 		while (!session_signal)
 			z80_main(
 				z80_multi*( // clump Z80 instructions together to gain speed...
-				tape_fastskip?VIDEO_LENGTH_X/16:( // tape loading ignores most events and heavy clumping is feasible, although some sync is still needed
+				tape_skipping?VIDEO_LENGTH_X/16:( // tape loading ignores most events and heavy clumping is feasible, although some sync is still needed
 					video_pos_x<video_threshold?1:(VIDEO_LENGTH_X-1-video_pos_x)/16//(VIDEO_LENGTH_X+15-video_pos_x)/40) // all IRQ events happen early in each scanline!
 				)<<(session_fast>>1)) // ...without missing any IRQ and CRTC deadlines! (or particular VRAM updates, as in "CHAPELLE SIXTEEN")
 			);
@@ -4113,8 +4002,8 @@ int main(int argc,char *argv[])
 					onscreen_byte(+4,-3,disc_track[1],q);
 				}
 				int i,q=!tape_delay; //tape_enabled
-				if (tape_fastskip)
-					onscreen_char(+6,-3,tape_feedskip?'*':'+',q);
+				if (tape_skipping)
+					onscreen_char(+6,-3,tape_skipping>0?'*':'+',q);
 				if (tape_filesize)
 				{
 					i=(long long)tape_filetell*1000/(tape_filesize+1);
@@ -4134,13 +4023,13 @@ int main(int argc,char *argv[])
 					if (video_threshold>VIDEO_LENGTH_X/4)
 						onscreen_bool(-4,-6,1,1,0);
 				}
-				#ifdef SDL2
+				/*#ifdef SDL2
 				if (session_audio) // SDL2 audio queue
 				{
 					if ((j=session_audioqueue)<0) j=0; else if (j>AUDIO_N_FRAMES) j=AUDIO_N_FRAMES;
 					onscreen_bool(+11,-2,j,1,1); onscreen_bool(j+11,-2,AUDIO_N_FRAMES-j,1,0);
 				}
-				#endif
+				#endif*/
 			}
 			video_threshold=VIDEO_LENGTH_X/4; // softer HSYNC threshold
 			// update session and continue
@@ -4173,11 +4062,15 @@ int main(int argc,char *argv[])
 			#endif
 			}
 			audio_queue=0; // wipe audio queue and force a reset
-			psg_writelog(); session_writefilm();
+			psg_writelog();
 			crtc_giga=crtc_giga_count>=156&&crtc_giga_count<312&&crtc_table[7]; crtc_giga_count=0; // autodetect Gigascreen effects
+			if (tape_enabled)
+				{ if (tape_delay>0) --tape_delay; } // handle tape delays
+			else if (tape_delay<3) // the tape is temporarily "deaf":
+				++tape_delay; // OPERA SOFT tapes need this delay! [3..]
 			if (tape_closed)
 				tape_closed=0,session_dirtymenu=1; // tag tape as closed
-			tape_fastskip=tape_feedskip=audio_pos_z=0;
+			tape_skipping=audio_pos_z=0;
 			if (tape&&tape_skipload&&!tape_delay) // &&tape_enabled
 				session_fast|=6,video_framelimit|=(MAIN_FRAMESKIP_MASK+1),video_interlaced|=2,audio_disabled|=2; // abuse binary logic to reduce activity
 			else
@@ -4190,8 +4083,8 @@ int main(int argc,char *argv[])
 	tape_close();
 	disc_close(0); disc_close(1);
 	psg_closelog();
-	session_closewave();
 	session_closefilm();
+	session_closewave();
 	if (f=fopen(session_configfile(),"w"))
 		session_configwritemore(f),session_configwrite(f),fclose(f);
 	return puff_byebye(),session_byebye(),0;

@@ -28,7 +28,7 @@ INLINE int hex16(int i) { return i<10?'0'+i:'7'+i; }
 #define length(x) (sizeof(x)/sizeof(*(x)))
 
 #include "cpcec-a7.h" //unsigned char *onscreen_chrs;
-#define ONSCREEN_SIZE (sizeof(onscreen_chrs)/96)
+#define ONSCREEN_SIZE (sizeof(onscreen_chrs)/95)
 
 #ifndef SDL2
 #if defined(SDL_MAIN_HANDLED)||!defined(_WIN32)
@@ -72,13 +72,19 @@ INLINE int hex16(int i) { return i<10?'0'+i:'7'+i; }
 #define VIDEO_UNIT DWORD // 0x00RRGGBB style
 #define VIDEO1(x) (x) // no conversion required!
 
-#define VIDEO_FILTER_AVG(x,y) (((((x&0xFF00FF)+(y&0xFF00FF)+(x<y?0x10001:0))&0x1FE01FE)+(((x&0xFF00)+(y&0xFF00)+(x<y?0x100:0))&0x1FE00))>>1) // 50:50
-#define VIDEO_FILTER_BLUR(x,y) (((((x&0xFF00FF)*3+(y&0xFF00FF)+(x<y?0x20002:0))&0x3FC03FC)+(((x&0xFF00)*3+(y&0xFF00)+(x<y?0x200:0))&0x3FC00))>>2) // 25:75
-#define VIDEO_FILTER_STEP(r,x,y) r=VIDEO_FILTER_BLUR(x,y),x=r // hard interpolation
-//#define VIDEO_FILTER_STEP(r,x,y) r=VIDEO_FILTER_BLUR(x,y),x=y // soft interpolation
-#define VIDEO_FILTER_X1(x) (((x>>1)&0x7F7F7F)+0x2B2B2B)
-//#define VIDEO_FILTER_X1(x) (((x>>2)&0x3F3F3F)+0x404040) // heavier
-//#define VIDEO_FILTER_X1(x) (((x>>2)&0x3F3F3F)*3+0x161616) // lighter
+//#define VIDEO_FILTER_HALF(x,y) (((((x&0XFF00FF)+(y&0XFF00FF)+(x<y?0X10001:0))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+(x<y?0X100:0))&0X1FE00))>>1) // 50%:50%
+#define VIDEO_FILTER_HALF(x,y) ((x<y?((0X10001+(x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+((0X100+(x&0XFF00)+(y&0XFF00))&0X1FE00):(((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1) // 50:50
+//#define VIDEO_FILTER_BLUR(r,x,y,z) r=VIDEO_FILTER_HALF(y,z),y=z
+//#define VIDEO_FILTER_BLUR(r,x,y,z) r=VIDEO_FILTER_HALF(y,z),y=r
+//#define VIDEO_FILTER_BLUR(r,x,y,z) r=(z&0XFF0000)+(y&0XFF00)+(x&0XFF),x=y,y=z // colour bleed
+//#define VIDEO_FILTER_BLUR(r,x,y,z) r=((z&0XFEFEFE)>>1)+((((z)*3)>>16)+(((z&0XFF00)*9)>>8)+(((z&0XFF)))+13)/26*0X10101 // desaturation
+#define VIDEO_FILTER_BLUR(r,x,y,z) r=(x<y?((0X10001+(z&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+((0X100+(y&0XFF00)+(x&0XFF00))&0X1FE00):(((z&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((y&0XFF00)+(x&0XFF00))&0X1FE00))>>1,x=y,y=z // 50:50 bleed
+//#define VIDEO_FILTER_X1(x) (((x>>1)&0X7F7F7F)+0X2B2B2B) // average
+//#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)+0X404040) // heavier
+//#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)*3+0X161616) // lighter
+//#define VIDEO_FILTER_X1(x) (((((((x&0XFF0000)>>8)+(x&0XFF00))>>8)+(x&0XFF)+1)/3)*0X10101) // fast but imprecise greyscale
+//#define VIDEO_FILTER_X1(x) ((((x&0XFF0000)*60+(x&0XFF00)*(176<<8)+(x&0XFF)*(20<<16)+128)>>24)*0X10101) // greyscale 3:9:1
+#define VIDEO_FILTER_X1(x) ((((x&0XFF0000)*76+(x&0XFF00)*(150<<8)+(x&0XFF)*(30<<16)+128)>>24)*0X10101) // natural greyscale
 
 #if 0 // 8 bits
 	#define AUDIO_UNIT unsigned char
@@ -93,12 +99,12 @@ INLINE int hex16(int i) { return i<10?'0'+i:'7'+i; }
 #endif // bitsize
 #define AUDIO_CHANNELS 2 // 1 mono, 2 stereo
 
-VIDEO_UNIT *video_frame; // video frame, allocated on runtime
+VIDEO_UNIT *video_frame,*video_blend; // video frame, allocated on runtime
 AUDIO_UNIT *audio_frame,audio_buffer[AUDIO_LENGTH_Z*AUDIO_CHANNELS],audio_memory[AUDIO_N_FRAMES*AUDIO_LENGTH_Z*AUDIO_CHANNELS]; // audio frame, cycles during playback
 VIDEO_UNIT *video_target; // pointer to current video pixel
 AUDIO_UNIT *audio_target; // pointer to current audio sample
 int video_pos_x,video_pos_y,audio_pos_z; // counters to keep pointers within range
-BYTE video_interlaced=0,video_interlaces=0,video_interlacez=0; // video scanline status
+BYTE video_interlaced=0,video_interlaces=0; // video scanline status
 char video_framelimit=0,video_framecount=0; // video frameskip counters; must be signed!
 BYTE audio_disabled=0,audio_session=0; // audio status and counter
 unsigned char session_path[STRMAX],session_parmtr[STRMAX],session_tmpstr[STRMAX],session_substr[STRMAX],session_info[STRMAX]="";
@@ -107,15 +113,15 @@ int session_timer,session_event=0; // timing synchronisation and user command
 BYTE session_fast=0,session_wait=0,session_audio=1,session_softblit=1,session_hardblit; // timing and devices ; software blitting is enabled by default because it's safer
 BYTE session_stick=1,session_shift=0,session_key2joy=0; // keyboard and joystick
 BYTE video_scanline=0,video_scanlinez=8; // 0 = solid, 1 = scanlines, 2 = full interlace, 3 = half interlace
-BYTE video_filter=0,audio_filter=0; // interpolation flags
+BYTE video_filter=0,audio_filter=0; // filter flags
 BYTE session_intzoom=0,session_recording=0;
-
 FILE *session_wavefile=NULL; // audio recording is done on each session update
 
 RECT session_ideal; // ideal rectangle where the window fits perfectly
 JOYINFOEX session_joy; // joystick buffer
 HWND session_hwnd; // window handle
 HMENU session_menu=NULL; // menu handle
+int session_hidemenu=0; // normal or pop-up
 HDC session_dc1,session_dc2=NULL; HGDIOBJ session_dib=NULL; // video structs
 HWAVEOUT session_wo; WAVEHDR session_wh; MMTIME session_mmtime; // audio structs
 
@@ -345,10 +351,8 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 		if (yy>xx*VIDEO_PIXELS_Y/VIDEO_PIXELS_X) // window area is too tall?
 			yy=xx*VIDEO_PIXELS_Y/VIDEO_PIXELS_X;
 		if (session_intzoom) // integer zoom? (100%, 200%, 300%...)
-		{
-			xx=(xx/(VIDEO_PIXELS_X*62/64))*VIDEO_PIXELS_X; // the MM/NN factor is a tolerance margin:
-			yy=(yy/(VIDEO_PIXELS_Y*62/64))*VIDEO_PIXELS_Y; // 61/64 allows 200% on windowed 1920x1080
-		}
+			xx=((xx*17)/VIDEO_PIXELS_X/16)*VIDEO_PIXELS_X,
+			yy=((yy*17)/VIDEO_PIXELS_Y/16)*VIDEO_PIXELS_Y;
 		if (!(xx*yy))
 			xx=VIDEO_PIXELS_X,yy=VIDEO_PIXELS_Y; // window area is too small!
 		int x=(r.right-xx)/2,y=(r.bottom-yy)/2; // locate bitmap on window center
@@ -413,8 +417,9 @@ void session_togglefullscreen(void)
 {
 	if (IsZoomed(session_hwnd))
 	{
-		SetWindowLong(session_hwnd,GWL_STYLE,(GetWindowLong(session_hwnd,GWL_STYLE)|WS_CAPTION)); //&~WS_POPUP&~WS_CLIPCHILDREN // show caption and buttons
-		SetMenu(session_hwnd,session_menu); // show menu
+		SetWindowLong(session_hwnd,GWL_STYLE,(GetWindowLong(session_hwnd,GWL_STYLE)|WS_CAPTION));
+			//&~WS_POPUP&~WS_CLIPCHILDREN // show caption and buttons
+		if (!session_hidemenu) SetMenu(session_hwnd,session_menu); // show menu
 		RECT r; GetWindowRect(session_hwnd,&r); // adjust to screen center
 		ShowWindow(session_hwnd,SW_RESTORE);
 		r.left+=((r.right-r.left)-session_ideal.right)/2;
@@ -424,14 +429,21 @@ void session_togglefullscreen(void)
 	}
 	else
 	{
-		SetWindowLong(session_hwnd,GWL_STYLE,(GetWindowLong(session_hwnd,GWL_STYLE)&~WS_CAPTION)); //|WS_POPUP|WS_CLIPCHILDREN // hide caption and buttons
-		SetMenu(session_hwnd,NULL); // hide menu
+		SetWindowLong(session_hwnd,GWL_STYLE,(GetWindowLong(session_hwnd,GWL_STYLE)&~WS_CAPTION));
+			//|WS_POPUP|WS_CLIPCHILDREN // hide caption and buttons
+		/*if (!session_hidemenu)*/ SetMenu(session_hwnd,NULL); // hide menu
 		ShowWindow(session_hwnd,SW_MAXIMIZE); // adjust to entire screen
 		session_fullscreen=1;
 	}
 	session_dirtymenu=1; // update "Full screen" option (if any)
 }
-
+int session_contextmenu(void) // used only when the normal menu is disabled
+{
+	POINT p;
+	if (session_hidemenu&&session_menu)
+		return GetCursorPos(&p),TrackPopupMenu(session_menu,0,p.x,p.y,0,session_hwnd,NULL);
+	return 0;
+}
 LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // window callback function
 {
 	switch (msg)
@@ -480,13 +492,16 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 			}
 			break;
 		case WM_COMMAND:
-			if (0x3F00==(WORD)wparam)
+			if (0x3F00==(WORD)wparam) // Exit
 				PostMessage(hwnd,WM_CLOSE,0,0);
 			else
 			{
 				session_shift=!!(wparam&0x4000); // bit 6 means SHIFT KEY ON
 				session_event=wparam&0xBFFF; // cfr infra: bit 7 means CONTROL KEY OFF
 			}
+			break;
+		case WM_RBUTTONUP:
+			session_contextmenu();
 			break;
 		case WM_KEYDOWN:
 			{
@@ -523,11 +538,16 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 		case WM_ENTERSIZEMOVE: // pause before moving the window
 		case WM_ENTERMENULOOP: // pause before showing the menus
 			session_please();
-		case WM_KILLFOCUS: // no 'break'!
+		case WM_KILLFOCUS: // no `break`!
 			session_kbdclear(); // loss of focus: no keys!
-		default: // no 'break'!
-			if (msg==WM_SYSKEYDOWN&&wparam==VK_RETURN) // ALT+RETURN toggles MAXIMIZE/RESTORE!
-				session_togglefullscreen();
+		default: // no `break`!
+			if (msg==WM_SYSKEYDOWN)
+			{
+				if (wparam==VK_RETURN) // ALT+RETURN toggles fullscreen
+					return session_togglefullscreen(),0; // skip OS
+				else if (wparam==VK_F10&&session_contextmenu()) // F10 shows the popup menu
+					return 0; // skip OS if the popup menu is allowed
+			}
 			return DefWindowProc(hwnd,msg,wparam,lparam);
 	}
 	return 0;
@@ -562,7 +582,7 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 		else // menu block
 		{
 			if (!session_menu)
-				session_menu=CreateMenu();
+				session_menu=session_hidemenu?CreatePopupMenu():CreateMenu();
 			if (session_submenu)
 				AppendMenu(session_menu,MF_POPUP,(UINT_PTR)session_submenu,session_parmtr);
 			session_submenu=CreateMenu();
@@ -589,11 +609,14 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	session_ideal.left=session_ideal.top=0; // calculate ideal size
 	session_ideal.right=VIDEO_PIXELS_X;
 	session_ideal.bottom=VIDEO_PIXELS_Y;
-	AdjustWindowRect(&session_ideal,i=!session_submenu?WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU:WS_OVERLAPPEDWINDOW,!!session_submenu);
+	if (!session_submenu)
+		session_hidemenu=1,session_menu=NULL;
+	AdjustWindowRect(&session_ideal,i=WS_OVERLAPPEDWINDOW,!session_hidemenu);
 	session_ideal.right-=session_ideal.left;
 	session_ideal.bottom-=session_ideal.top;
 	session_ideal.left=session_ideal.top=0; // ensure that the ideal area is defined as (0,0,WIDTH,HEIGHT)
-	if (!(session_hwnd=CreateWindow(wc.lpszClassName,session_caption,i,CW_USEDEFAULT,CW_USEDEFAULT,session_ideal.right,session_ideal.bottom,NULL,session_submenu?session_menu:NULL,wc.hInstance,NULL)))
+	if (!(session_hwnd=CreateWindow(wc.lpszClassName,session_caption,i,CW_USEDEFAULT,CW_USEDEFAULT,session_ideal.right,session_ideal.bottom,NULL,session_hidemenu?NULL:session_menu,wc.hInstance,NULL))
+		||!(video_blend=malloc(sizeof(VIDEO_UNIT)*VIDEO_PIXELS_Y/2*VIDEO_PIXELS_X)))
 		return "cannot create window";
 	DragAcceptFiles(session_hwnd,1);
 
@@ -740,7 +763,8 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 	return q;
 }
 
-INLINE void session_writewave(AUDIO_UNIT *t); // save the current sample frame. Must be defined later on!
+void session_writewave(AUDIO_UNIT *t); // save the current sample frame. Must be defined later on!
+FILE *session_filmfile=NULL; void session_writefilm(void); // must be defined later on, too!
 INLINE void session_render(void) // update video, audio and timers
 {
 	int i,j;
@@ -775,18 +799,19 @@ INLINE void session_render(void) // update video, audio and timers
 	audio_target=&audio_memory[AUDIO_LENGTH_Z*AUDIO_CHANNELS*audio_session];
 	if (!audio_disabled) // avoid conflicts when realtime is off: output and playback buffers clash!
 	{
-		if (audio_filter) // audio interpolation: sample averaging
+		if (audio_filter) // audio filter: sample averaging
 			audio_playframe(audio_filter,audio_frame==audio_buffer?audio_target:audio_frame);
 		else if (audio_frame==audio_buffer)
 			memcpy(audio_target,audio_buffer,sizeof(audio_buffer));
 	}
 	if (session_wavefile) // record audio output, if required
-	{
 		session_writewave(audio_target);
+	if (session_wavefile||session_filmfile)
 		audio_frame=audio_buffer; // secondary buffer
-	}
 	else
 		audio_frame=audio_target; // primary buffer
+	session_writefilm(); // record film frame
+
 	if (session_audio) // use audio as clock
 	{
 		static BYTE s=1;
@@ -799,8 +824,8 @@ INLINE void session_render(void) // update video, audio and timers
 			SetPriorityClass(GetCurrentProcess(),(o=session_fast|audio_disabled)?BELOW_NORMAL_PRIORITY_CLASS:ABOVE_NORMAL_PRIORITY_CLASS);
 			//SetThreadPriority(GetCurrentThread(),(o=session_fast|audio_disabled)?THREAD_PRIORITY_NORMAL:THREAD_PRIORITY_ABOVE_NORMAL);
 		}
-		if (waveOutGetPosition(session_wo,&session_mmtime,sizeof(MMTIME))) // !=MMSYSERR_NOERROR
-			;//session_audio=0,audio_disabled=-1; // audio device is lost! // can this really happen!?
+		waveOutGetPosition(session_wo,&session_mmtime,sizeof(MMTIME));
+		//if (!=MMSYSERR_NOERROR) session_audio=0,audio_disabled=-1; // audio device is lost! // can this really happen!?
 		static int u=0; if (!u) u=session_mmtime.u.sample; // reference
 		i=session_mmtime.u.sample-u,j=AUDIO_PLAYBACK; // questionable -- this will break the timing every 13 hours of emulation at 44100 Hz :-(
 	}
@@ -853,6 +878,8 @@ INLINE void session_byebye(void) // delete video+audio devices
 		waveOutUnprepareHeader(session_wo,&session_wh,sizeof(WAVEHDR));
 		waveOutClose(session_wo);
 	}
+	if (session_menu)
+		DestroyMenu(session_menu);
 
 	#ifdef DDRAW
 	if (lpddfore) IDirectDrawSurface_SetClipper(lpddfore,NULL),IDirectDrawSurface_Release(lpddfore);
@@ -866,21 +893,35 @@ INLINE void session_byebye(void) // delete video+audio devices
 	if (session_dc2) DeleteDC(session_dc2);
 	if (session_dib) DeleteObject(session_dib);
 	ReleaseDC(session_hwnd,session_dc1);
+	free(video_blend);
 }
 
-void session_writebitmap(FILE *f) // write current OS-dependent bitmap into a BMP file
+#define session_getscanline(i) (&video_frame[i*VIDEO_LENGTH_X+VIDEO_OFFSET_X]) // no transformations required, VIDEO_UNIT is ARGB8888
+void session_writebitmap(FILE *f,int half) // write current OS-dependent bitmap into a RGB888 BMP file
 {
 	static BYTE r[VIDEO_PIXELS_X*3];
-	for (int i=VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-1;i>=VIDEO_OFFSET_Y;--i)
-	{
-		BYTE *s=(BYTE *)&video_frame[(VIDEO_OFFSET_X+i*VIDEO_LENGTH_X)],*t=r;
-		for (int j=0;j<VIDEO_PIXELS_X;++j) // turn RGBA (32 bits) into RGB (24 bits)
-			*t++=*s++, // copy B
-			*t++=*s++, // copy G
-			*t++=*s++, // copy R
-			s++; // skip A
-		fwrite(r,1,VIDEO_PIXELS_X*3,f);
-	}
+	for (int i=VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-half-1;i>=VIDEO_OFFSET_Y;fwrite(r,1,VIDEO_PIXELS_X*3>>half,f),i-=half+1)
+		if (half)
+		{
+			BYTE *t=r; VIDEO_UNIT *s=session_getscanline(i);
+			for (int j=0;j<VIDEO_PIXELS_X;j+=2) // soft scale 2x RGBA (32 bits) into 1x RGB (24 bits)
+			{
+				VIDEO_UNIT v=VIDEO_FILTER_HALF(s[0],s[1]);
+				*t++=v, // copy B
+				*t++=v>>8, // copy G
+				*t++=v>>16, // copy R
+				s+=2;
+			}
+		}
+		else
+		{
+			BYTE *t=r,*s=(BYTE *)session_getscanline(i);
+			for (int j=0;j<VIDEO_PIXELS_X;++j) // turn RGBA (32 bits) into RGB (24 bits)
+				*t++=*s++, // copy B
+				*t++=*s++, // copy G
+				*t++=*s++, // copy R
+				s++; // skip A
+		}
 }
 
 // menu item functions ---------------------------------------------- //
@@ -1034,6 +1075,7 @@ int session_filedialog(char *r,char *s,char *t,int q,int f) // auxiliar function
 	memset(&session_ofn,0,sizeof(session_ofn));
 	session_ofn.lStructSize=sizeof(OPENFILENAME);
 	session_ofn.hwndOwner=session_hwnd;
+	if (!r) r=session_path; // NULL path = default!
 	if (r!=(char*)session_tmpstr)
 		strcpy(session_tmpstr,r); // copy path, if required
 	int i=strlen(session_tmpstr); // sanitize path
@@ -1063,9 +1105,8 @@ int session_filedialog(char *r,char *s,char *t,int q,int f) // auxiliar function
 	session_please();
 	return q?GetSaveFileName(&session_ofn):GetOpenFileName(&session_ofn);
 }
-#define session_filedialog_readonly (session_ofn.Flags&OFN_READONLY)
-#define session_filedialog_readonly0() (session_ofn.Flags&=~OFN_READONLY)
-#define session_filedialog_readonly1() (session_ofn.Flags|=OFN_READONLY)
+#define session_filedialog_get_readonly() (session_ofn.Flags&OFN_READONLY)
+#define session_filedialog_set_readonly(q) (q?(session_ofn.Flags|=OFN_READONLY):(session_ofn.Flags&=~OFN_READONLY))
 char *session_newfile(char *r,char *s,char *t) // "Create File" | ...and returns NULL on failure, or a string on success.
 	{ return session_filedialog(r,s,t,1,0)?session_parmtr:NULL; }
 char *session_getfile(char *r,char *s,char *t) // "Open a File" | lists files in path `r` matching pattern `s` under caption `t`, etc.
@@ -1073,36 +1114,9 @@ char *session_getfile(char *r,char *s,char *t) // "Open a File" | lists files in
 char *session_getfilereadonly(char *r,char *s,char *t,int q) // "Open a File" with Read Only option | lists files in path `r` matching pattern `s` under caption `t`; `q` is the default Read Only value, etc.
 	{ return session_filedialog(r,s,t,0,q?OFN_READONLY:0)?session_parmtr:NULL; }
 
-// OS-dependant composite funcions ---------------------------------- //
+// final definitions ------------------------------------------------ //
 
-//#define mgetc(x) (*(x))
-//#define mputc(x,y) (*(x)=(y))
-// 'i' = lil-endian (Intel), 'm' = big-endian (Motorola)
-
-#define mgetii(x) (*(WORD*)(x))
-#define mgetiiii(x) (*(DWORD*)(x))
-#define mputii(x,y) ((*(WORD*)(x))=(y))
-#define mputiiii(x,y) ((*(DWORD*)(x))=(y))
-int  mgetmm(unsigned char *x) { return (*x<<8)+x[1]; }
-int  mgetmmmm(unsigned char *x) { return (*x<<24)+(x[1]<<16)+(x[2]<<8)+x[3]; }
-void mputmm(unsigned char *x,int y) { *x=y>>8; x[1]=y; }
-void mputmmmm(unsigned char *x,int y) { *x=y>>24; x[1]=y>>16; x[2]=y>>8; x[3]=y; }
-
-#define equalsii(x,i) (*(WORD*)(x)==(i))
-#define equalsiiii(x,i) (*(DWORD*)(x)==(i))
-int equalsmm(unsigned char *x,unsigned int i) { return (*x<<8)+x[1]==i; }
-int equalsmmmm(unsigned char *x,unsigned int i) { return (*x<<24)+(x[1]<<16)+(x[2]<<8)+x[3]==i; }
-
-int fgetii(FILE *f) { int i=0; return (fread(&i,1,2,f)!=2)?EOF:i; } // native lil-endian 16-bit fgetc()
-int fputii(int i,FILE *f) { return (fwrite(&i,1,2,f)!=2)?EOF:i; } // native lil-endian 16-bit fputc()
-int fgetiiii(FILE *f) { int i=0; return (fread(&i,1,4,f)!=4)?EOF:i; } // native lil-endian 32-bit fgetc()
-int fputiiii(int i,FILE *f) { return (fwrite(&i,1,4,f)!=4)?EOF:i; } // native lil-endian 32-bit fputc()
-int fgetmm(FILE *f) { int i=fgetc(f)<<8; return i+fgetc(f); } // common big-endian 16-bit fgetc()
-int fputmm(int i,FILE *f) { fputc(i>>8,f); return fputc(i,f); } // common big-endian 16-bit fputc()
-int fgetmmmm(FILE *f) { int i=fgetc(f)<<24; i+=fgetc(f)<<16; i+=fgetc(f)<<8; return i+fgetc(f); } // common big-endian 32-bit fgetc()
-int fputmmmm(int i,FILE *f) { fputc(i>>24,f); fputc(i>>16,f); fputc(i>>8,f); return fputc(i,f); } // common big-endian 32-bit fputc()
-
-// dummy SDL definitions
+// dummy SDL2 definitions
 #define SDL_LIL_ENDIAN 1234
 #define SDL_BIG_ENDIAN 4321
 #define SDL_BYTEORDER SDL_LIL_ENDIAN

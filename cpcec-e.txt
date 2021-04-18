@@ -267,6 +267,12 @@ ZIP archives can be read by CPCEC (if there are more than one file inside, a
 list will be shown so the user can choose the required file) but their contents
 cannot be modified.
 
+The mapping between the real keyboard and the emulated is straightforward
+(alphanumeric table, control keys, numeric keypad, cursors...) with the only
+particularities of DELETE for CLR and INSERT for COPY, as their functions are
+equivalent but modern keyboards no longer place these keys within the
+alphanumeric table.
+
 ## Debugger ##
 
 The debugger is used to stop the emulation and examine its internal state. It
@@ -300,7 +306,8 @@ can write (RAM only; the separator is `\`);
 * O ("output") requests a length in bytes and a filename, and creates a file
 with a memory dump starting from the current location of the cursor;
 * P ("print") requests a length in bytes and a filename, and creates a file with
-a disassembly starting from the current location of the cursor;
+a disassembly (disassembly panel) or a hex dump (memory dump panel) starting
+from the current location of the cursor;
 * Q toggles the behavior of illegal opcode $EDFF, either as in normal mode
 ("EDFF-") where it does nothing special or in development mode ("EDFF+") where
 its a breakpoint;
@@ -373,9 +380,13 @@ SPEC-P-3.ROM, and otherwise runs the same as CPCEC, with several differences:
 * option -K disables the PSG AY-3-8912 sound chip (enabled by default) if the
 chosen model is Spectrum 48k;
 * option -X disables the disc drives if the chosen model is Spectrum +3, that
-thus becomes a +2A instead;
+thus becomes a +2A instead; same outcome can happen on runtime by disabling
+"Settings: Disc controller" and selecting the firmware SPEC-P-3.ROM;
 * Control+Shift+F8 starts (or stops) the cassette motor, because the CPC
 hardware includes a built-in tape control, while the Spectrum hardware lacks it.
+* SHIFT emulates the CAPS key, CONTROL emulates SYMBOL, BLOQ MAYUS emulates
+CAPS+2 (CAPS LOCK), cursors emulate CAPS+6/7/8/9, TAB emulates CAPS+1 (EDIT) and
+ESCAPE emulates CAPS+SPACE (BREAK).
 * joystick options apply to the Sinclair 2 interface by default; the menu allows
 choosing the type of joystick.
 
@@ -836,3 +847,20 @@ files saved from Spectrum Plus3 set bit 4 of byte 0x0C01E to state that the
 snapshot requires a Plus3 (Easter egg "Hello There I'm a +3"). The CPC debugger
 adds an information panel (key 'X') for Dandanator status, and its graphics
 viewer can show MODE 2 images.
+- 20210418 -- twentieth public release. Pixel and scanline filters are now
+saturation-based (colour aberration, desaturation) rather than luminosity-based
+(horizontal blur, shading). Fixed bug in XRF-to-AVI recording: VFW32 operations
+always assumed 16-bit stereo. The film recording options "High resolution" and
+"High framerate" now stick between sessions, and the first one also applies to
+BMP screenshots. Aded support for block types $19 and $4B in CDT/TZX tape files,
+as well as the new disc option "Read-only as default" so the user can choose
+whether discs are by default read-only or read-write, and this option stacks
+together with the already extant "Strict disc writes". Added new option "Flip
+joystick buttons" to CPCEC so users can swap the value of the two CPC joystick
+buttons, as suggested by SB1903. PSG emulation now catches overflows, regardless
+of whether they're programming errors (music distortion in "Thing on a Spring")
+or done on purpose (pipe sound effect in "Thing Bounces Back"). Fixed bug in
+ZXSEC's Plus3 memory contention ("Firefly" disc release) and improved the beeper
+(oversampling: Utz's "Quattropic"). ZXSEC snapshot handling is now more strict
+or flexible (changing models as often or as seldom as possible) depending on the
+option "Strict SNA files".

@@ -7,7 +7,7 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "XRF"
-#define MY_VERSION "20210207"//"2555"
+#define MY_VERSION "20210418"//"1355"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -116,7 +116,7 @@ int xrf_open(char *s) // opens a XRF file and sets the common parameters up; !0 
 	fseek(xrf_file,0,SEEK_END);
 	xrf_length=ftell(xrf_file);
 	fseek(xrf_file,0,SEEK_SET);
-	char id[9]; id[fread1(id,8,xrf_file)]=0;
+	unsigned char id[9]; id[fread1(id,8,xrf_file)]=0;
 	video_x=xrf_fgetcc();
 	video_y=xrf_fgetcc();
 	audio_z=xrf_fgetcc();
@@ -240,11 +240,11 @@ int vfw_create(char *s) // !0 ERROR
 	{
 		AVISTREAMINFO ahdr; MEMZERO(ahdr);
 		ahdr.fccType=streamtypeAUDIO;
-		ahdr.dwRate=(ahdr.dwSampleSize=ahdr.dwScale=4)*clock_z*audio_z;
+		ahdr.dwRate=(ahdr.dwSampleSize=ahdr.dwScale=flags_audio[flags_z&3])*clock_z*audio_z;
 		ahdr.dwQuality=(DWORD)-1;
 		WAVEFORMATEX wfex; MEMZERO(wfex); wfex.wFormatTag=WAVE_FORMAT_PCM;
-		wfex.nBlockAlign=(wfex.wBitsPerSample=16)/8*(wfex.nChannels=(1+1));
-		wfex.nAvgBytesPerSec=wfex.nBlockAlign*(wfex.nSamplesPerSec=audio_z*clock_z);
+		wfex.nAvgBytesPerSec=(wfex.nBlockAlign=(wfex.wBitsPerSample=(flags_z&1)?16:8)/8*(wfex.nChannels=(flags_z&2)?2:1))
+			*(wfex.nSamplesPerSec=audio_z*clock_z);
 		if (AVIFileCreateStream(vfw_file,&vfw_audio,&ahdr))
 			vfw_audio=NULL;
 		else
@@ -264,7 +264,7 @@ int vfw_write(void) // !0 ERROR
 		AVIStreamWrite(vfw_codec,avi_videos++,1,avi_canvas,video_x*video_y*4,0,NULL,NULL);
 		if (vfw_audio)
 		{
-			AVIStreamWrite(vfw_audio,avi_audios,audio_z,wave32,audio_z*4,0,NULL,NULL);
+			AVIStreamWrite(vfw_audio,avi_audios,audio_z,wave32,audio_z*flags_audio[flags_z&3],0,NULL,NULL);
 			avi_audios+=audio_z;
 		}
 		return 0;
@@ -485,11 +485,26 @@ int avi_finish(void)
 
 int main(int argc,char *argv[])
 {
-	#ifdef _WIN32
-	if (argc<3||argc>4||argc>3&&strlen(argv[3])!=4)
-	#else
-	if (argc!=3)
-	#endif
+	char *s=NULL,*t=NULL,*z=NULL; int i=0;
+	while (++i<argc)
+	{
+		if (!strcmp("-h",argv[i])||!strcmp("--help",argv[i]))
+			i=argc; // help!
+		else if (!s)
+			s=argv[i];
+		else if (!t)
+			t=argv[i];
+		#ifdef _WIN32
+		else if (!z)
+		{
+			if (strlen(argv[i])==4)
+				z=argv[i];
+			else i=argc; // help!
+		}
+		#endif
+		else i=argc; // help!
+	}
+	if (!t||i>argc)
 	{
 		printf(MY_CAPTION " " MY_VERSION " " MY_LICENSE "\n"
 			"\n"
@@ -513,13 +528,13 @@ int main(int argc,char *argv[])
 			#endif
 		return 1;
 	}
-	if (xrf_open(argv[1]))
+	if (xrf_open(s))
 		return xrf_close(),fprintf(stderr,"error: cannot open source!\n"),1;
 	#ifdef _WIN32
-	if (argc>3)
-		strcpy(avi_fourcc,argv[3]);
+	if (z)
+		strcpy(avi_fourcc,z);
 	#endif
-	if (avi_create(argv[2]))
+	if (avi_create(t))
 		return xrf_close(),avi_finish(),fprintf(stderr,"error: cannot create target!\n"),1;
 
 	fprintf(stderr,audio_z?"VIDEO %ix%ipx %iHz - AUDIO %ich%02ib %iHz\n":"VIDEO %ix%ipx %iHz - NO AUDIO\n",video_x,video_y,clock_z,(flags_z&2)?2:1,(flags_z&1)?16:8,audio_z*clock_z);

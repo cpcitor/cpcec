@@ -85,7 +85,10 @@ void tape_fputcccc(int i) // writes four little-endian bytes; cfr. tape_fputc();
 }
 
 int tape_type,tape_playback,tape_count; // general tape parameters
-int tape_pilot,tape_pilots,tape_sync,tape_syncs,tape_syncz[256],tape_bits,tape_bit0,tape_bit1,tape_byte,tape_half,tape_mask,tape_wave,tape_hold,tape_loop,tape_looptell; // special TZX/CDT tape parameters
+int tape_pilot,tape_pilots,tape_sync,tape_syncs,tape_syncz[256],tape_bits,tape_bit0,tape_bit1,tape_byte,tape_half,tape_mask,tape_wave,tape_hold,tape_loop,tape_looptell; // TZX tape parameters
+int tape_kansas,tape_kansasin,tape_kansasi,tape_kansason,tape_kansaso,tape_kansas0n,tape_kansas1n,tape_kansasrl,tape_kansas_i,tape_kansas_n,tape_kansas_b,tape_kansas_o; // TZX block $4B: Kansas City Standard
+int tape_general_totp,tape_general_npp,tape_general_asp,tape_general_totd,tape_general_npd,tape_general_asd,tape_general_count,
+	tape_general_mask,tape_general_step,tape_general_bits; WORD tape_general_symdef[256][128]; // TZX block $19: Generalized Data
 int tape_record,tape_output; // tape recording parameters
 
 #define tape_setup()
@@ -146,13 +149,11 @@ int tape_open(char *s) // open a tape file. `s` path; 0 OK, !0 ERROR
 			if (fgetmmmm(tape)==0x57415645) // "WAVE" ID
 				while ((q=fgetmmmm(tape))>0&&(l=fgetiiii(tape))>=0&&q!=0x64617461) // read chunks until "data"
 				{
-					//logprintf("[%08X:%08X]",q,l);
 					if (q==0x666D7420) // "fmt " is the only chunk that we must process!
 					{
 						l-=fread(tape_buffer,1,16,tape); // read the first part of the "fmt " chunk
 						tape_playback=tape_buffer[4]+(tape_buffer[5]<<8)+(tape_buffer[6]<<16);
 						tape_sync=tape_buffer[12]; // handle any bit depth and channel amount: only the highest bit matters to us
-						//logprintf("<%i>",tape_playback);
 					}
 					fseek(tape,l,SEEK_CUR); // skip unknown chunk!
 				}
@@ -184,7 +185,7 @@ int tape_open(char *s) // open a tape file. `s` path; 0 OK, !0 ERROR
 			else
 			#endif
 				fgetii(tape),tape_type=2; // TZX/CDT: major.minor version
-			tape_status=tape_count=q=tape_pilots=tape_syncs/*=tape_bits*/=tape_wave=tape_loop=0; // force HOLD
+			tape_status=tape_count=q=tape_pilots=tape_syncs/*=tape_bits*/=tape_wave=tape_kansas=tape_general_totp=tape_general_totd=tape_loop=0; // force HOLD
 			tape_playback=3500000/TAPE_MAIN_TZX_STEP; tape_hold=2*1000; // 2000 ms -> 3500 T = 1 ms
 		}
 	}
@@ -209,6 +210,33 @@ int tape_create(char *s) // create a tape file. `s` path; 0 OK, !0 ERROR
 }
 
 // tape emulation --------------------------------------------------- //
+
+int tape_main_general_size,tape_main_general_symbol,tape_main_general_subsym;
+void tape_main_general_make(int n,int m) // loads a symbol definition table (cfr. TZX block type $19)
+{
+	MEMZERO(tape_general_symdef); tape_main_general_size=m;
+	for (int i=0;i<n;++i)
+	{
+		tape_general_symdef[i][0]=tape_fgetc()&3; // is this ever non-zero!?
+		for (int j=1;j<=m;++j)
+			tape_general_symdef[i][j]=tape_fgetcc();
+	}
+}
+void tape_main_general_load(int i) // prepare new symbol
+{
+	tape_main_general_subsym=1;
+	switch (tape_general_symdef[tape_main_general_symbol=i][0]&3)
+	{
+		case 1: tape_status^=1; break; // undo last signal swap
+		case 2: tape_status=0; break;
+		case 3: tape_status=1; break;
+	}
+}
+int tape_main_general_next(void) // handle subsymbols; TRUE if last subsymbol in symbol
+{
+	tape_count+=tape_general_symdef[tape_main_general_symbol][tape_main_general_subsym];
+	return tape_main_general_subsym>=tape_main_general_size||!tape_general_symdef[tape_main_general_symbol][++tape_main_general_subsym];
+}
 
 void tape_main(int t) // handle tape signal for `t` clock ticks
 {
@@ -275,6 +303,60 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 							tape_mask=128,tape_byte=tape_fgetc();
 						tape_status=!!(tape_byte&tape_mask),--tape_wave,tape_count+=tape_bit0;
 					}
+					else if (tape_kansas) // KANSAS CITY STANDARD?
+					{
+						if (tape_kansas_i<tape_kansasin) // IN signals?
+							++tape_kansas_i,tape_count+=tape_kansasi;
+						else if (tape_kansas_b<tape_kansas_n) // BIT signals?
+							++tape_kansas_b,tape_count+=tape_half;
+						else if (tape_mask<8) // new BIT signal?
+						{
+							if (!tape_mask) // new byte?
+								tape_byte=tape_fgetc();
+							if (tape_byte&(tape_kansasrl?128>>tape_mask:1<<tape_mask))
+								tape_half=tape_bit1,tape_kansas_n=tape_kansas1n;
+							else
+								tape_half=tape_bit0,tape_kansas_n=tape_kansas0n;
+							++tape_mask,tape_kansas_b=1,tape_count+=tape_half;
+						}
+						else // OUT signals?
+						{
+							if (++tape_kansas_o>=tape_kansason)
+								--tape_kansas,tape_mask=tape_kansas_i=tape_kansas_n=tape_kansas_o=0; // next byte!
+							tape_count+=tape_kansaso;
+						}
+						tape_status^=1;
+					}
+					else if (tape_general_totp) // GENERALIZED DATA PILOT?
+					{
+						tape_status^=1; if (tape_general_count<=0) // fetch new item?
+						{
+							if (tape_general_asp) // build table?
+								tape_main_general_make(tape_general_asp,tape_general_npp),tape_general_asp=0;
+							// can tape_general_count ever be zero!?
+							tape_main_general_load(tape_byte=tape_fgetc()); tape_general_count=tape_fgetcc();
+						}
+						if (tape_main_general_next()) // end of symbol?
+							if (--tape_general_count)
+								tape_main_general_load(tape_byte); // repeat item
+							else
+								--tape_general_totp;
+					}
+					else if (tape_general_totd) // GENERALIZED DATA BYTES?
+					{
+						tape_status^=1; if (tape_general_count<=0) // fetch new item?
+						{
+							if (tape_general_asd) // build table?
+								tape_general_mask=(1<<(tape_general_bits=tape_general_asd>2?tape_general_asd>4?tape_general_asd>16?8:4:2:1))-1,
+								tape_main_general_make(tape_general_asd,tape_general_npd),tape_general_asd=0;
+							// can tape_general_bits ever be zero!?
+							tape_main_general_load(((tape_byte=tape_fgetc())>>(tape_general_step=(tape_general_count=8)-tape_general_bits))&tape_general_mask);
+						}
+						if (tape_main_general_next()) // end of symbol?
+							if (--tape_general_totd)
+								tape_general_count=tape_general_step, // warn if empty
+								tape_main_general_load((tape_byte>>(tape_general_step-=tape_general_bits))&tape_general_mask); // decode item
+					}
 					else if (tape_hold) // HOLD?
 					{
 						tape_count+=3500;
@@ -287,12 +369,11 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 					#ifdef TAPE_OPEN_TAP_FORMAT
 					if (tape_type==3) // TAP
 					{
-						if (!(tape_pilots|tape_syncs|tape_bits|tape_hold)) //
+						if (!(tape_pilots|tape_syncs|tape_bits|tape_hold))
 						{
 							tape_half=tape_mask=0;
 							tape_hold=2*1000; // 2-second gap
 							tape_bits=tape_fgetcc()<<3;
-							//logprintf("<%04X> ",tape_bits>>3);
 							tape_pilots=(tape_fgetc()&128)?3223:8063;
 							tape_ungetc(); // cheating! (2/2)
 							if (tape_bits<0) // EOF?
@@ -320,10 +401,8 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 					#endif
 						while (!(tape_pilots|tape_syncs|tape_bits|tape_wave|tape_hold))
 						{
-							tape_half=tape_mask=0;
-							//logprintf("%08X:",tape_filetell);
+							tape_half=tape_mask=tape_general_count=tape_general_bits=0;
 							int i=tape_fgetc();
-							//logprintf("TZX[%02X] ",i);
 							if (i<0) // EOF?
 							{
 								i=0x22; // dummy block
@@ -387,7 +466,16 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 									tape_wave=tape_fgetc()-8; if (tape_wave==-8) tape_wave=0; // handle dodgy VALLATION TURBO tape!
 									tape_wave+=tape_fgetcc()<<3;
 									tape_wave+=tape_fgetc()<<19;
-									//logprintf("%08X!\n",tape_wave);
+									break;
+								case 0x19: // GENERALIZED DATA
+									tape_fgetcccc();
+									tape_hold=tape_fgetcc();
+									tape_general_totp=tape_fgetcccc();
+									tape_general_npp=tape_fgetc();
+									if (!(tape_general_asp=tape_fgetc())) tape_general_asp=256;
+									tape_general_totd=tape_fgetcccc();
+									tape_general_npd=tape_fgetc();
+									if (!(tape_general_asd=tape_fgetc())) tape_general_asd=256;
 									break;
 								case 0x20: // HOLD (or STOP)
 									tape_hold=tape_fgetcc();
@@ -396,34 +484,30 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 									tape_fgetcccc();
 									break;
 								// the following blocks are only moderately useful when we edit the tape
-								case 0x21: // !GROUP START
+								case 0x21: // GROUP START
 									tape_skip(tape_fgetc());
+									//break; no `break`!
+								case 0x22: // GROUP END
 									break;
-								case 0x22: // !GROUP END
-									break;
-								// the following blocks are never used in tapes: they do more harm than good!
-								case 0x23: // !JUMP TO GROUP
-									tape_fgetcc();
-									logprintf("UNSUPPORTED TZX BLOCK 0x23!\n");
-									break;
-								case 0x24: // !LOOP START
+								case 0x24: // LOOP START
 									tape_loop=tape_fgetcc();
 									tape_looptell=tape_filetell;
 									break;
-								case 0x25: // !LOOP END
+								case 0x25: // LOOP END
 									if (tape_loop&&--tape_loop)
 										tape_seek(tape_looptell);
 									break;
-								case 0x26: // !CALL SEQUENCE
-									tape_skip(tape_fgetc()*2);
-									logprintf("UNSUPPORTED TZX BLOCK 0x26!\n");
+								// the following blocks shouldn't be used in tapes: they do more harm than good!
+								case 0x23: // !JUMP TO GROUP
+									tape_fgetcc(); //x=i;
 									break;
+								case 0x26: // !CALL SEQUENCE
+									tape_skip(tape_fgetc()*2); // no `break`!
 								case 0x27: // !RETURN FROM CALL
-									logprintf("UNSUPPORTED TZX BLOCK 0x27!\n");
+									//x=i;
 									break;
 								case 0x28: // !SELECT BLOCK
-									tape_skip(tape_fgetcc());
-									logprintf("UNSUPPORTED TZX BLOCK 0x28!\n");
+									tape_skip(tape_fgetcc()); //x=i;
 									break;
 								// the following blocks are informative, but don't play a role in playback
 								case 0x31: // *MESSAGE BLOCK
@@ -432,7 +516,7 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 									#ifdef CONSOLE_DEBUGGER
 									{
 										i=tape_fgetc();
-										char blah[STRMAX];
+										char blah[256];
 										int j; for (j=0;j<i;++j)
 											blah[j]=tape_fgetc();
 										blah[j]=0;
@@ -458,6 +542,29 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 								case 0x40: // *SNAPSHOT INFO
 									tape_skip(tape_fgetcccc()>>8);
 									break;
+								case 0x4B: // KANSAS CITY STANDARD
+									tape_kansas=tape_fgetcccc()-12;
+									tape_hold=tape_fgetcc();
+									tape_pilot=tape_fgetcc();
+									tape_pilots=tape_fgetcc();
+									tape_bit0=tape_fgetcc();
+									tape_bit1=tape_fgetcc();
+									if (!(tape_kansas0n=(i=tape_fgetc())>>4)) tape_kansas0n=16;
+									if (!(tape_kansas1n=i&15)) tape_kansas1n=16;
+									tape_kansasrl=(i=tape_fgetc())&1;
+									tape_kansasin=(i>>6)&3; tape_kansasi=(i>>5)&1;
+									tape_kansason=(i>>3)&3; tape_kansaso=(i>>2)&1;
+									tape_kansas_b=tape_kansas_i=tape_kansas_n=tape_kansas_o=0;
+									// optimisations to avoid repeated multiplications
+									if (tape_kansasi)
+										tape_kansasin*=tape_kansas1n,tape_kansasi=tape_bit1;
+									else
+										tape_kansasin*=tape_kansas0n,tape_kansasi=tape_bit0;
+									if (tape_kansaso)
+										tape_kansason*=tape_kansas1n,tape_kansaso=tape_bit1;
+									else
+										tape_kansason*=tape_kansas0n,tape_kansaso=tape_bit0;
+									break;
 								case 0x5A: // *GLUE
 									tape_skip(9);
 									break;
@@ -465,8 +572,8 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 									tape_skip(tape_fgetcccc()); // all unknown blocks are defined this way
 									break;
 							}
+							//if (x) logprintf("TZX: BLOCK 0x%02X!\n",x);
 						}
-					//logprintf("TONE %i SYNC %i BITS %i WAVE %i HOLD %i\n",tape_pilots,tape_syncs,tape_bits,tape_wave,tape_hold);
 				}
 				tape_count-=TAPE_MAIN_TZX_STEP;
 			}
@@ -485,10 +592,9 @@ void tape_catalog_text(char **t,int i)
 {
 	if (i)
 	{
-		while (i--)
-			*(*t)++=tape_fgetc();
-		if (!(*t)[-1]) // purge trailing zero (f.e. SPEEDKING.CDT)
-			--(*t);
+		int j; while (i--)
+			if ((j=tape_fgetc())>=32)
+				*(*t)++=j; // purge invisible chars (f.e. SPEEDKING.CDT)
 	}
 	*(*t)++=0;
 }
@@ -500,9 +606,10 @@ int tape_catalog(char *t,int x)
 	int i,j,p=-1;
 	if (tape_type<2) // sample?
 	{
+		int x=tape_type?-1:-tape_sync; // WAV granularity depends on sample width
 		for (i=0;i<100;i+=5)
 		{
-			j=tape_filebase+(i*(tape_filesize-tape_filebase)/100);
+			j=tape_filebase+(((long long)i*(tape_filesize-tape_filebase)/100)&x);
 			if (j<=tape_filetell)
 				++p;
 			t+=1+sprintf(t,TAPE_CATALOG_HEAD " sample block %02i%%",j,i);
@@ -517,7 +624,7 @@ int tape_catalog(char *t,int x)
 		if (tape_type==3) // TAP
 			while (t<s&&(i=tape_fgetcc())>=0)
 			{
-				t+=1+sprintf(t,TAPE_CATALOG_HEAD " %i bytes",j=tape_filetell-2,i);
+				t+=1+sprintf(t,TAPE_CATALOG_HEAD " STANDARD DATA, %i bytes",j=tape_filetell-2,i);
 				if (j<=z)
 					++p;
 				tape_skip(i);
@@ -557,25 +664,29 @@ int tape_catalog(char *t,int x)
 						l=tape_fgetcc();
 						l+=tape_fgetc()<<16;
 						break;
+					case 0x19: t+=1+sprintf(t,"GENERAL DATA");
+						l=tape_fgetcccc();
+						l-=(k=2+4+1+1+4+1+1);
+						break;
 					case 0x20: t+=1+sprintf(t,"HOLD");
 						tape_fgetcc();
 						break;
 					case 0x2A: t+=1+sprintf(t,"STOP on 48K");
 						tape_fgetcccc();
 						break;
-					case 0x21: t+=sprintf(t,"GROUP: "); // !GROUP START
+					case 0x21: t+=sprintf(t,"GROUP: "); // GROUP START
 						tape_catalog_text(&t,tape_fgetc());
 						u=t;
 						break;
-					case 0x22: if (u) t=u,u=NULL; // t+=1+sprintf(t,"!GROUP END");
+					case 0x22: if (u) t=u,u=NULL; // t+=1+sprintf(t,"GROUP END");
 						break;
 					case 0x23: t+=1+sprintf(t,"!JUMP TO GROUP");
 						tape_fgetcc();
 						break;
-					case 0x24: t+=1+sprintf(t,"!LOOP START");
+					case 0x24: t+=1+sprintf(t,"LOOP START");
 						tape_fgetcc();
 						break;
-					case 0x25: t+=1+sprintf(t,"!LOOP END");
+					case 0x25: t+=1+sprintf(t,"LOOP END");
 						break;
 					case 0x26: t+=1+sprintf(t,"!CALL SEQUENCE");
 						k=tape_fgetc()*2;
@@ -605,6 +716,10 @@ int tape_catalog(char *t,int x)
 						break;
 					case 0x40: t+=1+sprintf(t,"*SNAPSHOT INFO");
 						k=tape_fgetcccc()>>8;
+						break;
+					case 0x4B: t+=1+sprintf(t,"KANSAS CITY DATA");
+						k=tape_fgetcccc();
+						l=k-12;
 						break;
 					case 0x5A: t+=1+sprintf(t,"*GLUE");
 						k=9;
@@ -638,97 +753,93 @@ void tape_select(int i) // caller must provide a valid offset
 	if (!tape||tape_type<0)
 		return;
 	tape_seek(i);
-	tape_count=tape_pilots=tape_syncs=tape_bits=tape_wave=0,tape_hold=2*1000; // reset counter and playback // 2-second gap
+	tape_count=tape_pilots=tape_syncs=tape_bits=tape_wave=tape_kansas=tape_general_totp=tape_general_totd=0,tape_hold=2*1000; // reset counter and playback // 2-second gap
 }
 
 // tape speed-up hacks ---------------------------------------------- //
 
 int fasttape_test(const BYTE *s,WORD p) // compares a chunk of memory against a pattern; see below for pattern format
 {
-	WORD a,z;
-	for (;;)
-		if (*s==0x80) // relative word
+	for (WORD a,z;;)
+		if (*s==0x80) // relative word, f.e. 0x80 0xFE (-2) points back to itself
 		{
+			z=PEEK(p); ++p; z+=PEEK(p)*256; ++p;
 			a=p+(signed char)(*++s);
-			z=PEEK(p); ++p; z+=PEEK(p)<<8;
-			if (a!=z)
-				return 0; // word isn't the same
-			++s; ++p;
+			if (a-z) return 0; // word doesn't match
+			++s;
 		}
 		else // offset+length memcmp
 		{
-			a=p+(signed char)(*s++);
-			z=a+(*s++);
-			if (a==z)
-				return 1; // end of pattern, OK
-			if (z<a||memcmp(&(PEEK(a)),s,z-a))
-				return 0; // pattern doesn't match
+			a=p+(signed char)(*s++); z=a+(*s++);
+			if (a==z) return 1; // any offset, zero length: end of pattern, OK
+			if (z<a||memcmp(&(PEEK(a)),s,z-a)) return 0; // pattern doesn't match
 			p=z; s+=z-a;
 		}
 }
+
+void fasttape_skip(int q,int x) // skip the signal in steps of `x` until it changes
+{
+	q&=1; while (q==tape_status&&(tape||tape_hold)) tape_main(x);
+}
 int fasttape_add8(int q,int tape_step,BYTE *counter8,int step) // scan tape signal until it changes (or timeouts!) and update counter
 {
-	q&=1; int n=0;
-	while ((q==tape_status)&&(*counter8<(256-step)))
-		*counter8+=step,tape_main(tape_step),++n;
+	int n=0;
+	q&=1; while ((q==tape_status)&&(*counter8<(256-step))) *counter8+=step,tape_main(tape_step),++n;
 	return n;
 }
 int fasttape_sub8(int q,int tape_step,BYTE *counter8,int step) // idem, but negative
 {
-	q&=1; int n=0;
-	while ((q==tape_status)&&(*counter8>step))
-		*counter8-=step,tape_main(tape_step),++n;
+	int n=0;
+	q&=1; while ((q==tape_status)&&(*counter8>step)) *counter8-=step,tape_main(tape_step),++n;
 	return n;
 }
-void fasttape_skip(int q,int x) // skip the signal in steps of `x` until it changes
-{
-	q&=1;
-	while (q==tape_status&&(tape||tape_hold))
-		tape_main(x);
-}
 
-BYTE fasttape_dump(void) // get a byte from the stream, aligned or not, and leave no edges at all
-{
-	tape_bits-=8;
-	int b=tape_mask,i=tape_byte<<8;
-	i+=tape_byte=tape_fgetc();
-	while ((b<<=1)<=128)
-		i<<=1;
-	return i>>=8;
-}
-BYTE fasttape_feed(void) // get a byte from the stream, aligned or not, and leave the last edge in
-{
-	tape_bits-=7;
-	if (tape_mask==128)
-		return tape_mask=1,tape_byte;
-	int b=tape_mask,i=tape_byte<<8;
-	i+=tape_byte=tape_fgetc();
-	do
-		i<<=1;
-	while ((b<<=1)<128);
-	return tape_mask<<=1,i>>=8;
-}
-#define FASTTAPE_CAN_FEED() (tape_mask&&!(tape_pilots|tape_syncs|tape_half)&&tape_bits>7) // general purpose loader handling
-#define FASTTAPE_CAN_FEEDX() (tape_mask&&!(tape_pilots|tape_syncs)&&tape_bits>7) // polarity-dependent loaders may need this
-#define FASTTAPE_FEED_END(x,y) fasttape_skip((x),(y))
-
-void fasttape_skipbits(void) // skips the current block if the PILOT and SYNCS are already over
-{
-	if (/*tape_mask&&*/!(tape_pilots|tape_syncs|tape_half)&&(tape_bits|tape_wave|tape_hold))
+int FASTTAPE_CAN_FEED(void) { return tape_general_bits?tape_general_totd>8&&tape_general_count==7:tape_bits>8&&tape_mask==128; } // check for a single full byte
+BYTE fasttape_feed(int q,int x) // get a whole byte from the stream, but leave the last signal in
 	{
-		if (tape_bits>8)
+		int i=tape_byte;
+		if (tape_general_bits) tape_general_totd-=7,tape_general_count-=7;
+			else tape_bits-=7,tape_mask>>=7;
+		fasttape_skip(q,x); return i;
+	}
+int FASTTAPE_CAN_DUMP(void) { return tape_general_bits?tape_general_totd>16:tape_bits>16; } // fasttape_feed() needs the final byte!
+BYTE fasttape_dump(void) // get a whole byte from the stream and consume all signals
+	{
+		int i=tape_byte; tape_byte=tape_fgetc();
+		if (tape_general_bits) tape_general_totd-=8;
+			else tape_bits-=8;
+		return i;
+	}
+
+void fasttape_gotonext(void) // skips the current block (minus the last bits) if the PILOT and SYNCS are already over
+{
+	if (!(tape_pilots|tape_syncs|tape_general_totp)&&(tape_bits|tape_wave|tape_kansas|tape_general_totd|tape_hold))
+	{
+		int i; if (tape_bits>8)
 		{
-			tape_skip(tape_bits/8);
-			tape_bits-=(tape_bits/8)*8;
+			tape_skip(i=(tape_bits-1)/8);
+			tape_bits-=i*8;
 		}
 		else if (tape_wave>8)
 		{
-			tape_skip(tape_wave/8);
-			tape_wave-=(tape_wave/8)*8;
+			tape_skip(i=(tape_wave-1)/8);
+			tape_wave-=i*8;
+		}
+		else if (tape_kansas>1)
+		{
+			tape_skip(tape_kansas-1);
+			tape_kansas=1;
+		}
+		else if ((tape_general_totd*tape_general_bits)&&(tape_general_totd>8/tape_general_bits))
+		{
+			int j=8/tape_general_bits;
+			tape_skip(i=(tape_general_totd-1)/j);
+			tape_general_totd-=i*j;
 		}
 		else if (tape_hold!=1&&tape_hold&&!(tape_bits|tape_wave))
 			tape_hold=1;
 	}
+	tape_loop=0; // just in case a tape uses this!
 }
 
 // ============================================== END OF TAPE SUPPORT //

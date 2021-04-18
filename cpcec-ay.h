@@ -33,7 +33,10 @@ void psg_reg_update(int c)
 	{
 		case 0: case 2: case 4: // LO wavelengths
 		case 1: case 3: case 5: // HI wavelengths
-			psg_tone_limit[c/2]=psg_table[c&-2]+(psg_table[(c&-2)+1]<<8);
+			// catch overflows, either bad (buggy music in "Thing on a Spring")
+			// or good (pipe sound effect in its sequel "Thing Bounces Back")
+			if (psg_tone_count[c/2]>(psg_tone_limit[c/2]=psg_table[c&~1]+(psg_table[c|1]<<8)))
+				psg_tone_count[c/2]&=psg_tone_limit[c/2]; // harsh, but ensures count<=i
 			break;
 		case 6: // noise wavelength
 			if (!(psg_noise_limit=(psg_table[6]&31)*2))
@@ -49,7 +52,7 @@ void psg_reg_update(int c)
 			break;
 		case 11: case 12: // envelope wavelength
 			if (!(psg_hard_limit=(psg_table[11]+(psg_table[12]<<8))*2))
-				psg_hard_limit=1*2; // hard envelope, ditto
+				psg_hard_limit=1*2; // hard envelope, half the rate
 			break;
 		case 13: // envelope bits
 			c=psg_table[13]; psg_hard_count=psg_hard_level=psg_hard_flag0=0;
@@ -69,7 +72,7 @@ INLINE void psg_table_sendto(BYTE x,BYTE i)
 	if (x<14) // reject invalid index!
 	{
 		if (x==7&&((psg_table[7]^i)&7))
-			psg_r7_filter=1<<5; // below 1<<3 "Terminus" is dirty; above 1<<7 "SOUND 1,1,100" is hearable
+			psg_r7_filter=PSG_TICK_STEP<<5; // below <<3 "Terminus" is dirty; above <<7 "SOUND 1,1,100" is hearable
 		psg_table[x]=(i&=psg_valid[x]);
 		psg_reg_update(x);
 	}
@@ -106,7 +109,7 @@ void playcity_send(BYTE x,BYTE b)
 	{
 		int y=playcity_index[x];
 		playcity_table[x][y]=(b&=psg_valid[y]);
-		if (y==13)
+		if (y==13) // envelope bits?
 		{
 			playcity_hard_count[x]=playcity_hard_level[x]=playcity_hard_flag0[x]=0;
 			playcity_hard_flag2[x]=(playcity_hard_style[x]=b<4?9:b<8?15:b)&4?0:15;
@@ -201,19 +204,18 @@ void psg_writelog(void)
 
 // audio output ----------------------------------------------------- //
 
-void psg_main(int t) // render audio output for `t` clock ticks
+void psg_main(int t,int d) // render audio output for `t` clock ticks, with `d` as a 16-bit base signal
 {
 	static int r=0; // audio clock is slower, so remainder is kept here
 	if (audio_pos_z>=AUDIO_LENGTH_Z||((r+=t)<=0))
 		return; // don't do any calculations if there's nothing to do
+	if ((psg_r7_filter-=r)<0)
+		psg_r7_filter=0;
 	int psg_tone_catch[3];
 	for (int c=0;c<3;++c) // catch ultrasounds, but keep any noise channels
-		psg_tone_catch[c]=psg_tone_mixer[c]|((psg_tone_limit[c]<=(PSG_KHZ_CLOCK/225)&&!psg_r7_filter)?7*1:0); // safe margin? (200-250)
-	if ((psg_r7_filter-=r/PSG_TICK_STEP)<0)
-		psg_r7_filter=0;
-	while (r>=PSG_TICK_STEP) // not 0, see r%=... below
+		psg_tone_catch[c]=psg_tone_mixer[c]|((psg_tone_limit[c]<=(PSG_KHZ_CLOCK*256/AUDIO_PLAYBACK)&&!psg_r7_filter)?7*1:0); // safe margin? (200-250)
+	do
 	{
-		r-=PSG_TICK_STEP;
 		if (--psg_noise_count<=0) // update noise
 		{
 			psg_noise_count=psg_noise_limit;
@@ -236,42 +238,63 @@ void psg_main(int t) // render audio output for `t` clock ticks
 			if (--psg_tone_count[c]<=0) // update channel
 				psg_tone_count[c]=psg_tone_limit[c],psg_tone_state[c]=~psg_tone_state[c];
 		#if AUDIO_CHANNELS > 1
-		static int n=0,o0=0,o1=0,p=0; // output averaging variables
+		static int o0=0,o1=0,p=0; // output averaging variables
 		#else
-		static int n=0,o=0,p=0; // output averaging variables
+		static int o=0,p=0; // output averaging variables
+		#endif
+		#if PSG_MAIN_EXTRABITS
+		static int n=0; // oversampling loops
 		#endif
 		p+=AUDIO_PLAYBACK<<PSG_MAIN_EXTRABITS;
-		while (p>0&&n<(1<<PSG_MAIN_EXTRABITS))
-		{
-			for (int c=0;c<3;++c)
-				if (psg_tone_state[c]|(psg_tone_catch[c]&(7*1))) // is the channel active?
-					if (psg_noise_state|(psg_tone_catch[c]&(7*8))) // is the channel noisy?
-						#if AUDIO_CHANNELS > 1
-						o0+=audio_table[psg_tone_power[c]]*psg_stereo[c][0],
-						o1+=audio_table[psg_tone_power[c]]*psg_stereo[c][1];
-						#else
-						o+=audio_table[psg_tone_power[c]];
-						#endif
-			++n;
-			p-=TICKS_PER_SECOND/PSG_TICK_STEP;
-		}
-		if (n>=(1<<PSG_MAIN_EXTRABITS)) // enough data to write a sample? (TODO: can `n` be >1<<N ???)
+		while (p>0)
 		{
 			#if AUDIO_CHANNELS > 1
-			*audio_target++=(o0+n/2)/(n<<(24-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average (left)
-			*audio_target++=(o1+n/2)/(n<<(24-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average (right)
-			o0=o1=n=0;//%=1<<PSG_MAIN_EXTRABITS; // reset output averaging variables
+			o0-=d<<8,
+			o1-=d<<8;
 			#else
-			*audio_target++=(o+n/2)/(n<<(16-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average
-			o=n=0;//%=1<<PSG_MAIN_EXTRABITS; // reset output averaging variables
+			o-=d;
 			#endif
-			if (++audio_pos_z>=AUDIO_LENGTH_Z)
+			p-=TICKS_PER_SECOND/PSG_TICK_STEP;
+			#if PSG_MAIN_EXTRABITS
+			if (++n>>PSG_MAIN_EXTRABITS) // enough data to write a sample? `n` will never be >1 on CPC at 44100 Hz, but can be on ZX!
+			#else
+			#endif
 			{
-				r%=PSG_TICK_STEP; // throw ticks away!
-				break; // stop making sound right now!
+				for (int c=0;c<3;++c) // the base signal can carry ultrasounds, but the PSG filtered them out earlier
+					if (psg_tone_state[c]|(psg_tone_catch[c]&(7*1))) // is the channel active?
+						if (psg_noise_state|(psg_tone_catch[c]&(7*8))) // is the channel noisy?
+							#if AUDIO_CHANNELS > 1
+							o0+=audio_table[psg_tone_power[c]]*psg_stereo[c][0]<<PSG_MAIN_EXTRABITS,
+							o1+=audio_table[psg_tone_power[c]]*psg_stereo[c][1]<<PSG_MAIN_EXTRABITS;
+							#else
+							o+=audio_table[psg_tone_power[c]]<<PSG_MAIN_EXTRABITS;
+							#endif
+				#if PSG_MAIN_EXTRABITS
+				#if AUDIO_CHANNELS > 1
+				*audio_target++=(o0+n/2)/(n<<(24-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average (left)
+				*audio_target++=(o1+n/2)/(n<<(24-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average (right)
+				o0=o1=n=0; // reset output averaging variables
+				#else
+				*audio_target++=(o+n/2)/(n<<(16-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average
+				o=n=0; // reset output averaging variables
+				#endif
+				#else
+				#if AUDIO_CHANNELS > 1
+				*audio_target++=(o0>>(24-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average (left)
+				*audio_target++=(o1>>(24-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average (right)
+				o0=o1=0; // reset output averaging variables
+				#else
+				*audio_target++=(o>>(16-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average
+				o=0; // reset output averaging variables
+				#endif
+				#endif
+				if (++audio_pos_z>=AUDIO_LENGTH_Z)
+					r%=PSG_TICK_STEP; // throw ticks away!
+				break; // exit `while (p>0) ...`
 			}
 		}
 	}
+	while ((r-=PSG_TICK_STEP)>0);
 }
 
 // Again, the PlayCity extension requires its own logic, as it "piggybacks" on top of the central AY chip;
@@ -288,9 +311,10 @@ void playcity_main(AUDIO_UNIT *t,int l)
 	{
 		for (int c=0;c<3;++c) // preload channel limits
 		{
-			playcity_tone_limit[x][c]=playcity_table[x][c*2+0]+playcity_table[x][c*2+1]*256;
 			playcity_tone_power[x][c]=playcity_table[x][c*1+8];
 			playcity_tone_mixer[x][c]=playcity_table[x][7]>>c;
+			if ((playcity_tone_limit[x][c]=playcity_table[x][c*2+0]+playcity_table[x][c*2+1]*256)<=(PSG_PLAYCITY*256/AUDIO_PLAYBACK))
+				playcity_tone_mixer[x][c]|=1; // catch ultrasounds!
 		}
 		if (!(playcity_noise_limit[x]=playcity_table[x][6]*2)) // noise limits
 			playcity_noise_limit[x]=2; // half the rate
@@ -302,11 +326,10 @@ void playcity_main(AUDIO_UNIT *t,int l)
 	#else
 	static int n=0,o=0,p=0;
 	#endif
-	int playcity_clock_hi=(playcity_clock?playcity_clock*2-1:2)*125000,playcity_clock_lo=(playcity_clock?playcity_clock:1)*AUDIO_PLAYBACK;
+	int playcity_clock_hi=(playcity_clock?playcity_clock*2-1:2)*PSG_PLAYCITY*125,playcity_clock_lo=(playcity_clock?playcity_clock:1)*AUDIO_PLAYBACK*2; // where 125/2 = 1000/16
 	for (;;)
 	{
-		p+=playcity_clock_hi;
-		while (p>=0)
+		p+=playcity_clock_hi; while (p>=0)
 		{
 			for (int x=dirty_l;x<=dirty_h;++x) // update all chips
 			{
@@ -328,17 +351,11 @@ void playcity_main(AUDIO_UNIT *t,int l)
 							playcity_hard_level[x]=0,playcity_hard_flag0[x]^=15; // loop!
 					}
 				}
-				for (int c=0;c<3;++c) // update channels
+				for (int c=0;c<3;++c) // update channels and render output
 				{
-					if (--playcity_tone_count[x][c]<=0)
+					if (--playcity_tone_count[x][c]<=0) // end of count?
 						playcity_tone_count[x][c]=playcity_tone_limit[x][c],
 						playcity_tone_state[x][c]=~playcity_tone_state[x][c];
-				/*}
-			}
-			for (int x=dirty_l;x<=dirty_h;++x) // generate outputs
-			{
-				for (int c=0;c<3;++c)
-				{*/
 					if (playcity_tone_state[x][c]|(playcity_tone_mixer[x][c]&1)) // active channel?
 						if (playcity_noise_state[x]|(playcity_tone_mixer[x][c]&8)) // noisy channel?
 						{
@@ -355,11 +372,10 @@ void playcity_main(AUDIO_UNIT *t,int l)
 						}
 				}
 			}
-			++n;
-			p-=playcity_clock_lo;
+			++n; p-=playcity_clock_lo;
 		}
-		// generate samples, negative (-50% x2) to avoid overflows against the central AY chip (+100%)
-		if (n>=(1<<PSG_MAIN_EXTRABITS)) // enough data to write a sample? (TODO: can `n` be >1<<N ???)
+		// generate negative samples (-50% x2) to avoid overflows against the central AY chip (+100%)
+		if (n) // enough data to write a sample? unlike the basic PSG, `n` is >1 at 44100 Hz (5 or 6)
 		{
 			#if AUDIO_CHANNELS > 1
 			*t++-=(o0+n/2)/(n<<(24-AUDIO_BITDEPTH));

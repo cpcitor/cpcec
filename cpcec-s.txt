@@ -282,6 +282,11 @@ Los archivos ZIP pueden ser leídos por CPCEC (de haber más de un fichero en su
 interior se mostrará una lista para que el usuario elija el fichero necesario)
 pero sus contenidos no pueden ser modificados.
 
+La relación entre el teclado real y el emulado es inmediata (tabla alfanumérica,
+teclas de control, panel numérico, cursores...) con las únicas particularidades
+de SUPR para CLR e INSERT para COPY, pues sus funciones son equivalentes pero
+los teclados modernos ya no ubican estas teclas dentro de la tabla alfanumérica.
+
 ## Debugger ##
 
 El depurador o "debugger" sirve para detener la emulación y examinar su estado
@@ -318,7 +323,8 @@ puede escribir (solamente RAM; el separador es `\`);
 fichero con un volcado de memoria que comienza en la dirección actual del
 cursor;
 * P ("print") solicita una longitud en bytes y un nombre de fichero, y crea un
-fichero con un desensamblado que comienza en la dirección actual del cursor;
+fichero con un desensamblado (panel de desensamblado) o un volcado hexadecimal
+(panel de volcado de memoria) que comienza en la dirección actual del cursor;
 * Q conmuta el comportamiento del código ilegal $EDFF, bien en modo normal
 ("EDFF-") donde no hace nada especial o en modo de desarrollo ("EDFF+") donde es
 un breakpoint;
@@ -396,10 +402,15 @@ SPEC-P-3.ROM, y por lo demás funciona igual que CPCEC, con varias salvedades:
 * la opción -K deshabilita el chip de sonido PSG AY-3-8912 (habilitado por
 defecto) si el modelo elegido es Spectrum 48k;
 * la opción -X deshabilita la unidad de disco si el modelo elegido es Spectrum
-+3, que así se convierte en un +2A;
++3, que así se convierte en un +2A; se puede conseguir lo mismo en tiempo de
+ejecución desactivando "Settings: Disc controller" y eligiendo el firmware
+SPEC-P-3.ROM;
 * Control+Mays+F8 sirve para poner en marcha (o detener) el motor de cinta, dado
 que el hardware de CPC dispone de control de cinta incorporado, mientras que el
 de Spectrum carece de él.
+* MAYS emula la tecla CAPS, CONTROL emula SYMBOL, BLOQ MAYUS emula CAPS+2 (CAPS
+LOCK), los cursores emulan CAPS+6/7/8/9, TAB emula CAPS+1 (EDIT) y ESCAPE emula
+CAPS+SPACE (BREAK).
 * las opciones de joystick se refieren al interfaz Sinclair 2 por defecto; el
 menú permite elegir el tipo de joystick.
 
@@ -886,3 +897,22 @@ LFSR. Los ficheros SNA grabados desde Spectrum Plus3 activan el bit 4 del byte
 There I'm a +3"). El debugger de CPC añade un panel de información (tecla 'X')
 con el estado del Dandanator, y el visor de gráficos puede mostrar imágenes de
 MODE 2.
+- 20210418 -- vigésima versión pública. Los filtros de pixeles y scanlines ahora
+están basados en la saturación (aberración cromática, desaturación) en lugar de
+la luminosidad (difuminado horizontal, sombreado). Corregido un error al grabar
+de XRF a AVI: las operaciones de VFW32 siempre asumían 16-bits estéreo. Las
+opciones de grabación "High resolution" y "High framerate" ahora perduran entre
+sesiones, y la primera además incluye las instantáneas BMP. Añadido soporte para
+los tipos de bloque $19 y $4B en los ficheros de cinta CDT/TZX, así como la
+nueva opción de disco "Read-only as default" para que el usuario pueda elegir si
+los discos se abren por defecto en sólo-lectura o lectura-escritura, y esta
+opción se combina con la ya existente "Strict disc writes". Nueva opción "Flip
+joystick buttons" para que los usuarios de CPCEC puedan cambiar el valor de los
+dos botones del joystick de CPC, tal como sugería SB1903. La emulación del PSG
+ahora detecta los desbordamientos, tanto si son errores de programación (música
+distorsionada en "Thing on a Spring") o hechos a propósito (efecto sonoro de la
+tubería en "Thing Bounces Back"). Corregido un error de ZXSEC en la contención
+de memoria de Plus3 (edición de disco de "Firefly") y mejorado el "beeper"
+(oversampling: "Quattropic" de Utz). El manejo de snapshots de ZXSEC es más
+estricto o flexible (cambiando de modelo tanto o tan poco como sea posible)
+mediante la opción "Strict SNA files".

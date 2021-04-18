@@ -107,7 +107,7 @@ void z80_setup(void) // setup the Z80
 
 void z80_reset(void) // reset the Z80
 {
-	z80_pc.w=z80_sp.w=z80_iff.w=z80_irq=z80_active=z80_imd=0;
+	z80_pc.w=z80_sp.w=z80_ir.w=z80_iff.w=z80_irq=z80_active=z80_imd=0;
 	z80_ix.w=z80_iy.w=0xFFFF;
 	#ifdef Z80_CPC_DANDANATOR
 		MEMZERO(dandanator_config);
@@ -3655,7 +3655,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 				if (!z80_debug_logfile) // try creating a log file?
 				{
 					char *s;
-					if (s=session_newfile("","*","Register log file"))
+					if (s=session_newfile(NULL,"*","Register log file"))
 						z80_debug_logfile=fopen(s,"wb"),z80_debug_logpos=0;
 				}
 				if (!z80_debug_logfile)
@@ -3724,12 +3724,7 @@ void z80_debug_show(void) // redraw debug screen
 		if (!w)
 			z[4]='#'; // current PC
 		if (x)
-		{
-			if (x&8)
-				z[5]="BCDEHLFA"[x&7]; // log
-			else
-				z[5]='@'; // breakpoint
-		}
+			z[5]=(x&8)?"BCDEHLFA"[x&7]:'@'; // log/breakpoint
 	}
 	if (z80_debug_panel==0)
 	{
@@ -3968,7 +3963,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 			if (!z80_debug_grfx&&((i=z80_debug_pnl0_w,z80_debug_panel==0)||(i=z80_debug_pnl2_w,z80_debug_panel==2)))
 			{
 				char *s; FILE *f; WORD w=i;
-				if (s=session_getfile("","*","Input file"))
+				if (s=session_getfile(NULL,"*","Input file"))
 					if (f=puff_fopen(s,"rb"))
 					{
 						while ((i=fgetc(f))>=0)
@@ -3984,7 +3979,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 				session_parmtr[0]=0;
 				if (session_input(session_parmtr,"Output length")>=0)
 					if (i=(WORD)z80_debug_hexs(session_parmtr))
-						if (s=session_newfile("","*","Output file"))
+						if (s=session_newfile(NULL,"*","Output file"))
 							if (f=fopen(s,"wb"))
 							{
 								while (i--)
@@ -4090,7 +4085,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 				switch (ucase(k))
 				{
 					case KBDBG_LEFT : if (--z80_debug_pnl0_x<0) z80_debug_pnl0_x&=1,--z80_debug_pnl0_w; break;
-					case -1: z80_debug_cache[1]=z80_dasm(session_tmpstr,z80_debug_pnl0_w); // no 'break'!
+					case -1: z80_debug_cache[1]=z80_dasm(session_tmpstr,z80_debug_pnl0_w); // no `break`!
 					case KBDBG_RIGHT: if ((WORD)(++z80_debug_pnl0_x/2+z80_debug_pnl0_w)==z80_debug_cache[1])
 							z80_debug_pnl0_x&=1,z80_debug_pnl0_w=z80_debug_cache[1]; break;
 					case KBDBG_UP   : i=-1; break;
@@ -4142,7 +4137,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 						{
 							char *s; FILE *f; WORD w=z80_debug_pnl0_w;
 							if (i=(WORD)z80_debug_hexs(session_parmtr))
-								if (s=session_newfile("","*.TXT","Print disassembly"))
+								if (s=session_newfile(NULL,"*.TXT","Print disassembly"))
 									if (f=fopen(s,"w"))
 									{
 										do // WRAP!
@@ -4247,7 +4242,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 						{
 							char *s; FILE *f; WORD w=z80_debug_pnl0_w;
 							if (i=(WORD)z80_debug_hexs(session_parmtr))
-								if (s=session_newfile("","*.TXT","Print hex dump"))
+								if (s=session_newfile(NULL,"*.TXT","Print hex dump"))
 									if (f=fopen(s,"w"))
 									{
 										int u=0;
