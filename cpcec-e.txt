@@ -39,7 +39,7 @@ and SPECTRUM.ROM. All these files must be copied in a single directory, ideally
 created to host the emulator.
 
 The binaries can be compiled from the source files by following the instructions
-in the next paragraphs. GCC 4.9.2, GCC 5.1.0, Pelles 4.50.113, TCC 0.9.27 and
+in the next paragraphs. GCC 4.9.2, GCC 5.1.0, Pelles C 4.50.113, TCC 0.9.27 and
 Clang 3.7.1 work correctly; GCC 4.7.1 makes severe mistakes in compilation and
 can generate invalid binaries.
 
@@ -47,11 +47,11 @@ The Windows binaries can be compiled from GCC (or compatible) through the
 following commands:
 
 	windres cpcec.rc -Ocoff -ocpcec.res
-	gcc -m32 -mwindows cpcec.res -O2 -xc cpcec.c -luser32 -lgdi32 -lwinmm
+	gcc -mwindows cpcec.res -O2 -xc cpcec.c -luser32 -lgdi32 -lwinmm
 -lcomdlg32 -lshell32 -ocpcec.exe
 
 	windres zxsec.rc -Ocoff -ozxsec.res
-	gcc -m32 -mwindows zxsec.res -O2 -xc zxsec.c -luser32 -lgdi32 -lwinmm
+	gcc -mwindows zxsec.res -O2 -xc zxsec.c -luser32 -lgdi32 -lwinmm
 -lcomdlg32 -lshell32 -ozxsec.exe
 
 Optional DirectDraw support can be achieved by appending `-DDDRAW -lddraw` to
@@ -409,7 +409,7 @@ Distancia, UNED), a project directed by professor José Manuel Díaz Martínez a
 ultimately awarded a 100% and the right to a honorable mention.
 * The documentation about the system comes from cpcwiki.eu, cpc-power.com,
 cpcrulez.fr and quasar.cpcscene.net.
-* The alpha tests were handled by the faithful and loyal Denis Lechevalier.
+* The alpha tests were handled by Denis Lechevalier.
 
 ## Appendix: test cases ##
 
@@ -852,15 +852,18 @@ saturation-based (colour aberration, desaturation) rather than luminosity-based
 (horizontal blur, shading). Fixed bug in XRF-to-AVI recording: VFW32 operations
 always assumed 16-bit stereo. The film recording options "High resolution" and
 "High framerate" now stick between sessions, and the first one also applies to
-BMP screenshots. Aded support for block types $19 and $4B in CDT/TZX tape files,
-as well as the new disc option "Read-only as default" so the user can choose
-whether discs are by default read-only or read-write, and this option stacks
-together with the already extant "Strict disc writes". Added new option "Flip
-joystick buttons" to CPCEC so users can swap the value of the two CPC joystick
-buttons, as suggested by SB1903. PSG emulation now catches overflows, regardless
-of whether they're programming errors (music distortion in "Thing on a Spring")
-or done on purpose (pipe sound effect in "Thing Bounces Back"). Fixed bug in
-ZXSEC's Plus3 memory contention ("Firefly" disc release) and improved the beeper
-(oversampling: Utz's "Quattropic"). ZXSEC snapshot handling is now more strict
-or flexible (changing models as often or as seldom as possible) depending on the
-option "Strict SNA files".
+BMP screenshots. Added support for block types 0x19 and 0x4B in CDT/TZX tape
+files, as well as the new disc option "Read-only as default" so the user can
+choose whether discs are by default read-only or read-write, and this option
+stacks together with the already extant "Strict disc writes". Added new option
+"Flip joystick buttons" to CPCEC so users can swap the value of the two CPC
+joystick buttons, as suggested by SB1903. PSG emulation now catches overflows,
+regardless of whether they're programming errors (music distortion in "Thing on
+a Spring") or done on purpose (pipe sound effect in "Thing Bounces Back"). Fixed
+bug in ZXSEC's Plus3 memory contention ("Firefly" disc release) and improved the
+beeper (oversampling: Utz's "Quattropic"). ZXSEC snapshot handling is now more
+strict or flexible (changing models as often or as seldom as possible) depending
+on the option "Strict SNA files".
+- 20210428 -- minor patch fixing bugs in the firmware INI handler (spaces must
+be trimmed on both sides of each string) and in several tape fastloaders, and
+adding inverse video 8-bit characters to the debugger's memory dump.

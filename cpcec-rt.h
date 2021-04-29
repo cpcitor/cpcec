@@ -92,16 +92,15 @@ int fputmmmm(int i,FILE *f) { fputc(i>>24,f); fputc(i>>16,f); fputc(i>>8,f); ret
 
 char *strrstr(char *h,char *n) // = strrchr + strstr
 {
-	char *z=h;
-	h+=strlen(h)-strlen(n); // skip last bytes that cannot match
-	while (h>=z)
+	char *z=h+strlen(h)-strlen(n); // skip last bytes that cannot match
+	while (z>=h)
 	{
-		char *s=h,*t=n;
+		char *s=z,*t=n;
 		while (*t&&*s==*t)
 			++s,++t;
 		if (!*t)
-			return h;
-		--h;
+			return z;
+		--z;
 	}
 	return NULL;
 }
@@ -131,7 +130,7 @@ int globbing(char *w,char *t,int q) // wildcard pattern *w against string *t; q 
 }
 int multiglobbing(char *w,char *t,int q) // like globbing(), but with multiple patterns with semicolons inbetween; 1..n tells which pattern matches
 {
-	int n=1; char c,*m;
+	char n=1,c,*m; // up to 127 patterns (!)
 	do
 	{
 		m=session_substr;

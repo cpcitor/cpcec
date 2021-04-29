@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20210418"//"1355"
+#define MY_VERSION "20210428"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -122,7 +122,7 @@ const unsigned char kbd_map_xlt[]=
 	KBCODE_F5	,0x85,	KBCODE_F6	,0x86,	KBCODE_F7	,0x87,	KBCODE_F8	,0x88,
 	KBCODE_F9	,0x89,	KBCODE_HOLD	,0x8F,	KBCODE_F11	,0x8B,	KBCODE_F12	,0x8C,
 	KBCODE_X_ADD	,0x91,	KBCODE_X_SUB	,0x92,	KBCODE_X_MUL	,0x93,	KBCODE_X_DIV	,0x94,
-	//KBCODE_PRIOR	,0x95,	KBCODE_NEXT	,0x96,	KBCODE_HOME	,0x97,	KBCODE_END	,0x98,
+	KBCODE_PRIOR	,0x95,	KBCODE_NEXT	,0x96,	KBCODE_HOME	,0x97,	KBCODE_END	,0x98,
 	// actual keys
 	KBCODE_1	,0x18,	KBCODE_Q	,0x10,	KBCODE_A	,0x08,	KBCODE_L_SHIFT	,0x00,
 	KBCODE_2	,0x19,	KBCODE_W	,0x11,	KBCODE_S	,0x09,	KBCODE_Z	,0x01,
@@ -256,7 +256,7 @@ void ula_setup(void)
 }
 void ula_update(void) // update ULA settings according to model
 {
-	ula_clash_gamma=type_id?2:1;
+	ula_clash_gamma=type_id?2:1; // BBG48.SNA expects 0 rather than 1, but ULA48.SNA expects 1 rather than 0. Mystery?
 	ula_clash_delta=type_id<3?!type_id?4:3:2;
 	// lowest valid ULA deltas for V1, V2 and V3
 	// Black Lamp (48K)	4	*	*
@@ -657,7 +657,7 @@ BYTE z80_tape_fastload[][32] = { // codes that read pulses : <offset, length, da
 	/*  0 */ {  -6,   3,0X04,0XC8,0X3E,  +1,   9,0XDB,0XFE,0X1F,0XD0,0XA9,0XE6,0X20,0X28,0XF3 }, // ZX SPECTRUM FIRMWARE
 	/*  1 */ {  -2,  11,0XDB,0XFE,0X1F,0XE6,0X20,0XF6,0X02,0X4F,0XBF,0XC0,0XCD,  +7,   7,0X10,0XFE,0X2B,0X7C,0XB5,0X20,0XF9 }, // ZX SPECTRUM FIRMWARE (SETUP)
 	/*  2 */ {  -6,  13,0X04,0XC8,0X3E,0X7F,0XDB,0XFE,0X1F,0X00,0XA9,0XE6,0X20,0X28,0XF3 }, // TOPO
-	/*  3 */ {  -6,   3,0X04,0XC8,0X3E,  +1,   9,0XDB,0XFE,0XA9,0XE6,0X40,0XD8,0X00,0X28,0XF3 }, // MULTILOAD, "SUPER CARS"
+	/*  3 */ {  -6,   3,0X04,0XC8,0X3E,  +1,   9,0XDB,0XFE,0XA9,0XE6,0X40,0XD8,0X00,0X28,0XF3 }, // MULTILOAD V1+V2
 	/*  4 */ {  -4,   8,0X1C,0XC8,0XDB,0XFE,0XE6,0X40,0XBA,0XCA,-128, -10 }, // "LA ABADIA DEL CRIMEN"
 	/*  5 */ {  -6,  13,0X04,0XC8,0X3E,0X7F,0XDB,0XFE,0X1F,0XA9,0XD8,0XE6,0X20,0X28,0XF3 }, // "HYDROFOOL" (1/2)
 	/*  6 */ {  -6,  12,0X04,0XC8,0X3E,0X7F,0XDB,0XFE,0X1F,0XA9,0XE6,0X20,0X28,0XF4 }, // "HYDROFOOL" (2/2)
@@ -680,6 +680,7 @@ BYTE z80_tape_fastfeed[][32] = { // codes that build bytes
 	/*  7 */ {  -5,   1,0X06,  +4,   1,0XD2,  +2,   1,0X3E,  +1,   4,0XB8,0XCB,0X15,0X3E,  +1,   1,0XD2,-128, -18 }, // "CHIP'S CHALLENGE"
 	/*  8 */ {  -0,   1,0X30,  +1,   5,0X90,0XCB,0X15,0X30,0XF1 }, // MINILOAD-ZXS 1/2
 	/*  9 */ {  -0,   6,0XD0,0X90,0XCB,0X15,0X30,0XF2 }, // MINILOAD-ZXS 2/2
+	/* 10 */ {  -0,   1,0X30,  +1,   1,0X3E,  +1,   4,0XB8,0XCB,0X15,0X06,  +1,   2,0X30,0XF2 }, // MULTILOAD V2
 };
 BYTE z80_tape_fastdump[][32] = { // codes that fill blocks
 	/*  0 */ { -36,  10,0X08,0X20,0X07,0X30,0X0F,0XDD,0X75,0X00,0X18,0X0F, +15,   3,0XDD,0X23,0X1B, +19,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XCA }, // ZX SPECTRUM FIRMWARE
@@ -730,9 +731,9 @@ void z80_tape_trap(void)
 			z80_bc.b.l=2; // fix border colour
 			//tape_enabled|=8; // shorten setup
 			// no `break`!
-		case 10: // SPEEDLOCK V1 SETUP ("BOUNTY BOB STRIKES BACK")
-		case 11: // SPEEDLOCK V2 SETUP ("ATHENA 48K / 128K")
-		case 12: // SPEEDLOCK V3 SETUP ("THE ADDAMS FAMILY")
+		case 10: // SPEEDLOCK V1 SETUP ("BOUNTY BOB STRIKES BACK"...)
+		case 11: // SPEEDLOCK V2 SETUP ("ATHENA 48K / 128K"...)
+		case 12: // SPEEDLOCK V3 SETUP ("THE ADDAMS FAMILY"...)
 			tape_enabled|=8; // play tape and listen to decryption noises
 			break;
 	}
@@ -763,14 +764,9 @@ void z80_tape_trap(void)
 			else
 				z80_r7+=fasttape_add8(z80_bc.b.l>>5,58,&z80_bc.b.h,1)*9;
 			break;
-		case  3: // MULTILOAD ("THE FINAL MATRIX"...), "SUPER CARS"
-			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==5)
-			{
-				if (z80_tape_testdump(z80_tape_spystack(0))==6)
-					while (FASTTAPE_CAN_DUMP()&&z80_de.b.l>1)
-						z80_hl.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de.w;
+		case  3: // MULTILOAD (V1: "DEFLEKTOR", "THE FINAL MATRIX"... V2: "SUPER CARS", "ATOMIC ROBO KID"...)
+			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==10)
 				k=fasttape_feed(z80_bc.b.l>>6,59),tape_skipping=z80_hl.b.l=128+(k>>1),z80_bc.b.h=-(k&1);
-			}
 			else
 				fasttape_add8(z80_bc.b.l>>6,59,&z80_bc.b.h,1);
 			break;
@@ -797,13 +793,9 @@ void z80_tape_trap(void)
 				z80_r7+=fasttape_add8(z80_bc.b.l>>5,54,&z80_bc.b.h,1)*9;
 			break;
 		case  7: // ALKATRAZ ("HATE"...)
-			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==2)
-				k=fasttape_feed(z80_bc.b.l>>5,59),tape_skipping=z80_hl.b.l=128+(k>>1),z80_bc.b.h=-(k&1);
-			else
-				z80_r7+=fasttape_add8(z80_bc.b.l>>5,59,&z80_bc.b.h,1)*9;
-			break;
 		case  8: // "RAINBOW ISLANDS"
-			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==0)
+		case 13: // "CHIP'S CHALLENGE"
+			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&((j=z80_tape_testfeed(z80_tape_spystack(0)))==0||j==2||j==7))
 			{
 				if ((k=z80_tape_testdump(z80_tape_spystack(0)))==0||k==3)
 					while (FASTTAPE_CAN_DUMP()&&z80_de.b.l>1)
@@ -818,12 +810,6 @@ void z80_tape_trap(void)
 				k=fasttape_feed(z80_bc.b.l>>6,50),tape_skipping=z80_hl.b.l=128+(k>>1),z80_bc.b.h=-(k&1);
 			else
 				z80_r7+=fasttape_add8(z80_bc.b.l>>6,50,&z80_bc.b.h,1)*7;
-			break;
-		case 13: // "CHIP'S CHALLENGE"
-			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==7)
-				k=fasttape_feed(z80_bc.b.l>>5,59),tape_skipping=z80_hl.b.l=128+(k>>1),z80_bc.b.h=-(k&1);
-			else
-				z80_r7+=fasttape_add8(z80_bc.b.l>>5,59,&z80_bc.b.h,1)*9;
 			break;
 	}
 }
@@ -1930,6 +1916,16 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 		case 0x1400: // NUM./: MINIMUM FRAMESKIP
 			video_framelimit&=~MAIN_FRAMESKIP_MASK;
 			break;
+		#ifdef DEBUG
+		case 0x9500: // PRIOR
+			++ula_clash_gamma; break;
+		case 0x9600: // NEXT
+			--ula_clash_gamma; break;
+		case 0x9700: // HOME
+			++ula_clash_delta; break;
+		case 0x9800: // END
+			--ula_clash_delta; break;
+		#endif
 	}
 	return session_menuinfo(),0;
 }
@@ -2163,6 +2159,10 @@ int main(int argc,char *argv[])
 					onscreen_bool(-2,-5,1,3,kbd_bit_tst(kbd_joy[3]));
 					onscreen_bool(-4,-4,1,1,kbd_bit_tst(kbd_joy[4]));
 				}
+				#ifdef DEBUG
+				onscreen_byte(+1,+1,ula_clash_delta,0);
+				onscreen_byte(+4,+1,ula_clash_gamma,0);
+				#endif
 				/*#ifdef SDL2
 				if (session_audio) // SDL2 audio queue
 				{

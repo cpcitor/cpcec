@@ -794,7 +794,8 @@ int fasttape_sub8(int q,int tape_step,BYTE *counter8,int step) // idem, but nega
 	return n;
 }
 
-int FASTTAPE_CAN_FEED(void) { return tape_general_bits?tape_general_totd>8&&tape_general_count==7:tape_bits>8&&tape_mask==128; } // check for a single full byte
+int FASTTAPE_CAN_FEED(void) { return tape_general_bits?!tape_general_totp&&tape_general_totd>16&&tape_general_count==7:
+	(!(tape_pilots+tape_syncs)&&(tape_bits>16)&&(tape_mask==128)); } // check for a single full byte (not the last one!)
 BYTE fasttape_feed(int q,int x) // get a whole byte from the stream, but leave the last signal in
 	{
 		int i=tape_byte;
@@ -802,7 +803,7 @@ BYTE fasttape_feed(int q,int x) // get a whole byte from the stream, but leave t
 			else tape_bits-=7,tape_mask>>=7;
 		fasttape_skip(q,x); return i;
 	}
-int FASTTAPE_CAN_DUMP(void) { return tape_general_bits?tape_general_totd>16:tape_bits>16; } // fasttape_feed() needs the final byte!
+int FASTTAPE_CAN_DUMP(void) { return tape_general_bits?tape_general_totd>24:tape_bits>24; } // fasttape_feed() needs the final byte!
 BYTE fasttape_dump(void) // get a whole byte from the stream and consume all signals
 	{
 		int i=tape_byte; tape_byte=tape_fgetc();

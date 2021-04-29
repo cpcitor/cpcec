@@ -39,7 +39,7 @@ SPEC-P-3.ROM y SPECTRUM.ROM. Todos ellos deben ser copiados en un mismo
 directorio, idealmente creado para alojar el emulador.
 
 Los binarios pueden ser compilados a partir de los ficheros fuente siguiendo las
-instrucciones incluidas a continuación. GCC 4.9.2, GCC 5.1.0, Pelles 4.50.113,
+instrucciones incluidas a continuación. GCC 4.9.2, GCC 5.1.0, Pelles C 4.50.113,
 TCC 0.9.27 y Clang 3.7.1 funcionan correctamente; GCC 4.7.1 comete fallos graves
 en la compilación y puede generar binarios inválidos.
 
@@ -47,11 +47,11 @@ Los binarios para Windows pueden ser compilados desde GCC (o compatibles)
 mediante los siguientes comandos:
 
 	windres cpcec.rc -Ocoff -ocpcec.res
-	gcc -m32 -mwindows cpcec.res -O2 -xc cpcec.c -luser32 -lgdi32 -lwinmm
+	gcc -mwindows cpcec.res -O2 -xc cpcec.c -luser32 -lgdi32 -lwinmm
 -lcomdlg32 -lshell32 -ocpcec.exe
 
 	windres zxsec.rc -Ocoff -ozxsec.res
-	gcc -m32 -mwindows zxsec.res -O2 -xc zxsec.c -luser32 -lgdi32 -lwinmm
+	gcc -mwindows zxsec.res -O2 -xc zxsec.c -luser32 -lgdi32 -lwinmm
 -lcomdlg32 -lshell32 -ozxsec.exe
 
 La posibilidad de emplear opcionalmente DirectDraw consiste en añadir `-DDDRAW
@@ -434,7 +434,7 @@ el profesor José Manuel Díaz Martínez y resultó galardonado con un diez con
 derecho a matrícula de honor.
 * La documentación sobre el sistema procede de cpcwiki.eu, cpc-power.com,
 cpcrulez.fr y quasar.cpcscene.net.
-* Las pruebas alfa corrieron a cargo del fiel y leal Denis Lechevalier.
+* Las pruebas alfa corrieron a cargo de Denis Lechevalier.
 
 ## Apéndice: casos de pruebas ##
 
@@ -903,7 +903,7 @@ la luminosidad (difuminado horizontal, sombreado). Corregido un error al grabar
 de XRF a AVI: las operaciones de VFW32 siempre asumían 16-bits estéreo. Las
 opciones de grabación "High resolution" y "High framerate" ahora perduran entre
 sesiones, y la primera además incluye las instantáneas BMP. Añadido soporte para
-los tipos de bloque $19 y $4B en los ficheros de cinta CDT/TZX, así como la
+los tipos de bloque 0x19 y 0x4B en los ficheros de cinta CDT/TZX, así como la
 nueva opción de disco "Read-only as default" para que el usuario pueda elegir si
 los discos se abren por defecto en sólo-lectura o lectura-escritura, y esta
 opción se combina con la ya existente "Strict disc writes". Nueva opción "Flip
@@ -916,3 +916,7 @@ de memoria de Plus3 (edición de disco de "Firefly") y mejorado el "beeper"
 (oversampling: "Quattropic" de Utz). El manejo de snapshots de ZXSEC es más
 estricto o flexible (cambiando de modelo tanto o tan poco como sea posible)
 mediante la opción "Strict SNA files".
+- 20210428 -- parche menor que corrige errores en el cargador de firmwares INI
+(quitar espacios al principio y al final de la cadena) y en algunos aceleradores
+de cinta, y añade vídeo inverso a los caracteres de 8 bits del volcado de
+memoria del debugger.

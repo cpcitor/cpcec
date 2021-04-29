@@ -36,7 +36,7 @@ void psg_reg_update(int c)
 			// catch overflows, either bad (buggy music in "Thing on a Spring")
 			// or good (pipe sound effect in its sequel "Thing Bounces Back")
 			if (psg_tone_count[c/2]>(psg_tone_limit[c/2]=psg_table[c&~1]+(psg_table[c|1]<<8)))
-				psg_tone_count[c/2]&=psg_tone_limit[c/2]; // harsh, but ensures count<=i
+				psg_tone_count[c/2]=psg_tone_limit[c/2]; // harsh, but ensures count<=i
 			break;
 		case 6: // noise wavelength
 			if (!(psg_noise_limit=(psg_table[6]&31)*2))
@@ -248,6 +248,7 @@ void psg_main(int t,int d) // render audio output for `t` clock ticks, with `d` 
 		p+=AUDIO_PLAYBACK<<PSG_MAIN_EXTRABITS;
 		while (p>0)
 		{
+			//static int dd=0; dd=(d+dd+(d>dd))/2;
 			#if AUDIO_CHANNELS > 1
 			o0-=d<<8,
 			o1-=d<<8;

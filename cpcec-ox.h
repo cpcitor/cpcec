@@ -456,17 +456,14 @@ int session_ui_printasciz(char *s,int x,int y,int prae,int w,int post,int q)
 }
 
 int session_ui_base_x,session_ui_base_y,session_ui_size_x,session_ui_size_y; // used to calculate mouse clicks relative to widget
-int session_ui_maus_x,session_ui_maus_y; // mouse X+Y, when the "key" is -1 (click) or -2 (move)
+int session_ui_maus_x,session_ui_maus_y; // mouse X+Y, when the "key" is -1 (move), -2 (left click) or -3 (right click)
 int session_ui_char,session_ui_shift; // ASCII+Shift of the latest keystroke
 #define SESSION_UI_MAXX (VIDEO_PIXELS_X/8-6)
 #define SESSION_UI_MAXY (VIDEO_PIXELS_Y/SESSION_UI_HEIGHT-2)
 
 int session_ui_exchange(void) // update window and wait for a keystroke
 {
-	session_ui_char=0; SDL_Event event;
-	for (;;)
-	{
-		SDL_WaitEvent(&event);
+	session_ui_char=0; for (SDL_Event event;SDL_WaitEvent(&event);)
 		switch (event.type)
 		{
 			case SDL_WINDOWEVENT:
@@ -474,16 +471,13 @@ int session_ui_exchange(void) // update window and wait for a keystroke
 					SDL_RenderPresent(session_blitter);//SDL_UpdateWindowSurface(session_hwnd); // fast redraw
 				break;
 			case SDL_MOUSEMOTION:
+			case SDL_MOUSEBUTTONUP:
 			case SDL_MOUSEBUTTONDOWN:
 				session_ui_maus_x=(event.button.x-session_ideal.x)*VIDEO_PIXELS_X/session_ideal.w/8-session_ui_base_x,session_ui_maus_y=(event.button.y-session_ideal.y)*VIDEO_PIXELS_Y/session_ideal.h/SESSION_UI_HEIGHT-session_ui_base_y;
 				return event.type==SDL_MOUSEBUTTONDOWN?event.button.button==SDL_BUTTON_RIGHT?-3:-2:-1;
 			case SDL_MOUSEWHEEL:
-				{
-					int i=event.wheel.y;
-					if (!i) return 0;
-					if (event.wheel.direction==SDL_MOUSEWHEEL_FLIPPED) i=-i;
-					return i>0?KBCODE_PRIOR:KBCODE_NEXT;
-				}
+				if (event.wheel.direction==SDL_MOUSEWHEEL_FLIPPED) event.wheel.y=-event.wheel.y;
+				return event.wheel.y>0?KBCODE_PRIOR:event.wheel.y<0?KBCODE_NEXT:0;
 			case SDL_KEYDOWN:
 				session_ui_shift=!!(event.key.keysym.mod&KMOD_SHIFT);
 				return event.key.keysym.mod&KMOD_ALT?0:event.key.keysym.scancode;
@@ -494,7 +488,6 @@ int session_ui_exchange(void) // update window and wait for a keystroke
 			case SDL_QUIT:
 				return KBCODE_ESCAPE;
 		}
-	}
 }
 
 void session_ui_loop(void) // get background painted again to erase old widgets
@@ -1408,9 +1401,9 @@ int session_pad2bit(int i) // translate motions and buttons into codes
 void session_menuinfo(void); // set the current menu flags. Must be defined later on!
 INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 {
-	static int config_signal=0; // catch DEBUG and PAUSE signals
-	if (config_signal!=session_signal)
-		config_signal=session_signal,session_dirtymenu=1;
+	static int s=0; // catch DEBUG and PAUSE signals
+	if (s!=session_signal)
+		s=session_signal,session_dirtymenu=1;
 	if (session_dirtymenu)
 		session_dirtymenu=0,session_menuinfo();
 	if (session_signal)
@@ -1431,7 +1424,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 		}
 		SDL_WaitEvent(NULL);
 	}
-	int q=0; SDL_Event event;
+	int q=0,k; SDL_Event event;
 	while (SDL_PollEvent(&event))
 	{
 		switch (event.type)
@@ -1445,30 +1438,27 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 					session_event=0x8080; // show menu
 				break;
 			case SDL_KEYDOWN:
+				if (event.key.keysym.mod&KMOD_ALT) // ALT+RETURN toggles fullscreen
 				{
-					if (event.key.keysym.mod&KMOD_ALT) // ALT+RETURN toggles fullscreen
-					{
-						if (event.key.keysym.sym==SDLK_RETURN)
-							session_togglefullscreen();
-						break;
-					}
-					session_shift=!!(event.key.keysym.mod&KMOD_SHIFT);
-					if (event.key.keysym.sym==SDLK_F10)
-					{
-						session_event=0x8080; // F10 shows the popup menu
-						break;
-					}
-					if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant inside debugger, see below
-						session_event=debug_xlat(event.key.keysym.scancode);
-					int k=session_key_n_joy(event.key.keysym.scancode);
-					if (k<128) // normal key
-					{
-						if (!(session_signal&SESSION_SIGNAL_DEBUG)) // only relevant outside debugger
-							kbd_bit_set(k);
-					}
-					else if (!session_event) // special key, but only if not already set by debugger
-						session_event=(k-((event.key.keysym.mod&KMOD_CTRL)?128:0))<<8;
+					if (event.key.keysym.sym==SDLK_RETURN)
+						session_togglefullscreen();
+					break;
 				}
+				session_shift=!!(event.key.keysym.mod&KMOD_SHIFT);
+				if (event.key.keysym.sym==SDLK_F10)
+				{
+					session_event=0x8080; // F10 shows the popup menu
+					break;
+				}
+				if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant inside debugger, see below
+					session_event=debug_xlat(event.key.keysym.scancode);
+				if ((k=session_key_n_joy(event.key.keysym.scancode))<128) // normal key
+				{
+					if (!(session_signal&SESSION_SIGNAL_DEBUG)) // only relevant outside debugger
+						kbd_bit_set(k);
+				}
+				else if (!session_event) // special key, but only if not already set by debugger
+					session_event=(k-((event.key.keysym.mod&KMOD_CTRL)?128:0))<<8;
 				break;
 			case SDL_TEXTINPUT: // always follows SDL_KEYDOWN
 				if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant inside debugger
@@ -1477,11 +1467,8 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 							session_event=128+(session_event&31)*64+(event.text.text[1]&63);
 				break;
 			case SDL_KEYUP:
-				{
-					int k=session_key_n_joy(event.key.keysym.scancode);
-					if (k<128)
-						kbd_bit_res(k);
-				}
+				if ((k=session_key_n_joy(event.key.keysym.scancode))<128)
+					kbd_bit_res(k);
 				break;
 			case SDL_JOYAXISMOTION:
 				if (!session_pad)

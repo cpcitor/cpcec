@@ -3765,7 +3765,7 @@ void z80_debug_show(void) // redraw debug screen
 			debug_printi("%02X",b);
 			if (z80_debug_panel==2&&m==z80_debug_pnl2_w)
 				debug_output[z80_debug_pnl2_x?-1:-2]^=128;
-			debug_output[32-1-x]=(b>=32&&b<127)?b:'.';
+			debug_output[32-1-x]=(b&96)?b:'.';
 			++m;
 		}
 		*debug_output=z80_debug_peekpoke?'\\':'/';

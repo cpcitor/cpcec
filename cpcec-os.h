@@ -446,7 +446,7 @@ int session_contextmenu(void) // used only when the normal menu is disabled
 }
 LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // window callback function
 {
-	switch (msg)
+	int k; switch (msg)
 	{
 		case WM_CLOSE:
 			DestroyWindow(hwnd);
@@ -481,14 +481,12 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 			break;
 		//case WM_SETFOCUS: // force full redraw
 		case WM_PAINT:
+			session_dontblit=0;
+			PAINTSTRUCT ps; HDC h;
+			if (h=BeginPaint(hwnd,&ps))
 			{
-				session_dontblit=0;
-				PAINTSTRUCT ps; HDC h;
-				if (h=BeginPaint(hwnd,&ps))
-				{
-					session_redraw(hwnd,h);
-					EndPaint(hwnd,&ps);
-				}
+				session_redraw(hwnd,h);
+				EndPaint(hwnd,&ps);
 			}
 			break;
 		case WM_COMMAND:
@@ -504,31 +502,24 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 			session_contextmenu();
 			break;
 		case WM_KEYDOWN:
+			session_shift=GetKeyState(VK_SHIFT)<0;
+			if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant inside debugger, see below
+				session_event=debug_xlat(((lparam>>16)&127)+((lparam>>17)&128));
+			if ((k=session_key_n_joy(((lparam>>16)&127)+((lparam>>17)&128)))<128) // normal key
 			{
-				int vkc=GetKeyState(VK_CONTROL)<0;
-				session_shift=GetKeyState(VK_SHIFT)<0;
-				if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant inside debugger, see below
-					session_event=debug_xlat(((lparam>>16)&127)+((lparam>>17)&128));
-				int k=session_key_n_joy(((lparam>>16)&127)+((lparam>>17)&128));
-				if (k<128) // normal key
-				{
-					if (!(session_signal&SESSION_SIGNAL_DEBUG)) // only relevant outside debugger
-						kbd_bit_set(k);
-				}
-				else if (!session_event) // special key, but only if not already set by debugger
-					session_event=(k-(vkc?128:0))<<8;
+				if (!(session_signal&SESSION_SIGNAL_DEBUG)) // only relevant outside debugger
+					kbd_bit_set(k);
 			}
+			else if (!session_event) // special key, but only if not already set by debugger
+				session_event=(k-(GetKeyState(VK_CONTROL)<0?128:0))<<8;
 			break;
 		case WM_CHAR: // always follows WM_KEYDOWN
 			if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant inside debugger
 				session_event=wparam>32&&wparam<=255?wparam:0; // exclude SPACE and non-visible codes!
 			break;
 		case WM_KEYUP:
-			{
-				int k;
-				if ((k=session_key_n_joy(((lparam>>16)&127)+((lparam>>17)&128)))<128) // normal key
-					kbd_bit_res(k);
-			}
+			if ((k=session_key_n_joy(((lparam>>16)&127)+((lparam>>17)&128)))<128) // normal key
+				kbd_bit_res(k);
 			break;
 		case WM_DROPFILES:
 			DragQueryFile((HDROP)wparam,0,(LPTSTR)session_parmtr,STRMAX);
@@ -723,9 +714,9 @@ void session_menuinfo(void); // set the current menu flags. Must be defined late
 
 INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 {
-	static int config_signal=0; // catch DEBUG and PAUSE signals
-	if (config_signal!=session_signal)
-		config_signal=session_signal,session_dirtymenu=1;
+	static int s=0; // catch DEBUG and PAUSE signals
+	if (s!=session_signal)
+		s=session_signal,session_dirtymenu=1;
 	if (session_dirtymenu)
 		session_dirtymenu=0,session_menuinfo();
 	if (session_signal)
@@ -746,9 +737,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 		}
 		WaitMessage(); //session_dontblit=1; // reduce flickering
 	}
-	MSG msg;
-	int q=0;
-	while (PeekMessage(&msg,0,0,0,PM_REMOVE))
+	int q=0; for (MSG msg;PeekMessage(&msg,0,0,0,PM_REMOVE);)
 	{
 		TranslateMessage(&msg);
 		q|=msg.message==WM_QUIT;
