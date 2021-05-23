@@ -86,7 +86,11 @@ void tape_fputcccc(int i) // writes four little-endian bytes; cfr. tape_fputc();
 
 int tape_type,tape_playback,tape_count; // general tape parameters
 int tape_pilot,tape_pilots,tape_sync,tape_syncs,tape_syncz[256],tape_bits,tape_bit0,tape_bit1,tape_byte,tape_half,tape_mask,tape_wave,tape_hold,tape_loop,tape_looptell; // TZX tape parameters
+#ifdef TAPE_KANSAS_CITY
 int tape_kansas,tape_kansasin,tape_kansasi,tape_kansason,tape_kansaso,tape_kansas0n,tape_kansas1n,tape_kansasrl,tape_kansas_i,tape_kansas_n,tape_kansas_b,tape_kansas_o; // TZX block $4B: Kansas City Standard
+#else
+#define tape_kansas tape_wave // dummy definition!
+#endif
 int tape_general_totp,tape_general_npp,tape_general_asp,tape_general_totd,tape_general_npd,tape_general_asd,tape_general_count,
 	tape_general_mask,tape_general_step,tape_general_bits; WORD tape_general_symdef[256][128]; // TZX block $19: Generalized Data
 int tape_record,tape_output; // tape recording parameters
@@ -303,6 +307,7 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 							tape_mask=128,tape_byte=tape_fgetc();
 						tape_status=!!(tape_byte&tape_mask),--tape_wave,tape_count+=tape_bit0;
 					}
+					#ifdef TAPE_KANSAS_CITY
 					else if (tape_kansas) // KANSAS CITY STANDARD?
 					{
 						if (tape_kansas_i<tape_kansasin) // IN signals?
@@ -327,6 +332,7 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 						}
 						tape_status^=1;
 					}
+					#endif
 					else if (tape_general_totp) // GENERALIZED DATA PILOT?
 					{
 						tape_status^=1; if (tape_general_count<=0) // fetch new item?
@@ -542,6 +548,7 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 								case 0x40: // *SNAPSHOT INFO
 									tape_skip(tape_fgetcccc()>>8);
 									break;
+								#ifdef TAPE_KANSAS_CITY
 								case 0x4B: // KANSAS CITY STANDARD
 									tape_kansas=tape_fgetcccc()-12;
 									tape_hold=tape_fgetcc();
@@ -565,6 +572,7 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 									else
 										tape_kansason*=tape_kansas0n,tape_kansaso=tape_bit0;
 									break;
+								#endif
 								case 0x5A: // *GLUE
 									tape_skip(9);
 									break;
@@ -590,12 +598,9 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 
 void tape_catalog_text(char **t,int i)
 {
-	if (i)
-	{
-		int j; while (i--)
-			if ((j=tape_fgetc())>=32)
-				*(*t)++=j; // purge invisible chars (f.e. SPEEDKING.CDT)
-	}
+	for (int j;i>0;--i)
+		if ((j=tape_fgetc())>=32)
+			*(*t)++=j; // purge invisible chars (f.e. SPEEDKING.CDT)
 	*(*t)++=0;
 }
 #define TAPE_CATALOG_HEAD "%010i --"
@@ -717,10 +722,12 @@ int tape_catalog(char *t,int x)
 					case 0x40: t+=1+sprintf(t,"*SNAPSHOT INFO");
 						k=tape_fgetcccc()>>8;
 						break;
+					#ifdef TAPE_KANSAS_CITY
 					case 0x4B: t+=1+sprintf(t,"KANSAS CITY DATA");
 						k=tape_fgetcccc();
 						l=k-12;
 						break;
+					#endif
 					case 0x5A: t+=1+sprintf(t,"*GLUE");
 						k=9;
 						break;
@@ -798,18 +805,22 @@ int FASTTAPE_CAN_FEED(void) { return tape_general_bits?!tape_general_totp&&tape_
 	(!(tape_pilots+tape_syncs)&&(tape_bits>16)&&(tape_mask==128)); } // check for a single full byte (not the last one!)
 BYTE fasttape_feed(int q,int x) // get a whole byte from the stream, but leave the last signal in
 	{
-		int i=tape_byte;
-		if (tape_general_bits) tape_general_totd-=7,tape_general_count-=7;
-			else tape_bits-=7,tape_mask>>=7;
+		int i=tape_byte; // keep for later
+		if (tape_general_bits)
+			tape_general_totd-=7,tape_general_count-=7;
+		else
+			tape_bits-=7,tape_mask>>=7;
 		fasttape_skip(q,x); return i;
 	}
-int FASTTAPE_CAN_DUMP(void) { return tape_general_bits?tape_general_totd>24:tape_bits>24; } // fasttape_feed() needs the final byte!
+int FASTTAPE_CAN_DUMP(void) { return tape_general_bits?tape_general_totd>=24:tape_bits>=24; } // all but the final bytes!
 BYTE fasttape_dump(void) // get a whole byte from the stream and consume all signals
 	{
 		int i=tape_byte; tape_byte=tape_fgetc();
-		if (tape_general_bits) tape_general_totd-=8;
-			else tape_bits-=8;
-		return i;
+		if (tape_general_bits)
+			tape_general_totd-=8;
+		else
+			tape_bits-=8;
+		return i; // no `fasttape_skip` here
 	}
 
 void fasttape_gotonext(void) // skips the current block (minus the last bits) if the PILOT and SYNCS are already over
@@ -826,11 +837,13 @@ void fasttape_gotonext(void) // skips the current block (minus the last bits) if
 			tape_skip(i=(tape_wave-1)/8);
 			tape_wave-=i*8;
 		}
+		#ifdef TAPE_KANSAS_CITY
 		else if (tape_kansas>1)
 		{
 			tape_skip(tape_kansas-1);
 			tape_kansas=1;
 		}
+		#endif
 		else if ((tape_general_totd*tape_general_bits)&&(tape_general_totd>8/tape_general_bits))
 		{
 			int j=8/tape_general_bits;

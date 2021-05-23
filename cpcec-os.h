@@ -168,7 +168,7 @@ BYTE kbd_bit[16],joy_bit[16]; // up to 128 keys in 16 rows of 8 bits
 // +------------------------------------------------------------------------+ +--------------+ +-------------------+
 // watch out: we use the HARDWARE keyboard symbols rather than the SOFTWARE ones,
 // to ensure that the emulator works regardless of the operating system language!
-#define	KBCODE_NULL	0
+
 // function keys
 #define	KBCODE_F1	0x3B
 #define	KBCODE_F2	0x3C
@@ -281,7 +281,7 @@ BYTE kbd_bit[16],joy_bit[16]; // up to 128 keys in 16 rows of 8 bits
 #define	KBCODE_X_MUL	0x37
 #define	KBCODE_X_DIV	0xB5
 
-const BYTE kbd_k2j[]= // these keys can simulate a joystick
+const BYTE kbd_k2j[]= // these keys can simulate a 4-button joystick
 	{ KBCODE_UP, KBCODE_DOWN, KBCODE_LEFT, KBCODE_RIGHT, KBCODE_Z, KBCODE_X, KBCODE_C, KBCODE_V };
 
 unsigned char kbd_map[256]; // key-to-key translation map
@@ -350,10 +350,10 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 			xx=yy*VIDEO_PIXELS_X/VIDEO_PIXELS_Y;
 		if (yy>xx*VIDEO_PIXELS_Y/VIDEO_PIXELS_X) // window area is too tall?
 			yy=xx*VIDEO_PIXELS_Y/VIDEO_PIXELS_X;
-		if (session_intzoom) // integer zoom? (100%, 200%, 300%...)
-			xx=((xx*17)/VIDEO_PIXELS_X/16)*VIDEO_PIXELS_X,
-			yy=((yy*17)/VIDEO_PIXELS_Y/16)*VIDEO_PIXELS_Y;
-		if (!(xx*yy))
+		if (session_intzoom) // integer zoom? (100%, 150%, 200%, 250%, 300%...)
+			xx=((xx*17)/VIDEO_PIXELS_X/8)*VIDEO_PIXELS_X/2,
+			yy=((yy*17)/VIDEO_PIXELS_Y/8)*VIDEO_PIXELS_Y/2;
+		if (xx<VIDEO_PIXELS_X||yy<VIDEO_PIXELS_Y)
 			xx=VIDEO_PIXELS_X,yy=VIDEO_PIXELS_Y; // window area is too small!
 		int x=(r.right-xx)/2,y=(r.bottom-yy)/2; // locate bitmap on window center
 		HGDIOBJ session_oldselect;

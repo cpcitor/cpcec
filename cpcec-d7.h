@@ -433,7 +433,7 @@ void disc_track_format(void)
 		while (++i<disc_index_table[disc_trueunit][0x30]*disc_index_table[disc_trueunit][0x31])
 			old_length+=disc_index_table[disc_trueunit][0x34+i]<<8;
 
-	char *disc_backup;
+	char *disc_backup=NULL;
 	if (old_length)
 	{
 		disc_backup=malloc(old_length);
@@ -849,6 +849,8 @@ BYTE disc_data_recv(void) // DATA I/O
 					}
 					else if ((disc_parmtr[4]==disc_parmtr[6])||((disc_result[1]|disc_result[2])&0x3F)) // is it the last requested sector? did any fatal errors happen?
 					{
+						if ((disc_result[1]|disc_result[2])&0x3F)
+							++disc_sector_last; // "BAD CAT" implies that errors waste enough time to miss the very next sector
 						disc_exitstate();
 						disc_length=7;
 						disc_phase=4;

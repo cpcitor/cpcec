@@ -916,7 +916,21 @@ de memoria de Plus3 (edición de disco de "Firefly") y mejorado el "beeper"
 (oversampling: "Quattropic" de Utz). El manejo de snapshots de ZXSEC es más
 estricto o flexible (cambiando de modelo tanto o tan poco como sea posible)
 mediante la opción "Strict SNA files".
-- 20210428 -- parche menor que corrige errores en el cargador de firmwares INI
-(quitar espacios al principio y al final de la cadena) y en algunos aceleradores
-de cinta, y añade vídeo inverso a los caracteres de 8 bits del volcado de
-memoria del debugger.
+- 20210428 -- parche menor que corrige errores en algunos aceleradores de cinta
+y en el cargador de firmwares INI (quitar espacios al principio y al final de la
+cadena), y añade vídeo inverso a los caracteres de 8 bits del volcado de memoria
+del debugger.
+- 20210522 -- parche menor que corrige errores en el ASIC (modificar el SSCR
+tiene efecto inmediatamente; SSSL se comprueba cuando HCC==R1 y no cuando
+HCC==R0; avisado por NoRecess), el PSG (el registro 15 es válido, aunque el
+hardware no lo utilice; la demo para Plus "Phat" ahora toca bien la música), el
+Z80 (EI siempre retrasa el siguiente IRQ, da igual el estado anterior de la
+bandera de interrupciones, y OUTI envía la señal OUT durante su último
+microsegundo en lugar del penúltimo; la demo "KKB First" necesitaba ambas
+correcciones para funcionar; avisado por Hicks) y ele FDC (los errores conllevan
+retrasos que deben ser emulados; el disco protegido original de "Bad Cat"
+dependía de esto por accidente; avisado por Dlfrsilver). El depurador acepta
+expresiones muy simples (sumas y restas) al escribir valores de 16 bits
+(dirección de "Go To", longitud de "Output"...) y el zoom entero emplea pasos de
+50% en lugar de 100% porque el tamaño por defecto es técnicamente 200% y no
+100%.

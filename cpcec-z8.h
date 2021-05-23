@@ -11,8 +11,8 @@
 // the 1980s and 1990s. Its timings are slightly different but making
 // them fit other machines only requires new timing macros and tables.
 
-// This module also includes two optional debuggers. One is graphical;
-// the other one is based on text commands similar to MS-DOS DEBUG.EXE.
+// This module also includes a debugger with a graphical user interface
+// based on a four-panel layout: code, registers, data and stack.
 
 // BEGINNING OF Z80 EMULATION ======================================= //
 
@@ -1799,7 +1799,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 			BYTE op=Z80_FETCH;
 			Z80_STRIDE(op); ++z80_pc.w;
 			Z80_STRIDE_0;
-			z80_active=z80_iff.b.l; // EI delay
+			z80_active=z80_iff.b.l; // consume EI delay
 			switch (op)
 			{
 				// 0x00-0x3F
@@ -1814,7 +1814,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					break;
 				case 0x31: // LD SP,$NNNN
 					Z80_LD2(z80_sp.b);
-					//break;
+					// no `break`!
 				case 0x00: // NOP
 					break;
 				case 0x02: // LD (BC),A
@@ -2079,6 +2079,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 				// 0x40-0x7F
 				case 0x41: // LD B,C
 					z80_bc.b.h=z80_bc.b.l;
+					// no `break`!
 				case 0x40: // LD B,B
 					break;
 				case 0x42: // LD B,D
@@ -2101,6 +2102,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					break;
 				case 0x48: // LD C,B
 					z80_bc.b.l=z80_bc.b.h;
+					// no `break`!
 				case 0x49: // LD C,C
 					break;
 				case 0x4A: // LD C,D
@@ -2129,6 +2131,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					break;
 				case 0x53: // LD D,E
 					z80_de.b.h=z80_de.b.l;
+					// no `break`!
 				case 0x52: // LD D,D
 					break;
 				case 0x54: // LD D,H
@@ -2151,6 +2154,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					break;
 				case 0x5A: // LD E,D
 					z80_de.b.l=z80_de.b.h;
+					// no `break`!
 				case 0x5B: // LD E,E
 					break;
 				case 0x5C: // LD E,H
@@ -2179,6 +2183,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					break;
 				case 0x65: // LD H,L
 					z80_hl.b.h=z80_hl.b.l;
+					// no `break`!
 				case 0x64: // LD H,H
 					break;
 				case 0x66: // LD H,(HL)
@@ -2201,6 +2206,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					break;
 				case 0x6C: // LD L,H
 					z80_hl.b.l=z80_hl.b.h;
+					// no `break`!
 				case 0x6D: // LD L,L
 					break;
 				case 0x6E: // LD L,(HL)
@@ -2250,6 +2256,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					break;
 				case 0x7E: // LD A,(HL)
 					z80_af.b.h=Z80_PEEK(z80_hl.w);
+					// no `break`!
 				case 0x7F: // LD A,A
 					break;
 				case 0x76: // HALT
@@ -2774,7 +2781,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					z80_iff.w=z80_active=0; // disable interruptions at once
 					break;
 				case 0xFB: // EI
-					z80_iff.w=0x0101; // enable interruptions one instruction later
+					z80_iff.w=0x0101; z80_active=0; // enable interruptions two instructions later (demo "KKB FIRST" does DI...EI:EI:HALT...DI)
 					break;
 				case 0xC7: // RST 0
 				case 0xCF: // RST 1
@@ -2990,6 +2997,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 								break;
 							case 0x65: // LD XH,XL
 								xy->b.h=xy->b.l;
+								// no `break`!
 							case 0x64: // LD XH,XH
 								break;
 							case 0x66: // LD H,(IX+$XX)
@@ -3012,6 +3020,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 								break;
 							case 0x6C: // LD XL,XH
 								xy->b.l=xy->b.h;
+								// no `break`!
 							case 0x6D: // LD XL,XL
 								break;
 							case 0x6E: // LD L,(IX+$XX)
@@ -3446,7 +3455,6 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 						case 0x65: // *RETN
 						case 0x75: // *RETN
 							z80_iff.b.l=z80_iff.b.h; // NMI!?
-							z80_retn();
 							// no `break`!
 						case 0x4D: // RETI
 						case 0x5D: // *RETI
@@ -3793,38 +3801,39 @@ void z80_debug_show(void) // redraw debug screen
 	onscreen_debug(z80_debug_grfx?z80_debug_grfxmode:-1);
 }
 
-int z80_debug_hex(char c) // 0..15 OK, <0 ERROR!
+int z80_debug_hex(int c) // 0..15 OK, <0 ERROR!
 {
-	if (c>='0'&&c<='9')
-		return c-'0';
-	if (c>='A'&&c<='F')
-		return c-'A'+10;
-	if (c>='a'&&c<='f')
-		return c-'a'+10;
-	return -1;
+	return (c>='0'&&c<='9')?c-'0':(c>='A'&&c<='F')?c-'A'+10:(c>='a'&&c<='f')?c-'a'+10:-1;
 }
-int z80_debug_dec(char c) // 0..9 OK, <0 ERROR!
+int z80_debug_dec(int c) // 0..9 OK, <0 ERROR!
 {
-	if (c>='0'&&c<='9')
-		return c-'0';
-	return -1;
+	return (c>='0'&&c<='9')?c-'0':-1;
 }
-int z80_debug_hexs(char *s)
+int z80_debug_expr(char *s) // parse very simple expressions till an unknown character appears
 {
-	int c,i=0;
-	if (*s=='.') // decimal?
-		while ((c=z80_debug_dec(*++s))>=0)
-			i=(i*10)+c;
-	else
-		while ((c=z80_debug_hex(*s))>=0)
-			i=(i<<4)+c,++s;
-	return i;
+	int c,k='+',t=0;
+	for (;;)
+	{
+		int i=0; if (*s=='.') // decimal?
+			while ((c=z80_debug_dec(*++s))>=0)
+				i=(i*10)+c;
+		else
+			while ((c=z80_debug_hex(*s))>=0)
+				i=(i<<4)+c,++s;
+		if (k=='+')
+			t+=i;
+		else if (k=='-')
+			t-=i;
+		if ((k=*s++)!='+'&&k!='-')
+			break;
+	}
+	return t;
 }
 int z80_debug_goto(int i) // <0 ERROR, >=0 OK
 {
 	sprintf(session_parmtr,"%04X",i);
 	if (session_input(session_parmtr,"Go to")>0)
-		return z80_debug_hexs(session_parmtr);
+		return (WORD)(z80_debug_expr(session_parmtr));
 	return -1;
 }
 BYTE z80_debug_findhexa,z80_debug_search[STRMAX];
@@ -3978,12 +3987,16 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 				char *s; FILE *f; WORD w=i;
 				session_parmtr[0]=0;
 				if (session_input(session_parmtr,"Output length")>=0)
-					if (i=(WORD)z80_debug_hexs(session_parmtr))
+					if (i=(WORD)z80_debug_expr(session_parmtr))
 						if (s=session_newfile(NULL,"*","Output file"))
 							if (f=fopen(s,"wb"))
 							{
-								while (i--)
-									fputc(PEEK(w),f),++w;
+								if (z80_debug_panel==0||!z80_debug_peekpoke)
+									while (i--)
+										fputc(PEEK(w),f),++w;
+								else
+									while (i--)
+										fputc(POKE(w),f),++w;
 								fclose(f);
 							}
 			}
@@ -3993,10 +4006,10 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 			{
 				WORD w=i; BYTE b;
 				if (session_parmtr[0]=0,session_input(session_parmtr,"Fill length")>=0)
-					if (i=(WORD)z80_debug_hexs(session_parmtr))
+					if (i=(WORD)z80_debug_expr(session_parmtr))
 						if (session_parmtr[0]=0,session_input(session_parmtr,"Filler byte")>=0)
 						{
-							b=z80_debug_hexs(session_parmtr);
+							b=z80_debug_expr(session_parmtr);
 							while (i--)
 								POKE(w)=b,++w;
 						}
@@ -4136,7 +4149,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 						if (session_input(session_parmtr,"Disassembly length")>=0)
 						{
 							char *s; FILE *f; WORD w=z80_debug_pnl0_w;
-							if (i=(WORD)z80_debug_hexs(session_parmtr))
+							if (i=(WORD)z80_debug_expr(session_parmtr))
 								if (s=session_newfile(NULL,"*.TXT","Print disassembly"))
 									if (f=fopen(s,"w"))
 									{
@@ -4153,7 +4166,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 						break;
 					case 'K': // CLOSE LOG
 						z80_debug_close();
-						//break;
+						// no `break`!
 					default: k=0; break;
 				}
 				if (i&&k>0&&k<32) // cursors may need to move up or down
@@ -4241,28 +4254,27 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 						if (session_input(session_parmtr,"Hex dump length")>=0)
 						{
 							char *s; FILE *f; WORD w=z80_debug_pnl0_w;
-							if (i=(WORD)z80_debug_hexs(session_parmtr))
+							if (i=(WORD)z80_debug_expr(session_parmtr))
 								if (s=session_newfile(NULL,"*.TXT","Print hex dump"))
 									if (f=fopen(s,"w"))
 									{
-										int u=0;
 										do // WRAP!
 										{
-											if (!u)
+											if (!k)
 												fprintf(f,"$%04X: ",w);
 											else
 												fprintf(f,",");
 											fprintf(f,"$%02X",z80_debug_peek(z80_debug_peekpoke,w));
-											if (!(u=(u+1)&15))
+											if (!(k=(k+1)&15))
 												fprintf(f,"\n");
 										}
 										while (++w,--i>0);
-										if (u)
+										if (k)
 											fprintf(f,"\n");
 										fclose(f);
 									}
 						}
-						break;
+						// no `break`!
 					default: k=0; break;
 				}
 				break;

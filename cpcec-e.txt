@@ -864,6 +864,19 @@ bug in ZXSEC's Plus3 memory contention ("Firefly" disc release) and improved the
 beeper (oversampling: Utz's "Quattropic"). ZXSEC snapshot handling is now more
 strict or flexible (changing models as often or as seldom as possible) depending
 on the option "Strict SNA files".
-- 20210428 -- minor patch fixing bugs in the firmware INI handler (spaces must
-be trimmed on both sides of each string) and in several tape fastloaders, and
+- 20210428 -- minor patch fixing bugs in several tape fastloaders and in the
+firmware INI handler (spaces must be trimmed on both sides of each string), and
 adding inverse video 8-bit characters to the debugger's memory dump.
+- 20210522 -- minor patch fixing bugs in the ASIC (modifying the SSCR has an
+immediate impact; SSSL is checked when HCC==R1 rather than when HCC==R0;
+reported by NoRecess), the PSG (register 15 is valid, even if the hardware
+doesn't use it: the Plus demo "Phat" plays its music properly now), the Z80 (EI
+always delays the next IRQ, no matter the previous state of the interrupt enable
+flag, and OUTI sends the OUT signal during its last microsecond rather than
+during the second-to-last; "KKB First" demo needed both fixes to run correctly;
+reported by Hicks) and the FDC (errors imply delays that must be emulated: the
+original protected disc of "Bad Cat" accidentally relies on this; reported by
+Dlfrsilver). The debugger accepts very simple expressions (additions and
+substractions) when entering 16-bit values (address of "Go To", length of
+"Output"...) and the integer zoom allows 50% steps rather than 100% because the
+default size is technically 200% rather than 100%.

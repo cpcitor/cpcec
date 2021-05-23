@@ -1,18 +1,20 @@
 type 0
 crtc 1
 bank 1
-xfdc 1
+fdcw 3
+joy1 0
 plct 0
-file /org/gourichon/localdata/stephane/SG/project/retrocomputing/bydate/2020/2020-12-31/FDCToolsV1_1/ReadAmsdos/Example.dsk
+file /home/stephane/today/retrocomputing/cookie_-_the_doctor.dsk
 snap 
 tape 
-disc /org/gourichon/localdata/stephane/SG/project/retrocomputing/bydate/2020/2020-12-31/FDCToolsV1_1/ReadAmsdos/Example.dsk
+disc /home/stephane/today/retrocomputing/cookie_-_the_doctor.dsk
 card /org/gourichon/localdata/stephane/SG/project/retrocomputing/bydate/2020/2020-05-09/cpcec/cpc464.rom
 dntr 
-info 1
 palette 2
-autorewind 1
+rewind 1
 debug 0
+film 3
+info 1
 polyphony 1
 scanlines 0
 softaudio 0

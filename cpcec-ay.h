@@ -16,7 +16,7 @@
 
 // BEGINNING OF PSG AY-3-8910 EMULATION ============================== //
 
-const BYTE psg_valid[16]={255,15,255,15,255,15,31,63,31,31,31,255,255,15,255,255}; // bit masks
+const BYTE psg_valid[16]={255,15,255,15,255,15,31,255,31,31,31,255,255,15,255,255}; // bit masks
 BYTE psg_index,psg_table[16]; // index and table
 BYTE psg_hard_log=0xFF; // default mode: drop and stay
 int psg_r7_filter; // safety delay to filter ultrasounds away, cfr. "Terminus" and "Robocop"
@@ -69,7 +69,7 @@ void psg_all_update(void)
 
 INLINE void psg_table_sendto(BYTE x,BYTE i)
 {
-	if (x<14) // reject invalid index!
+	if (x<16) // reject invalid index! (however, the CPC+ demo "PHAT" relies on writing and reading R15)
 	{
 		if (x==7&&((psg_table[7]^i)&7))
 			psg_r7_filter=PSG_TICK_STEP<<5; // below <<3 "Terminus" is dirty; above <<7 "SOUND 1,1,100" is hearable
@@ -80,6 +80,8 @@ INLINE void psg_table_sendto(BYTE x,BYTE i)
 #define psg_table_select(i) psg_index=(i) // "NODES OF YESOD" needs all bits because of a programming error!
 #define psg_table_send(i) psg_table_sendto(psg_index,(i))
 #define psg_table_recv() (psg_index<16?psg_table[psg_index]:0xFF)
+#define psg_port_a_lock() (psg_table[7]&64) // useless on Spectrum, used by the CPC for the keyboard bits
+#define psg_port_b_lock() (psg_table[7]&128) // useless on Spectrum, required on CPC by "PHAT", see above
 
 #define psg_setup()
 

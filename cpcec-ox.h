@@ -107,9 +107,8 @@ BYTE session_dirtymenu=1; // to force new status text
 #define kbd_bit_tst(k) ((kbd_bit[k/8]|joy_bit[k/8])&(1<<(k%8)))
 BYTE kbd_bit[16],joy_bit[16]; // up to 128 keys in 16 rows of 8 bits
 
-// SDL2 follows the USB keyboard standard, so we're using the same values here:
+// SDL2 follows the USB keyboard standard, so we're using the same values here!
 
-#define	KBCODE_NULL	  0
 // function keys
 #define	KBCODE_F1	 58
 #define	KBCODE_F2	 59
@@ -222,7 +221,7 @@ BYTE kbd_bit[16],joy_bit[16]; // up to 128 keys in 16 rows of 8 bits
 #define	KBCODE_X_MUL	 85
 #define	KBCODE_X_DIV	 84
 
-const BYTE kbd_k2j[]= // these keys can simulate a joystick
+const BYTE kbd_k2j[]= // these keys can simulate a 4-button joystick
 	{ KBCODE_UP, KBCODE_DOWN, KBCODE_LEFT, KBCODE_RIGHT, KBCODE_Z, KBCODE_X, KBCODE_C, KBCODE_V };
 
 unsigned char kbd_map[256]; // key-to-key translation map
@@ -299,10 +298,10 @@ void session_redraw(BYTE q)
 			xx=yy*VIDEO_PIXELS_X/VIDEO_PIXELS_Y;
 		if (yy>xx*VIDEO_PIXELS_Y/VIDEO_PIXELS_X) // window area is too tall?
 			yy=xx*VIDEO_PIXELS_Y/VIDEO_PIXELS_X;
-		if (session_intzoom) // integer zoom? (100%, 200%, 300%...)
-			xx=(xx/VIDEO_PIXELS_X)*VIDEO_PIXELS_X,
-			yy=(yy/VIDEO_PIXELS_Y)*VIDEO_PIXELS_Y;
-		if (!(xx*yy))
+		if (session_intzoom) // integer zoom? (100%, 150%, 200%, 250%, 300%...)
+			xx=((xx*17)/VIDEO_PIXELS_X/8)*VIDEO_PIXELS_X/2,
+			yy=((yy*17)/VIDEO_PIXELS_Y/8)*VIDEO_PIXELS_Y/2;
+		if (xx<VIDEO_PIXELS_X||yy<VIDEO_PIXELS_Y)
 			xx=VIDEO_PIXELS_X,yy=VIDEO_PIXELS_Y; // window area is too small!
 		session_ideal.x=(session_ideal.w-xx)/2; session_ideal.w=xx;
 		session_ideal.y=(session_ideal.h-yy)/2; session_ideal.h=yy;
@@ -513,7 +512,7 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 	int menu=0,menus=0,menuz=-1,item=0,items=0,itemz=-1,itemx=0,itemw=0;
 	char *zz,*z;
 
-	int done,ox=session_ui_base_x=1,oy=session_ui_base_y=1;
+	int done,ox=session_ui_base_x=1,oy=session_ui_base_y=1,q=1;
 	session_event=0x8000;
 	while (session_event==0x8000) // empty menu items must be ignored
 	{
@@ -522,10 +521,8 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 		{
 			if (menuz!=menu)
 			{
-				menuz=menu;
-				itemz=-1;
-				item=items=0;
-				int menux=menus=0;
+				menuz=menu; item=items=0;
+				q=itemz=-1; int menux=menus=0;
 				BYTE *m=session_ui_menudata;
 				while (*m) // scan menu data for menus
 				{
@@ -556,7 +553,7 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 			if (itemz!=item)
 			{
 				itemz=item;
-				int i=0;
+				q=1; int i=0;
 				BYTE *m=session_ui_menudata;
 				while (*m) // scan menu data for items
 				{
@@ -581,7 +578,8 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 				}
 				session_ui_drawframes(itemx+ox,1+oy,itemw+2,items);
 			}
-			session_redraw(0);
+			if (q)
+				session_redraw(q=0);
 			switch (session_ui_exchange())
 			{
 				case KBCODE_UP:

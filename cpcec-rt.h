@@ -703,8 +703,8 @@ int puff_body(int q) // loads (!0) or skips (0) a ZIP file body; !0 ERROR
 // simple ANSI X3.66
 unsigned int puff_dohash(unsigned int k,unsigned char *s,int l)
 {
-	static unsigned int z[]= {0,0x01DB71064,0x03B6E20C8,0x026D930AC,0x076DC4190,0x06B6B51F4,0x04DB26158,0x05005713C,
-		0x0EDB88320,0x0F00F9344,0x0D6D6A3E8,0x0CB61B38C,0x09B64C2B0,0x086D3D2D4,0x0A00AE278,0x0BDBDF21C}; // precalc'd!
+	static unsigned int z[]= {0,0x1DB71064,0x3B6E20C8,0x26D930AC,0x76DC4190,0x6B6B51F4,0x4DB26158,0x5005713C,
+		0xEDB88320,0xF00F9344,0xD6D6A3E8,0xCB61B38C,0x9B64C2B0,0x86D3D2D4,0xA00AE278,0xBDBDF21C}; // precalc'd!
 	for (int i=0;i<l;++i)
 		k^=s[i],k=(k>>4)^z[k&15],k=(k>>4)^z[k&15];
 	return k;
@@ -735,7 +735,7 @@ FILE *puff_fopen(char *s,char *m) // mimics fopen(), so NULL on error, *FILE oth
 				return puff_close(),NULL; // file failure!
 			puff_src=puff_tgt=NULL;
 			if (!(!puff_type||(puff_src=malloc(puff_srcl)))||!(puff_tgt=malloc(puff_tgtl))
-				||puff_body(1)||puff_hash!=(~puff_dohash(~0,puff_tgt,puff_tgto)))
+				||puff_body(1)||(DWORD)~(puff_hash^puff_dohash(~0,puff_tgt,puff_tgto)))
 				fclose(puff_ffile),puff_ffile=NULL; // memory or data failure!
 			if (puff_ffile)
 				fwrite1(puff_tgt,puff_tgto,puff_ffile),fseek(puff_ffile,0,SEEK_SET); // fopen() expects ftell()=0!

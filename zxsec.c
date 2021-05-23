@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20210428"//"2555"
+#define MY_VERSION "20210522"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -355,9 +355,10 @@ int psg_stereo[3][2]; const int psg_stereos[][3]={{0,0,0},{+256,-256,0},{+128,-1
 
 // behind the ULA: TAPE --------------------------------------------- //
 
-#define TAPE_MAIN_TZX_STEP (35<<0) // amount of T units per packet
 int tape_enabled=0; // tape motor and delay
-#define TAPE_OPEN_TAP_FORMAT
+#define TAPE_MAIN_TZX_STEP (35<<0) // amount of T units per packet
+#define TAPE_OPEN_TAP_FORMAT // required for Spectrum!
+#define TAPE_KANSAS_CITY // not too useful outside MSX...
 #include "cpcec-k7.h"
 
 // 0x1FFD,0x2FFD,0x3FFD: FDC 765 ------------------------------------ //
@@ -484,24 +485,7 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 
 void audio_main(int t) // render audio output for `t` clock ticks; t is always nonzero!
 {
-	#if 1
-	psg_main(t,((tape_status<<4)+((ula_v1&16)<<2)+((ula_v1&8)<<0))<<8);
-	#else
-	AUDIO_UNIT *z=audio_target;
-	psg_main(t);
-	if (z<audio_target)
-	{
-		// ULA MIXER: tape input (BIT 2) + beeper (BIT 4) + tape output (BIT 3; "Manic Miner" song, "Cobra's Arc" speech)
-		AUDIO_UNIT k=((tape_status<<4)+((ula_v1&16)<<2)+((ula_v1&8)<<0))<<(AUDIO_BITDEPTH-8);
-		static AUDIO_UNIT j=0;
-		#if AUDIO_CHANNELS > 1
-		*z++-=j=(k+j+(k>j))/2,*z++-=j;
-		#else
-		*z++-=(k+j+(k>j))/2;
-		#endif
-		j=k; while (z<audio_target) *z++-=j;
-	}
-	#endif
+	psg_main(t,((tape_status<<4)+((ula_v1&16)<<2)+((ula_v1&8)<<0))<<8); // ULA MIXER: tape input (BIT 2) + beeper (BIT 4) + tape output (BIT 3; "Manic Miner" song, "Cobra's Arc" speech)
 }
 
 // autorun runtime logic -------------------------------------------- //
@@ -515,10 +499,9 @@ BYTE autorun_kbd[16]; // automatic keypresses
 #define autorun_kbd_bit(k) (autorun_mode?autorun_kbd[k]:(kbd_bit[k]|joy_bit[k]))
 INLINE void autorun_next(void)
 {
-	++autorun_t;
 	switch (autorun_mode)
 	{
-		case 1: // autorun, 48k: type LOAD"" and hit RETURN; 128k+, hit RETURN
+		case 1: // 48k: type LOAD "" and hit RETURN
 			if (autorun_t>3)
 			{
 				autorun_kbd_set(0x33); // PRESS "J"
@@ -536,8 +519,8 @@ INLINE void autorun_next(void)
 		case 3:
 		case 5: if (autorun_t>3)
 			{
-				autorun_kbd_set(0x39);
-				autorun_kbd_set(0x28);
+				autorun_kbd_set(0x39); // PRESS SYMBOL SHIFT
+				autorun_kbd_set(0x28); // PRESS "P"
 				++autorun_mode;
 				autorun_t=0;
 			}
@@ -545,14 +528,14 @@ INLINE void autorun_next(void)
 		case 4:
 		case 6: if (autorun_t>3)
 			{
-				autorun_kbd_res(0x39);
-				autorun_kbd_res(0x28);
+				autorun_kbd_res(0x39); // RELEASE SYMBOL SHIFT
+				autorun_kbd_res(0x28); // RELEASE "P"
 				++autorun_mode;
 				autorun_t=0;
 			}
 			break;
 		case 7:
-		case 8: // shared autorun (1/2): press RETURN
+		case 8: // 128k and later: hit RETURN
 			if (autorun_t>3)
 			{
 				autorun_kbd_set(0x30); // PRESS RETURN
@@ -560,7 +543,7 @@ INLINE void autorun_next(void)
 				autorun_t=0;
 			}
 			break;
-		case 9: // shared autorun (2/2): release RETURN
+		case 9:
 			if (autorun_t>3)
 			{
 				autorun_kbd_res(0x30); // RELEASE RETURN
@@ -569,16 +552,15 @@ INLINE void autorun_next(void)
 			}
 			break;
 	}
+	++autorun_t;
 }
 
 // Z80-hardware procedures ------------------------------------------ //
 
 // the Spectrum hands the Z80 a mainly empty data bus value
-#define z80_irq_bus 0xFF
-// the Spectrum lacks special cases where RETI and RETN matter
-#define z80_retn()
+#define z80_irq_bus 255
 // the Spectrum doesn't obey the Z80 IRQ ACK signal
-#define z80_irq_ack()
+#define z80_irq_ack() 0
 
 DWORD main_t=0;
 
@@ -816,7 +798,7 @@ void z80_tape_trap(void)
 
 BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 {
-	BYTE b=0xFF;
+	BYTE b=255;
 	if ((p&63)==31) // KEMPSTON joystick
 		b=autorun_kbd_bit(8);
 	else if ((p&15)==14) // 0x??FE, ULA 48K
@@ -875,8 +857,9 @@ void z80_debug_hard(int q,int x,int y)
 	t=s+sprintf(s,"ULA:                " "    %04X:%02X %02X",(WORD)(ula_bitmap+0x4000),(BYTE)ula_temp,ula_v1);
 	t+=z80_debug_hard1(t,type_id,ula_v2);
 	t+=z80_debug_hard1(t,type_id==3,ula_v3);
-	#define Z80_DEBUG_HARD_MREQ(x) (ula_clash_mreq[x]!=ula_clash[0]?'*':'-')
-	#define Z80_DEBUG_HARD_IORQ(x) (ula_clash_iorq[x]!=ula_clash[0]?'*':'-')
+	#define Z80_DEBUG_HARD_T_F(x) ((x)?'*':'-')
+	#define Z80_DEBUG_HARD_MREQ(x) (Z80_DEBUG_HARD_T_F(ula_clash_mreq[x]!=ula_clash[0]))
+	#define Z80_DEBUG_HARD_IORQ(x) (Z80_DEBUG_HARD_T_F(ula_clash_iorq[x]!=ula_clash[0]))
 	t+=sprintf(t,"   %c%c%c%c:%c%c%c%c %05i:%c",
 		Z80_DEBUG_HARD_MREQ(0),Z80_DEBUG_HARD_MREQ(1),Z80_DEBUG_HARD_MREQ(2),Z80_DEBUG_HARD_MREQ(3),
 		Z80_DEBUG_HARD_IORQ(0),Z80_DEBUG_HARD_IORQ(1),Z80_DEBUG_HARD_IORQ(2),Z80_DEBUG_HARD_IORQ(3),
@@ -886,9 +869,9 @@ void z80_debug_hard(int q,int x,int y)
 	for (i=0;i<8;++i)
 		t+=sprintf(t,"%02X",psg_table[i]);
 	t+=z80_debug_hard_tab(t);
-	for (;i<14;++i)
+	for (;i<16;++i)
 		t+=sprintf(t,"%02X",psg_table[i]);
-	t+=sprintf(t,"----" "FDC:  %02X - %04X:%04X" "    %c ",disc_parmtr[0],(WORD)disc_offset,(WORD)disc_length,48+disc_phase);
+	t+=sprintf(t,"FDC:  %02X - %04X:%04X" "    %c ",disc_parmtr[0],(WORD)disc_offset,(WORD)disc_length,48+disc_phase);
 	for (i=0;i<7;++i)
 		t+=sprintf(t,"%02X",disc_result[i]);
 	char *r=t;
@@ -1559,6 +1542,7 @@ void session_menuinfo(void)
 	z80_multi=1+z80_turbo; // setup overclocking
 	sprintf(session_info,"%i:%s ULAv%c %0.1fMHz"//" | disc %s | tape %s | %s"
 		,(!type_id||(ula_v2&32))?48:128,type_id?(type_id!=1?(type_id!=2?(!disc_disabled?"Plus3":"Plus2A"):"Plus2"):"128K"):"48K",ula_clash_disabled?'0':type_id?type_id>2?'3':'2':'1',3.5*z80_multi);
+	*debug_buffer=128; // force debug redraw! (somewhat overkill)
 }
 int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 {
@@ -1659,6 +1643,7 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 						break;
 				if (any_load(session_parmtr,!session_shift))
 					session_message(txt_error_any_load,txt_error);
+				else strcpy(autorun_path,session_parmtr);
 			}
 			break;
 		case 0x0300: // ^F3: RELOAD SNAPSHOT
@@ -2120,10 +2105,10 @@ int main(int argc,char *argv[])
 		while (!session_signal)
 			z80_main(
 				z80_multi*( // clump Z80 instructions together to gain speed...
-				tape_skipping?ula_limit_x*4: // tape loading ignores most events and heavy clumping is feasible, although some sync is still needed
+				((session_fast&-2)|tape_skipping)?ula_limit_x*4: // tape loading allows simple timings, but some sync is still needed
 					irq_delay?irq_delay:(ula_pos_y<-1?(-ula_pos_y-1)*ula_limit_x*4:ula_pos_y<192?(ula_limit_x-ula_pos_x+ula_clash_delta)*4:
-					ula_count_y<ula_limit_y-1?(ula_limit_y-ula_count_y-1)*ula_limit_x*4:1 // the safest way to handle the fastest interrupt countdown possible (ULA SYNC)
-				)<<(session_fast>>1)) // ...without missing any IRQ and ULA deadlines!
+					ula_count_y<ula_limit_y-1?(ula_limit_y-ula_count_y-1)*ula_limit_x*4:1) // the safest way to handle the fastest interrupt countdown possible (ULA SYNC)
+				) // ...without missing any IRQ and ULA deadlines!
 			);
 		if (session_signal&SESSION_SIGNAL_FRAME) // end of frame?
 		{
@@ -2202,9 +2187,9 @@ int main(int argc,char *argv[])
 				tape_closed=0,session_dirtymenu=1; // tag tape as closed
 			tape_skipping=audio_pos_z=0;
 			if (tape&&tape_skipload&&tape_enabled)
-				session_fast|=6,video_framelimit|=(MAIN_FRAMESKIP_MASK+1),video_interlaced|=2,audio_disabled|=2; // abuse binary logic to reduce activity
+				session_fast|=2,video_framelimit|=(MAIN_FRAMESKIP_MASK+1),video_interlaced|=2,audio_disabled|=2; // abuse binary logic to reduce activity
 			else
-				session_fast&=~6,video_framelimit&=~(MAIN_FRAMESKIP_MASK+1),video_interlaced&=~2,audio_disabled&=~2; // ditto, to restore normal activity
+				session_fast&=~2,video_framelimit&=~(MAIN_FRAMESKIP_MASK+1),video_interlaced&=~2,audio_disabled&=~2; // ditto, to restore normal activity
 			session_update();
 		}
 	}
