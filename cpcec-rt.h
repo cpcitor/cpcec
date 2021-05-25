@@ -1112,7 +1112,7 @@ int session_createfilm(void) // start recording video and audio; !0 ERROR
 
 	if (!session_filmvideo&&!(session_filmvideo=malloc(sizeof(VIDEO_UNIT)*SESSION_FILMVIDEO_LENGTH)))
 		return 1; // cannot allocate buffer!
-	if (!xrf_chunk&&!(xrf_chunk=malloc((sizeof(VIDEO_UNIT)*SESSION_FILMVIDEO_LENGTH+AUDIO_BITDEPTH/8*SESSION_FILMAUDIO_LENGTH)*9/8+4*8))) // maximum pathological length!
+	if (!xrf_chunk&&!(xrf_chunk=malloc((sizeof(VIDEO_UNIT)*SESSION_FILMVIDEO_LENGTH+SESSION_FILMAUDIO_LENGTH*AUDIO_BITDEPTH/8)*9/8+4*8))) // maximum pathological length!
 		return 1; // cannot allocate memory!
 
 	if (!(session_nextfilm=session_savenext("%s%08i.xrf",session_nextfilm))) // "Xor-Rle Film"
@@ -1127,7 +1127,7 @@ int session_createfilm(void) // start recording video and audio; !0 ERROR
 	fputc(session_filmflag=((AUDIO_BITDEPTH>>session_filmscale)>8?1:0)+(AUDIO_CHANNELS>1?2:0),session_filmfile); // +16BITS(1)+STEREO(2)
 	fputmmmm(-1,session_filmfile); // to be filled later
 	session_filmalign=video_pos_y; // catch scanline mode, if any
-	return session_recording=1,MEMZERO(session_filmvideo),session_filmcount=0;
+	return memset(session_filmvideo,0,sizeof(VIDEO_UNIT)*SESSION_FILMVIDEO_LENGTH),session_filmcount=0;
 }
 void session_writefilm(void) // record one frame of video and audio
 {
@@ -1249,7 +1249,7 @@ int session_closefilm(void) // stop recording video and audio; !0 ERROR
 	fseek(session_filmfile,16,SEEK_SET);
 	fputmmmm(session_filmcount>>session_filmtimer,session_filmfile); // number of frames
 	fclose(session_filmfile);
-	return session_filmfile=NULL,session_recording=0;
+	return session_filmfile=NULL,0;
 }
 
 unsigned char bitmapheader[54]="BM\000\000\000\000\000\000\000\000\066\000\000\000\050\000\000\000\000\000\000\000\000\000\000\000\001\000\030\000";

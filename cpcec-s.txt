@@ -934,3 +934,8 @@ expresiones muy simples (sumas y restas) al escribir valores de 16 bits
 (dirección de "Go To", longitud de "Output"...) y el zoom entero emplea pasos de
 50% en lugar de 100% porque el tamaño por defecto es técnicamente 200% y no
 100%.
+- 20210524 -- parche menor que corrige errores al grabar vídeos: errores de
+campos en máquinas de 64 bits, tamaño erróneo en la cabecera AVI del sonido de 8
+bits (ambos avisados por Cpcitor), y suciedad acumulada entre múltiples
+grabaciones dentro de una misma sesión. XRF también muestra la longitud del
+resultado.

@@ -880,3 +880,7 @@ Dlfrsilver). The debugger accepts very simple expressions (additions and
 substractions) when entering 16-bit values (address of "Go To", length of
 "Output"...) and the integer zoom allows 50% steps rather than 100% because the
 default size is technically 200% rather than 100%.
+- 20210524 -- minor patch fixing bugs in film recording: field size errors on
+64-bit machines, improper AVI header sound sample size on 8-bit output (both
+reported by Cpcitor), and accumulated dirt between multiple recordings within
+the same session. XRF also shows the length of the output file.

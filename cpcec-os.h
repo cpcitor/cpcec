@@ -114,7 +114,7 @@ BYTE session_fast=0,session_wait=0,session_audio=1,session_softblit=1,session_ha
 BYTE session_stick=1,session_shift=0,session_key2joy=0; // keyboard and joystick
 BYTE video_scanline=0,video_scanlinez=8; // 0 = solid, 1 = scanlines, 2 = full interlace, 3 = half interlace
 BYTE video_filter=0,audio_filter=0; // filter flags
-BYTE session_intzoom=0,session_recording=0;
+BYTE session_intzoom=0;
 FILE *session_wavefile=NULL; // audio recording is done on each session update
 
 RECT session_ideal; // ideal rectangle where the window fits perfectly
@@ -832,7 +832,7 @@ INLINE void session_render(void) // update video, audio and timers
 			if (i=(1000*i/j)) // avoid zero, it has a special value in Windows!
 				Sleep(i>1000/VIDEO_PLAYBACK?1+1000/VIDEO_PLAYBACK:i);
 		}
-		else if (i<0&&!session_recording)
+		else if (i<0&&!session_filmfile)
 			video_framecount=-2; // automatic frameskip if timing ever breaks!
 		audio_session=(audio_session+1)%AUDIO_N_FRAMES;
 	}

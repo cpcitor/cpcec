@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20210522"//"2555"
+#define MY_VERSION "20210524"//"1155"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -1740,20 +1740,20 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 					if (disc_create(s))
 						session_message("Cannot create disc!",txt_error);
 					else
-						disc_open(s,!!session_shift,1);
+						disc_open(s,session_shift,1);
 				}
 			break;
 		case 0x8700: // F7: INSERT DISC..
 			if (type_id==3&&!disc_disabled)
 				if (s=puff_session_getfilereadonly(disc_path,"*.dsk",session_shift?"Insert disc into B:":"Insert disc into A:",disc_filemode&1))
-					if (disc_open(s,!!session_shift,!session_filedialog_get_readonly()))
+					if (disc_open(s,session_shift,!session_filedialog_get_readonly()))
 						session_message("Cannot open disc!",txt_error);
 			break;
 		case 0x0700: // ^F7: EJECT DISC
-			disc_close(!!session_shift);
+			disc_close(session_shift);
 			break;
 		case 0x0701:
-			disc_flip[!!session_shift]^=1;
+			disc_flip[session_shift]^=1;
 			break;
 		case 0x8800: // F8: INSERT OR RECORD TAPE..
 			if (session_shift)
@@ -1855,11 +1855,11 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 				video_scanblend=!video_scanblend;
 			break;
 		case 0x8C01:
-			if (!session_recording)
+			if (!session_filmfile)
 				session_filmscale=!session_filmscale;
 			break;
 		case 0x8C02:
-			if (!session_recording)
+			if (!session_filmfile)
 				session_filmtimer=!session_filmtimer;
 			break;
 		case 0x8C00: // F12: SAVE SCREENSHOT OR RECORD XRF FILM

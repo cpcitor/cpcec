@@ -7,7 +7,7 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "XRF"
-#define MY_VERSION "20210418"//"1355"
+#define MY_VERSION "20210524"//"1155"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -37,17 +37,18 @@ Contact information: <mailto:cngsoft@gmail.com> */
 #include <string.h> // strcmp...
 #include <stdlib.h> // malloc...
 
-#ifdef _WIN32
+#ifdef _WIN32 // "BYTE", "WORD", "DWORD" and (unused) "QWORD" are always exactly 8, 16, 32 and 64 bits long
 
 #define WIN32_LEAN_AND_MEAN 1
 #include <windows.h>
 #include <vfw.h>
 
-#else
+#else // "char", "short int" and "long long int" are 8, 16 and 64 bits, but "long int" can be 32 or 64 bits
 
-#define BYTE unsigned char
-#define WORD unsigned short
-#define DWORD unsigned long
+#include <stdint.h>
+#define BYTE uint8_t
+#define WORD uint16_t
+#define DWORD uint32_t
 
 #endif
 
@@ -71,7 +72,7 @@ BYTE *xrf_bitmap=NULL,*xrf_shadow=NULL,*xrf_chunk=NULL; // buffers
 #define xrf_decode1() (xrf_decode0(),(b&a)?*w++:0)
 int xrf_decode(BYTE *t,BYTE *s,int *l,int x) // equally hacky decoder based on an 8-bit RLE and a pseudo Huffman filter!
 {
-	BYTE *w=s,*z=t,a=0,b; int m=-1,n;
+	BYTE *w=s,*z=t,a=0,b=0; int m=-1,n;
 	for (;;)
 	{
 		xrf_decode0(); if (b&a) // special case of xrf_decode1(): we must catch "100000000"
@@ -362,7 +363,7 @@ int avi_create(char *s)
 		avi_header[0x012A]=(flags_z&2)?2:1;
 		avi_mputcccc(&avi_header[0x012C],i);
 		avi_mputcccc(&avi_header[0x0130],i*flags_audio[flags_z&3]);
-		avi_header[0x0134]=flags_audio[flags_z&3];
+		avi_header[0x00FC]=avi_header[0x0114]=avi_header[0x0134]=flags_audio[flags_z&3];
 		avi_header[0x0136]=(flags_z&1)?16:8;
 		avi_mputcccc(&avi_header[0x013C],sizeof(avi_header)-0x0140); // "JUNK" size
 		// Notice that some fields need to know in advance the sizes;
@@ -396,7 +397,6 @@ int avi_create(char *s)
 		avi_mputcccc(&avi_h_mute[0x0004],sizeof(avi_h_mute)+4+i+8+count_z*16); // "RIFF:AVI " size (movie+index)
 		avi_mputcccc(&avi_h_mute[0x0030],count_z); // avi_videos
 		avi_mputcccc(&avi_h_mute[0x008C],count_z); // avi_videos
-		avi_mputcccc(&avi_h_mute[0x0108],count_z*audio_z); // avi_audios
 
 		avi_length=fwrite1(avi_h_mute,sizeof(avi_h_mute),avi_file)+12;
 		avi_fputcccc(0x5453494C); // "LIST"
@@ -520,10 +520,9 @@ int main(int argc,char *argv[])
 			"and you are welcome to redistribute it under certain conditions." // GPL_3_INFO
 			"\n");
 			#ifdef _WIN32
-			printf("\nfourcc codes:");
 			ICINFO lpicinfo; ICInfo(0,-1,&lpicinfo); int n=lpicinfo.fccHandler;
 			for (int i=0;i<n;++i)
-				ICInfo(0,i,&lpicinfo),printf(" %c%c%c%c",lpicinfo.fccHandler&255,(lpicinfo.fccHandler>>8)&255,(lpicinfo.fccHandler>>16)&255,(lpicinfo.fccHandler>>24)&255);
+				ICInfo(0,i,&lpicinfo),printf("%s%c%c%c%c",i?i%10?" ":"\n\t\t":"\n- fourcc codes: ",lpicinfo.fccHandler&255,(lpicinfo.fccHandler>>8)&255,(lpicinfo.fccHandler>>16)&255,(lpicinfo.fccHandler>>24)&255);
 			printf("\n");
 			#endif
 		return 1;
@@ -546,6 +545,9 @@ int main(int argc,char *argv[])
 	if (xrf_cursor!=xrf_length||!xrf_count)
 		fprintf(stderr,"error: cannot decode/encode data!\n");
 	else
-		fprintf(stderr,"ok: %i frames, %i unused.\n",xrf_count,xrf_dummy);
+	{
+		avi_file=fopen(t,"rb"); fseek(avi_file,0,SEEK_END); long long ii=ftell(avi_file); fclose(avi_file);
+		fprintf(stderr,"ok: %i frames, %i unused, %.02f Mbytes.\n",xrf_count,xrf_dummy,ii/1048576.0);
+	}
 	return xrf_cursor!=xrf_length;
 }

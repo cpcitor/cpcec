@@ -91,7 +91,7 @@ BYTE session_fast=0,session_wait=0,session_audio=1,session_softblit=1,session_ha
 BYTE session_stick=1,session_shift=0,session_key2joy=0; // keyboard and joystick
 BYTE video_scanline=0,video_scanlinez=8; // 0 = solid, 1 = scanlines, 2 = full interlace, 3 = half interlace
 BYTE video_filter=0,audio_filter=0; // filter flags
-BYTE session_intzoom=0,session_recording=0; int session_joybits=0;
+BYTE session_intzoom=0; int session_joybits=0;
 FILE *session_wavefile=NULL; // audio recording is done on each session update
 
 BYTE session_paused=0,session_signal=0;
@@ -1567,7 +1567,7 @@ INLINE void session_render(void) // update video, audio and timers
 		j=1000/VIDEO_PLAYBACK-(i-session_timer);
 		if (j>0)
 			SDL_Delay(j>1000/VIDEO_PLAYBACK?1+1000/VIDEO_PLAYBACK:j);
-		else if (j<0&&!session_recording)
+		else if (j<0&&!session_filmfile)
 			video_framecount=-2; // automatic frameskip!
 		session_timer+=1000/VIDEO_PLAYBACK;
 	}
