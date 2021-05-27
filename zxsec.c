@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20210524"//"1155"
+#define MY_VERSION "20210526"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -1955,7 +1955,7 @@ int main(int argc,char *argv[])
 {
 	int i,j; FILE *f;
 	session_detectpath(argv[0]);
-	if (f=fopen(session_configfile(),"r"))
+	if (f=session_configfile("r"))
 	{
 		while (fgets(session_parmtr,STRMAX-1,f))
 			session_configreadmore(session_configread(session_parmtr));
@@ -2200,7 +2200,7 @@ int main(int argc,char *argv[])
 	psg_closelog();
 	session_closefilm();
 	session_closewave();
-	if (f=fopen(session_configfile(),"w"))
+	if (f=session_configfile("w"))
 		session_configwritemore(f),session_configwrite(f),fclose(f);
 	return puff_byebye(),session_byebye(),0;
 }

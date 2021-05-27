@@ -3363,7 +3363,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							Z80_IN2(z80_hl.b.l,0x368);
 							break;
 						case 0x70: // IN (C)
-							{ BYTE dummy; Z80_IN2(dummy,0x370); }
+							Z80_IN2(op,0x370);
 							break;
 						case 0x78: // IN A,(C)
 							Z80_IN2(z80_af.b.h,0x378);
@@ -3811,9 +3811,9 @@ int z80_debug_dec(int c) // 0..9 OK, <0 ERROR!
 }
 int z80_debug_expr(char *s) // parse very simple expressions till an unknown character appears
 {
-	int c,k='+',t=0;
-	for (;;)
+	int t=0,k='+',c; for (;;)
 	{
+		while (*s==' ') ++s; // trim spaces
 		int i=0; if (*s=='.') // decimal?
 			while ((c=z80_debug_dec(*++s))>=0)
 				i=(i*10)+c;
@@ -3824,7 +3824,14 @@ int z80_debug_expr(char *s) // parse very simple expressions till an unknown cha
 			t+=i;
 		else if (k=='-')
 			t-=i;
-		if ((k=*s++)!='+'&&k!='-')
+		else if (k=='&')
+			t&=i;
+		else if (k=='|')
+			t|=i;
+		else if (k=='^')
+			t^=i;
+		while (*s==' ') ++s; // trim spaces
+		if (!(k=*s++)||!strchr("+-&|^",k))
 			break;
 	}
 	return t;

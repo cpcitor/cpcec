@@ -197,8 +197,9 @@ levels;
 * F11+Control: change the type of scanlines, from half scanlines to double
 interlace;
 * F11+Control+Shift: ditto in reverse, from double interlace to half scanlines;
-* F12: record the content of the screen into a BMP file;
-* F12+Mays: record a video in the temporary format XRF;
+* F12: record the content of the screen into a BMP file in the emulator's
+directory;
+* F12+Mays: record a video in the temporary format XRF (see below in "Videos");
 * F12+Control: start recording (or stop) the sound into a WAV file;
 * F12+Control+Shift: start recording (or stop) the sound into a YM file;
 * Pause: stop (or resume) emulation;
@@ -289,8 +290,9 @@ notation.
 * Digits from 0 to 9 and letters from A to F modify the value under the cursor;
 * Stop (".") creates or deletes a breakpoint in the current cursor location in
 the disassembly;
-* G ("go to") requests an address (in hexadecimal) and moves the cursor to its
-location in the disassembly or the memory dump;
+* G ("go to") requests an address (in hexadecimal by default, in decimal if
+preceded by ".") and moves the cursor to its location in the disassembly or the
+memory dump;
 * H ("help") shows a short help;
 * I ("input") requests a filename and loads its contents onto memory starting
 from the current location of the cursor;
@@ -314,7 +316,7 @@ its a breakpoint;
 * R ("run to") runs the emulation until reaching the operation under the cursor
 in the disassembly;
 * S ("search") requests either an ASCII string (case insensitive) or a
-hexadecimal string with a prefix (for example `SOS` becomes `$534F53`) and
+hexadecimal string preceded by "$" (for example `SOS` becomes `$534F53`) and
 searches the memory for it since the current location until the last valid
 address. If it finds the string it moves the cursor next to it in either the
 disassembly or the memory dump;
@@ -353,9 +355,10 @@ When compiling the tool for Windows (it needs the system library AVIFIL32: "gcc
 source.xrf target.avi ABCD") it will read the file "source.xrf" and generate a
 file named "target.avi" with the help of the codec ABCD, if it's available.
 Running the tool without parameters shows the help and the list of available
-codecs. It's advised to install and use the codec ZMBV developed by the Dosbox
-project because it provides the best performance in pixellated recordings like
-these.
+codecs; running it without a target parameter prints the source file's
+parameters. It's advised to install and use the codec ZMBV developed by the
+Dosbox project because it provides the best performance in pixellated recordings
+like these.
 
 In other systems XRF cannot directly use any codec, so the outcome is an AVI
 file without any compression (image is RGB 24 bpp, sound is stereo PCM);
@@ -884,3 +887,8 @@ default size is technically 200% rather than 100%.
 64-bit machines, improper AVI header sound sample size on 8-bit output (both
 reported by Cpcitor), and accumulated dirt between multiple recordings within
 the same session. XRF also shows the length of the output file.
+- 20210526 -- minor patch aligning the X-Masking video effect to the right
+instead of the left. The debugger expressions accept three new operators: &
+(AND), | (OR) and ^ (XOR). XRF shows the output file's accurate byte length
+rather than just the megabytes, and running it without a target parameter prints
+the source video parameters and the expected size.

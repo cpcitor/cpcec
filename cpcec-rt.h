@@ -229,27 +229,22 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 				break;
 			case 8+VIDEO_FILTER_X_MASK:
 				do
-					vt=*vi,*vo++=*vi++=VIDEO_FILTER_X1(vt),*vo++=*vi++;
+					*vo++=*vi++,
+					vt=*vi,*vo++=*vi++=VIDEO_FILTER_X1(vt);
 				while (vi<vl);
 				break;
 			case 0+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK:
 				if (video_pos_y&1)
-				{
-					//if (video_pos_y&2) ++vi;
-					do
-						vt=*vi,*vi=VIDEO_FILTER_X1(vt),vi+=2;
-					while (vi<vl);
-				}
-				break;
+				// no `break` here!
 			case 0+VIDEO_FILTER_X_MASK:
 				do
-					vt=*vi,*vi=VIDEO_FILTER_X1(vt),vi+=2;
+					vt=*++vi,*vi++=VIDEO_FILTER_X1(vt);
 				while (vi<vl);
 				break;
 			case 8+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK:
-				//if (video_pos_y&2) *vo++=*vi++;
 				do
-					vt=*vi++,*vo++=VIDEO_FILTER_X1(vt),*vo++=*vi++;
+					*vo++=*vi++,
+					vt=*vi++,*vo++=VIDEO_FILTER_X1(vt);
 				while (vi<vl);
 				break;
 			case 8+VIDEO_FILTER_SMUDGE:
@@ -283,18 +278,17 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 			case 8+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
 				va=vb=*vi;
 				do
-					vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vo++=*vi++=VIDEO_FILTER_X1(vt),
-					vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vo++=*vi++=vt;
+					vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vo++=*vi++=vt,
+					vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vo++=*vi++=VIDEO_FILTER_X1(vt);
 				while (vi<vl);
 				break;
 			case 0+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
 				va=vb=*vi;
 				if (video_pos_y&1)
 				{
-					//if (video_pos_y&2) vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vi++=vt;
 					do
-						vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vi++=VIDEO_FILTER_X1(vt),
-						vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vi++=vt;
+						vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vi++=vt,
+						vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vi++=VIDEO_FILTER_X1(vt);
 					while (vi<vl);
 					break;
 				}
@@ -305,16 +299,15 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 			case 0+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
 				va=vb=*vi;
 				do
-					vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vi++=VIDEO_FILTER_X1(vt),
-					vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vi++=vt;
+					vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vi++=vt,
+					vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vi++=VIDEO_FILTER_X1(vt);
 				while (vi<vl);
 				break;
 			case 8+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
 				va=vb=*vi;
-				//if (video_pos_y&2) vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vo++=*vi++=vt;
 				do
-					vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vi++=vt,*vo++=VIDEO_FILTER_X1(vt),
-					vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vo++=*vi++=vt;
+					vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vo++=*vi++=vt,
+					vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vi++=vt,*vo++=VIDEO_FILTER_X1(vt);
 				while (vi<vl);
 				break;
 		}
@@ -1153,7 +1146,7 @@ void session_writefilm(void) // record one frame of video and audio
 			if (session_filmscale)
 				for (int i=VIDEO_OFFSET_Y+(session_filmalign&1);i<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;i+=2)
 				{
-					s=session_getscanline(i); for (int j=1;j<VIDEO_PIXELS_X;j+=2)
+					s=session_getscanline(i); for (int j=0;j<VIDEO_PIXELS_X;j+=2)
 						*t++^=s[j]; // bitwise delta against last frame
 				}
 			else
@@ -1177,7 +1170,7 @@ void session_writefilm(void) // record one frame of video and audio
 			if (session_filmscale)
 				for (int i=VIDEO_OFFSET_Y+(session_filmalign&1);i<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;i+=2)
 				{
-					s=session_getscanline(i); for (int j=1;j<VIDEO_PIXELS_X;j+=2)
+					s=session_getscanline(i); for (int j=0;j<VIDEO_PIXELS_X;j+=2)
 						*t++=s[j]; // keep this frame for later
 				}
 			else // no scaling, copy
@@ -1282,15 +1275,15 @@ void session_detectpath(char *s) // detects session path using argv[0] as refere
 	else
 		*session_path=0; // no path (?)
 }
-char *session_configfile(void) // returns path to configuration file
+FILE *session_configfile(char *s) // returns handle to configuration file
 {
-	return strcat(strcpy(session_parmtr,session_path),
+	return fopen(strcat(strcpy(session_parmtr,session_path),
 	#ifdef _WIN32
-	my_caption ".ini"
+	my_caption ".ini" // "filename.ini"
 	#else
-	"." my_caption "rc"
+	"." my_caption "rc" // ".filenamerc"
 	#endif
-	);
+	),s);
 }
 
 char *session_configread(char *t) // reads configuration file; s points to the parameter value, *s is ZERO if unhandleable
@@ -1317,9 +1310,9 @@ void session_configwrite(FILE *f) // save common parameters
 {
 	fprintf(f,
 		"film %i\ninfo %i\n"
-		"polyphony %i\nscanlines %i\nsoftaudio %i\nsoftvideo %i\nzoomvideo %i\nsafevideo %i\n"
+		"polyphony %i\nsoftaudio %i\nscanlines %i\nsoftvideo %i\nzoomvideo %i\nsafevideo %i\n"
 		,session_filmscale+(session_filmtimer<<1),onscreen_flag
-		,audio_mixmode,(video_scanline&3)+(video_scanblend?4:0),audio_filter,video_filter,session_intzoom,session_softblit
+		,audio_mixmode,audio_filter,(video_scanline&3)+(video_scanblend?4:0),video_filter,session_intzoom,session_softblit
 		);
 }
 

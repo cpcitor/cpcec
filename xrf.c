@@ -7,7 +7,7 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "XRF"
-#define MY_VERSION "20210524"//"1155"
+#define MY_VERSION "20210526"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -286,7 +286,7 @@ int vfw_finish(void) // close and clean up; always 0 OK
 
 // create and write an AVI file by hand, no compression ------------- //
 
-FILE *avi_file=NULL; int avi_length;
+FILE *avi_file=NULL; long long int avi_length=0;
 
 BYTE avi_header[0x0200]= // padding is doubtful. VirtualDub uses 0x2000, VFW.DLL uses 0x0800...
 {
@@ -450,6 +450,7 @@ int avi_finish(void)
 	#endif
 	if (!avi_file) return 1;
 
+	avi_length+=8;
 	avi_fputcccc(0x31786469); // "idx1"
 	if (audio_z)
 		avi_fputcccc(count_z*32);
@@ -465,14 +466,14 @@ int avi_finish(void)
 		avi_fputcccc(0x10);
 		avi_fputcccc(z); // offset
 		avi_fputcccc(j); // video size
-		z+=j+8;
+		z+=j+8; avi_length+=16;
 		if (audio_z)
 		{
 			avi_fputcccc(0x62773130); // "01wb"
 			avi_fputcccc(0x10);
-			avi_fputcccc(z); // ofset
+			avi_fputcccc(z); // offset
 			avi_fputcccc(k); // audio size
-			z+=k+8;
+			z+=k+8; avi_length+=16;
 		}
 	}
 
@@ -498,20 +499,20 @@ int main(int argc,char *argv[])
 		else if (!z)
 		{
 			if (strlen(argv[i])==4)
-				z=argv[i];
+				strcpy(avi_fourcc,z=argv[i]);
 			else i=argc; // help!
 		}
 		#endif
 		else i=argc; // help!
 	}
-	if (!t||i>argc)
+	if (!s||i>argc)
 	{
 		printf(MY_CAPTION " " MY_VERSION " " MY_LICENSE "\n"
 			"\n"
 			#ifdef _WIN32
-			"usage: xrf source.xrf target.avi [fourcc]\n"
+			"usage: xrf source.xrf [target.avi [fourcc]]\n"
 			#else
-			"usage: xrf source.xrf target.avi\n"
+			"usage: xrf source.xrf [target.avi]\n"
 			#endif
 			"       xrf source.xrf - | ffmpeg [filters] -i - [options] target\n"
 			"\n"
@@ -529,25 +530,33 @@ int main(int argc,char *argv[])
 	}
 	if (xrf_open(s))
 		return xrf_close(),fprintf(stderr,"error: cannot open source!\n"),1;
-	#ifdef _WIN32
-	if (z)
-		strcpy(avi_fourcc,z);
-	#endif
-	if (avi_create(t))
-		return xrf_close(),avi_finish(),fprintf(stderr,"error: cannot create target!\n"),1;
-
+	if (!count_z)
+		return xrf_close(),fprintf(stderr,"error: source is empty!\n"),1;
 	fprintf(stderr,audio_z?"VIDEO %ix%ipx %iHz - AUDIO %ich%02ib %iHz\n":"VIDEO %ix%ipx %iHz - NO AUDIO\n",video_x,video_y,clock_z,(flags_z&2)?2:1,(flags_z&1)?16:8,audio_z*clock_z);
 
-	while (!xrf_read()&&!avi_write())
-		fprintf(stderr,"%05.02f\015",xrf_cursor*100.0/xrf_length);
-	xrf_close();
-	avi_finish();
-	if (xrf_cursor!=xrf_length||!xrf_count)
-		fprintf(stderr,"error: cannot decode/encode data!\n");
-	else
+	if (t) // process
 	{
-		avi_file=fopen(t,"rb"); fseek(avi_file,0,SEEK_END); long long ii=ftell(avi_file); fclose(avi_file);
-		fprintf(stderr,"ok: %i frames, %i unused, %.02f Mbytes.\n",xrf_count,xrf_dummy,ii/1048576.0);
+		if (avi_create(t))
+			return xrf_close(),avi_finish(),fprintf(stderr,"error: cannot create target!\n"),1;
+		while (!xrf_read()&&!avi_write())
+			fprintf(stderr,"%05.02f\015",xrf_cursor*100.0/xrf_length);
+		avi_finish();
+		if (xrf_cursor!=xrf_length)
+			fprintf(stderr,"error: cannot decode/encode data!\n");
+		else
+		{
+			#ifdef _WIN32
+			if (!avi_length) // using VFW32.DLL means we cannot know the output length in advance
+				if (avi_file=fopen(t,"rb"))
+					fseek(avi_file,0,SEEK_END),avi_length=ftell(avi_file),fclose(avi_file);
+			#endif
+			fprintf(stderr,"%i frames (%i unused), %lld bytes.\n",xrf_count,xrf_dummy,avi_length);
+		}
 	}
-	return xrf_cursor!=xrf_length;
+	else // examine
+	{
+		long long int lv=count_z*video_x*video_y*3,la=count_z*audio_z*flags_audio[flags_z&3],lz=lv+la;
+		printf("%i frames, %lld video + %lld audio = %lld bytes.\n",count_z,lv,la,lz); // not "%lli"!
+	}
+	return xrf_close(),t&&xrf_cursor!=xrf_length;
 }

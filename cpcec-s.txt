@@ -209,8 +209,10 @@ decreciente;
 doble;
 * F11+Control+Mays: ídem en sentido contrario, de entrelazado doble a scanlines
 medios;
-* F12: grabar el contenido de la pantalla en un fichero BMP;
-* F12+Mays: grabar un vídeo en formato intermedio XRF;
+* F12: grabar el contenido de la pantalla en un fichero BMP en el directorio del
+emulador;
+* F12+Mays: grabar un vídeo en formato intermedio XRF (ver más adelante en
+"Vídeos");
 * F12+Control: comenzar a grabar (o terminar) el sonido en un fichero WAV;
 * F12+Control+Mays: comenzar a grabar (o terminar) el sonido en un fichero YM;
 * Pausa: detener (o reanudar) la emulación;
@@ -304,8 +306,9 @@ los parámetros de las órdenes emplean notación hexadecimal.
 * Dígitos del 0 al 9 y letras de la A a la F modifican el valor bajo el cursor;
 * Punto (".") crea o destruye un punto de ruptura o "breakpoint" en la posición
 actual del cursor en el desensamblado;
-* G ("go to") solicita una dirección (en hexadecimal) y envía el cursor a su
-lugar correspondiente en el desensamblado o el volcado de memoria;
+* G ("go to") solicita una dirección (en hexadecimal por defecto, en decimal si
+está precedida por ".") y envía el cursor a su lugar correspondiente en el
+desensamblado o el volcado de memoria;
 * H ("help") muestra una ayuda breve;
 * I ("input") solicita un nombre de fichero y carga su contenido en memoria a
 partir de la dirección actual del cursor;
@@ -331,10 +334,10 @@ un breakpoint;
 * R ("run to") ejecuta la emulación hasta alcanzar la operación actualmente bajo
 el cursor en el desensamblado;
 * S ("search") solicita una cadena bien ASCII (sin importar las mayúsculas),
-bien hexadecimal con un prefijo (por ejemplo `SOS` se convierte en `$534F53`) y
-la busca en la memoria a partir de la dirección actual hasta la última dirección
-válida. Si encuentra la cadena ubica el cursor en ella en el desensamblado o el
-volcado de memoria;
+bien hexadecimal con el prefijo "$" (por ejemplo `SOS` se convierte en
+`$534F53`) y la busca en la memoria a partir de la dirección actual hasta la
+última dirección válida. Si encuentra la cadena ubica el cursor en ella en el
+desensamblado o el volcado de memoria;
 	+ N ("next") vuelve a buscar la misma cadena;
 * T ("timer") limpia el cronómetro; su valor se incrementa a medida de la
 emulación;
@@ -375,7 +378,8 @@ Al compilarla en Windows (necesita la librería de sistema AVIFIL32: "gcc
 destino.avi ABCD") leerá el fichero "fuente.xrf" y generará un fichero llamado
 "destino.avi" mediante el códec ABCD, de estar instalado. Ejecutar la
 herramienta sin parámetros muestra la ayuda y la lista de los códecs
-disponibles. Se recomienda instalar y utilizar el códec ZMBV realizado por el
+disponibles; ejecutarla sin el parámetro de destino imprime los parámetros del
+fichero fuente. Se recomienda instalar y utilizar el códec ZMBV realizado por el
 proyecto Dosbox porque es el que mejor rendimiento proporciona en grabaciones
 pixeladas como éstas.
 
@@ -939,3 +943,8 @@ campos en máquinas de 64 bits, tamaño erróneo en la cabecera AVI del sonido d
 bits (ambos avisados por Cpcitor), y suciedad acumulada entre múltiples
 grabaciones dentro de una misma sesión. XRF también muestra la longitud del
 resultado.
+- 20210526 -- parche menor que alinea el efecto X-Masking a la derecha en lugar
+de la izquierda. Las expresiones del depurador aceptan tres operadores nuevos: &
+(AND), | (OR) y ^ (XOR). XRF muestra la longitud del resultado con una precisión
+de bytes en lugar de megabytes, y ejecutarlo sin un parámetro de destino imprime
+los parámetros del vídeo de fuente y el tamaño esperado.
