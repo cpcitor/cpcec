@@ -2339,7 +2339,10 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					{ Z80_RD_HL; Z80_SUB1(b); }
 					break;
 				case 0x97: // SUB A
-					Z80_SUB1(z80_af.b.h);
+					#if Z80_XCF_BUG
+					z80_q=
+					#endif
+					z80_af.w=0x0042;//Z80_SUB1(z80_af.b.h);
 					break;
 				case 0x98: // SBC B
 					Z80_SBC1(z80_bc.b.h);
@@ -2411,7 +2414,10 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					{ Z80_RD_HL; Z80_XOR1(b); }
 					break;
 				case 0xAF: // XOR A
-					Z80_XOR1(z80_af.b.h);
+					#if Z80_XCF_BUG
+					z80_q=
+					#endif
+					z80_af.w=0x0044;//Z80_XOR1(z80_af.b.h);
 					break;
 				case 0xB0: // OR B
 					Z80_OR1(z80_bc.b.h);
@@ -3773,7 +3779,7 @@ void z80_debug_show(void) // redraw debug screen
 			debug_printi("%02X",b);
 			if (z80_debug_panel==2&&m==z80_debug_pnl2_w)
 				debug_output[z80_debug_pnl2_x?-1:-2]^=128;
-			debug_output[32-1-x]=(b&96)?b:'.';
+			debug_output[32-1-x]=(b&128)+((b&96)?b&127:'.');
 			++m;
 		}
 		*debug_output=z80_debug_peekpoke?'\\':'/';
@@ -3796,7 +3802,7 @@ void z80_debug_show(void) // redraw debug screen
 	}
 	z80_debug_hard(z80_debug_page,-9-1-20,0);
 	debug_locate(6,length(z80_debug_cache)-1);
-	debug_printi("... EDFF%c",z80_debug_edfftrap?'+':'-'); debug_printi(" Timer: %010u",main_t);
+	debug_printi("... EDFF%c",z80_debug_edfftrap?'*':'-'); debug_printi(" Timer: %010u",main_t);
 	debug_printi(" (%03X,",video_pos_x&0xFFF); debug_printi("%03X) -- H: help",video_pos_y&0xFFF);
 	onscreen_debug(z80_debug_grfx?z80_debug_grfxmode:-1);
 }

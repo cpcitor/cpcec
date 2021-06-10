@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20210526"//"2555"
+#define MY_VERSION "20210609"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -117,9 +117,10 @@ unsigned short session_icon32xx16[32*32] = {
 #define KBD_JOY_UNIQUE 6 // exclude repeated buttons
 unsigned char kbd_joy[]= // ATARI norm: up, down, left, right, fire1-fire4
 	{ 0x48,0x49,0x4A,0x4B,0x4C,0x4D,0x4C,0x4D }; // constant, joystick bits are hard-wired; last two fires are repeated
-
+#define MAUS_EMULATION 1 // lightguns are emulated with the mouse
 #include "cpcec-os.h" // OS-specific code!
 #include "cpcec-rt.h" // OS-independent code!
+int litegun=0; // 0 = standard joystick, 1 = Trojan Light Phaser, 2 = Gunstick (MHT), 3 = Westphaser (Loriciel)
 
 const unsigned char kbd_map_xlt[]=
 {
@@ -328,7 +329,7 @@ Z80W z80_af2,z80_bc2,z80_de2,z80_hl2,z80_ix,z80_iy; // AF', BC', DE', HL', IX, I
 Z80W z80_pc,z80_sp,z80_iff,z80_ir; // Program Counter, Stack Pointer, Interrupt Flip-Flops, IR pair
 BYTE z80_imd; // Interrupt Mode
 BYTE z80_r7; // low 7 bits of R, required by several `IN X,(Y)` operations
-int z80_turbo=0,z80_multi=1; // overclocking options
+int z80_turbo=0,z80_multi; // overclocking options
 
 // above the Gate Array and the CRTC: PLUS ASIC --------------------- //
 
@@ -450,7 +451,7 @@ void crtc_syncs_update(void)
 	video_vsync_max=crtc_hold>0?VIDEO_VSYNC_HI+(VIDEO_LENGTH_Y-VIDEO_VSYNC_LO):VIDEO_VSYNC_HI;
 }
 
-INLINE void crtc_table_select(BYTE i) { crtc_index=(i&16)?16:(i&15); }
+INLINE void crtc_table_select(BYTE i) { crtc_index=i>17?17:i; } // does it top at 17? does it accept >17 here, but ignore later sends and recvs >17?
 INLINE void crtc_table_send(BYTE i)
 {
 	if (crtc_table[crtc_index]!=(i&=crtc_valid[crtc_index]))
@@ -524,7 +525,10 @@ INLINE void crtc_table_send(BYTE i)
 				break;
 		}
 }
-INLINE BYTE crtc_table_recv(void) { return (crtc_index>=12&&crtc_index<18)?crtc_table[crtc_index]:(crtc_type>2&&crtc_index<8?crtc_table[crtc_index+8]:0); }
+BYTE crtc_table_recv(void)
+{
+	return (crtc_index>=12&&crtc_index<18)?crtc_table[crtc_index]:(crtc_type>2&&crtc_index<8?crtc_table[crtc_index+8]:0);
+}
 INLINE BYTE crtc_table_info(void) { return crtc_count_r4>=crtc_table[6]?32:0; } // +64???
 
 #define crtc_setup()
@@ -1142,6 +1146,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 					crtc_count_r5=(crtc_count_r5+1)&31;
 			}
 
+			static int crtc_v_off_count;
 			if (!crtc_count_r4)
 				if ((!crtc_count_r9||crtc_type==1))
 				{
@@ -1151,10 +1156,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 			if (!crtc_count_r9)
 			{
 				if (crtc_count_r4==crtc_table[6])
-				{
-					CRTC_STATUS_V_OFF_SET;
-					crtc_status|=CRTC_STATUS_V_OFF; // hide vertical bitmap!
-				}
+					crtc_v_off_count=(crtc_table[6]+crtc_type)?1:2; // V_OFF counter, see below
 				if (crtc_count_r4==crtc_table[7])
 					if (crtc_table[4]||crtc_type!=1) // "CHAPEL SIXTEEN" (CRTC1), "PDTMD4" (CRTC0) and (?) "GNG11B" (CRTC3)
 					{
@@ -1162,6 +1164,11 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 							CRTC_STATUS_VSYNC_SET; // glued VSYNCs don't trigger more than one event!
 						crtc_count_r3y=0,crtc_status|=CRTC_STATUS_VSYNC; // start vertical sync!
 					}
+			}
+			if (!--crtc_v_off_count) // CRTC0 doesn't instantly hide the screen when R6=0
+			{
+				CRTC_STATUS_V_OFF_SET;
+				crtc_status|=CRTC_STATUS_V_OFF; // hide vertical bitmap!
 			}
 
 			crtc_line_set();
@@ -1238,7 +1245,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 
 			if (video_pos_y>=video_vsync_max||(video_pos_y>=video_vsync_min&&gate_count_r3y>0)) // VBLANK?
 			{
-				if (!video_framecount) video_endscanlines(video_table[video_type][20]); // 'T' = BLACK
+				if (!video_framecount) video_endscanlines(); // 11 = WHITE, 20 = BLACK
 				crtc_status=((crtc_table[8]&1)&&(crtc_table[4]&32))?(crtc_status^CRTC_STATUS_REG_8):(crtc_status&~CRTC_STATUS_REG_8); // "CLEVER & SMART" shakes screen, ECSTASY DEMO 1 doesn't!
 				video_newscanlines(video_pos_x,(crtc_status&CRTC_STATUS_REG_8)?2:0); // vertical reset
 				++video_pos_z; session_signal|=SESSION_SIGNAL_FRAME+session_signal_frames; // end of frame!
@@ -1276,7 +1283,35 @@ int autorun_mode=0,autorun_t=0;
 BYTE autorun_kbd[16]; // automatic keypresses
 #define autorun_kbd_set(k) (autorun_kbd[k/8]|=1<<(k%8))
 #define autorun_kbd_res(k) (autorun_kbd[k/8]&=~(1<<(k%8)))
-#define autorun_kbd_bit(k) (autorun_mode?autorun_kbd[k]:(kbd_bit[k]|joy_bit[k]))
+int autorun_kbd_bit(int k)
+{
+	if (autorun_mode)
+		return autorun_kbd[k];
+	if (k==9&&litegun) // catch special case: lightgun models
+	{
+		k=kbd_bit[9]; switch (litegun)
+		{
+			case 1: // TROJAN LIGHT PHASER updates the CRTC light pen registers
+				k|=session_maus_z?16:0; // BIT4 = trigger
+				int t=crtc_table[12]*256+crtc_table[13] // is [14]:[15] involved in this calculation too???
+					+(session_maus_x-VIDEO_PIXELS_X/2+8)/16-crtc_table[2]+65 // an extremely crude approximation,
+					+((session_maus_y-VIDEO_PIXELS_Y/2+8)/16-crtc_table[7]+40)*crtc_table[1]; // but it just works!
+				crtc_table[17]=t; crtc_table[16]=((t>>8)&3)+(crtc_table[12]&0x30);
+				break;
+			case 2: // GUNSTICK detects bright pixels
+				k|=session_maus_z?16:0; // BIT4 = trigger
+				static int g; if (++g&255) // work around the buggy "TARGET PLUS", that always does 256 reads and must miss at least one
+					k|=(video_litegun&0x00C000)?2:0;
+				break;
+			case 3: // WESTPHASER catches the electron beam
+				k|=(session_maus_z?32:0) // BIT5 = trigger
+					+(video_pos_y>session_maus_y+VIDEO_OFFSET_Y&&video_pos_x>session_maus_x+VIDEO_OFFSET_X?1:0);
+				break;
+		}
+		return k;
+	}
+	return kbd_bit[k]|joy_bit[k];
+}
 INLINE void autorun_next(void)
 {
 	if (autorun_t==-4) // PLUS menu (1/2)
@@ -1499,7 +1534,9 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 						psg_table_send(pio_port_a);
 				}
 				else if (pio_port_c&0x40)
+				{
 					pio_port_a=~autorun_kbd_bit(pio_port_c&15);
+				}
 			}
 			else // 0xF700, PIO CONTROL
 			{
@@ -1982,10 +2019,10 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 		{
 			if (!(p&0x0100)) // 0xF400, PIO PORT A
 			{
-				if ((pio_control&0x10)||plus_enabled) // "TIRE AU FLAN" expects this to detect PLUS!
-					b&=pio_port_a=(psg_index==14&&!psg_port_a_lock())?~autorun_kbd_bit(pio_port_c&15):psg_table_recv(); // READ PSG REGISTER // index 14 is keyboard port!
+				if ((pio_control&0x10)||plus_enabled) // "TIRE AU FLAN" expects this to detect PLUS! "GX8K" needs a kludge, though, as it accidentally reads port A when it should read port B
+					b&=pio_port_a=(psg_index==14&&!psg_port_a_lock())?~autorun_kbd_bit(pio_port_c&15):pio_control&0x10?psg_table_recv():pio_port_a; // READ PSG REGISTER
 				else
-					b&=pio_port_a;
+					b&=pio_port_a; // just look at the port
 			}
 			else // 0xF500, PIO PORT B
 			{
@@ -1997,7 +2034,7 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 					// VSYNC (0x01; CRTC2 MISSES IT DURING HORIZONTAL OVERFLOW!)
 					b&=(crtc_status&CRTC_STATUS_VSYNC? // gate_status&CRTC_STATUS_VSYNC ???
 						(crtc_type!=2||crtc_limit_r2+crtc_limit_r3x!=crtc_table[0]+1): // CRTC2 fails if HSYNC sets and H_OFF resets at once!
-						((crtc_table[8]&1)&&irq_timer<3&&video_pos_y>=VIDEO_LENGTH_Y*5/12&&video_pos_y<VIDEO_LENGTH_Y*7/12)) // interlaced CRTC VSYNC!
+						((crtc_table[8]&2)&&irq_timer<3&&video_pos_y>=VIDEO_LENGTH_Y*5/12&&video_pos_y<VIDEO_LENGTH_Y*7/12)) // interlaced CRTC VSYNC!
 						+((tape_delay|tape_status)?0xDE:0x5E); // + AMSTRAD MODEL (0x1E) + PRINTER IS OFFLINE (0x40) + TAPE SIGNAL (0x00/0x80)
 				}
 				else
@@ -2665,7 +2702,10 @@ int bios_load(char *s) // load a cartridge file or a firmware ROM file. 0 OK, !0
 		if (!f)
 			return 1;
 		int i=0,j=0x63623030,k,l;
-		if (fgetmmmm(f)==0x52494646&&fgetiiii(f)>0&&fgetmmmm(f)==0x414D5321) // cartridge file?
+		k=fgetmmmm(f); l=fgetiiii(f);
+		if (k==0X45585445||k==0X4D56202D) // reject accidental DSK files
+			return puff_fclose(f),1;
+		if (k==0x52494646&&l>0&&fgetmmmm(f)==0x414D5321) // cartridge file?
 			while ((k=fgetmmmm(f))&&(l=fgetiiii(f))>=0&&!feof(f))
 			{
 				//logprintf(" [%08X:%08X]",k,l);
@@ -3195,17 +3235,17 @@ char session_menudata[]=
 	"=\n"
 	"0x8700 Insert disc into A:..\tF7\n"
 	"0x8701 Create disc in A:..\n"
-	"0x0700 Remove disc from A:\tCtrl+F7\n"
 	"0x0701 Flip disc sides in A:\n"
+	"0x0700 Remove disc from A:\tCtrl+F7\n"
 	"0xC700 Insert disc into B:..\tShift+F7\n"
 	"0xC701 Create disc in B:..\n"
-	"0x4700 Remove disc from B:\tCtrl+Shift+F7\n"
 	"0x4701 Flip disc sides in B:\n"
+	"0x4700 Remove disc from B:\tCtrl+Shift+F7\n"
 	"=\n"
 	"0x8800 Insert tape..\tF8\n"
 	"0xC800 Record tape..\tShift+F8\n"
-	"0x0800 Remove tape\tCtrl+F8\n"
 	"0x8801 Browse tape..\n"
+	"0x0800 Remove tape\tCtrl+F8\n"
 	//"0x4800 Play tape\tCtrl+Shift+F8\n"
 	"=\n"
 	"0x3F00 E_xit\n"
@@ -3246,11 +3286,15 @@ char session_menudata[]=
 	"0x8514 320k RAM\n"
 	"0x8515 576k RAM\n"
 	#ifdef Z80_CPC_DANDANATOR
-	"=\n"
 	"0xC500 Insert Dandanator..\tShift+F5\n"
 	"0x4500 Remove Dandanator\tCtrl+Shift+F5\n"
 	"0x0510 Writeable Dandanator\n"
 	#endif
+	"=\n"
+	"0x8521 No lightgun\n"
+	"0x8522 Trojan Light Phaser\n"
+	"0x8523 Gunstick (MHT)\n"
+	"0x8524 Westphaser (Loriciel)\n"
 	"=\n"
 	#ifdef PSG_PLAYCITY
 	"0x8520 PlayCity extension\n"
@@ -3314,7 +3358,7 @@ char session_menudata[]=
 	"0x0100 About..\tCtrl+F1\n"
 	"";
 
-void session_menuinfo(void)
+void session_redomenu(void)
 {
 	session_menucheck(0x8F00,session_signal&SESSION_SIGNAL_PAUSE);
 	session_menucheck(0x8900,session_signal&SESSION_SIGNAL_DEBUG);
@@ -3351,6 +3395,7 @@ void session_menuinfo(void)
 	#ifdef PSG_PLAYCITY
 	session_menucheck(0x8520,!playcity_disabled);
 	#endif
+	session_menuradio(0x8521+litegun,0x8521,0x8524);
 	session_menuradio(0x8511+gate_ram_depth,0x8511,0x8515);
 	session_menucheck(0x8901,onscreen_flag);
 	session_menucheck(0x8A00,session_fullscreen);
@@ -3381,6 +3426,8 @@ void session_menuinfo(void)
 	z80_multi=1+z80_turbo; // setup overclocking
 	sprintf(session_info,"%i:%iK %s%c %0.1fMHz"//" | disc %s | tape %s | %s"
 		,gate_ram_dirty,gate_ram_kbyte[gate_ram_depth],plus_enabled?"ASIC":"CRTC",48+crtc_type,4.0*z80_multi);
+	video_lastscanline=video_table[video_type][20]; // BLACK in the CLUT
+	video_halfscanline=VIDEO_FILTER_SCAN(video_table[video_type][11],video_lastscanline); // WHITE in the CLUT
 	*debug_buffer=128; // force debug redraw! (somewhat overkill)
 }
 int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
@@ -3554,6 +3601,12 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 		case 0x8520: // PLAYCITY
 			if (playcity_disabled=!playcity_disabled)
 				playcity_reset();
+			break;
+		case 0x8521: // JOYSTICK, NO LIGHTGUN
+		case 0x8522: // TROJAN LIGHT PHASER
+		case 0x8523: // GUNSTICK (MHT)
+		case 0x8524: // WESTPHASER (LORICIEL)
+			litegun=(k&7)-1;
 			break;
 		case 0x8500: // F5: LOAD FIRMWARE.. // INSERT DANDANATOR..
 		#ifdef Z80_CPC_DANDANATOR
@@ -3766,7 +3819,7 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 			video_framelimit&=~MAIN_FRAMESKIP_MASK;
 			break;
 	}
-	return session_menuinfo(),0;
+	return session_redomenu(),0;
 }
 
 void session_configreadmore(char *s)
@@ -3789,7 +3842,7 @@ void session_configreadmore(char *s)
 	else if (!strcasecmp(session_parmtr,"dntr")) strcpy(dandanator_path,s);
 	#endif
 	else if (!strcasecmp(session_parmtr,"palette")) { if ((i=*s&15)<length(video_table)) video_type=i; }
-	else if (!strcasecmp(session_parmtr,"rewind")) tape_rewind=*s&1;
+	else if (!strcasecmp(session_parmtr,"casette")) tape_rewind=*s&1,tape_skipload=!!(*s&2),tape_fastload=!!(*s&4);
 	else if (!strcasecmp(session_parmtr,"debug")) z80_debug_configread(strtol(s,NULL,10));
 }
 void session_configwritemore(FILE *f)
@@ -3802,7 +3855,7 @@ void session_configwritemore(FILE *f)
 	#ifdef Z80_CPC_DANDANATOR
 		"dntr %s\n"
 	#endif
-		"palette %i\nrewind %i\ndebug %i\n",
+		"palette %i\ncasette %i\ndebug %i\n",
 		type_id,crtc_type,gate_ram_depth,disc_filemode,key2joy_flag,
 	#ifdef PSG_PLAYCITY
 		!playcity_disabled,
@@ -3811,7 +3864,7 @@ void session_configwritemore(FILE *f)
 	#ifdef Z80_CPC_DANDANATOR
 		dandanator_path,
 	#endif
-		video_type,tape_rewind,z80_debug_configwrite());
+		video_type,(tape_rewind?1:0)+(tape_skipload?2:0)+(tape_fastload?4:0),z80_debug_configwrite());
 }
 
 #if defined(DEBUG) || defined(SDL_MAIN_HANDLED)

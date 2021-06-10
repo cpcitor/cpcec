@@ -53,6 +53,8 @@ void psg_reg_update(int c)
 		case 11: case 12: // envelope wavelength
 			if (!(psg_hard_limit=(psg_table[11]+(psg_table[12]<<8))*2))
 				psg_hard_limit=1*2; // hard envelope, half the rate
+			if (psg_hard_count>psg_hard_limit)
+				psg_hard_count=psg_hard_limit; // cifra nota supra
 			break;
 		case 13: // envelope bits
 			c=psg_table[13]; psg_hard_count=psg_hard_level=psg_hard_flag0=0;

@@ -161,14 +161,16 @@ int sortedinsert(char *t,int z,char *s) // insert string 's' in its alphabetical
 }
 int sortedsearch(char *t,int z,char *s) // look for string 's' in an alphabetically ordered packed list of strings 't' of length 'l'; returns index (not offset!) in list
 {
-	if (s&&*s) {
-	char *r=&t[z]; int i=0; while (t<r)
+	if (s&&*s)
 	{
-		if (!strcasecmp(s,t))
-			return i;
-		++i; while (*t++)
-			;
-	} }
+		char *r=&t[z]; int i=0; while (t<r)
+		{
+			if (!strcasecmp(s,t))
+				return i;
+			++i; while (*t++)
+				;
+		}
+	}
 	return -1; // 's' was not found!
 }
 
@@ -179,6 +181,7 @@ int sortedsearch(char *t,int z,char *s) // look for string 's' in an alphabetica
 #define VIDEO_FILTER_SMUDGE 4
 
 int video_scanblend=0,audio_mixmode=1; // 0 = pure mono, 1 = pure stereo, 2 = 50%, 3 = 25%
+VIDEO_UNIT video_lastscanline,video_halfscanline,video_litegun; // the fillers used in video_endscanlines() and the lightgun buffer
 
 INLINE void video_newscanlines(int x,int y)
 {
@@ -201,6 +204,8 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 	{
 		VIDEO_UNIT vt,va,vc,vb,*vi=video_target-video_pos_x+VIDEO_OFFSET_X,*vl=vi+VIDEO_PIXELS_X,
 			*vo=video_target-video_pos_x+VIDEO_OFFSET_X+VIDEO_LENGTH_X;
+		if (!(((session_maus_y+VIDEO_OFFSET_Y)^video_pos_y)&-2)) // does the lightgun aim at the current scanline?
+			video_litegun=session_maus_x>=0&&session_maus_x<VIDEO_PIXELS_X?vi[session_maus_x]|vi[session_maus_x^1]:0; // keep the colours BEFORE any filtering happens!
 		if (video_scanblend) // blend scanlines from previous and current frame!
 		{
 			VIDEO_UNIT *vp=&video_blend[(video_pos_y-VIDEO_OFFSET_Y)/2*VIDEO_PIXELS_X];
@@ -313,9 +318,8 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 		}
 	}
 }
-INLINE void video_endscanlines(VIDEO_UNIT z) // call between frames
+INLINE void video_endscanlines(void) // call between frames
 {
-	VIDEO_UNIT zz=(video_filter&VIDEO_FILTER_Y_MASK)?VIDEO_FILTER_X1(z):z; // minor video filter: weak scanlines
 	if (video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y) // empty bottom lines?
 	{
 		VIDEO_UNIT *p=video_target-video_pos_x+VIDEO_OFFSET_X;
@@ -323,25 +327,29 @@ INLINE void video_endscanlines(VIDEO_UNIT z) // call between frames
 			for (int y=video_pos_y;y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;y+=2,p+=VIDEO_LENGTH_X-VIDEO_PIXELS_X)
 			{
 				for (int x=0;x<VIDEO_PIXELS_X;++x)
-					*p++=z; // render primary scanlines
+					*p++=video_lastscanline; // render primary scanlines
 				p+=VIDEO_LENGTH_X-VIDEO_PIXELS_X;
 				for (int x=0;x<VIDEO_PIXELS_X;++x)
-					*p++=zz; // filter secondary scanlines
+					*p++=video_halfscanline; // filter secondary scanlines
 			}
 		else
 			for (int y=video_pos_y;y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;y+=2,p+=VIDEO_LENGTH_X*2-VIDEO_PIXELS_X)
 				for (int x=0;x<VIDEO_PIXELS_X;++x)
-					*p++=z; // render primary scanlines only
+					*p++=video_lastscanline; // render primary scanlines only
 	}
-	static VIDEO_UNIT zzz=-1; // first value intentionally invalid!
-	if (video_scanlinez!=video_scanline||zzz!=zz) // did the config change?
+	//if (session_maus_y<0||session_maus_y>=VIDEO_PIXELS_Y)
+		video_litegun=0; // a lightgun out of screen sees nothing
+	static int f=-1; static VIDEO_UNIT z=-1; // first value intentionally invalid!
+	if (video_scanlinez!=video_scanline||f!=video_filter||z!=video_halfscanline) // did the config change?
 		if ((video_scanlinez=video_scanline)==1) // do we have to redo the secondary scanlines?
 		{
-			zzz=zz;
+			z=video_halfscanline; f=video_filter;
+			VIDEO_UNIT v0=f&VIDEO_FILTER_Y_MASK?VIDEO_FILTER_X1(z):z,
+				v1=f&VIDEO_FILTER_X_MASK?z:v0;
 			VIDEO_UNIT *p=video_frame+VIDEO_OFFSET_X+(VIDEO_OFFSET_Y+1)*VIDEO_LENGTH_X;
 			for (int y=0;y<VIDEO_PIXELS_Y;y+=2,p+=VIDEO_LENGTH_X*2-VIDEO_PIXELS_X)
-				for (int x=0;x<VIDEO_PIXELS_X;++x)
-					*p++=zz; // render secondary scanlines only
+				for (int x=0;x<VIDEO_PIXELS_X;x+=2)
+					*p++=v0,*p++=v1; // render secondary scanlines only
 		}
 }
 
@@ -354,18 +362,18 @@ INLINE void audio_playframe(int q,AUDIO_UNIT *ao) // call between frames by the 
 	{
 		case 1:
 			for (int i=0;i<AUDIO_LENGTH_Z;++i)
-				aa=*ai++,*ao++=a0=(aa+a0+(aa>a0))/2,
-				aa=*ai++,*ao++=a1=(aa+a1+(aa>a1))/2;
+				aa=*ai++,*ao++=a0=(aa+a0+(aa>a0))>>1,
+				aa=*ai++,*ao++=a1=(aa+a1+(aa>a1))>>1;
 			break;
 		case 2:
 			for (int i=0;i<AUDIO_LENGTH_Z;++i)
-				aa=*ai++,*ao++=a0=(aa+a0*3+(aa>a0)*3)/4,
-				aa=*ai++,*ao++=a1=(aa+a1*3+(aa>a1)*3)/4;
+				aa=*ai++,*ao++=a0=(aa+a0*3+(aa>a0)*3)>>2,
+				aa=*ai++,*ao++=a1=(aa+a1*3+(aa>a1)*3)>>2;
 			break;
 		case 3:
 			for (int i=0;i<AUDIO_LENGTH_Z;++i)
-				aa=*ai++,*ao++=a0=(aa+a0*7+(aa>a0)*7)/8,
-				aa=*ai++,*ao++=a1=(aa+a1*7+(aa>a1)*7)/8;
+				aa=*ai++,*ao++=a0=(aa+a0*7+(aa>a0)*7)>>3,
+				aa=*ai++,*ao++=a1=(aa+a1*7+(aa>a1)*7)>>3;
 			break;
 	}
 	#else
@@ -374,15 +382,15 @@ INLINE void audio_playframe(int q,AUDIO_UNIT *ao) // call between frames by the 
 	{
 		case 1:
 			for (int i=0;i<AUDIO_LENGTH_Z;++i)
-				aa=*ai++,*ao++=az=(aa+az+(aa>az))/2;
+				aa=*ai++,*ao++=az=(aa+az+(aa>az))>>1;
 			break;
 		case 2:
 			for (int i=0;i<AUDIO_LENGTH_Z;++i)
-				aa=*ai++,*ao++=az=(aa+az*3+(aa>az)*3)/4;
+				aa=*ai++,*ao++=az=(aa+az*3+(aa>az)*3)>>2;
 			break;
 		case 3:
 			for (int i=0;i<AUDIO_LENGTH_Z;++i)
-				aa=*ai++,*ao++=az=(aa+az*7+(aa>az)*7)/8;
+				aa=*ai++,*ao++=az=(aa+az*7+(aa>az)*7)>>3;
 			break;
 	}
 	#endif

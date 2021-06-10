@@ -11,7 +11,7 @@
 // interface of variables and procedures that don't require particular
 // knowledge of the emulation's intrinsic properties.
 
-// To compile the emulator for Windows 5.0+, the default platform,
+// To compile the emulator for Windows 5.0+, the default platform, type
 // "$(CC) -xc cpcec.c -luser32 -lgdi32 -lcomdlg32 -lshell32 -lwinmm"
 // or the equivalent options as defined by your preferred compiler.
 // Optional DirectDraw support is enabled by appending "-DDDRAW -lddraw"
@@ -76,15 +76,16 @@ INLINE int hex16(int i) { return i<10?'0'+i:'7'+i; }
 #define VIDEO_FILTER_HALF(x,y) ((x<y?((0X10001+(x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+((0X100+(x&0XFF00)+(y&0XFF00))&0X1FE00):(((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1) // 50:50
 //#define VIDEO_FILTER_BLUR(r,x,y,z) r=VIDEO_FILTER_HALF(y,z),y=z
 //#define VIDEO_FILTER_BLUR(r,x,y,z) r=VIDEO_FILTER_HALF(y,z),y=r
-//#define VIDEO_FILTER_BLUR(r,x,y,z) r=(z&0XFF0000)+(y&0XFF00)+(x&0XFF),x=y,y=z // colour bleed
+//#define VIDEO_FILTER_BLUR(r,x,y,z) r=(x&0XFF0000)+(z&0XFF00)+(y&0XFF),x=y,y=z // colour bleed
 //#define VIDEO_FILTER_BLUR(r,x,y,z) r=((z&0XFEFEFE)>>1)+((((z)*3)>>16)+(((z&0XFF00)*9)>>8)+(((z&0XFF)))+13)/26*0X10101 // desaturation
-#define VIDEO_FILTER_BLUR(r,x,y,z) r=(x<y?((0X10001+(z&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+((0X100+(y&0XFF00)+(x&0XFF00))&0X1FE00):(((z&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((y&0XFF00)+(x&0XFF00))&0X1FE00))>>1,x=y,y=z // 50:50 bleed
+#define VIDEO_FILTER_BLUR(r,x,y,z) r=(x<z?((0X10001+(x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+((0X100+(y&0XFF00)+(z&0XFF00))&0X1FE00):(((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((y&0XFF00)+(z&0XFF00))&0X1FE00))>>1,x=y,y=z // 50:50 bleed
 //#define VIDEO_FILTER_X1(x) (((x>>1)&0X7F7F7F)+0X2B2B2B) // average
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)+0X404040) // heavier
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)*3+0X161616) // lighter
 //#define VIDEO_FILTER_X1(x) (((((((x&0XFF0000)>>8)+(x&0XFF00))>>8)+(x&0XFF)+1)/3)*0X10101) // fast but imprecise greyscale
-//#define VIDEO_FILTER_X1(x) ((((x&0XFF0000)*60+(x&0XFF00)*(176<<8)+(x&0XFF)*(20<<16)+128)>>24)*0X10101) // greyscale 3:9:1
 #define VIDEO_FILTER_X1(x) ((((x&0XFF0000)*76+(x&0XFF00)*(150<<8)+(x&0XFF)*(30<<16)+128)>>24)*0X10101) // natural greyscale
+//#define VIDEO_FILTER_SCAN(w,b) (((((w&0xFF00FF)*3+(b&0xFF00FF)*13)&0xFF00FF0)+(((w&0xFF00)*3+(b&0xFF00)*13)&0xFF000))>>4) // white:black 3:13
+#define VIDEO_FILTER_SCAN(w,b) (((((w&0xFF00FF)+(b&0xFF00FF)*7)&0x7F807F8)+(((w&0xFF00)+(b&0xFF00)*7)&0x7F800))>>3) // white:black 1:7
 
 #if 0 // 8 bits
 	#define AUDIO_UNIT unsigned char
@@ -111,14 +112,17 @@ unsigned char session_path[STRMAX],session_parmtr[STRMAX],session_tmpstr[STRMAX]
 
 int session_timer,session_event=0; // timing synchronisation and user command
 BYTE session_fast=0,session_wait=0,session_audio=1,session_softblit=1,session_hardblit; // timing and devices ; software blitting is enabled by default because it's safer
-BYTE session_stick=1,session_shift=0,session_key2joy=0; // keyboard and joystick
+BYTE session_stick=1,session_shift=0,session_key2joy=0; // keyboard, joystick
+#ifdef MAUS_EMULATION
+int session_maus_z=0,session_maus_x=0,session_maus_y=0; // optional mouse
+#endif
 BYTE video_scanline=0,video_scanlinez=8; // 0 = solid, 1 = scanlines, 2 = full interlace, 3 = half interlace
 BYTE video_filter=0,audio_filter=0; // filter flags
 BYTE session_intzoom=0;
 FILE *session_wavefile=NULL; // audio recording is done on each session update
 
 RECT session_ideal; // ideal rectangle where the window fits perfectly
-JOYINFOEX session_joy; // joystick buffer
+JOYINFOEX session_joy; // joystick+mouse buffers
 HWND session_hwnd; // window handle
 HMENU session_menu=NULL; // menu handle
 int session_hidemenu=0; // normal or pop-up
@@ -330,32 +334,27 @@ int session_key_n_joy(int k) // handle some keys as joystick motions
 	return kbd_map[k];
 }
 
-BYTE session_dontblit=0;
+int session_r_x,session_r_y,session_r_w,session_r_h; // actual location and size of the bitmap
 void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 {
-	if (session_dontblit)
-	{
-		session_dontblit=0;
-		return;
-	}
 	int ox,oy;
 	if (session_signal&SESSION_SIGNAL_DEBUG)
 		ox=0,oy=0;
 	else
 		ox=VIDEO_OFFSET_X,oy=VIDEO_OFFSET_Y;
-	RECT r; GetClientRect(hwnd,&r); int xx,yy; // calculate window area
-	if ((xx=(r.right-=r.left))>0&&(yy=(r.bottom-=r.top))>0) // divisions by zero happen on WM_PAINT during window resizing!
+	RECT r; GetClientRect(hwnd,&r); // calculate window area
+	if ((session_r_w=(r.right-=r.left))>0&&(session_r_h=(r.bottom-=r.top))>0) // divisions by zero happen on WM_PAINT during window resizing!
 	{
-		if (xx>yy*VIDEO_PIXELS_X/VIDEO_PIXELS_Y) // window area is too wide?
-			xx=yy*VIDEO_PIXELS_X/VIDEO_PIXELS_Y;
-		if (yy>xx*VIDEO_PIXELS_Y/VIDEO_PIXELS_X) // window area is too tall?
-			yy=xx*VIDEO_PIXELS_Y/VIDEO_PIXELS_X;
+		if (session_r_w>session_r_h*VIDEO_PIXELS_X/VIDEO_PIXELS_Y) // window area is too wide?
+			session_r_w=session_r_h*VIDEO_PIXELS_X/VIDEO_PIXELS_Y;
+		if (session_r_h>session_r_w*VIDEO_PIXELS_Y/VIDEO_PIXELS_X) // window area is too tall?
+			session_r_h=session_r_w*VIDEO_PIXELS_Y/VIDEO_PIXELS_X;
 		if (session_intzoom) // integer zoom? (100%, 150%, 200%, 250%, 300%...)
-			xx=((xx*17)/VIDEO_PIXELS_X/8)*VIDEO_PIXELS_X/2,
-			yy=((yy*17)/VIDEO_PIXELS_Y/8)*VIDEO_PIXELS_Y/2;
-		if (xx<VIDEO_PIXELS_X||yy<VIDEO_PIXELS_Y)
-			xx=VIDEO_PIXELS_X,yy=VIDEO_PIXELS_Y; // window area is too small!
-		int x=(r.right-xx)/2,y=(r.bottom-yy)/2; // locate bitmap on window center
+			session_r_w=((session_r_w*17)/VIDEO_PIXELS_X/8)*VIDEO_PIXELS_X/2,
+			session_r_h=((session_r_h*17)/VIDEO_PIXELS_Y/8)*VIDEO_PIXELS_Y/2;
+		if (session_r_w<VIDEO_PIXELS_X||session_r_h<VIDEO_PIXELS_Y)
+			session_r_w=VIDEO_PIXELS_X,session_r_h=VIDEO_PIXELS_Y; // window area is too small!
+		session_r_x=(r.right-session_r_w)/2,session_r_y=(r.bottom-session_r_h)/2; // locate bitmap on window center
 		HGDIOBJ session_oldselect;
 
 		#ifdef DDRAW
@@ -380,8 +379,8 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 					RECT rr;
 					rr.right=(rr.left=ox)+VIDEO_PIXELS_X;
 					rr.bottom=(rr.top=oy)+VIDEO_PIXELS_Y;
-					r.right=(r.left=p.x+x)+xx;
-					r.bottom=(r.top=p.y+y)+yy;
+					r.right=(r.left=p.x+session_r_x)+session_r_w;
+					r.bottom=(r.top=p.y+session_r_y)+session_r_h;
 					IDirectDrawSurface_Blt(lpddfore,&r,l,&rr,DDBLT_WAIT,0);
 				}
 			}
@@ -402,10 +401,10 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 		{
 			if (session_oldselect=SelectObject(session_dc2,session_signal&SESSION_SIGNAL_DEBUG?session_dbg:session_dib))
 			{
-				if (session_hardblit=(xx<=VIDEO_PIXELS_X||yy<=VIDEO_PIXELS_Y)) // window area is a perfect fit?
-					BitBlt(h,x,y,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,session_dc2,ox,oy,SRCCOPY); // fast :-)
+				if (session_hardblit=(session_r_w<=VIDEO_PIXELS_X||session_r_h<=VIDEO_PIXELS_Y)) // window area is a perfect fit?
+					BitBlt(h,session_r_x,session_r_y,session_r_w=VIDEO_PIXELS_X,session_r_h=VIDEO_PIXELS_Y,session_dc2,ox,oy,SRCCOPY); // fast :-)
 				else
-					StretchBlt(h,x,y,xx,yy,session_dc2,ox,oy,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,SRCCOPY); // slow :-(
+					StretchBlt(h,session_r_x,session_r_y,session_r_w,session_r_h,session_dc2,ox,oy,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,SRCCOPY); // slow :-(
 				SelectObject(session_dc2,session_oldselect);
 			}
 		}
@@ -481,12 +480,10 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 			break;
 		//case WM_SETFOCUS: // force full redraw
 		case WM_PAINT:
-			session_dontblit=0;
-			PAINTSTRUCT ps; HDC h;
-			if (h=BeginPaint(hwnd,&ps))
 			{
-				session_redraw(hwnd,h);
-				EndPaint(hwnd,&ps);
+				PAINTSTRUCT ps; HDC h;
+				if (h=BeginPaint(hwnd,&ps))
+					session_redraw(hwnd,h),EndPaint(hwnd,&ps);
 			}
 			break;
 		case WM_COMMAND:
@@ -498,14 +495,23 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 				session_event=wparam&0xBFFF; // cfr infra: bit 7 means CONTROL KEY OFF
 			}
 			break;
+		case WM_LBUTTONDOWN:
+		case WM_LBUTTONUP:
+		case WM_MOUSEMOVE: // no `break`!
+			#ifdef MAUS_EMULATION
+			session_maus_z=wparam&MK_LBUTTON;
+			session_maus_y=session_r_h>0?((HIWORD(lparam)-session_r_y)*VIDEO_PIXELS_Y+session_r_h/2)/session_r_h:-1;
+			session_maus_x=session_r_w>0?((LOWORD(lparam)-session_r_x)*VIDEO_PIXELS_X+session_r_w/2)/session_r_w:-1;
+			#endif
+			break;
 		case WM_RBUTTONUP:
 			session_contextmenu();
 			break;
 		case WM_KEYDOWN:
 			session_shift=GetKeyState(VK_SHIFT)<0;
 			if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant inside debugger, see below
-				session_event=debug_xlat(((lparam>>16)&127)+((lparam>>17)&128));
-			if ((k=session_key_n_joy(((lparam>>16)&127)+((lparam>>17)&128)))<128) // normal key
+				session_event=debug_xlat(((HIWORD(lparam))&127)+(((HIWORD(lparam))>>1)&128));
+			if ((k=session_key_n_joy(((HIWORD(lparam))&127)+(((HIWORD(lparam))>>1)&128)))<128) // normal key
 			{
 				if (!(session_signal&SESSION_SIGNAL_DEBUG)) // only relevant outside debugger
 					kbd_bit_set(k);
@@ -518,7 +524,7 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 				session_event=wparam>32&&wparam<=255?wparam:0; // exclude SPACE and non-visible codes!
 			break;
 		case WM_KEYUP:
-			if ((k=session_key_n_joy(((lparam>>16)&127)+((lparam>>17)&128)))<128) // normal key
+			if ((k=session_key_n_joy(((HIWORD(lparam))&127)+(((HIWORD(lparam))>>1)&128)))<128) // normal key
 				kbd_bit_res(k);
 			break;
 		case WM_DROPFILES:
@@ -710,7 +716,7 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	return NULL;
 }
 
-void session_menuinfo(void); // set the current menu flags. Must be defined later on!
+void session_redomenu(void); // set the current menu flags. Must be defined later on!
 
 INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 {
@@ -718,7 +724,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 	if (s!=session_signal)
 		s=session_signal,session_dirtymenu=1;
 	if (session_dirtymenu)
-		session_dirtymenu=0,session_menuinfo();
+		session_dirtymenu=0,session_redomenu();
 	if (session_signal)
 	{
 		if (session_signal&SESSION_SIGNAL_DEBUG)
@@ -735,7 +741,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 			SetWindowText(session_hwnd,session_tmpstr);
 			session_paused=1;
 		}
-		WaitMessage(); //session_dontblit=1; // reduce flickering
+		WaitMessage();
 	}
 	int q=0; for (MSG msg;PeekMessage(&msg,0,0,0,PM_REMOVE);)
 	{

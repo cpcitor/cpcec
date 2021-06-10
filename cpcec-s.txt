@@ -30,7 +30,8 @@ operativo que disponga de la librería SDL2 [http://www.libsdl.org/] desde la
 versión 2.0.4 o superior. El hardware mínimo es el propio de dichos sistemas
 operativos, y se recomienda que el microprocesador central funcione a 400 MHz
 por lo menos. La resolución de pantalla en píxeles debe ser 800x600 como mínimo.
-Una tarjeta de sonido es opcional, así como emplear un joystick.
+Una tarjeta de sonido es opcional, así como emplear un joystick. El ratón puede
+emular una pistola de luz a elección del usuario.
 
 El emulador se compone de varios ficheros: los binarios ejecutables (por defecto
 CPCEC.EXE y ZXSEC.EXE para Windows) y los ficheros de firmware CPC464.ROM,
@@ -94,6 +95,8 @@ muestra una breve explicación de las opciones disponibles.
 * -c1 : elegir el modo de "scanlines" normales (por defecto);
 * -c2 : elegir el modo de entrelazado simple;
 * -c3 : elegir el modo de entrelazado doble;
+* -c4, -c5, -c6, -c7 : elegir los modos de "scanlines" y entrelazado como en
+-c0...-c3, más "blending";
 * -d : iniciar la emulación con el "debugger" activo (por defecto inactivo);
 * -g0, -g1, -g2, -g3, -g4 : elegir el tipo de CRTC de 0 a 4 (tipo 1 por
 defecto);
@@ -411,15 +414,15 @@ ejecución desactivando "Settings: Disc controller" y eligiendo el firmware
 SPEC-P-3.ROM;
 * Control+Mays+F8 sirve para poner en marcha (o detener) el motor de cinta, dado
 que el hardware de CPC dispone de control de cinta incorporado, mientras que el
-de Spectrum carece de él.
+de Spectrum carece de él;
 * MAYS emula la tecla CAPS, CONTROL emula SYMBOL, BLOQ MAYUS emula CAPS+2 (CAPS
-LOCK), los cursores emulan CAPS+6/7/8/9, TAB emula CAPS+1 (EDIT) y ESCAPE emula
-CAPS+SPACE (BREAK).
+LOCK), los cursores emulan CAPS+5/6/7/8, TAB emula CAPS+1 (EDIT) y ESCAPE emula
+CAPS+SPACE (BREAK);
 * las opciones de joystick se refieren al interfaz Sinclair 2 por defecto; el
 menú permite elegir el tipo de joystick.
 
 ZXSEC puede mostrar efectos Gigascreen (por ejemplo la demo "Mescaline
-Synesthesia" 2009 DeMarche) tras activar las opciones de entrelazado en el menú
+Synesthesia" 2009 DeMarche) mediante las opciones de entrelazado en el menú
 Video.
 
 ## Agradecimientos ##
@@ -948,3 +951,11 @@ de la izquierda. Las expresiones del depurador aceptan tres operadores nuevos: &
 (AND), | (OR) y ^ (XOR). XRF muestra la longitud del resultado con una precisión
 de bytes en lugar de megabytes, y ejecutarlo sin un parámetro de destino imprime
 los parámetros del vídeo de fuente y el tamaño esperado.
+- 20210609 -- parche menor que añade emulación de pistolas de luz para CPC
+(Trojan, Gunstick y Westphaser en el puerto de joystick) y Spectrum (Gunstick en
+los puertos de Sinclair 1 y Kempston), replica una particularidad del CRTC0
+(cuando R6==0 se muestra una sola línea, en lugar de ninguna como los otros
+tipos de CRTC) y mejora la elección del color de relleno para los scanlines
+medios. La versión de SDL2 ahora interpreta los clics de ratón cuando se suelta
+el botón, consistentemente con otros interfaces de usuario. Las opciones de
+aceleración de cinta perduran entre sesiones.

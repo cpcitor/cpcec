@@ -30,7 +30,7 @@ library [http://www.libsdl.org/] from version 2.0.4 or higher. The minimal
 hardware requirements are those fitting the operating system, and it's advised
 that the main microprocessor runs at 400 MHz at least. Screen resolution in
 pixels must be 800x600 at least. A sound card is optional, as well as equipping
-a joystick.
+a joystick. The mouse can emulate a lightgun to the user's choice.
 
 The emulator spans several files: the runnable binaries (by default CPCEC.EXE
 and ZXSEC.EXE for Windows) and the firmware files CPC464.ROM, CPC664.ROM,
@@ -93,6 +93,8 @@ short help explaining the available options.
 * -c1 : set the scanline mode to whole (by default);
 * -c2 : set the interlace mode to simple;
 * -c3 : set the interlace mode to double;
+* -c4, -c5, -c6, -c7 : set the scanline and interlace modes as in -c0...-c3,
+plus blending;
 * -d : start the emulation with the debugger on (by default off);
 * -g0, -g1, -g2, -g3, -g4 : set the CRTC type (by default 1);
 * -h : short help;
@@ -386,15 +388,15 @@ chosen model is Spectrum 48k;
 thus becomes a +2A instead; same outcome can happen on runtime by disabling
 "Settings: Disc controller" and selecting the firmware SPEC-P-3.ROM;
 * Control+Shift+F8 starts (or stops) the cassette motor, because the CPC
-hardware includes a built-in tape control, while the Spectrum hardware lacks it.
+hardware includes a built-in tape control, while the Spectrum hardware lacks it;
 * SHIFT emulates the CAPS key, CONTROL emulates SYMBOL, BLOQ MAYUS emulates
-CAPS+2 (CAPS LOCK), cursors emulate CAPS+6/7/8/9, TAB emulates CAPS+1 (EDIT) and
-ESCAPE emulates CAPS+SPACE (BREAK).
+CAPS+2 (CAPS LOCK), cursors emulate CAPS+5/6/7/8, TAB emulates CAPS+1 (EDIT) and
+ESCAPE emulates CAPS+SPACE (BREAK);
 * joystick options apply to the Sinclair 2 interface by default; the menu allows
 choosing the type of joystick.
 
 ZXSEC can show Gigascreen effects (for example the demo "Mescaline Synesthesia"
-2009 DeMarche) if the user enables the interlace options in the Video menu.
+2009 DeMarche) through the interlace options in the Video menu.
 
 ## Acknowledgements ##
 
@@ -892,3 +894,10 @@ instead of the left. The debugger expressions accept three new operators: &
 (AND), | (OR) and ^ (XOR). XRF shows the output file's accurate byte length
 rather than just the megabytes, and running it without a target parameter prints
 the source video parameters and the expected size.
+- 20210609 -- minor patch adding lightgun emulation for CPC (Trojan, Gunstick
+and Westphaser on joystick port) and Spectrum (Gunstick on Sinclair 1 and
+Kempston ports), recreating a CRTC0 quirk (when R6==0 a single scanline is
+shown, rather than none as in other CRTC types) and improving the choice of the
+filler colour when half scanlines are on. The SDL2 version now handles mouse
+clicks when the button is up to improve consistency with other user interfaces.
+Tape acceleration options stick between sessions.

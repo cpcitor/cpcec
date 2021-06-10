@@ -361,13 +361,13 @@ void disc_sector_load(void) // read a sector and set the status flags accordingl
 }
 
 // formatting a track requires rearranging the whole disc both on file and on memory
-// 1.- prepare a backup of the disc after the current track
+// 1.- prepare a backup of the data after the current track
 // 2.- modify the disc header to include the new track size
 // 3.- store the new track in place of the current track
 // 4.- dump the backup after the current track
 // 5.- discard the backup
 // difficult enough? if the disc is old style we also have to convert it to new style on the fly!
-// 1.- prepare a backup of the disc after the current track
+// 1.- prepare a backup of the data after the current track
 // 2.- turn the disc header into "EXTENDED" while including the new track size
 // 3.- modify all the tracks before the current one to fit the new style
 // 4.- store the new track in place of the current track
@@ -382,8 +382,18 @@ void disc_track_format_old2new(BYTE *t) // converts a single track from MV - CPC
 }
 void disc_track_format(void)
 {
-	int m,l128=disc_parmtr[3]<<disc_parmtr[2]; // length of track data in 128-byte chunks
-	int j=disc_track[disc_trueunit]*disc_index_table[disc_trueunit][0x31]+((disc_trueunithead&4)?1:0); // location on file: (track*heads)+head
+	int j=0,l128=0; // length of new track (header and data) in 128-byte chunks
+	for (int i=0;i<disc_parmtr[3];++i) // disc_parmtr[2] is useless to calculate the REAL length of the track!
+	{
+		logprintf("%02X%02X%02X%02X ",disc_buffer[0+i*4],disc_buffer[1+i*4],disc_buffer[2+i*4],disc_buffer[3+i*4]);
+		//if (disc_buffer[0+i*4]|disc_buffer[1+i*4]|disc_buffer[2+i*4]|disc_buffer[3+i*4]) // skip dummy sectors? (Rubi's self-copier for "The Demo")
+		{
+			memmove(&disc_buffer[j*4],&disc_buffer[i*4],4),++j; // keep non-dummy sector
+			l128+=1<<disc_buffer[3+i*4]; // layout is "CHRN", as usual; we use N here
+		}
+	}
+	disc_parmtr[3]=j; // all dummy sectors are gone now
+	j=disc_track[disc_trueunit]*disc_index_table[disc_trueunit][0x31]+((disc_trueunithead&4)?1:0); // location on file: (track*heads)+head
 	if (j<0||j>=84*disc_index_table[disc_trueunit][0x31]||(!disc_canwrite[disc_trueunit])) // invalid track? (up to 84) write protected?
 	{
 		disc_result[0]=0x40|(disc_parmtr[1]&7); // 0x40: Command Aborted
@@ -395,7 +405,7 @@ void disc_track_format(void)
 	}
 
 	// adjust the header, as formatting can lead to differently sized tracks that don't fit in "MV - CPC" discs
-	if (m=(disc_index_table[disc_trueunit][0]=='M')) // old style
+	int m; if (m=(disc_index_table[disc_trueunit][0]=='M')) // old style
 	{
 		strcpy(disc_index_table[disc_trueunit],disc_header_text);
 		memset(&disc_index_table[disc_trueunit][0x34],disc_index_table[disc_trueunit][0x33],disc_index_table[disc_trueunit][0x30]*disc_index_table[disc_trueunit][0x31]);
@@ -405,7 +415,8 @@ void disc_track_format(void)
 	// is the new track formatted or unformatted?
 	BYTE q=disc_index_table[disc_trueunit][j+0x34];
 	MEMZERO(disc_track_table[disc_trueunithead]);
-	if (disc_parmtr[2]>=7||disc_parmtr[3]>29||l128>50)
+	logprintf("[FR %02X:%02X:%04X] ",disc_parmtr[2],disc_parmtr[3],l128);
+	if (disc_parmtr[2]>=7||disc_parmtr[3]>29||l128>49)
 		disc_index_table[disc_trueunit][j+0x34]=l128=0; // track is unformatted, no header or body
 	else
 	{
@@ -419,7 +430,7 @@ void disc_track_format(void)
 		for (int i=0;i<disc_parmtr[3];++i)
 		{
 			memcpy(&disc_track_table[disc_trueunithead][i*8+0x18],&disc_buffer[0+i*4],4); // CHRN
-			int l=128<<disc_parmtr[2];
+			int l=128<<disc_buffer[3+i*4]; //disc_parmtr[2] is useless, again; we use N here
 			disc_track_table[disc_trueunithead][i*8+0x1E]=l;
 			disc_track_table[disc_trueunithead][i*8+0x1F]=l>>8;
 		}

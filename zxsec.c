@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20210526"//"2555"
+#define MY_VERSION "20210609"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -111,9 +111,18 @@ unsigned short session_icon32xx16[32*32] = {
 #define KBD_JOY_UNIQUE 5 // exclude repeated buttons
 unsigned char kbd_joy[]= // ATARI norm: up, down, left, right, fire1-4
 	{ 0,0,0,0,0,0,0,0 }; // variable instead of constant, there are several joystick types
-
+#define MAUS_EMULATION 1 // lightguns are emulated with the mouse
 #include "cpcec-os.h" // OS-specific code!
 #include "cpcec-rt.h" // OS-independent code!
+BYTE joy1_type=2;
+BYTE joy1_types[][8]={ // virtual button is repeated for all joystick buttons
+	{ 0x43,0x42,0x41,0x40,0x44,0x44,0x44,0x44 }, // Kempston
+	{ 0x1B,0x1A,0x18,0x19,0x1C,0x1C,0x1C,0x1C }, // 4312+5: Sinclair 1
+	{ 0x21,0x22,0x24,0x23,0x20,0x20,0x20,0x20 }, // 9867+0: Interface II, Sinclair 2
+	{ 0x23,0x24,0x1C,0x22,0x20,0x20,0x20,0x20 }, // 7658+0: Cursor, Protek, AGF
+	{ 0x10,0x08,0x29,0x28,0x38,0x38,0x38,0x38 }, // QAOP+Space
+};
+int litegun=0; // 0 = standard joystick, 1 = Gunstick (MHT)
 
 const unsigned char kbd_map_xlt[]=
 {
@@ -161,28 +170,38 @@ const VIDEO_UNIT video_table[][16]= // colour table, 0xRRGGBB style
 {
 	// monochrome - black and white // =(b+r*3+g*9+13/2)/13;
 	{
-		VIDEO1(0x000000),VIDEO1(0x1B1B1B),VIDEO1(0x373737),VIDEO1(0x525252),VIDEO1(0x6E6E6E),VIDEO1(0x898989),VIDEO1(0xA5A5A5),VIDEO1(0xC0C0C0),
-		VIDEO1(0x000000),VIDEO1(0x242424),VIDEO1(0x494949),VIDEO1(0x6D6D6D),VIDEO1(0x929292),VIDEO1(0xB6B6B6),VIDEO1(0xDBDBDB),VIDEO1(0xFFFFFF)
+		VIDEO1(0x000000),VIDEO1(0x1B1B1B),VIDEO1(0x373737),VIDEO1(0x525252),
+		VIDEO1(0x6E6E6E),VIDEO1(0x898989),VIDEO1(0xA5A5A5),VIDEO1(0xC0C0C0),
+		VIDEO1(0x000000),VIDEO1(0x242424),VIDEO1(0x494949),VIDEO1(0x6D6D6D),
+		VIDEO1(0x929292),VIDEO1(0xB6B6B6),VIDEO1(0xDBDBDB),VIDEO1(0xFFFFFF)
 	},
 	// dark colour
 	{
-		VIDEO1(0x000000),VIDEO1(0x000080),VIDEO1(0x800000),VIDEO1(0x800080),VIDEO1(0x008000),VIDEO1(0x008080),VIDEO1(0x808000),VIDEO1(0x808080),
-		VIDEO1(0x000000),VIDEO1(0x0000FF),VIDEO1(0xFF0000),VIDEO1(0xFF00FF),VIDEO1(0x00FF00),VIDEO1(0x00FFFF),VIDEO1(0xFFFF00),VIDEO1(0xFFFFFF)
+		VIDEO1(0x000000),VIDEO1(0x000080),VIDEO1(0x800000),VIDEO1(0x800080),
+		VIDEO1(0x008000),VIDEO1(0x008080),VIDEO1(0x808000),VIDEO1(0x808080),
+		VIDEO1(0x000000),VIDEO1(0x0000FF),VIDEO1(0xFF0000),VIDEO1(0xFF00FF),
+		VIDEO1(0x00FF00),VIDEO1(0x00FFFF),VIDEO1(0xFFFF00),VIDEO1(0xFFFFFF)
 	},
 	// normal colour
 	{
-		VIDEO1(0x000000),VIDEO1(0x0000C0),VIDEO1(0xC00000),VIDEO1(0xC000C0),VIDEO1(0x00C000),VIDEO1(0x00C0C0),VIDEO1(0xC0C000),VIDEO1(0xC0C0C0),
-		VIDEO1(0x000000),VIDEO1(0x0000FF),VIDEO1(0xFF0000),VIDEO1(0xFF00FF),VIDEO1(0x00FF00),VIDEO1(0x00FFFF),VIDEO1(0xFFFF00),VIDEO1(0xFFFFFF)
+		VIDEO1(0x000000),VIDEO1(0x0000C0),VIDEO1(0xC00000),VIDEO1(0xC000C0),
+		VIDEO1(0x00C000),VIDEO1(0x00C0C0),VIDEO1(0xC0C000),VIDEO1(0xC0C0C0),
+		VIDEO1(0x000000),VIDEO1(0x0000FF),VIDEO1(0xFF0000),VIDEO1(0xFF00FF),
+		VIDEO1(0x00FF00),VIDEO1(0x00FFFF),VIDEO1(0xFFFF00),VIDEO1(0xFFFFFF)
 	},
 	// bright colour
 	{
-		VIDEO1(0x000000),VIDEO1(0x0000E0),VIDEO1(0xE00000),VIDEO1(0xE000E0),VIDEO1(0x00E000),VIDEO1(0x00E0E0),VIDEO1(0xE0E000),VIDEO1(0xE0E0E0),
-		VIDEO1(0x000000),VIDEO1(0x0000FF),VIDEO1(0xFF0000),VIDEO1(0xFF00FF),VIDEO1(0x00FF00),VIDEO1(0x00FFFF),VIDEO1(0xFFFF00),VIDEO1(0xFFFFFF)
+		VIDEO1(0x000000),VIDEO1(0x0000E0),VIDEO1(0xE00000),VIDEO1(0xE000E0),
+		VIDEO1(0x00E000),VIDEO1(0x00E0E0),VIDEO1(0xE0E000),VIDEO1(0xE0E0E0),
+		VIDEO1(0x000000),VIDEO1(0x0000FF),VIDEO1(0xFF0000),VIDEO1(0xFF00FF),
+		VIDEO1(0x00FF00),VIDEO1(0x00FFFF),VIDEO1(0xFFFF00),VIDEO1(0xFFFFFF)
 	},
 	// monochrome - green screen
 	{
-		VIDEO1(0x003C00),VIDEO1(0x084808),VIDEO1(0x176017),VIDEO1(0x1E6C1E),VIDEO1(0x449044),VIDEO1(0x4B9C4B),VIDEO1(0x5AB45A),VIDEO1(0x62C062),
-		VIDEO1(0x003C00),VIDEO1(0x0A4B0A),VIDEO1(0x1E691E),VIDEO1(0x287828),VIDEO1(0x5AC35A),VIDEO1(0x64D264),VIDEO1(0x78F078),VIDEO1(0x82FF82)
+		VIDEO1(0x003C00),VIDEO1(0x084808),VIDEO1(0x176017),VIDEO1(0x1E6C1E),
+		VIDEO1(0x449044),VIDEO1(0x4B9C4B),VIDEO1(0x5AB45A),VIDEO1(0x62C062),
+		VIDEO1(0x003C00),VIDEO1(0x0A4B0A),VIDEO1(0x1E691E),VIDEO1(0x287828),
+		VIDEO1(0x5AC35A),VIDEO1(0x64D264),VIDEO1(0x78F078),VIDEO1(0x82FF82)
 	},
 };
 
@@ -217,7 +236,7 @@ Z80W z80_af2,z80_bc2,z80_de2,z80_hl2,z80_ix,z80_iy; // AF', BC', DE', HL', IX, I
 Z80W z80_pc,z80_sp,z80_iff,z80_ir; // Program Counter, Stack Pointer, Interrupt Flip-Flops, IR pair
 BYTE z80_imd; // Interrupt Mode
 BYTE z80_r7; // low 7 bits of R, required by several `IN X,(Y)` operations
-int z80_turbo=0,z80_multi=1; // overclocking options
+int z80_turbo=0,z80_multi; // overclocking options
 
 // 0x??FE,0x7FFD,0x1FFD: ULA 48K,128K,PLUS3 ------------------------- //
 
@@ -471,7 +490,7 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 		}
 		if (ula_pos_x==0&&ula_count_y>=ula_limit_y)
 		{
-			if (!video_framecount) video_endscanlines(video_table[video_type][0]);
+			if (!video_framecount) video_endscanlines(); // 15 = WHITE, 0 = BLACK
 			video_newscanlines(video_pos_x,(312-ula_limit_y)*2); // 128K screen is one line shorter, but begins one line later than 48K
 			ula_bitmap=0; ula_attrib=0x1800;
 			++ula_flash;
@@ -796,25 +815,25 @@ void z80_tape_trap(void)
 	}
 }
 
+#define z80_recv_gunstick(button,sensor) ((session_maus_z?button:0)+((video_litegun&0x00C000)?sensor:0)) // GUNSTICK detects bright pixels
 BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 {
-	BYTE b=255;
-	if ((p&63)==31) // KEMPSTON joystick
-		b=autorun_kbd_bit(8);
-	else if ((p&15)==14) // 0x??FE, ULA 48K
+	if ((p&63)==31) // KEMPSTON port
+		return litegun?z80_recv_gunstick(16,4):autorun_kbd_bit(8); // catch special case: lightgun or joystick ("TARGET PLUS", "MIKE GUNNER")
+	BYTE b=255; if ((p&15)==14) // 0x??FE, ULA 48K
 	{
 		int i,j,k=autorun_kbd_bit(11)||autorun_kbd_bit(12)||autorun_kbd_bit(15);
 		for (i=j=0;i<8;++i)
-		{
 			if (!(p&(256<<i)))
 			{
 				j|=autorun_kbd_bit(i); // bits 0-4: keyboard rows
-				if (!i)
-					j|=k; // CAPS SHIFT: row 0, bit 0
-				else
-					j|=autorun_kbd_bit(8+i); // other rows
+				j|=i?autorun_kbd_bit(8+i):k; // handle composite keys: CAPS SHIFT is row 0, bit 0
+				if (litegun&&!autorun_mode)
+				{
+					if (i==4) j|=z80_recv_gunstick(1,4); // GUNSTICK on SINCLAIR 1 ("SOLO")
+					//else if (i==3) //j|=z80_recv_gunstick(16,4); // GUNSTICK on SINCLAIR 2
+				}
 			}
-		}
 		b=~j;
 		if (tape&&!z80_iff.b.l) // does any tape loader enable interrupts at all???
 			z80_tape_trap();
@@ -1360,15 +1379,6 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 
 // auxiliary user interface operations ------------------------------ //
 
-BYTE joy1_type=2;
-BYTE joy1_types[][8]={ // virtual button is repeated for all joystick buttons
-	{ 0x43,0x42,0x41,0x40,0x44,0x44,0x44,0x44 }, // Kempston
-	{ 0x1B,0x1A,0x18,0x19,0x1C,0x1C,0x1C,0x1C }, // 4312+5: Sinclair 1
-	{ 0x21,0x22,0x24,0x23,0x20,0x20,0x20,0x20 }, // 9867+0: Interface II, Sinclair 2
-	{ 0x23,0x24,0x1C,0x22,0x20,0x20,0x20,0x20 }, // 7658+0: Cursor, Protek, AGF
-	{ 0x10,0x08,0x29,0x28,0x38,0x38,0x38,0x38 }, // QAOP+Space
-};
-
 char txt_error_snap_save[]="Cannot save snapshot!";
 char snap_pattern[]="*.sna";
 char file_pattern[]="*.sna;*.z80;*.rom;*.dsk;*.tap;*.tzx;*.csw;*.wav";
@@ -1383,17 +1393,17 @@ char session_menudata[]=
 	"=\n"
 	"0x8700 Insert disc into A:..\tF7\n"
 	"0x8701 Create disc in A:..\n"
-	"0x0700 Remove disc from A:\tCtrl+F7\n"
 	"0x0701 Flip disc sides in A:\n"
+	"0x0700 Remove disc from A:\tCtrl+F7\n"
 	"0xC700 Insert disc into B:..\tShift+F7\n"
 	"0xC701 Create disc in B:..\n"
-	"0x4700 Remove disc from B:\tCtrl+Shift+F7\n"
 	"0x4701 Flip disc sides in B:\n"
+	"0x4700 Remove disc from B:\tCtrl+Shift+F7\n"
 	"=\n"
 	"0x8800 Insert tape..\tF8\n"
 	"0xC800 Record tape..\tShift+F8\n"
-	"0x0800 Remove tape\tCtrl+F8\n"
 	"0x8801 Browse tape..\n"
+	"0x0800 Remove tape\tCtrl+F8\n"
 	"0x4800 Play tape\tCtrl+Shift+F8\n"
 	"=\n"
 	"0x3F00 E_xit\n"
@@ -1422,6 +1432,7 @@ char session_menudata[]=
 	"0x8503 Sinclair 2 joystick\n"
 	"0x8504 Cursor/AGF joystick\n"
 	"0x8505 QAOP+Space joystick\n"
+	"0x8506 Gunstick (MHT)\n"
 	"=\n"
 	"0x8511 Memory contention\n"
 	"0x8512 ULA video noise\n"
@@ -1488,7 +1499,7 @@ char session_menudata[]=
 	"0x0100 About..\tCtrl+F1\n"
 	"";
 
-void session_menuinfo(void)
+void session_redomenu(void)
 {
 	session_menucheck(0x8F00,session_signal&SESSION_SIGNAL_PAUSE);
 	session_menucheck(0x8900,session_signal&SESSION_SIGNAL_DEBUG);
@@ -1514,6 +1525,7 @@ void session_menuinfo(void)
 	session_menucheck(0x0400,session_key2joy);
 	session_menuradio(0x0601+z80_turbo,0x0601,0x0604);
 	session_menuradio(0x8501+joy1_type,0x8501,0x8505);
+	session_menucheck(0x8506,litegun);
 	session_menucheck(0x8590,!(disc_filemode&2));
 	session_menucheck(0x8591,disc_filemode&1);
 	session_menucheck(0x8510,!(disc_disabled&1));
@@ -1542,6 +1554,8 @@ void session_menuinfo(void)
 	z80_multi=1+z80_turbo; // setup overclocking
 	sprintf(session_info,"%i:%s ULAv%c %0.1fMHz"//" | disc %s | tape %s | %s"
 		,(!type_id||(ula_v2&32))?48:128,type_id?(type_id!=1?(type_id!=2?(!disc_disabled?"Plus3":"Plus2A"):"Plus2"):"128K"):"48K",ula_clash_disabled?'0':type_id?type_id>2?'3':'2':'1',3.5*z80_multi);
+	video_lastscanline=video_table[video_type][0]; // BLACK in the CLUT
+	video_halfscanline=VIDEO_FILTER_SCAN(video_table[video_type][15],video_lastscanline); // WHITE in the CLUT
 	*debug_buffer=128; // force debug redraw! (somewhat overkill)
 }
 int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
@@ -1676,12 +1690,15 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 		case 0x0400: // ^F4: TOGGLE JOYSTICK
 			session_key2joy=!session_key2joy;
 			break;
-		case 0x8501:
-		case 0x8502:
-		case 0x8503:
-		case 0x8504:
-		case 0x8505:
+		case 0x8501: // KEMPSTON JOYSTICK
+		case 0x8502: // SINCLAIR 1 STICK
+		case 0x8503: // SINCLAIR 2 STICK
+		case 0x8504: // CURSOR JOYSTICK
+		case 0x8505: // QAOP+M JOYSTICK
 			joy1_type=(k&15)-1; // 0,1,2,3,4
+			break;
+		case 0x8506: // MHT GUNSTICK
+			litegun=!litegun;
 			break;
 		case 0x8590: // STRICT DISC WRITES
 			disc_filemode^=2;
@@ -1912,7 +1929,7 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 			--ula_clash_delta; break;
 		#endif
 	}
-	return session_menuinfo(),0;
+	return session_redomenu(),0;
 }
 
 void session_configreadmore(char *s)
@@ -1928,17 +1945,17 @@ void session_configreadmore(char *s)
 	else if (!strcasecmp(session_parmtr,"disc")) strcpy(disc_path,s);
 	else if (!strcasecmp(session_parmtr,"card")) strcpy(bios_path,s);
 	else if (!strcasecmp(session_parmtr,"palette")) { if ((i=*s&15)<length(video_table)) video_type=i; }
-	else if (!strcasecmp(session_parmtr,"rewind")) tape_rewind=*s&1;
+	else if (!strcasecmp(session_parmtr,"casette")) tape_rewind=*s&1,tape_skipload=!!(*s&2),tape_fastload=!!(*s&4);
 	else if (!strcasecmp(session_parmtr,"debug")) z80_debug_configread(strtol(s,NULL,10));
 }
 void session_configwritemore(FILE *f)
 {
 	fprintf(f,"type %i\njoy1 %i\nxsna %i\nfdcw %i\n"
 		"file %s\nsnap %s\ntape %s\ndisc %s\ncard %s\n"
-		"palette %i\nrewind %i\ndebug %i\n"
+		"palette %i\ncasette %i\ndebug %i\n"
 		,type_id,joy1_type,snap_extended,disc_filemode,
 		autorun_path,snap_path,tape_path,disc_path,bios_path,
-		video_type,tape_rewind,z80_debug_configwrite());
+		video_type,(tape_rewind?1:0)+(tape_skipload?2:0)+(tape_fastload?4:0),z80_debug_configwrite());
 }
 
 #if defined(DEBUG) || defined(SDL_MAIN_HANDLED)
