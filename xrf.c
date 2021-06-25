@@ -70,7 +70,7 @@ BYTE *xrf_bitmap=NULL,*xrf_shadow=NULL,*xrf_chunk=NULL; // buffers
 #define XRF_CHUNKSIZE ((MAXVIDEOBYTES+MAXAUDIOBYTES)*9/8+32)
 #define xrf_decode0() (!(a>>=1)&&(b=*w++,a=128))
 #define xrf_decode1() (xrf_decode0(),(b&a)?*w++:0)
-int xrf_decode(BYTE *t,BYTE *s,int *l,int x) // equally hacky decoder based on an 8-bit RLE and a pseudo Huffman filter!
+int xrf_decode(BYTE *t,BYTE *s,int *l,int x) // equally hacky decoder based on an 8-bit RLE and an interleaved pseudo Huffman filter!
 {
 	BYTE *w=s,*z=t,a=0,b=0; int m=-1,n;
 	for (;;)

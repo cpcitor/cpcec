@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20210609"//"2555"
+#define MY_VERSION "20210624"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -61,39 +61,39 @@ Contact information: <mailto:cngsoft@gmail.com> */
 
 #if defined(SDL2)||!defined(_WIN32)
 unsigned short session_icon32xx16[32*32] = {
-	0x0000,0x0000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,	0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0x0000,0x0000,
-	0x0000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,	0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0x0000,
-	0xf000,0xf000,0xf000,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xff00,0xf800,0xf000,0xff80,	0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xfff0,0xff80,0xf000,0xf000,0xf000,
-	0xf000,0xf000,0xf800,0xff00,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xff00,0xf800,0xf000,0xff80,0xffff,	0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xfff0,0xff80,0xf000,0xf080,0xf000,0xf000,
-	0xf000,0xf000,0xf800,0xf800,0xff00,0xffff,0xffff,0xffff,0xffff,0xffff,0xff00,0xf800,0xf000,0xff80,0xffff,0xffff,	0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xfff0,0xff80,0xf000,0xf080,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xf800,0xf800,0xf800,0xff00,0xffff,0xffff,0xffff,0xff00,0xf800,0xf000,0xff80,0xffff,0xffff,0xffff,	0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xfff0,0xff80,0xf000,0xf080,0xffff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xf800,0xf800,0xf800,0xf800,0xff00,0xff00,0xf800,0xf800,0xf000,0xff80,0xffff,0xfff0,0xfff0,0xfff0,	0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xff80,0xff80,0xf000,0xf080,0xffff,0xffff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xf800,0xf800,0xf800,0xf800,0xff00,0xf800,0xf800,0xf000,0xff80,0xffff,0xfff0,0xfff0,0xfff0,0xfff0,	0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xff80,0xff80,0xf000,0xf080,0xffff,0xffff,0xffff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xf800,0xf800,0xf800,0xf800,0xf800,0xf800,0xf000,0xff80,0xffff,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,	0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xff80,0xff80,0xf000,0xf080,0xffff,0xffff,0xffff,0xffff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xf800,0xf800,0xf800,0xf800,0xf800,0xf000,0xff80,0xffff,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,	0xfff0,0xfff0,0xfff0,0xfff0,0xff80,0xff80,0xf000,0xf080,0xffff,0xf0f0,0xffff,0xffff,0xffff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xf800,0xf800,0xf800,0xf800,0xf000,0xff80,0xffff,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,	0xfff0,0xfff0,0xfff0,0xff80,0xff80,0xf000,0xf080,0xffff,0xf0f0,0xf0f0,0xffff,0xffff,0xffff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xf800,0xf800,0xf800,0xf000,0xff80,0xffff,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,	0xfff0,0xfff0,0xff80,0xff80,0xf000,0xf080,0xffff,0xf0f0,0xf0f0,0xf0f0,0xffff,0xffff,0xffff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xf800,0xf800,0xf000,0xff80,0xffff,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,	0xfff0,0xff80,0xff80,0xf000,0xf080,0xffff,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xffff,0xffff,0xffff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xf800,0xf000,0xff80,0xff80,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,	0xff80,0xff80,0xf000,0xf080,0xffff,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xffff,0xffff,0xffff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xf000,0xff80,0xff80,0xff80,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xff80,	0xff80,0xf000,0xf080,0xffff,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xffff,0xffff,0xffff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xff80,0xff80,0xff80,0xff80,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xff80,0xff80,	0xf000,0xf080,0xffff,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xffff,0xffff,0xffff,0xf0f0,0xf000,0xf000,
+	0X0000,0X0000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,	0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0X0000,0X0000,
+	0X0000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,	0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0X0000,
+	0XF000,0XF000,0XF000,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFF00,0XF800,0XF000,0XFF80,	0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFF0,0XFF80,0XF000,0XF000,0XF000,
+	0XF000,0XF000,0XF800,0XFF00,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFF00,0XF800,0XF000,0XFF80,0XFFFF,	0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFF0,0XFF80,0XF000,0XF080,0XF000,0XF000,
+	0XF000,0XF000,0XF800,0XF800,0XFF00,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFF00,0XF800,0XF000,0XFF80,0XFFFF,0XFFFF,	0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFF0,0XFF80,0XF000,0XF080,0XFFFF,0XF000,0XF000,
+	0XF000,0XF000,0XF800,0XF800,0XF800,0XFF00,0XFFFF,0XFFFF,0XFFFF,0XFF00,0XF800,0XF000,0XFF80,0XFFFF,0XFFFF,0XFFFF,	0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFF0,0XFF80,0XF000,0XF080,0XFFFF,0XFFFF,0XF000,0XF000,
+	0XF000,0XF000,0XF800,0XF800,0XF800,0XF800,0XFF00,0XFF00,0XF800,0XF800,0XF000,0XFF80,0XFFFF,0XFFF0,0XFFF0,0XFFF0,	0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFF80,0XFF80,0XF000,0XF080,0XFFFF,0XFFFF,0XFFFF,0XF000,0XF000,
+	0XF000,0XF000,0XF800,0XF800,0XF800,0XF800,0XFF00,0XF800,0XF800,0XF000,0XFF80,0XFFFF,0XFFF0,0XFFF0,0XFFF0,0XFFF0,	0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFF80,0XFF80,0XF000,0XF080,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XF000,0XF000,
+	0XF000,0XF000,0XF800,0XF800,0XF800,0XF800,0XF800,0XF800,0XF000,0XFF80,0XFFFF,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,	0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFF80,0XFF80,0XF000,0XF080,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XF000,0XF000,
+	0XF000,0XF000,0XF800,0XF800,0XF800,0XF800,0XF800,0XF000,0XFF80,0XFFFF,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,	0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFF80,0XFF80,0XF000,0XF080,0XFFFF,0XF0F0,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XF000,0XF000,
+	0XF000,0XF000,0XF800,0XF800,0XF800,0XF800,0XF000,0XFF80,0XFFFF,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,	0XFFF0,0XFFF0,0XFFF0,0XFF80,0XFF80,0XF000,0XF080,0XFFFF,0XF0F0,0XF0F0,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XF000,0XF000,
+	0XF000,0XF000,0XF800,0XF800,0XF800,0XF000,0XFF80,0XFFFF,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,	0XFFF0,0XFFF0,0XFF80,0XFF80,0XF000,0XF080,0XFFFF,0XF0F0,0XF0F0,0XF0F0,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XF000,0XF000,
+	0XF000,0XF000,0XF800,0XF800,0XF000,0XFF80,0XFFFF,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,	0XFFF0,0XFF80,0XFF80,0XF000,0XF080,0XFFFF,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XF000,0XF000,
+	0XF000,0XF000,0XF800,0XF000,0XFF80,0XFF80,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,	0XFF80,0XFF80,0XF000,0XF080,0XFFFF,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XF000,0XF000,
+	0XF000,0XF000,0XF000,0XFF80,0XFF80,0XFF80,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFF80,	0XFF80,0XF000,0XF080,0XFFFF,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XF000,0XF000,
+	0XF000,0XF000,0XFF80,0XFF80,0XFF80,0XFF80,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFF80,0XFF80,	0XF000,0XF080,0XFFFF,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XFFFF,0XFFFF,0XFFFF,0XF0F0,0XF000,0XF000,
 
-	0xf000,0xf000,0xff80,0xff80,0xff80,0xff80,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xff80,0xff80,0xf000,	0xf080,0xffff,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xffff,0xffff,0xf0f0,0xf080,0xf000,0xf000,
-	0xf000,0xf000,0xff80,0xff80,0xff80,0xff80,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xff80,0xff80,0xf000,0xf080,	0xffff,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xffff,0xf0f0,0xf080,0xf000,0xf000,0xf000,
-	0xf000,0xf000,0xff80,0xff80,0xff80,0xff80,0xfff0,0xfff0,0xfff0,0xfff0,0xfff0,0xff80,0xff80,0xf000,0xf080,0xffff,	0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf080,0xf000,0xf08f,0xf000,0xf000,
-	0xf000,0xf000,0xff80,0xff80,0xff80,0xff80,0xfff0,0xfff0,0xfff0,0xfff0,0xff80,0xff80,0xf000,0xf080,0xffff,0xf0f0,	0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf080,0xf080,0xf000,0xf08f,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xff80,0xff80,0xff80,0xff80,0xfff0,0xfff0,0xfff0,0xff80,0xff80,0xf000,0xf080,0xffff,0xf0f0,0xf0f0,	0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf080,0xf080,0xf000,0xf08f,0xffff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xff80,0xff80,0xff80,0xff80,0xfff0,0xfff0,0xff80,0xff80,0xf000,0xf080,0xffff,0xf0f0,0xf0f0,0xf0f0,	0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf080,0xf080,0xf000,0xf08f,0xffff,0xffff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xff80,0xff80,0xff80,0xff80,0xfff0,0xff80,0xff80,0xf000,0xf080,0xffff,0xf0f0,0xf0f0,0xf0f0,0xf0f0,	0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf080,0xf080,0xf000,0xf08f,0xffff,0xffff,0xffff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xff80,0xff80,0xff80,0xff80,0xff80,0xff80,0xf000,0xf080,0xffff,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,	0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf080,0xf080,0xf000,0xf08f,0xffff,0xffff,0xffff,0xffff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xff80,0xff80,0xff80,0xff80,0xff80,0xf000,0xf080,0xffff,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,	0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf080,0xf080,0xf000,0xf08f,0xffff,0xf0ff,0xffff,0xffff,0xffff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xff80,0xff80,0xff80,0xff80,0xf000,0xf080,0xffff,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,0xf0f0,	0xf0f0,0xf0f0,0xf0f0,0xf080,0xf080,0xf000,0xf08f,0xffff,0xf0ff,0xf0ff,0xffff,0xffff,0xffff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xff80,0xff80,0xff80,0xf000,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,	0xf080,0xf080,0xf080,0xf080,0xf000,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf0ff,0xffff,0xffff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xff80,0xff80,0xf000,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,	0xf080,0xf080,0xf080,0xf000,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf0ff,0xffff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xff80,0xf000,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,	0xf080,0xf080,0xf000,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf0ff,0xffff,0xf000,0xf000,
-	0xf000,0xf000,0xf000,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,0xf080,	0xf080,0xf000,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf08f,0xf000,0xf000,0xf000,
-	0x0000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,	0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0x0000,
-	0x0000,0x0000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,	0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0x0000,0x0000,
+	0XF000,0XF000,0XFF80,0XFF80,0XFF80,0XFF80,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFF80,0XFF80,0XF000,	0XF080,0XFFFF,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XFFFF,0XFFFF,0XF0F0,0XF080,0XF000,0XF000,
+	0XF000,0XF000,0XFF80,0XFF80,0XFF80,0XFF80,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFF80,0XFF80,0XF000,0XF080,	0XFFFF,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XFFFF,0XF0F0,0XF080,0XF000,0XF000,0XF000,
+	0XF000,0XF000,0XFF80,0XFF80,0XFF80,0XFF80,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFF80,0XFF80,0XF000,0XF080,0XFFFF,	0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF080,0XF000,0XF08F,0XF000,0XF000,
+	0XF000,0XF000,0XFF80,0XFF80,0XFF80,0XFF80,0XFFF0,0XFFF0,0XFFF0,0XFFF0,0XFF80,0XFF80,0XF000,0XF080,0XFFFF,0XF0F0,	0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF080,0XF080,0XF000,0XF08F,0XFFFF,0XF000,0XF000,
+	0XF000,0XF000,0XFF80,0XFF80,0XFF80,0XFF80,0XFFF0,0XFFF0,0XFFF0,0XFF80,0XFF80,0XF000,0XF080,0XFFFF,0XF0F0,0XF0F0,	0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF080,0XF080,0XF000,0XF08F,0XFFFF,0XFFFF,0XF000,0XF000,
+	0XF000,0XF000,0XFF80,0XFF80,0XFF80,0XFF80,0XFFF0,0XFFF0,0XFF80,0XFF80,0XF000,0XF080,0XFFFF,0XF0F0,0XF0F0,0XF0F0,	0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF080,0XF080,0XF000,0XF08F,0XFFFF,0XFFFF,0XFFFF,0XF000,0XF000,
+	0XF000,0XF000,0XFF80,0XFF80,0XFF80,0XFF80,0XFFF0,0XFF80,0XFF80,0XF000,0XF080,0XFFFF,0XF0F0,0XF0F0,0XF0F0,0XF0F0,	0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF080,0XF080,0XF000,0XF08F,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XF000,0XF000,
+	0XF000,0XF000,0XFF80,0XFF80,0XFF80,0XFF80,0XFF80,0XFF80,0XF000,0XF080,0XFFFF,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,	0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF080,0XF080,0XF000,0XF08F,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XF000,0XF000,
+	0XF000,0XF000,0XFF80,0XFF80,0XFF80,0XFF80,0XFF80,0XF000,0XF080,0XFFFF,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,	0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF080,0XF080,0XF000,0XF08F,0XFFFF,0XF0FF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XF000,0XF000,
+	0XF000,0XF000,0XFF80,0XFF80,0XFF80,0XFF80,0XF000,0XF080,0XFFFF,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,0XF0F0,	0XF0F0,0XF0F0,0XF0F0,0XF080,0XF080,0XF000,0XF08F,0XFFFF,0XF0FF,0XF0FF,0XFFFF,0XFFFF,0XFFFF,0XFFFF,0XF000,0XF000,
+	0XF000,0XF000,0XFF80,0XFF80,0XFF80,0XF000,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,	0XF080,0XF080,0XF080,0XF080,0XF000,0XF08F,0XF08F,0XF08F,0XF08F,0XF08F,0XF0FF,0XFFFF,0XFFFF,0XFFFF,0XF000,0XF000,
+	0XF000,0XF000,0XFF80,0XFF80,0XF000,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,	0XF080,0XF080,0XF080,0XF000,0XF08F,0XF08F,0XF08F,0XF08F,0XF08F,0XF08F,0XF08F,0XF0FF,0XFFFF,0XFFFF,0XF000,0XF000,
+	0XF000,0XF000,0XFF80,0XF000,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,	0XF080,0XF080,0XF000,0XF08F,0XF08F,0XF08F,0XF08F,0XF08F,0XF08F,0XF08F,0XF08F,0XF08F,0XF0FF,0XFFFF,0XF000,0XF000,
+	0XF000,0XF000,0XF000,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,0XF080,	0XF080,0XF000,0XF08F,0XF08F,0XF08F,0XF08F,0XF08F,0XF08F,0XF08F,0XF08F,0XF08F,0XF08F,0XF08F,0XF000,0XF000,0XF000,
+	0X0000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,	0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0X0000,
+	0X0000,0X0000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,	0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0XF000,0X0000,0X0000,
 	};
 #endif
 
@@ -116,11 +116,11 @@ unsigned char kbd_joy[]= // ATARI norm: up, down, left, right, fire1-4
 #include "cpcec-rt.h" // OS-independent code!
 BYTE joy1_type=2;
 BYTE joy1_types[][8]={ // virtual button is repeated for all joystick buttons
-	{ 0x43,0x42,0x41,0x40,0x44,0x44,0x44,0x44 }, // Kempston
-	{ 0x1B,0x1A,0x18,0x19,0x1C,0x1C,0x1C,0x1C }, // 4312+5: Sinclair 1
-	{ 0x21,0x22,0x24,0x23,0x20,0x20,0x20,0x20 }, // 9867+0: Interface II, Sinclair 2
-	{ 0x23,0x24,0x1C,0x22,0x20,0x20,0x20,0x20 }, // 7658+0: Cursor, Protek, AGF
-	{ 0x10,0x08,0x29,0x28,0x38,0x38,0x38,0x38 }, // QAOP+Space
+	{ 0X43,0X42,0X41,0X40,0X44,0X44,0X44,0X44 }, // Kempston
+	{ 0X1B,0X1A,0X18,0X19,0X1C,0X1C,0X1C,0X1C }, // 4312+5: Sinclair 1
+	{ 0X21,0X22,0X24,0X23,0X20,0X20,0X20,0X20 }, // 9867+0: Interface II, Sinclair 2
+	{ 0X23,0X24,0X1C,0X22,0X20,0X20,0X20,0X20 }, // 7658+0: Cursor, Protek, AGF
+	{ 0X10,0X08,0X29,0X28,0X38,0X38,0X38,0X38 }, // QAOP+Space
 };
 int litegun=0; // 0 = standard joystick, 1 = Gunstick (MHT)
 
@@ -153,7 +153,7 @@ const unsigned char kbd_map_xlt[]=
 	KBCODE_ESCAPE	,0x78, // CAPS SHIFT (0x40) + SPACE (0x38)
 	KBCODE_BKSPACE	,0x60, // CAPS SHIFT (0x40) + "0" (0x20)
 	KBCODE_TAB	,0x58, // CAPS SHIFT (0x40) + "1" (0x18)
-	KBCODE_CAP_LOCK	,0x59, // CAPS SHIFT (0x40) + "2" (0x19)
+	KBCODE_CAPSLOCK	,0x59, // CAPS SHIFT (0x40) + "2" (0x19)
 	KBCODE_UP	,0x63, // CAPS SHIFT (0x40) + "7" (0x23)
 	KBCODE_DOWN	,0x64, // CAPS SHIFT (0x40) + "6" (0x24)
 	KBCODE_LEFT	,0x5C, // CAPS SHIFT (0x40) + "5" (0x1C)
@@ -170,38 +170,38 @@ const VIDEO_UNIT video_table[][16]= // colour table, 0xRRGGBB style
 {
 	// monochrome - black and white // =(b+r*3+g*9+13/2)/13;
 	{
-		VIDEO1(0x000000),VIDEO1(0x1B1B1B),VIDEO1(0x373737),VIDEO1(0x525252),
-		VIDEO1(0x6E6E6E),VIDEO1(0x898989),VIDEO1(0xA5A5A5),VIDEO1(0xC0C0C0),
-		VIDEO1(0x000000),VIDEO1(0x242424),VIDEO1(0x494949),VIDEO1(0x6D6D6D),
-		VIDEO1(0x929292),VIDEO1(0xB6B6B6),VIDEO1(0xDBDBDB),VIDEO1(0xFFFFFF)
+		VIDEO1(0X000000),VIDEO1(0X1B1B1B),VIDEO1(0X373737),VIDEO1(0X525252),
+		VIDEO1(0X6E6E6E),VIDEO1(0X898989),VIDEO1(0XA5A5A5),VIDEO1(0XC0C0C0),
+		VIDEO1(0X000000),VIDEO1(0X242424),VIDEO1(0X494949),VIDEO1(0X6D6D6D),
+		VIDEO1(0X929292),VIDEO1(0XB6B6B6),VIDEO1(0XDBDBDB),VIDEO1(0XFFFFFF)
 	},
 	// dark colour
 	{
-		VIDEO1(0x000000),VIDEO1(0x000080),VIDEO1(0x800000),VIDEO1(0x800080),
-		VIDEO1(0x008000),VIDEO1(0x008080),VIDEO1(0x808000),VIDEO1(0x808080),
-		VIDEO1(0x000000),VIDEO1(0x0000FF),VIDEO1(0xFF0000),VIDEO1(0xFF00FF),
-		VIDEO1(0x00FF00),VIDEO1(0x00FFFF),VIDEO1(0xFFFF00),VIDEO1(0xFFFFFF)
+		VIDEO1(0X000000),VIDEO1(0X000080),VIDEO1(0X800000),VIDEO1(0X800080),
+		VIDEO1(0X008000),VIDEO1(0X008080),VIDEO1(0X808000),VIDEO1(0X808080),
+		VIDEO1(0X000000),VIDEO1(0X0000FF),VIDEO1(0XFF0000),VIDEO1(0XFF00FF),
+		VIDEO1(0X00FF00),VIDEO1(0X00FFFF),VIDEO1(0XFFFF00),VIDEO1(0XFFFFFF)
 	},
 	// normal colour
 	{
-		VIDEO1(0x000000),VIDEO1(0x0000C0),VIDEO1(0xC00000),VIDEO1(0xC000C0),
-		VIDEO1(0x00C000),VIDEO1(0x00C0C0),VIDEO1(0xC0C000),VIDEO1(0xC0C0C0),
-		VIDEO1(0x000000),VIDEO1(0x0000FF),VIDEO1(0xFF0000),VIDEO1(0xFF00FF),
-		VIDEO1(0x00FF00),VIDEO1(0x00FFFF),VIDEO1(0xFFFF00),VIDEO1(0xFFFFFF)
+		VIDEO1(0X000000),VIDEO1(0X0000C0),VIDEO1(0XC00000),VIDEO1(0XC000C0),
+		VIDEO1(0X00C000),VIDEO1(0X00C0C0),VIDEO1(0XC0C000),VIDEO1(0XC0C0C0),
+		VIDEO1(0X000000),VIDEO1(0X0000FF),VIDEO1(0XFF0000),VIDEO1(0XFF00FF),
+		VIDEO1(0X00FF00),VIDEO1(0X00FFFF),VIDEO1(0XFFFF00),VIDEO1(0XFFFFFF)
 	},
 	// bright colour
 	{
-		VIDEO1(0x000000),VIDEO1(0x0000E0),VIDEO1(0xE00000),VIDEO1(0xE000E0),
-		VIDEO1(0x00E000),VIDEO1(0x00E0E0),VIDEO1(0xE0E000),VIDEO1(0xE0E0E0),
-		VIDEO1(0x000000),VIDEO1(0x0000FF),VIDEO1(0xFF0000),VIDEO1(0xFF00FF),
-		VIDEO1(0x00FF00),VIDEO1(0x00FFFF),VIDEO1(0xFFFF00),VIDEO1(0xFFFFFF)
+		VIDEO1(0X000000),VIDEO1(0X0000E0),VIDEO1(0XE00000),VIDEO1(0XE000E0),
+		VIDEO1(0X00E000),VIDEO1(0X00E0E0),VIDEO1(0XE0E000),VIDEO1(0XE0E0E0),
+		VIDEO1(0X000000),VIDEO1(0X0000FF),VIDEO1(0XFF0000),VIDEO1(0XFF00FF),
+		VIDEO1(0X00FF00),VIDEO1(0X00FFFF),VIDEO1(0XFFFF00),VIDEO1(0XFFFFFF)
 	},
 	// monochrome - green screen
 	{
-		VIDEO1(0x003C00),VIDEO1(0x084808),VIDEO1(0x176017),VIDEO1(0x1E6C1E),
-		VIDEO1(0x449044),VIDEO1(0x4B9C4B),VIDEO1(0x5AB45A),VIDEO1(0x62C062),
-		VIDEO1(0x003C00),VIDEO1(0x0A4B0A),VIDEO1(0x1E691E),VIDEO1(0x287828),
-		VIDEO1(0x5AC35A),VIDEO1(0x64D264),VIDEO1(0x78F078),VIDEO1(0x82FF82)
+		VIDEO1(0X003C00),VIDEO1(0X084808),VIDEO1(0X176017),VIDEO1(0X1E6C1E),
+		VIDEO1(0X449044),VIDEO1(0X4B9C4B),VIDEO1(0X5AB45A),VIDEO1(0X62C062),
+		VIDEO1(0X003C00),VIDEO1(0X0A4B0A),VIDEO1(0X1E691E),VIDEO1(0X287828),
+		VIDEO1(0X5AC35A),VIDEO1(0X64D264),VIDEO1(0X78F078),VIDEO1(0X82FF82)
 	},
 };
 
@@ -237,6 +237,14 @@ Z80W z80_pc,z80_sp,z80_iff,z80_ir; // Program Counter, Stack Pointer, Interrupt 
 BYTE z80_imd; // Interrupt Mode
 BYTE z80_r7; // low 7 bits of R, required by several `IN X,(Y)` operations
 int z80_turbo=0,z80_multi; // overclocking options
+
+// the Dandanator cartridge system can spy on the Z80 and trap its operations
+
+#define Z80_ZXS_DANDANATOR
+BYTE *mem_dandanator=NULL; char dandanator_path[STRMAX]="";
+WORD dandanator_trap,dandanator_temp; // Dandanator-Z80 watchdogs
+BYTE dandanator_cfg[8]; // CONFIG + OPCODE + PARAM1 + PARAM2 + active + return + asleep + EEPROM
+int dandanator_canwrite=0,dandanator_dirty,dandanator_bridge; // R/W status
 
 // 0x??FE,0x7FFD,0x1FFD: ULA 48K,128K,PLUS3 ------------------------- //
 
@@ -297,13 +305,13 @@ const int mmu_ram_mode[4][4]= // relative offsets of every bank for each PLUS3 R
 void mmu_update(void) // update the MMU tables with all the new offsets
 {
 	// the general idea is as follows: contention applies to the banks:
-	// V1 (48k): area 4000-7FFF (equivalent to 128k bank 5)
-	// V2 (128k,Plus2): banks 1,3,5,7
-	// V3 (Plus3): banks 4,5,6,7
+	// - V1 (48k): area 4000-7FFF (equivalent to 128k bank 5)
+	// - V2 (128k,Plus2): banks 1,3,5,7
+	// - V3 (Plus3): banks 4,5,6,7
 	// in other words:
-	// banks 5 and 7 are always contended
-	// banks 1 and 3 are contended on V2
-	// banks 4 and 6 are contended on V3
+	// - banks 5 and 7 are always contended;
+	// - banks 1 and 3 are contended on V2;
+	// - banks 4 and 6 are contended on V3.
 	if (ula_clash_disabled)
 	{
 		ula_clash_mreq[0]=ula_clash_mreq[1]=ula_clash_mreq[2]=ula_clash_mreq[3]=ula_clash_mreq[4]=
@@ -323,20 +331,98 @@ void mmu_update(void) // update the MMU tables with all the new offsets
 	if (ula_v3&1) // PLUS3 custom mode?
 	{
 		int i=(ula_v3>>1)&3;
-		mmu_rom[0]=mmu_ram[0]=&mem_ram[mmu_ram_mode[i][0]];
-		mmu_rom[1]=mmu_ram[1]=&mem_ram[mmu_ram_mode[i][1]];
-		mmu_rom[2]=mmu_ram[2]=&mem_ram[mmu_ram_mode[i][2]];
-		mmu_rom[3]=mmu_ram[3]=&mem_ram[mmu_ram_mode[i][3]];
+		mmu_rom[0]=mmu_ram[0]=&mem_ram[mmu_ram_mode[i][0]]; // 0000-3FFF
+		mmu_rom[1]=mmu_ram[1]=&mem_ram[mmu_ram_mode[i][1]]; // 4000-7FFF
+		mmu_rom[2]=mmu_ram[2]=&mem_ram[mmu_ram_mode[i][2]]; // 8000-BFFF
+		mmu_rom[3]=mmu_ram[3]=&mem_ram[mmu_ram_mode[i][3]]; // C000-FFFF
 	}
 	else // normal 128K mode
 	{
 		mmu_rom[0]=&mem_rom[((ula_v2&16)<<10)+((ula_v3&4)<<13)-0x0000]; // i.e. ROM ID=((ula_v3&4)/2)+((ula_v2&16)/16)
-		mmu_ram[0]=&mem_ram[(8<<14)-0x0000]; // dummy 16k for ROM writes
-		mmu_rom[1]=mmu_ram[1]=&mem_ram[(5<<14)-0x4000];
-		mmu_rom[2]=mmu_ram[2]=&mem_ram[(2<<14)-0x8000];
-		mmu_rom[3]=mmu_ram[3]=&mem_ram[((ula_v2&7)<<14)-0xC000];
+		mmu_ram[0]=&mem_ram[(8<<14)-0x0000]; // 0000-3FFF is a dummy 16K for ROM writes (special case: Dandanator)
+		mmu_rom[1]=mmu_ram[1]=&mem_ram[(5<<14)-0x4000]; // 4000-7FFF is always bank 5
+		mmu_rom[2]=mmu_ram[2]=&mem_ram[(2<<14)-0x8000]; // 8000-BFFF is always bank 2
+		mmu_rom[3]=mmu_ram[3]=&mem_ram[((ula_v2&7)<<14)-0xC000];  // C000-FFFF is only limited to bank 0 on 48K
 	}
 	ula_screen=&mem_ram[(ula_v2&8)?0x1C000:0x14000]; // bit 3: VRAM is bank 5 (OFF) or 7 (ON)
+
+#ifdef Z80_ZXS_DANDANATOR // Dandanator is always the last part of the MMU update
+	if (mem_dandanator) // emulate the Dandanator (and more exactly its Spectrum memory map) only when a card is loaded
+		if (dandanator_cfg[4]<32)
+			mmu_rom[0]=&mem_dandanator[(dandanator_cfg[4]<<14)-0x0000];
+}
+#define dandanator_clear() (dandanator_cfg[0]=dandanator_cfg[1]=dandanator_cfg[2]=dandanator_cfg[3]=dandanator_temp=0)
+void dandanator_update(void) // parse and run Dandanator commands, if any
+{
+	logprintf("DAN! %08X: %03d,%03d,%03d,%03d\n",z80_pc.w,dandanator_cfg[0],dandanator_cfg[1],dandanator_cfg[2],dandanator_cfg[3]);
+	if (dandanator_cfg[0]==46) // wake up!
+	{
+		if (dandanator_cfg[1]==dandanator_cfg[2]) // parameters must match
+		{
+			if (dandanator_cfg[1]==1) dandanator_cfg[6]|=4; // go to sleep
+			else if (dandanator_cfg[1]==16) dandanator_cfg[6]&=~4; // wake up
+			else if (dandanator_cfg[1]==31) dandanator_cfg[6]|=8; // sleep till reset
+		}
+	}
+	else if (!dandanator_cfg[6]) // ignore if asleep
+	{
+		if (dandanator_cfg[0]>0&&dandanator_cfg[0]<34) // immediate bank change
+			dandanator_cfg[4]=dandanator_cfg[0]-1; // delay over, change immediate
+		else if(dandanator_cfg[0]==34) // immediate bank change + sleep!
+			dandanator_cfg[4]=32,dandanator_cfg[6]|=4;
+		else if(dandanator_cfg[0]==36) // reset Z80!
+			z80_iff.w=z80_pc.w=0;
+		else if (dandanator_cfg[0]==40) // bank + flags
+		{
+			if (dandanator_cfg[2]&3)
+				z80_iff.w=0,z80_pc.w=(dandanator_cfg[2]&1)?0:0x66,dandanator_cfg[4]=dandanator_cfg[1]-1; // reset or NMI: changes are immediate!
+			else
+				dandanator_cfg[5]=dandanator_cfg[1]; // changes aren't immediate
+			dandanator_cfg[6]=dandanator_cfg[2]&12; // +4 wakes up with command 46, +8 sleeps till reset
+		}
+		else if (dandanator_cfg[0]==48) // EEPROM: uses the dummy 16K bank as a bridge
+		{
+			if (dandanator_cfg[1]==16)
+				dandanator_bridge=-1; // get ready for bridge setup with a later LD (HL),A
+			else if (dandanator_cfg[1]==32) // request EEPROM sector for writing
+				if (dandanator_cfg[7]=dandanator_cfg[2]&127) // keep EEPROM sector 0 read-only
+					;//if (dandanator_canwrite&&mem_dandanator)
+						//memset(&mem_ram[(8<<14)],255,4<<12),dandanator_dirty=1; // reset dummy bank
+		}
+	}
+	mmu_update(); dandanator_clear(); // update MMU and reset command queue
+}
+void dandanator_eeprom(void) // modify the cartridge, if allowed
+{
+	if (dandanator_cfg[7]) // do all cartridges behave like "SWORD OF IANNA"? (sending 4K bytes to 0000-0FFF, ending with RET)
+	{
+		logprintf("DAN! %08X: %02X,%04X: %02X%02X%02X%02X%02X%02X%02X%02X...\n",z80_pc.w,dandanator_cfg[7],dandanator_bridge
+			,mem_ram[(8<<14)+dandanator_bridge+0],mem_ram[(8<<14)+dandanator_bridge+1],mem_ram[(8<<14)+dandanator_bridge+2],mem_ram[(8<<14)+dandanator_bridge+3]
+			,mem_ram[(8<<14)+dandanator_bridge+4],mem_ram[(8<<14)+dandanator_bridge+5],mem_ram[(8<<14)+dandanator_bridge+6],mem_ram[(8<<14)+dandanator_bridge+7]
+			);
+		if (dandanator_canwrite&&mem_dandanator&&!(dandanator_bridge&0x0FFF))
+		{
+			memcpy(&mem_dandanator[dandanator_cfg[7]<<12],&mem_ram[(8<<14)+dandanator_bridge],1<<12); // dump dummy 16K bank onto the EEPROM sector
+			dandanator_dirty=dandanator_bridge=1;
+		}
+		dandanator_cfg[7]=0;
+	}
+}
+#define z80_dandanator_0xFB() (dandanator_clear())
+// we trap EI because Dandanator timeouts happen when handling interrupts
+#define z80_dandanator_0x77(w) do{ if (mem_ram[(8<<14)+0x1555]==0xAA) dandanator_bridge=w,mem_ram[(8<<14)+0x1555]=0; \
+	else if (w<4) ++dandanator_cfg[(dandanator_temp|=1)/2],dandanator_trap=1; }while(0)
+#define z80_dandanator_0x32(w) do{ if (w<4) { ++dandanator_cfg[(dandanator_temp|=1)/2]; \
+	if (dandanator_temp<=3*2) dandanator_trap=1; else dandanator_update(); } }while(0)
+#define z80_dandanator_0x10(w) do{ if (!--dandanator_trap) { if (dandanator_temp&1) ++dandanator_temp; \
+	if (w<0x4000) dandanator_trap=1; else if (dandanator_temp>3*2||(dandanator_cfg[0]>0&&dandanator_cfg[0]<40)) dandanator_update(); } }while(0)
+#define z80_dandanator_0xC9() do{ if (mem_ram[(8<<14)+0x1555]==0xA0) dandanator_eeprom(),mem_ram[(8<<14)+0x1555]=0; \
+	else if (dandanator_cfg[5]) dandanator_cfg[4]=dandanator_cfg[5]-1,dandanator_cfg[5]=0,mmu_update(); }while(0)
+void z80_dandanator_reset(void)
+{
+	MEMZERO(dandanator_cfg); dandanator_trap=dandanator_temp=0;
+	dandanator_update();
+#endif
 }
 
 #define ula_v1_send(i) (video_clut[16]=video_table[video_type][(ula_v1=i)&7])
@@ -669,6 +755,7 @@ BYTE z80_tape_fastload[][32] = { // codes that read pulses : <offset, length, da
 	/* 11 */ {  -2,   6,0XDB,0XFE,0X1F,0XE6,0X20,0X4F }, // SPEEDLOCK V2 SETUP
 	/* 12 */ {  -5,  11,0X4F,0X3E,0X7F,0XDB,0XFE,0XE6,0X40,0XA9,0X28,0X0E,0X2A }, // SPEEDLOCK V3 SETUP
 	/* 13 */ {  -6,  13,0X04,0X20,0X01,0XC9,0XDB,0XFE,0X1F,0XC8,0XA9,0XE6,0X20,0X28,0XF3 }, // "CHIP'S CHALLENGE"
+	/* 14 */ {  -2,   9,0XDB,0XFE,0X14,0XC8,0XE6,0X40,0XA9,0X28,0XF7 }, // "BOBBY CARROT"
 };
 BYTE z80_tape_fastfeed[][32] = { // codes that build bytes
 	/*  0 */ {  -0,   2,0XD0,0X3E,  +1,   4,0XB8,0XCB,0X15,0X06,  +1,   1,0XD2,-128, -14 }, // ZX SPECTRUM FIRMWARE + TOPO
@@ -812,6 +899,9 @@ void z80_tape_trap(void)
 			else
 				z80_r7+=fasttape_add8(z80_bc.b.l>>6,50,&z80_bc.b.h,1)*7;
 			break;
+		case 14: // "BOBBY CARROT"
+			z80_r7+=fasttape_add8(z80_bc.b.l>>6,43,&z80_de.b.h,1)*6;
+			break;
 	}
 }
 
@@ -822,6 +912,9 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 		return litegun?z80_recv_gunstick(16,4):autorun_kbd_bit(8); // catch special case: lightgun or joystick ("TARGET PLUS", "MIKE GUNNER")
 	BYTE b=255; if ((p&15)==14) // 0x??FE, ULA 48K
 	{
+		#ifdef Z80_ZXS_DANDANATOR
+		dandanator_clear(); // Dandanator timeouts happen when polling the keyboard or the tape
+		#endif
 		int i,j,k=autorun_kbd_bit(11)||autorun_kbd_bit(12)||autorun_kbd_bit(15);
 		for (i=j=0;i<8;++i)
 			if (!(p&(256<<i)))
@@ -879,10 +972,10 @@ void z80_debug_hard(int q,int x,int y)
 	#define Z80_DEBUG_HARD_T_F(x) ((x)?'*':'-')
 	#define Z80_DEBUG_HARD_MREQ(x) (Z80_DEBUG_HARD_T_F(ula_clash_mreq[x]!=ula_clash[0]))
 	#define Z80_DEBUG_HARD_IORQ(x) (Z80_DEBUG_HARD_T_F(ula_clash_iorq[x]!=ula_clash[0]))
-	t+=sprintf(t,"   %c%c%c%c:%c%c%c%c %05i:%c",
+	t+=sprintf(t,"   %c%c%c%c:%c%c%c%c %05d:%c",
 		Z80_DEBUG_HARD_MREQ(0),Z80_DEBUG_HARD_MREQ(1),Z80_DEBUG_HARD_MREQ(2),Z80_DEBUG_HARD_MREQ(3),
 		Z80_DEBUG_HARD_IORQ(0),Z80_DEBUG_HARD_IORQ(1),Z80_DEBUG_HARD_IORQ(2),Z80_DEBUG_HARD_IORQ(3),
-		ula_clash_z,48+ula_clash_mreq[4][(WORD)ula_clash_z]);
+		ula_clash_z%100000,48+ula_clash_mreq[4][(WORD)ula_clash_z]);
 	int i;
 	t+=sprintf(t,"PSG:                " "%02X: ",psg_index);
 	for (i=0;i<8;++i)
@@ -893,6 +986,9 @@ void z80_debug_hard(int q,int x,int y)
 	t+=sprintf(t,"FDC:  %02X - %04X:%04X" "    %c ",disc_parmtr[0],(WORD)disc_offset,(WORD)disc_length,48+disc_phase);
 	for (i=0;i<7;++i)
 		t+=sprintf(t,"%02X",disc_result[i]);
+	#ifdef Z80_ZXS_DANDANATOR
+	t+=sprintf(t,"DANDANATOR:         " "%c: %02X:%02X:%02X %02X:%02X:%02X",mem_dandanator?'0'+dandanator_temp:'-',dandanator_cfg[0],dandanator_cfg[1],dandanator_cfg[2],dandanator_cfg[4],dandanator_cfg[5],dandanator_cfg[6]);
+	#endif
 	char *r=t;
 	for (t=s;t<r;++y)
 	{
@@ -1045,11 +1141,22 @@ BYTE biostype_id=64; // keeper of the latest loaded BIOS type
 char bios_system[][13]={"spectrum.rom","spec128k.rom","spec-p-2.rom","spec-p-3.rom"};
 char bios_path[STRMAX]="";
 
+int bios_wrong_dword(DWORD t) // catch fingerprints that belong to other file types; DWORD is MMMM-styled
+{
+	return t==0x4D56202D // "MV - CPC" (floppy disc image) and "MV - SNA" (CPC Snapshot)
+		||t==0x45585445 // "EXTENDED" (advanced floppy disc image)
+		||t==0x5A585461 // "ZXTape!" (advanced tape image)
+		||t==0x13000000 // TAP BASIC (tape image)
+		||t==0x436F6D70 // "Compressed Wave File" (advanced audio file)
+		||t==0x52494646 // "RIFF" (WAVE audio file, CPC PLUS cartridge)
+		||t==0x01897FED // Amstrad CPC firmware
+	;
+}
+
 int bios_load(char *s) // load ROM. `s` path; 0 OK, !0 ERROR
 {
 	FILE *f=puff_fopen(s,"rb");
-	if (!f)
-		return 1;
+	if (!f) return 1;
 	int i,j;
 	fseek(f,0,SEEK_END); i=ftell(f);
 	if (i>=0x4000)
@@ -1082,23 +1189,38 @@ int bios_reload(void) // ditto, but from the current type_id
 	return type_id>3?1:biostype_id==type_id?0:bios_load(strcat(strcpy(session_substr,session_path),bios_system[type_id]));
 }
 
+#ifdef Z80_ZXS_DANDANATOR
+int dandanator_load(char *s) // inserts Dandanator cartridge, performs several tests, removes cartridge if they fail
+{
+	FILE *f=puff_fopen(s,"rb");
+	if (!f) return 1;
+	unsigned char t[0x1000]; fread1(t,sizeof(t),f);
+	// the Spectrum Dandanator heuristic is weak: it relies on FAILING basic filetypes and the strong CPC Dandanator test :-/
+	int k=!bios_wrong_dword(mgetmmmm(t))?4+2:0,i=0; for (;k&&i<sizeof(t)-4;++i)
+		if (t[i+0]==0xFD&&t[i+1]==0xFD&&t[i+2]==0xFD)
+			if (t[i+3]==0x77) k&=~4;
+			else if (t[i+3]==0x71) k&=~2;
+	if (k) // ensure that this is NOT a firmware dump: check the Spectrum TAPE LOAD fingerprint
+		k=fseek(f,-0x4000+0x0601,SEEK_END)||fgetmmmm(f)!=0xD3FE37C9;
+	puff_fclose(f); logprintf("Dandanator flags: %04X:%d\n",i,k);
+	if (!k) return 1; // fail!
+	dandanator_remove(); if (dandanator_insert(s)) return 1;
+	if (dandanator_path!=s) strcpy(dandanator_path,s); return 0;
+}
+#endif
+
 // snapshot file handling operations -------------------------------- //
 
-char snap_path[STRMAX]="";
+char snap_path[STRMAX]=""; int snap_not_z80(char *s) { return !globbing("*.z80",s,1); }
 int snap_extended=1; // flexible behavior (i.e. 128k-format snapshots with 48k-dumps)
-int snap_is_a_sna(char *s)
-{
-	return !globbing("*.z80",s,1);
-}
 
 #define SNAP_SAVE_Z80W(x,r) header[x]=r.b.l,header[x+1]=r.b.h
 int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ERROR
 {
-	if (!snap_is_a_sna(s))
+	if (!snap_not_z80(s))
 		return 1; // cannot save Z80!
 	FILE *f=puff_fopen(s,"wb");
-	if (!f)
-		return 1;
+	if (!f) return 1;
 	int i=z80_sp.w; BYTE header[27],q=snap_extended&&!z80_iff.b.l&&z80_pc.w>=0x5B00; // limit extended 48K snapshots to unsafe cases
 	if (!q&&(ula_v2&32)) // strict and 48k!?
 	{
@@ -1129,7 +1251,10 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 	{
 		SNAP_SAVE_Z80W(0,z80_pc);
 		header[2]=ula_v2;
-		header[3]=type_id==3&&(!snap_extended||(!(ula_v2&32)&&(ula_v3&7)!=4))?(ula_v3&15)+16:0; // using this byte for Plus3 config (low nibble + 16) is questionable and unreliable; most emus write 0 here :-(
+		if (mem_dandanator&&dandanator_cfg[4]<32) // the active Dandanator overrides Plus3 special memory modes!!
+			header[3]=dandanator_cfg[4]+32; // i.e. Dandanator bank +32
+		else
+			header[3]=type_id==3&&(!snap_extended||(!(ula_v2&32)&&(ula_v3&7)!=4))?(ula_v3&15)+16:0; // using this byte for Plus3 config (low nibble + 16) is questionable and unreliable; most emus write 0 here :-(
 		fwrite1(header,4,f);
 		if (!snap_extended||!(ula_v2&32)) // strict or 128k?
 			for (i=0;i<8;++i)
@@ -1172,11 +1297,10 @@ int snap_load_z80block(FILE *f,int length,int offset,int limits) // unpack a Z80
 int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ERROR
 {
 	FILE *f=puff_fopen(s,"rb");
-	if (!f)
-		return 1;
+	if (!f) return 1;
 	BYTE header[96]; int i,q;
 	fseek(f,0,SEEK_END); i=ftell(f); // snapshots are defined by filesizes, there's no magic number!
-	if ((q=snap_is_a_sna(s))&&i!=49179&&i!=49183&&i!=131103&&i!=147487) // ||(!memcmp("MV - SNA",header,8) fails on TAP files, for example
+	if ((q=snap_not_z80(s))&&i!=49179&&i!=49183&&i!=131103&&i!=147487) // ||(!memcmp("MV - SNA",header,8) fails on TAP files, for example
 		return puff_fclose(f),1;
 	fseek(f,0,SEEK_SET);
 	MEMFULL(z80_tape_index); // clean tape trap cache to avoid false positives
@@ -1303,11 +1427,21 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 		fread1(&mem_ram[0x14000],1<<14,f); // bank 5
 		fread1(&mem_ram[0x08000],1<<14,f); // bank 2
 		fread1(&mem_ram[0x00000],1<<14,f); // bank 0
-		q=type_id;
+		q=type_id; dandanator_cfg[4]=32; dandanator_cfg[5]=dandanator_cfg[6]=dandanator_cfg[7]=0;
 		if (fread1(header,4,f)==4) // new snapshot type, 128k-ready?
 		{
 			SNAP_LOAD_Z80W(0,z80_pc);
 			if (!(header[2]&32)) // 128k snapshot?
+			{
+				#ifdef Z80_ZXS_DANDANATOR
+				if (header[3]>=32) // Dandanator snapshot?
+				{
+					dandanator_cfg[4]=header[3]-32;
+					if (!mem_dandanator&&*dandanator_path)
+						dandanator_load(dandanator_path); // insert last known Dandanator file
+				}
+				else
+				#endif
 				if (header[3]>=2) // Plus3 snapshot?
 				{
 					if (!snap_extended||(header[3]&7)!=4) // strict or Plus3 mode?
@@ -1315,6 +1449,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 				}
 				else if (type_id==3)
 					header[3]=4; // 128k compatible mode
+			}
 			ula_v2=header[2]&63; // set 128k mode
 			if (type_id==3)
 				ula_v3=header[3]&15; // this is unreliable! most emulators don't handle Plus3!
@@ -1351,26 +1486,35 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 	autorun_t=autorun_mode=0; // cancel any autoloading yet
 	if (snap_load(s))
 	{
-		if (bios_load(s))
+		#ifdef Z80_ZXS_DANDANATOR
+		if (dandanator_load(s))
 		{
-			if (tape_open(s))
+		#endif
+			if (bios_load(s))
 			{
-				if (disc_open(s,0,0))
-					return 1; // everything failed!
-				if (q)
-					type_id=3,disc_disabled=0,tape_close(); // open disc? force PLUS3, enable disc, close tapes!
+				if (tape_open(s))
+				{
+					if (disc_open(s,0,0))
+						return 1; // everything failed!
+					if (q)
+						type_id=3,disc_disabled=0,tape_close(); // open disc? force PLUS3, enable disc, close tapes!
+				}
+				else if (q)
+					type_id=(type_id>2?2:type_id),disc_disabled|=2,disc_close(0),disc_close(1); // open tape? force PLUS2 if PLUS3, close disc!
+				if (q) // autorun for tape and disc
+				{
+					all_reset(),bios_reload();
+					autorun_mode=type_id?8:1; // only 48k needs typing
+					autorun_t=((type_id==3&&!disc_disabled)?-144:(type_id?-72:-96)); // PLUS3 slowest, 128+PLUS2 fast, 48k slow
+				}
 			}
-			else if (q)
-				type_id=(type_id>2?2:type_id),disc_disabled|=2,disc_close(0),disc_close(1); // open tape? force PLUS2 if PLUS3, close disc!
-			if (q) // autorun for tape and disc
-			{
-				all_reset(),bios_reload();
-				autorun_mode=type_id?8:1; // only 48k needs typing
-				autorun_t=((type_id==3&&!disc_disabled)?-144:(type_id?-72:-96)); // PLUS3 slowest, 128+PLUS2 fast, 48k slow
-			}
+			else // load bios? reset!
+				all_reset(),autorun_mode=0,disc_disabled&=~2;//,tape_close(),disc_close(0),disc_close(1);
+		#ifdef Z80_ZXS_DANDANATOR
 		}
-		else // load bios? reset!
-			all_reset(),autorun_mode=0,disc_disabled&=~2;//,tape_close(),disc_close(0),disc_close(1);
+		else // dandanator? reset!
+			all_reset(),autorun_mode=0,disc_disabled&=~2;
+		#endif
 	}
 	if (autorun_path!=s&&q)
 		strcpy(autorun_path,s);
@@ -1381,7 +1525,7 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 
 char txt_error_snap_save[]="Cannot save snapshot!";
 char snap_pattern[]="*.sna";
-char file_pattern[]="*.sna;*.z80;*.rom;*.dsk;*.tap;*.tzx;*.csw;*.wav";
+char file_pattern[]="*.sna;*.z80;*.rom;*.mld;*.dsk;*.tap;*.tzx;*.csw;*.wav";
 
 char session_menudata[]=
 	"File\n"
@@ -1438,6 +1582,11 @@ char session_menudata[]=
 	"0x8512 ULA video noise\n"
 	"0x8513 Issue-2 ULA line\n"
 	"0x8514 AY-Melodik chip\n"
+	#ifdef Z80_ZXS_DANDANATOR
+	"0xC500 Insert Dandanator..\tShift+F5\n"
+	"0x4500 Remove Dandanator\tCtrl+Shift+F5\n"
+	"0x0510 Writeable Dandanator\n"
+	#endif
 	"=\n"
 	"0x851F Strict SNA files\n"
 	"0x8510 Disc controller\n"
@@ -1533,6 +1682,10 @@ void session_redomenu(void)
 	session_menucheck(0x8512,!(ula_snow_disabled));
 	session_menucheck(0x8513,ula_v1_issue!=ULA_V1_ISSUE3);
 	session_menucheck(0x8514,!psg_disabled);
+	#ifdef Z80_ZXS_DANDANATOR
+	session_menucheck(0xC500,(size_t)mem_dandanator);
+	session_menucheck(0x0510,dandanator_canwrite);
+	#endif
 	session_menucheck(0x851F,!(snap_extended));
 	session_menucheck(0x8901,onscreen_flag);
 	session_menucheck(0x8A00,session_fullscreen);
@@ -1726,7 +1879,20 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 		case 0x851F:
 			snap_extended=!snap_extended;
 			break;
-		case 0x8500: // F5: LOAD FIRMWARE..
+		case 0x8500: // F5: LOAD FIRMWARE.. // INSERT DANDANATOR..
+		#ifdef Z80_ZXS_DANDANATOR
+			if (session_shift)
+			{
+				if (s=puff_session_getfile(dandanator_path,"*.rom;*.mld","Insert Dandanator card"))
+				{
+					if (dandanator_load(s)) // error? warn!
+						session_message(txt_error_any_load,txt_error);
+					else
+						autorun_mode=0,disc_disabled&=~2,all_reset(); // setup and reset
+				}
+			}
+			else
+		#endif
 			if (s=puff_session_getfile(bios_path,"*.rom","Load firmware"))
 			{
 				if (bios_load(s)) // error? warn and undo!
@@ -1735,9 +1901,22 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 					autorun_mode=0,disc_disabled&=~2,all_reset(); // setup and reset
 			}
 			break;
-		case 0x0500: // ^F5: RESET EMULATION
+		case 0x0500: // ^F5: RESET EMULATION // REMOVE DANDANATOR
+		#ifdef Z80_ZXS_DANDANATOR
+			if (session_shift)
+			{
+				if (mem_dandanator)
+					dandanator_remove(),autorun_mode=0,disc_disabled&=~2,all_reset();
+			}
+			else
+		#endif
 			autorun_mode=0,disc_disabled&=~2,all_reset();
 			break;
+		#ifdef Z80_ZXS_DANDANATOR
+		case 0x0510:
+			dandanator_canwrite=!dandanator_canwrite;
+			break;
+		#endif
 		case 0x8600: // F6: TOGGLE REALTIME
 			session_fast^=1;
 			break;
@@ -1944,6 +2123,9 @@ void session_configreadmore(char *s)
 	else if (!strcasecmp(session_parmtr,"tape")) strcpy(tape_path,s);
 	else if (!strcasecmp(session_parmtr,"disc")) strcpy(disc_path,s);
 	else if (!strcasecmp(session_parmtr,"card")) strcpy(bios_path,s);
+	#ifdef Z80_ZXS_DANDANATOR
+	else if (!strcasecmp(session_parmtr,"dntr")) strcpy(dandanator_path,s);
+	#endif
 	else if (!strcasecmp(session_parmtr,"palette")) { if ((i=*s&15)<length(video_table)) video_type=i; }
 	else if (!strcasecmp(session_parmtr,"casette")) tape_rewind=*s&1,tape_skipload=!!(*s&2),tape_fastload=!!(*s&4);
 	else if (!strcasecmp(session_parmtr,"debug")) z80_debug_configread(strtol(s,NULL,10));
@@ -1952,9 +2134,15 @@ void session_configwritemore(FILE *f)
 {
 	fprintf(f,"type %i\njoy1 %i\nxsna %i\nfdcw %i\n"
 		"file %s\nsnap %s\ntape %s\ndisc %s\ncard %s\n"
+	#ifdef Z80_ZXS_DANDANATOR
+		"dntr %s\n"
+	#endif
 		"palette %i\ncasette %i\ndebug %i\n"
 		,type_id,joy1_type,snap_extended,disc_filemode,
 		autorun_path,snap_path,tape_path,disc_path,bios_path,
+	#ifdef Z80_ZXS_DANDANATOR
+		dandanator_path,
+	#endif
 		video_type,(tape_rewind?1:0)+(tape_skipload?2:0)+(tape_fastload?4:0),z80_debug_configwrite());
 }
 
@@ -2178,22 +2366,16 @@ int main(int argc,char *argv[])
 				autorun_next();
 			if (!audio_disabled)
 				audio_main(TICKS_PER_FRAME); // fill sound buffer to the brim!
-			audio_queue=0; // wipe audio queue and force a reset
 			psg_writelog();
 			ula_snow_a=0; // zero or random step?
 			if (!ula_snow_disabled)
-			{
-				if ((i=z80_ir.b.h&0xC0)==0x40) // snow is tied to contention
+				switch(z80_ir.b.h&0xC0) // snow is tied to contention
 				{
-					if (!(ula_v2&8))
-						ula_snow_a=ULA_SNOW_STEP_8BIT;
+					case 0x40: if (!(ula_v2&8)) ula_snow_a=ULA_SNOW_STEP_8BIT;
+						break;
+					case 0xC0: if ((i=ula_v2&15)==5||i==15) ula_snow_a=ULA_SNOW_STEP_8BIT;
+						break;
 				}
-				else if (i==0xC0)
-				{
-					if ((i=ula_v2&15)==5||i==15)
-						ula_snow_a=ULA_SNOW_STEP_8BIT;
-				}
-			}
 			ula_snow_a&=main_t;
 			ula_clash_z=ula_clash_omega/*(ula_clash_z&3)*/+(ula_count_y*ula_limit_x+ula_pos_x)*4;
 			if (tape_type<0&&tape/*&&!z80_iff.b.l*/) // tape is recording? play always!
@@ -2202,7 +2384,7 @@ int main(int argc,char *argv[])
 				--tape_enabled; // tape is still busy?
 			if (tape_closed)
 				tape_closed=0,session_dirtymenu=1; // tag tape as closed
-			tape_skipping=audio_pos_z=0;
+			tape_skipping=audio_pos_z=audio_queue=0; // reset tape and audio queues and hacks
 			if (tape&&tape_skipload&&tape_enabled)
 				session_fast|=2,video_framelimit|=(MAIN_FRAMESKIP_MASK+1),video_interlaced|=2,audio_disabled|=2; // abuse binary logic to reduce activity
 			else
@@ -2213,13 +2395,11 @@ int main(int argc,char *argv[])
 	// it's over, "acta est fabula"
 	z80_close();
 	tape_close();
-	disc_close(0); disc_close(1);
+	disc_closeall();
 	psg_closelog();
-	session_closefilm();
-	session_closewave();
 	if (f=session_configfile("w"))
 		session_configwritemore(f),session_configwrite(f),fclose(f);
-	return puff_byebye(),session_byebye(),0;
+	return session_cleanup(),session_byebye(),0;
 }
 
 BOOTSTRAP

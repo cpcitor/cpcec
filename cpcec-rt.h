@@ -191,9 +191,8 @@ INLINE void video_newscanlines(int x,int y)
 }
 void video_resetscanline(void)
 {
-	static int blend=-1;
-	if (blend!=video_scanblend) // do we need to reset the blending buffer?
-		if (blend=video_scanblend)
+	static int b=-1; if (b!=video_scanblend) // do we need to reset the blending buffer?
+		if (b=video_scanblend)
 			for (int y=0;y<VIDEO_PIXELS_Y/2;++y)
 				MEMNCPY(&video_blend[y*VIDEO_PIXELS_X],&video_frame[(VIDEO_OFFSET_Y+y*2)*VIDEO_LENGTH_X+VIDEO_OFFSET_X],VIDEO_PIXELS_X);
 }
@@ -337,8 +336,7 @@ INLINE void video_endscanlines(void) // call between frames
 				for (int x=0;x<VIDEO_PIXELS_X;++x)
 					*p++=video_lastscanline; // render primary scanlines only
 	}
-	//if (session_maus_y<0||session_maus_y>=VIDEO_PIXELS_Y)
-		video_litegun=0; // a lightgun out of screen sees nothing
+	video_litegun=0; // the lightgun signal fades away between frames
 	static int f=-1; static VIDEO_UNIT z=-1; // first value intentionally invalid!
 	if (video_scanlinez!=video_scanline||f!=video_filter||z!=video_halfscanline) // did the config change?
 		if ((video_scanlinez=video_scanline)==1) // do we have to redo the secondary scanlines?
@@ -367,13 +365,13 @@ INLINE void audio_playframe(int q,AUDIO_UNIT *ao) // call between frames by the 
 			break;
 		case 2:
 			for (int i=0;i<AUDIO_LENGTH_Z;++i)
-				aa=*ai++,*ao++=a0=(aa+a0*3+(aa>a0)*3)>>2,
-				aa=*ai++,*ao++=a1=(aa+a1*3+(aa>a1)*3)>>2;
+				aa=*ai++,*ao++=a0=(aa+(a0+(aa>a0))*3)>>2,
+				aa=*ai++,*ao++=a1=(aa+(a1+(aa>a1))*3)>>2;
 			break;
 		case 3:
 			for (int i=0;i<AUDIO_LENGTH_Z;++i)
-				aa=*ai++,*ao++=a0=(aa+a0*7+(aa>a0)*7)>>3,
-				aa=*ai++,*ao++=a1=(aa+a1*7+(aa>a1)*7)>>3;
+				aa=*ai++,*ao++=a0=(aa+(a0+(aa>a0))*7)>>3,
+				aa=*ai++,*ao++=a1=(aa+(a1+(aa>a1))*7)>>3;
 			break;
 	}
 	#else
@@ -386,11 +384,11 @@ INLINE void audio_playframe(int q,AUDIO_UNIT *ao) // call between frames by the 
 			break;
 		case 2:
 			for (int i=0;i<AUDIO_LENGTH_Z;++i)
-				aa=*ai++,*ao++=az=(aa+az*3+(aa>az)*3)>>2;
+				aa=*ai++,*ao++=az=(aa+(az+(aa>az))*3)>>2;
 			break;
 		case 3:
 			for (int i=0;i<AUDIO_LENGTH_Z;++i)
-				aa=*ai++,*ao++=az=(aa+az*7+(aa>az)*7)>>3;
+				aa=*ai++,*ao++=az=(aa+(az+(aa>az))*7)>>3;
 			break;
 	}
 	#endif
@@ -1030,8 +1028,7 @@ unsigned int session_savenext(char *z,unsigned int i) // scans for available fil
 		sprintf(session_parmtr,z,session_path,i);
 		if (!(f=fopen(session_parmtr,"rb"))) // does the file exist?
 			break; // no? excellent!
-		fclose(f); // try again
-		++i;
+		fclose(f),++i; // try again
 	}
 	return i;
 }
@@ -1063,9 +1060,7 @@ int session_closewave(void) // close a wave file; !0 ERROR
 		fputiiii(session_wavesize,session_wavefile);
 		fseek(session_wavefile,0x04,SEEK_SET);
 		fputiiii(session_wavesize+36,session_wavefile); // file=head+data
-		fclose(session_wavefile);
-		session_wavefile=NULL;
-		return 0;
+		return fclose(session_wavefile),session_wavefile=NULL,0;
 	}
 	return 1;
 }
@@ -1080,7 +1075,7 @@ VIDEO_UNIT *session_filmvideo=NULL; AUDIO_UNIT session_filmaudio[SESSION_FILMAUD
 BYTE *xrf_chunk=NULL; // this buffer contains one video frame and two audio frames AFTER encoding
 
 #define xrf_encode1(n) ((n)&&(*z++=(n),a+=b),!(b>>=1)&&(*y=a,y=z++,a=0,b=128)) // write "0" (zero) or "1nnnnnnnn" (nonzero)
-int xrf_encode(BYTE *t,BYTE *s,int l,int x) // terribly hacky encoder based on an 8-bit RLE and a pseudo Huffman filter!
+int xrf_encode(BYTE *t,BYTE *s,int l,int x) // terribly hacky encoder based on an 8-bit RLE and an interleaved pseudo Huffman filter!
 {
 	if (l<=0) return *t++=128,*t++=0,2; // quick EOF!
 	BYTE *z=t,*y=z++,a=0,b=128,q=0; if (x<0) x=-x,q=128; // x<0 = perform XOR 128 on bytes
@@ -1249,8 +1244,7 @@ int session_closefilm(void) // stop recording video and audio; !0 ERROR
 	if (!session_filmfile) return 1;
 	fseek(session_filmfile,16,SEEK_SET);
 	fputmmmm(session_filmcount>>session_filmtimer,session_filmfile); // number of frames
-	fclose(session_filmfile);
-	return session_filmfile=NULL,0;
+	return fclose(session_filmfile),session_filmfile=NULL,0;
 }
 
 unsigned char bitmapheader[54]="BM\000\000\000\000\000\000\000\000\066\000\000\000\050\000\000\000\000\000\000\000\000\000\000\000\001\000\030\000";
@@ -1270,8 +1264,7 @@ INLINE int session_savebitmap(void) // save a RGB888 bitmap file; !0 ERROR
 	mputiiii(&bitmapheader[0x22],i);
 	fwrite(bitmapheader,1,sizeof(bitmapheader),f);
 	session_writebitmap(f,session_filmscale); // conversion can be OS-dependent!
-	fclose(f);
-	return 0;
+	return fclose(f),0;
 }
 
 // configuration functions ------------------------------------------ //
@@ -1309,7 +1302,7 @@ char *session_configread(char *t) // reads configuration file; s points to the p
 		if (!strcasecmp(session_parmtr,"softvideo")) return video_filter=*s&7,NULL;
 		if (!strcasecmp(session_parmtr,"zoomvideo")) return session_intzoom=*s&1,NULL;
 		if (!strcasecmp(session_parmtr,"safevideo")) return session_softblit=*s&1,NULL;
-		if (!strcasecmp(session_parmtr,"film")) return session_filmscale=*s&1,session_filmtimer=(*s&2)>>1,NULL;
+		if (!strcasecmp(session_parmtr,"film")) return session_filmscale=*s&1,session_filmtimer=(*s>>1)&1,NULL;
 		if (!strcasecmp(session_parmtr,"info")) return onscreen_flag=*s&1,NULL;
 	}
 	return s;
@@ -1322,6 +1315,13 @@ void session_configwrite(FILE *f) // save common parameters
 		,session_filmscale+(session_filmtimer<<1),onscreen_flag
 		,audio_mixmode,audio_filter,(video_scanline&3)+(video_scanblend?4:0),video_filter,session_intzoom,session_softblit
 		);
+}
+
+void session_cleanup(void) // final cleanup before `session_byebye`
+{
+	puff_byebye();
+	session_closefilm();
+	session_closewave();
 }
 
 // =================================== END OF OS-INDEPENDENT ROUTINES //

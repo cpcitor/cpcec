@@ -61,6 +61,7 @@ void disc_close(int drive) // close disc file. drive = 0 (A:) or 1 (B:)
 		disc_track_reset(drive),puff_fclose(disc[drive]);
 	disc_change[drive]=1,disc[drive]=NULL;
 }
+#define disc_closeall() (disc_close(0),disc_close(1))
 
 int disc_open(char *s,int drive,int canwrite) // open a disc file. `s` path, `drive` = 0 (A:) or 1 (B:); 0 OK, !0 ERROR
 {

@@ -189,7 +189,7 @@ BYTE kbd_bit[16],joy_bit[16]; // up to 128 keys in 16 rows of 8 bits
 // leftmost keys
 #define	KBCODE_ESCAPE	0x01
 #define	KBCODE_TAB	0x0F
-#define	KBCODE_CAP_LOCK	0x3A
+#define	KBCODE_CAPSLOCK	0x3A
 #define	KBCODE_L_SHIFT	0x2A
 #define	KBCODE_L_CTRL	0x1D
 //#define KBCODE_L_ALT	0x38 // trapped by Win32
@@ -266,8 +266,8 @@ BYTE kbd_bit[16],joy_bit[16]; // up to 128 keys in 16 rows of 8 bits
 #define	KBCODE_DOWN	0xD0
 #define	KBCODE_LEFT	0xCB
 #define	KBCODE_RIGHT	0xCD
-#define	KBCODE_NUM_LOCK	0xC5
 // numeric keypad
+#define	KBCODE_NUM_LOCK	0xC5
 #define	KBCODE_X_7	0x47
 #define	KBCODE_X_8	0x48
 #define	KBCODE_X_9	0x49
@@ -725,7 +725,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 		s=session_signal,session_dirtymenu=1;
 	if (session_dirtymenu)
 		session_dirtymenu=0,session_redomenu();
-	if (session_signal)
+	if (session_signal&(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE))
 	{
 		if (session_signal&SESSION_SIGNAL_DEBUG)
 		{
@@ -734,7 +734,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 			if (*debug_buffer)//!=0
 				session_redraw(session_hwnd,session_dc1),*debug_buffer=0;
 		}
-		else if (!session_paused) // set the caption just once
+		if (!session_paused) // set the caption just once
 		{
 			session_please();
 			sprintf(session_tmpstr,"%s | %s | PAUSED",session_caption,session_info);
@@ -1115,6 +1115,7 @@ char *session_getfilereadonly(char *r,char *s,char *t,int q) // "Open a File" wi
 #define SDL_LIL_ENDIAN 1234
 #define SDL_BIG_ENDIAN 4321
 #define SDL_BYTEORDER SDL_LIL_ENDIAN
+#define SDL_UTF8_CHARS 0
 
 // main-WinMain bootstrap
 #ifdef DEBUG

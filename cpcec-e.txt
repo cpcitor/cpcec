@@ -375,7 +375,8 @@ matter.
 ZXSEC is an emulator of the Sinclair Spectrum family (48k, 128k, +2/Plus2 and
 +3/Plus3) based on the components it shared with the Amstrad CPC family: the Z80
 microprocessor, the PSG AY-3-8192 sound chip, the tape system and the NEC765
-disc drive controller.
+disc drive controller. It also optionally emulates the Spectrum Dandanator
+extension and the AY-Melodik 48k sound chip.
 
 It spans the files ZXSEC.EXE, SPECTRUM.ROM, SPEC128K.ROM, SPEC-P-2.ROM and
 SPEC-P-3.ROM, and otherwise runs the same as CPCEC, with several differences:
@@ -901,3 +902,6 @@ shown, rather than none as in other CRTC types) and improving the choice of the
 filler colour when half scanlines are on. The SDL2 version now handles mouse
 clicks when the button is up to improve consistency with other user interfaces.
 Tape acceleration options stick between sessions.
+- 20210624 -- minor patch adding Spectrum Dandanator support, and making both
+emulators able to load Dandanator cartridges from the command line and the key
+F3. Several heuristics ensure that the cartridges match the current system.

@@ -26,6 +26,7 @@
 	#include <io.h> // _chsize(),_fileno()...
 	#define fsetsize(f,l) _chsize(_fileno(f),(l))
 	#define strcasecmp _stricmp // SDL_strcasecmp
+	#define SDL_UTF8_CHARS 0
 #else
 	#ifdef PATH_MAX
 		#define STRMAX PATH_MAX
@@ -40,6 +41,7 @@
 	#define BYTE Uint8
 	#define WORD Uint16
 	#define DWORD Uint32
+	#define SDL_UTF8_CHARS 1 // is there any POSIX system that does NOT rely on UTF8!?
 #endif
 
 #define MESSAGEBOX_WIDETAB "\t\t" // rely on monospace font
@@ -129,7 +131,7 @@ BYTE kbd_bit[16],joy_bit[16]; // up to 128 keys in 16 rows of 8 bits
 // leftmost keys
 #define	KBCODE_ESCAPE	 41
 #define	KBCODE_TAB	 43
-#define	KBCODE_CAP_LOCK	 57
+#define	KBCODE_CAPSLOCK	 57
 #define	KBCODE_L_SHIFT	225
 #define	KBCODE_L_CTRL	224
 //#define KBCODE_L_ALT	226 // trapped by Win32
@@ -206,8 +208,8 @@ BYTE kbd_bit[16],joy_bit[16]; // up to 128 keys in 16 rows of 8 bits
 #define	KBCODE_DOWN	 81
 #define	KBCODE_LEFT	 80
 #define	KBCODE_RIGHT	 79
-#define	KBCODE_NUM_LOCK	 83
 // numeric keypad
+#define	KBCODE_NUM_LOCK	 83
 #define	KBCODE_X_7	 95
 #define	KBCODE_X_8	 96
 #define	KBCODE_X_9	 97
@@ -1078,13 +1080,14 @@ int getftype(char *s) // <0 = not exist, 0 = file, >0 = directory
 }
 int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_filedialog; q here means TAB is available or not, and f means the starting TAB value (q) or whether we're reading (!q)
 {
-	int i; char *m,*n,basepath[8<<9],pastname[STRMAX],basefind[STRMAX]; // realpath() is an exception, see below
+	int i; char *m,*n,basepath[8<<9],pastname[STRMAX],pastfile[STRMAX],basefind[STRMAX]; // realpath() is an exception, see below
 	session_ui_fileflags=f;
 	if (!r) r=session_path; // NULL path = default!
 	if (m=strrchr(r,PATHCHAR))
-		i=m[1],m[1]=0,strcpy(basepath,r),m[1]=i,strcpy(pastname,&m[1]);
+		i=m[1],m[1]=0,strcpy(basepath,r),m[1]=i,strcpy(pastname,&m[1]); // it's important to restore `r`: 1.- it can be `session_path`; 2.- the caller may need it
 	else
 		*basepath=0,strcpy(pastname,r);
+	strcpy(pastfile,pastname); // this will stick till the user accepts or cancels the dialog; see below
 	for (;;)
 	{
 		i=0; m=session_scratch;
@@ -1205,7 +1208,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 		{
 			if (*session_parmtr=='*') // the user wants to create a file
 			{
-				*session_parmtr=0;
+				strcpy(session_parmtr,pastfile); //*session_parmtr=0;
 				if (session_ui_input(session_parmtr,t)>0)
 				{
 					if (multiglobbing(s,session_parmtr,1)!=1) // not the first extension?
@@ -1336,7 +1339,7 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 		for (;;)
 			if (*s=='=')
 			{
-				*t++=0x80; *t++=0;*t++=0; // fake DROP code!
+				*t++=0x80; *t++=0;*t++=0; // 0x8000 is an empty menu item (menus cannot generate the DROPFILE event)
 				while (*s++!='\n')
 					;
 			}
@@ -1404,7 +1407,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 		s=session_signal,session_dirtymenu=1;
 	if (session_dirtymenu)
 		session_dirtymenu=0,session_redomenu();
-	if (session_signal)
+	if (session_signal&(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE))
 	{
 		if (session_signal&SESSION_SIGNAL_DEBUG)
 		{
@@ -1413,7 +1416,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 			if (*debug_buffer)//!=0
 				session_redraw(1),*debug_buffer=0;
 		}
-		else if (!session_paused) // set the caption just once
+		if (!session_paused) // set the caption just once
 		{
 			session_please();
 			sprintf(session_tmpstr,"%s | %s | PAUSED",session_caption,session_info);

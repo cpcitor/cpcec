@@ -399,7 +399,8 @@ documentación de FFMPEG al respecto.
 ZXSEC es un emulador de la familia Sinclair Spectrum (48k, 128k, +2/Plus2 y
 +3/Plus3) basado en los componentes compartidos con el Amstrad CPC: el
 microprocesador Z80, el chip de sonido PSG AY-3-8912, el sistema de cinta y la
-controladora de disco NEC765.
+controladora de disco NEC765. También emula opcionalmente la extensión
+Dandanator para Spectrum y el chip de sonido AY-Melodik para 48k.
 
 Se compone de los ficheros ZXSEC.EXE, SPECTRUM.ROM, SPEC128K.ROM, SPEC-P-2.ROM y
 SPEC-P-3.ROM, y por lo demás funciona igual que CPCEC, con varias salvedades:
@@ -959,3 +960,7 @@ tipos de CRTC) y mejora la elección del color de relleno para los scanlines
 medios. La versión de SDL2 ahora interpreta los clics de ratón cuando se suelta
 el botón, consistentemente con otros interfaces de usuario. Las opciones de
 aceleración de cinta perduran entre sesiones.
+- 20210624 -- parche menor que añade soporte de Dandanator para Spectrum, y que
+hace que ambos emuladores puedan cargar cartuchos de Dandanator desde la línea
+de comando y la tecla F3. Varias heurísticas comprueban que los cartuchos se
+corresponden con el sistema.
