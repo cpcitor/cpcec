@@ -1006,7 +1006,7 @@ void onscreen_debug(int q) // rewrite debug texts or redraw graphics
 	{
 		int z=onscreen_grafx(q,&debug_frame[VIDEO_PIXELS_X*(VIDEO_PIXELS_Y-DEBUG_LENGTH_Y*ONSCREEN_SIZE)/2+(VIDEO_PIXELS_X-DEBUG_LENGTH_X*8)/2],
 			VIDEO_PIXELS_X,DEBUG_LENGTH_X*8,DEBUG_LENGTH_Y*ONSCREEN_SIZE);
-		sprintf(t,"%04X...%04X %c%03iH: help  W: exit",onscreen_grafx_addr&0xFFFF,z&0xFFFF,(q&1)?'V':'H',onscreen_grafx_size);
+		sprintf(t,"%04X...%04X %c%03dH: help  W: exit",onscreen_grafx_addr&0xFFFF,z&0xFFFF,(q&1)?'V':'H',onscreen_grafx_size);
 		int w=strlen(t)/2;
 		for (int y=-2;y<0;++y)
 			for (int x=-w;x<0;++x)
@@ -1020,7 +1020,7 @@ void onscreen_debug(int q) // rewrite debug texts or redraw graphics
 
 // multimedia file output ------------------------------------------- //
 
-unsigned int session_savenext(char *z,unsigned int i) // scans for available filenames; `z` is "%s%i.ext" and `i` is the current index; returns 0 on error, or a new index
+unsigned int session_savenext(char *z,unsigned int i) // scans for available filenames; `z` is "%s%u.ext" and `i` is the current index; returns 0 on error, or a new index
 {
 	FILE *f;
 	while (i)
@@ -1039,7 +1039,7 @@ int session_createwave(void) // create a wave file; !0 ERROR
 {
 	if (session_wavefile||!session_audio)
 		return 1; // file already open, or no audio to save!
-	if (!(session_nextwave=session_savenext("%s%08i.wav",session_nextwave)))
+	if (!(session_nextwave=session_savenext("%s%08u.wav",session_nextwave)))
 		return 1; // too many files!
 	if (!(session_wavefile=fopen(session_parmtr,"wb")))
 		return 1; // cannot create file!
@@ -1111,7 +1111,7 @@ int session_createfilm(void) // start recording video and audio; !0 ERROR
 	if (!xrf_chunk&&!(xrf_chunk=malloc((sizeof(VIDEO_UNIT)*SESSION_FILMVIDEO_LENGTH+SESSION_FILMAUDIO_LENGTH*AUDIO_BITDEPTH/8)*9/8+4*8))) // maximum pathological length!
 		return 1; // cannot allocate memory!
 
-	if (!(session_nextfilm=session_savenext("%s%08i.xrf",session_nextfilm))) // "Xor-Rle Film"
+	if (!(session_nextfilm=session_savenext("%s%08u.xrf",session_nextfilm))) // "Xor-Rle Film"
 		return 1; // too many files!
 	if (!(session_filmfile=fopen(session_parmtr,"wb")))
 		return 1; // cannot create file!
@@ -1251,7 +1251,7 @@ unsigned char bitmapheader[54]="BM\000\000\000\000\000\000\000\000\066\000\000\0
 unsigned int session_nextbitmap=1;
 INLINE int session_savebitmap(void) // save a RGB888 bitmap file; !0 ERROR
 {
-	if (!(session_nextbitmap=session_savenext("%s%08i.bmp",session_nextbitmap)))
+	if (!(session_nextbitmap=session_savenext("%s%08u.bmp",session_nextbitmap)))
 		return 1; // too many files!
 	FILE *f;
 	if (!(f=fopen(session_parmtr,"wb")))
@@ -1310,8 +1310,8 @@ char *session_configread(char *t) // reads configuration file; s points to the p
 void session_configwrite(FILE *f) // save common parameters
 {
 	fprintf(f,
-		"film %i\ninfo %i\n"
-		"polyphony %i\nsoftaudio %i\nscanlines %i\nsoftvideo %i\nzoomvideo %i\nsafevideo %i\n"
+		"film %d\ninfo %d\n"
+		"polyphony %d\nsoftaudio %d\nscanlines %d\nsoftvideo %d\nzoomvideo %d\nsafevideo %d\n"
 		,session_filmscale+(session_filmtimer<<1),onscreen_flag
 		,audio_mixmode,audio_filter,(video_scanline&3)+(video_scanblend?4:0),video_filter,session_intzoom,session_softblit
 		);

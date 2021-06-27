@@ -603,7 +603,7 @@ void tape_catalog_text(char **t,int i)
 			*(*t)++=j; // purge invisible chars (f.e. SPEEDKING.CDT)
 	*(*t)++=0;
 }
-#define TAPE_CATALOG_HEAD "%010i --"
+#define TAPE_CATALOG_HEAD "%010d --"
 int tape_catalog(char *t,int x)
 {
 	if (!tape||tape_type<0)
@@ -617,7 +617,7 @@ int tape_catalog(char *t,int x)
 			j=tape_filebase+(((long long)i*(tape_filesize-tape_filebase)/100)&x);
 			if (j<=tape_filetell)
 				++p;
-			t+=1+sprintf(t,TAPE_CATALOG_HEAD " sample block %02i%%",j,i);
+			t+=1+sprintf(t,TAPE_CATALOG_HEAD " sample block %02d%%",j,i);
 		}
 	}
 	else // TZX/TAP?
@@ -629,7 +629,7 @@ int tape_catalog(char *t,int x)
 		if (tape_type==3) // TAP
 			while (t<s&&(i=tape_fgetcc())>=0)
 			{
-				t+=1+sprintf(t,TAPE_CATALOG_HEAD " STANDARD DATA, %i bytes",j=tape_filetell-2,i);
+				t+=1+sprintf(t,TAPE_CATALOG_HEAD " STANDARD DATA, %d bytes",j=tape_filetell-2,i);
 				if (j<=z)
 					++p;
 				tape_skip(i);
@@ -737,7 +737,7 @@ int tape_catalog(char *t,int x)
 				}
 				tape_skip(k+l);
 				if (l)
-					--t,t+=1+sprintf(t,", %i bytes",l);
+					--t,t+=1+sprintf(t,", %d bytes",l);
 				if (u) // keep block invisible
 					t=u;
 			}

@@ -1809,6 +1809,9 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					z80_wz=((z80_bc.w+1)&0x00FF)|(z80_af.b.h<<8);
 					break;
 				case 0x12: // LD (DE),A
+					#ifdef Z80_ZXS_DANDANATOR
+					z80_dandanator_0x12(z80_de.w,z80_af.b.h);
+					#endif
 					Z80_POKE(z80_de.w,z80_af.b.h);
 					z80_wz=((z80_de.w+1)&0x00FF)|(z80_af.b.h<<8);
 					break;
@@ -1826,7 +1829,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 				case 0x32: // LD ($NNNN),A
 					Z80_WZ_PC; ++z80_pc.w;
 					#ifdef Z80_ZXS_DANDANATOR
-					z80_dandanator_0x32(z80_wz);
+					z80_dandanator_0x32(z80_wz,z80_af.b.h);
 					#endif
 					Z80_POKE(z80_wz,z80_af.b.h);
 					z80_wz=((z80_wz+1)&0x00FF)|(z80_af.b.h<<8);
@@ -2228,7 +2231,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					break;
 				case 0x77: // LD (HL),A
 					#ifdef Z80_ZXS_DANDANATOR
-					z80_dandanator_0x77(z80_hl.w);
+					z80_dandanator_0x77(z80_hl.w,z80_af.b.h);
 					#endif
 					Z80_POKE(z80_hl.w,z80_af.b.h);
 					break;
@@ -3364,7 +3367,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							Z80_OUT2(z80_hl.b.l,0x369);
 							break;
 						case 0x71: // OUT (C)
-							Z80_OUT2(z80_out0(),0x371);
+							Z80_OUT2(Z80_NO_OUT,0x371);
 							break;
 						case 0x79: // OUT (C),A
 							Z80_OUT2(z80_af.b.h,0x379);

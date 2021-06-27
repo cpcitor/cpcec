@@ -964,3 +964,8 @@ aceleración de cinta perduran entre sesiones.
 hace que ambos emuladores puedan cargar cartuchos de Dandanator desde la línea
 de comando y la tecla F3. Varias heurísticas comprueban que los cartuchos se
 corresponden con el sistema.
+- 20210626 -- parche menor que corrige varios errores de formato ("%i" en lugar
+de "%d" o "%u" y semejantes), un bug en el CRTC (parte de los cilindros 3D de
+"PhX" para CRTC3) y otro en Dandanator para Spectrum (atrapar "LD A,(DE)"). La
+carga de bloques de snapshots es ligeramente más segura tanto en CPCEC como en
+ZXSEC.

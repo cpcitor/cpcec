@@ -905,3 +905,7 @@ Tape acceleration options stick between sessions.
 - 20210624 -- minor patch adding Spectrum Dandanator support, and making both
 emulators able to load Dandanator cartridges from the command line and the key
 F3. Several heuristics ensure that the cartridges match the current system.
+- 20210626 -- minor patch fixing several format errors ("%i" in place of "%d" or
+"%u" and so on), a bug in the CRTC (3D cylinders part of "PhX" on CRTC3) and
+another one in the Spectrum Dandanator ("LD (DE),A" trap). Slightly safer
+snapshot block loading on both CPCEC and ZXSEC.

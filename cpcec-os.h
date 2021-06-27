@@ -554,7 +554,7 @@ OSVERSIONINFO win32_version; char session_version[8];
 INLINE char* session_create(char *s) // create video+audio devices and set menu; 0 OK, !0 ERROR
 {
 	win32_version.dwOSVersionInfoSize=sizeof(win32_version); GetVersionEx(&win32_version);
-	sprintf(session_version,"%i.%i",win32_version.dwMajorVersion,win32_version.dwMinorVersion);
+	sprintf(session_version,"%d.%d",win32_version.dwMajorVersion,win32_version.dwMinorVersion);
 	HMENU session_submenu=NULL;
 	char c,*t; int i;
 	/*if (!session_softblit)*/ while (c=*s++)
@@ -685,8 +685,8 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	if (session_stick)
 	{
 		JOYCAPS jc; int i=joyGetNumDevs(),j=0;
-		logprintf("Detected %i joystick[s]: ",i);
-		while (j<i&&((!joyGetDevCaps(j,&jc,sizeof(jc))&&logprintf("Joystick/controller #%i = '%s'. ",j,jc.szPname)),joyGetPosEx(j,&session_joy))) // scan joysticks until we run out or one is OK
+		logprintf("Detected %d joystick[s]: ",i);
+		while (j<i&&((!joyGetDevCaps(j,&jc,sizeof(jc))&&logprintf("Joystick/controller #%d = '%s'. ",j,jc.szPname)),joyGetPosEx(j,&session_joy))) // scan joysticks until we run out or one is OK
 			++j;
 		session_stick=(j<i)?j+1:0; // ID+1 if available, 0 if missing
 		logprintf(session_stick?"Joystick enabled!\n":"No joystick!\n");

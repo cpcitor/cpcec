@@ -178,7 +178,7 @@ int disc_track_load(int d,int c) // setup track `c` from drive `d`; 0 OK, !0 ERR
 			if ((i=128<<disc_track_table[k][0x14])<(128<<7)) // sector size is defined in the track header
 				for (j=0;j<disc_track_table[k][0x15];++j)
 					disc_track_table[k][j*8+0x1E]=i,disc_track_table[k][j*8+0x1F]=i>>8;
-	//logprintf("(%08X:%08X %i:%i) ",disc_track_offset[d],disc_track_offset[d+4],disc_track_table[d][0x15],disc_track_table[d+4][0x15]);
+	//logprintf("(%08X:%08X %d:%d) ",disc_track_offset[d],disc_track_offset[d+4],disc_track_table[d][0x15],disc_track_table[d+4][0x15]);
 	return 0;
 }
 void disc_track_update(void) // force reload of all tracks
@@ -917,7 +917,7 @@ INLINE void disc_main(int t) // handle disc drives for `t` clock ticks
 	if ((disc_phase&2)&&!(disc_parmtr[0]==0x46&&(i=disc_parmtr[4])==disc_parmtr[6]&&i==disc_parmtr[7]&&i==disc_parmtr[8])) // kludge: the second condition helps 5KB DEMO 3 and ORION PRIME work
 	{
 		static int r=0;
-		//logprintf("%i ",t);
+		//logprintf("%d ",t);
 		t=(t*DISC_PER_FRAME)+r;
 		r=t%TICKS_PER_FRAME;
 		disc_timer-=t/TICKS_PER_FRAME;

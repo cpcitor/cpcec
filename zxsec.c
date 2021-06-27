@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20210624"//"2555"
+#define MY_VERSION "20210626"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -221,7 +221,8 @@ int TICKS_PER_SECOND;// (TICKS_PER_FRAME*VIDEO_PLAYBACK);
 // HARDWARE DEFINITIONS ============================================= //
 
 BYTE mem_ram[9<<14],mem_rom[4<<14]; // memory: 9*16k RAM and 4*16k ROM
-BYTE *mmu_ram[4],*mmu_rom[4]; // memory is divided in 16k pages
+BYTE *mmu_ram[4],*mmu_rom[4]; // memory is divided in 16k banks
+#define mem_16k (&mem_ram[8<<14]) // dummy 16k RAM bank
 #define PEEK(x) mmu_rom[(x)>>14][x] // WARNING, x cannot be `x=EXPR`!
 #define POKE(x) mmu_ram[(x)>>14][x] // WARNING, x cannot be `x=EXPR`!
 
@@ -244,7 +245,7 @@ int z80_turbo=0,z80_multi; // overclocking options
 BYTE *mem_dandanator=NULL; char dandanator_path[STRMAX]="";
 WORD dandanator_trap,dandanator_temp; // Dandanator-Z80 watchdogs
 BYTE dandanator_cfg[8]; // CONFIG + OPCODE + PARAM1 + PARAM2 + active + return + asleep + EEPROM
-int dandanator_canwrite=0,dandanator_dirty,dandanator_bridge; // R/W status
+int dandanator_canwrite=0,dandanator_dirty,dandanator_base; // R/W status
 
 // 0x??FE,0x7FFD,0x1FFD: ULA 48K,128K,PLUS3 ------------------------- //
 
@@ -339,7 +340,7 @@ void mmu_update(void) // update the MMU tables with all the new offsets
 	else // normal 128K mode
 	{
 		mmu_rom[0]=&mem_rom[((ula_v2&16)<<10)+((ula_v3&4)<<13)-0x0000]; // i.e. ROM ID=((ula_v3&4)/2)+((ula_v2&16)/16)
-		mmu_ram[0]=&mem_ram[(8<<14)-0x0000]; // 0000-3FFF is a dummy 16K for ROM writes (special case: Dandanator)
+		mmu_ram[0]=mem_16k-0x0000; // 0000-3FFF is a dummy 16K for ROM writes (special case: Dandanator)
 		mmu_rom[1]=mmu_ram[1]=&mem_ram[(5<<14)-0x4000]; // 4000-7FFF is always bank 5
 		mmu_rom[2]=mmu_ram[2]=&mem_ram[(2<<14)-0x8000]; // 8000-BFFF is always bank 2
 		mmu_rom[3]=mmu_ram[3]=&mem_ram[((ula_v2&7)<<14)-0xC000];  // C000-FFFF is only limited to bank 0 on 48K
@@ -364,11 +365,11 @@ void dandanator_update(void) // parse and run Dandanator commands, if any
 			else if (dandanator_cfg[1]==31) dandanator_cfg[6]|=8; // sleep till reset
 		}
 	}
-	else if (!dandanator_cfg[6]) // ignore if asleep
+	else if (!dandanator_cfg[6]&&dandanator_cfg[0]) // ignore if asleep or empty
 	{
-		if (dandanator_cfg[0]>0&&dandanator_cfg[0]<34) // immediate bank change
-			dandanator_cfg[4]=dandanator_cfg[0]-1; // delay over, change immediate
-		else if(dandanator_cfg[0]==34) // immediate bank change + sleep!
+		if (dandanator_cfg[0]<34) // immediate bank change
+			dandanator_cfg[4]=dandanator_cfg[0]-1;
+		else if(dandanator_cfg[0]==34) // vanish and sleep!
 			dandanator_cfg[4]=32,dandanator_cfg[6]|=4;
 		else if(dandanator_cfg[0]==36) // reset Z80!
 			z80_iff.w=z80_pc.w=0;
@@ -383,41 +384,41 @@ void dandanator_update(void) // parse and run Dandanator commands, if any
 		else if (dandanator_cfg[0]==48) // EEPROM: uses the dummy 16K bank as a bridge
 		{
 			if (dandanator_cfg[1]==16)
-				dandanator_bridge=-1; // get ready for bridge setup with a later LD (HL),A
+				dandanator_base=-1; // get ready for bridge setup with a later LD (HL),A
 			else if (dandanator_cfg[1]==32) // request EEPROM sector for writing
 				if (dandanator_cfg[7]=dandanator_cfg[2]&127) // keep EEPROM sector 0 read-only
 					;//if (dandanator_canwrite&&mem_dandanator)
-						//memset(&mem_ram[(8<<14)],255,4<<12),dandanator_dirty=1; // reset dummy bank
+						//memset(mem_16k,255,4<<12),dandanator_dirty=1; // reset dummy bank
 		}
 	}
 	mmu_update(); dandanator_clear(); // update MMU and reset command queue
 }
 void dandanator_eeprom(void) // modify the cartridge, if allowed
 {
-	if (dandanator_cfg[7]) // do all cartridges behave like "SWORD OF IANNA"? (sending 4K bytes to 0000-0FFF, ending with RET)
+	if (dandanator_cfg[7]) // before doing RET, "SWORD OF IANNA" sends 4K to 0000-0FFF and "BOBBY CARROT" sends 4K to 3000-3FFF
 	{
-		logprintf("DAN! %08X: %02X,%04X: %02X%02X%02X%02X%02X%02X%02X%02X...\n",z80_pc.w,dandanator_cfg[7],dandanator_bridge
-			,mem_ram[(8<<14)+dandanator_bridge+0],mem_ram[(8<<14)+dandanator_bridge+1],mem_ram[(8<<14)+dandanator_bridge+2],mem_ram[(8<<14)+dandanator_bridge+3]
-			,mem_ram[(8<<14)+dandanator_bridge+4],mem_ram[(8<<14)+dandanator_bridge+5],mem_ram[(8<<14)+dandanator_bridge+6],mem_ram[(8<<14)+dandanator_bridge+7]
+		logprintf("DAN! %08X: %02X,%04X: %02X%02X%02X%02X%02X%02X%02X%02X...\n",z80_pc.w,dandanator_cfg[7],dandanator_base
+			,mem_16k[dandanator_base+0],mem_16k[dandanator_base+1],mem_16k[dandanator_base+2],mem_16k[dandanator_base+3]
+			,mem_16k[dandanator_base+4],mem_16k[dandanator_base+5],mem_16k[dandanator_base+6],mem_16k[dandanator_base+7]
 			);
-		if (dandanator_canwrite&&mem_dandanator&&!(dandanator_bridge&0x0FFF))
+		if (dandanator_canwrite&&mem_dandanator&&!(dandanator_base&0x0FFF))
 		{
-			memcpy(&mem_dandanator[dandanator_cfg[7]<<12],&mem_ram[(8<<14)+dandanator_bridge],1<<12); // dump dummy 16K bank onto the EEPROM sector
-			dandanator_dirty=dandanator_bridge=1;
+			memcpy(&mem_dandanator[dandanator_cfg[7]<<12],mem_16k+dandanator_base,1<<12); // dump dummy 16K bank onto the EEPROM sector
+			dandanator_dirty=dandanator_base=1;
 		}
 		dandanator_cfg[7]=0;
 	}
 }
-#define z80_dandanator_0xFB() (dandanator_clear())
-// we trap EI because Dandanator timeouts happen when handling interrupts
-#define z80_dandanator_0x77(w) do{ if (mem_ram[(8<<14)+0x1555]==0xAA) dandanator_bridge=w,mem_ram[(8<<14)+0x1555]=0; \
-	else if (w<4) ++dandanator_cfg[(dandanator_temp|=1)/2],dandanator_trap=1; }while(0)
-#define z80_dandanator_0x32(w) do{ if (w<4) { ++dandanator_cfg[(dandanator_temp|=1)/2]; \
-	if (dandanator_temp<=3*2) dandanator_trap=1; else dandanator_update(); } }while(0)
 #define z80_dandanator_0x10(w) do{ if (!--dandanator_trap) { if (dandanator_temp&1) ++dandanator_temp; \
 	if (w<0x4000) dandanator_trap=1; else if (dandanator_temp>3*2||(dandanator_cfg[0]>0&&dandanator_cfg[0]<40)) dandanator_update(); } }while(0)
-#define z80_dandanator_0xC9() do{ if (mem_ram[(8<<14)+0x1555]==0xA0) dandanator_eeprom(),mem_ram[(8<<14)+0x1555]=0; \
+#define z80_dandanator_0x12(w,b) do{ if (/*b==0x30&&*/mem_16k[0x1555]==0xAA) dandanator_base=w,mem_16k[0x1555]=0; }while(0)
+#define z80_dandanator_0x32(w,b) do{ if (w<4) { ++dandanator_cfg[(dandanator_temp|=1)/2]; \
+	if (dandanator_temp<=3*2) dandanator_trap=1; else dandanator_update(); } }while(0)
+#define z80_dandanator_0x77(w,b) do{ if (/*b==0x30&&*/mem_16k[0x1555]==0xAA) dandanator_base=w,mem_16k[0x1555]=0; \
+	else if (w<4) ++dandanator_cfg[(dandanator_temp|=1)/2],dandanator_trap=1; }while(0)
+#define z80_dandanator_0xC9() do{ if (mem_16k[0x1555]==0xA0) dandanator_eeprom(),mem_16k[0x1555]=0; \
 	else if (dandanator_cfg[5]) dandanator_cfg[4]=dandanator_cfg[5]-1,dandanator_cfg[5]=0,mmu_update(); }while(0)
+#define z80_dandanator_0xFB() (dandanator_clear()) // we trap EI because interrupt handling implies timeouts
 void z80_dandanator_reset(void)
 {
 	MEMZERO(dandanator_cfg); dandanator_trap=dandanator_temp=0;
@@ -694,10 +695,7 @@ void z80_sync(int t) // the Z80 asks the hardware/video/audio to catch up
 void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 {
 	if (!(p&1)) // 0x??FE, ULA 48K
-	{
-		ula_v1_send(b);
-		tape_output=(b>>3)&1; // tape record signal
-	}
+		ula_v1_send(b),tape_output=(b>>3)&1; // tape record signal
 	if (!(p&2)) // 0x??FD, MULTIPLE DEVICES
 	{
 		if (type_id&&!(ula_v2&32)) // 48K mode forbids further changes!
@@ -786,7 +784,7 @@ int z80_tape_testfeed(WORD p)
 	int i; if ((i=z80_tape_index[p])>length(z80_tape_fastfeed))
 	{
 		for (i=0;i<length(z80_tape_fastfeed)&&!fasttape_test(z80_tape_fastfeed[i],p);++i) ;
-		z80_tape_index[p]=i; logprintf("FASTFEED: %04X=%02i\n",p,(i<length(z80_tape_fastfeed))?i:-1);
+		z80_tape_index[p]=i; logprintf("FASTFEED: %04X=%02d\n",p,(i<length(z80_tape_fastfeed))?i:-1);
 	}
 	return i;
 }
@@ -795,7 +793,7 @@ int z80_tape_testdump(WORD p)
 	int i; if ((i=z80_tape_index[p-1])>length(z80_tape_fastdump)) // the offset avoid conflicts with TABLE2
 	{
 		for (i=0;i<length(z80_tape_fastdump)&&!fasttape_test(z80_tape_fastdump[i],p);++i) ;
-		z80_tape_index[p-1]=i; logprintf("FASTDUMP: %04X=%02i\n",p,(i<length(z80_tape_fastdump))?i:-1);
+		z80_tape_index[p-1]=i; logprintf("FASTDUMP: %04X=%02d\n",p,(i<length(z80_tape_fastdump))?i:-1);
 	}
 	return i;
 }
@@ -806,7 +804,7 @@ void z80_tape_trap(void)
 	if ((i=z80_tape_index[z80_pc.w])>length(z80_tape_fastload))
 	{
 		for (i=0;i<length(z80_tape_fastload)&&!fasttape_test(z80_tape_fastload[i],z80_pc.w);++i) ;
-		z80_tape_index[z80_pc.w]=i; logprintf("FASTLOAD: %04X=%02i\n",z80_pc.w,(i<length(z80_tape_fastload))?i:-1);
+		z80_tape_index[z80_pc.w]=i; logprintf("FASTLOAD: %04X=%02d\n",z80_pc.w,(i<length(z80_tape_fastload))?i:-1);
 	}
 	if (i>=length(z80_tape_fastload)) return; // only known methods can reach here!
 	if (tape_enabled>=0&&tape_enabled<2) // automatic tape playback/stop?
@@ -917,7 +915,7 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 		#endif
 		int i,j,k=autorun_kbd_bit(11)||autorun_kbd_bit(12)||autorun_kbd_bit(15);
 		for (i=j=0;i<8;++i)
-			if (!(p&(256<<i)))
+			if (!(p&(256<<i))) // the bit mask in the upper byte can merge keyboard rows together
 			{
 				j|=autorun_kbd_bit(i); // bits 0-4: keyboard rows
 				j|=i?autorun_kbd_bit(8+i):k; // handle composite keys: CAPS SHIFT is row 0, bit 0
@@ -989,13 +987,12 @@ void z80_debug_hard(int q,int x,int y)
 	#ifdef Z80_ZXS_DANDANATOR
 	t+=sprintf(t,"DANDANATOR:         " "%c: %02X:%02X:%02X %02X:%02X:%02X",mem_dandanator?'0'+dandanator_temp:'-',dandanator_cfg[0],dandanator_cfg[1],dandanator_cfg[2],dandanator_cfg[4],dandanator_cfg[5],dandanator_cfg[6]);
 	#endif
-	char *r=t;
-	for (t=s;t<r;++y)
+	printf(s);
+	char *r=t; t=s; do
 	{
-		debug_locate(x,y);
-		MEMNCPY(debug_output,t,20);
-		t+=20;
-	}
+		debug_locate(x,y); ++y;
+		MEMNCPY(debug_output,t,20); t+=20;
+	} while (t<r);
 }
 #define ONSCREEN_GRAFX_RATIO 8
 void onscreen_grafx_step(VIDEO_UNIT *t,BYTE b)
@@ -1098,7 +1095,7 @@ WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 #define Z80_XCF_BUG 1 // replicate the SCF/CCF quirk
 #define Z80_DEBUG_MMU 0 // forbid ROM/RAM toggling, it's useless on Spectrum
 #define Z80_DEBUG_EXT 0 // forbid EXTRA hardware debugging info pages
-#define z80_out0() 0 // whether OUT (C) sends 0 (NMOS) or 255 (CMOS)
+#define Z80_NO_OUT 0 // whether OUT (C) sends 0 (NMOS) or 255 (CMOS)
 
 #include "cpcec-z8.h"
 
@@ -1106,6 +1103,7 @@ WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 
 char txt_error[]="Error!";
 char txt_error_any_load[]="Cannot open file!";
+char txt_error_bios[]="Cannot load firmware!";
 
 // emulation setup and reset operations ----------------------------- //
 
@@ -1137,7 +1135,7 @@ void all_reset(void) // reset everything!
 
 // firmware ROM file handling operations ---------------------------- //
 
-BYTE biostype_id=64; // keeper of the latest loaded BIOS type
+BYTE old_type_id=0xFF; // keeper of the latest loaded BIOS type
 char bios_system[][13]={"spectrum.rom","spec128k.rom","spec-p-2.rom","spec-p-3.rom"};
 char bios_path[STRMAX]="";
 
@@ -1146,10 +1144,10 @@ int bios_wrong_dword(DWORD t) // catch fingerprints that belong to other file ty
 	return t==0x4D56202D // "MV - CPC" (floppy disc image) and "MV - SNA" (CPC Snapshot)
 		||t==0x45585445 // "EXTENDED" (advanced floppy disc image)
 		||t==0x5A585461 // "ZXTape!" (advanced tape image)
-		||t==0x13000000 // TAP BASIC (tape image)
+		||t==0x13000000 // BASIC header (tape image)
 		||t==0x436F6D70 // "Compressed Wave File" (advanced audio file)
 		||t==0x52494646 // "RIFF" (WAVE audio file, CPC PLUS cartridge)
-		||t==0x01897FED // Amstrad CPC firmware
+		||t==0x01897FED // Amstrad CPC firmware (useless on Spectrum!)
 	;
 }
 
@@ -1157,8 +1155,7 @@ int bios_load(char *s) // load ROM. `s` path; 0 OK, !0 ERROR
 {
 	FILE *f=puff_fopen(s,"rb");
 	if (!f) return 1;
-	int i,j;
-	fseek(f,0,SEEK_END); i=ftell(f);
+	fseek(f,0,SEEK_END); int i=ftell(f),j;
 	if (i>=0x4000)
 		fseek(f,i-0x4000+0x0601,SEEK_SET),j=fgetmmmm(f);
 	if ((i!=(1<<14)&&i!=(1<<15)&&i!=(1<<16))||j!=0xD3FE37C9) // 16/32/64k + Spectrum TAPE LOAD fingerprint
@@ -1174,10 +1171,9 @@ int bios_load(char *s) // load ROM. `s` path; 0 OK, !0 ERROR
 		memcpy(&mem_rom[1<<14],mem_rom,1<<14); // mirror 16k ROM up
 	if (i<(1<<16))
 		memcpy(&mem_rom[1<<15],mem_rom,1<<15); // mirror 32k ROM up
-	biostype_id=type_id=i>(1<<14)?i>(1<<15)?3:mem_rom[0x5540]=='A'?2:1:0; // "Amstrad" (PLUS2) or "Sinclair" (128K)?
-	//logprintf("Firmware %ik m%i\n",i>>10,type_id);
-	if (bios_path!=s&&(char*)session_substr!=s)
-		strcpy(bios_path,s);
+	old_type_id=type_id=i>(1<<14)?i>(1<<15)?3:mem_rom[0x5540]=='S'?1:2:0; // original Sinclair 128K or modified Amstrad PLUS2?
+	//logprintf("Firmware %dk m%d\n",i>>10,type_id);
+	if (bios_path!=s&&(char*)session_substr!=s) strcpy(bios_path,s);
 	return 0;
 }
 int bios_path_load(char *s) // ditto, but from the base path
@@ -1186,7 +1182,7 @@ int bios_path_load(char *s) // ditto, but from the base path
 }
 int bios_reload(void) // ditto, but from the current type_id
 {
-	return type_id>3?1:biostype_id==type_id?0:bios_load(strcat(strcpy(session_substr,session_path),bios_system[type_id]));
+	return type_id>3?1:old_type_id==type_id?0:bios_load(strcat(strcpy(session_substr,session_path),bios_system[type_id]));
 }
 
 #ifdef Z80_ZXS_DANDANATOR
@@ -1269,17 +1265,18 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 #define SNAP_LOAD_Z80W(x,r) r.b.l=header[x],r.b.h=header[x+1]
 int snap_load_z80block(FILE *f,int length,int offset,int limits) // unpack a Z80-type compressed block; 0 OK, !0 ERROR
 {
-	int x,y;
-	while (length-->0&&offset<limits)
+	int x,y; while (length-->0&&offset<limits)
 	{
 		if ((x=fgetc(f))==0xED)
 		{
 			--length;
 			if ((y=fgetc(f))==0xED)
 			{
-				length-=2;
 				x=fgetc(f);
 				y=fgetc(f);
+				if (offset+x>limits)
+					break;
+				length-=2;
 				while (x--)
 					mem_ram[offset++]=y;
 			}
@@ -1333,7 +1330,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 		if (header[12]!=255&&!z80_pc.w) // HEADER V2+
 		{
 			i=fgetii(f);
-			logprintf(" (+%i)",i);
+			logprintf(" (+%d)",i);
 			if (i<=64)
 				fread1(&header[32],i,f);
 			else
@@ -1358,7 +1355,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 				bios_reload(); // reload BIOS if required!
 			while ((i=fgetii(f))&&(q=fgetc(f),!feof(f)))
 			{
-				logprintf(" %05i:%03i",i,q);
+				logprintf(" %05d:%03d",i,q);
 				if ((q-=3)<0||q>7) // ignore ROM copies
 					q=8; // dummy 16K
 				else if (!type_id) // 128K banks follow the normal order,
@@ -1474,8 +1471,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 	ula_update(); mmu_update(); // adjust RAM and ULA models
 	psg_all_update();
 	z80_debug_reset();
-	if (snap_path!=s)
-		strcpy(snap_path,s);
+	if (snap_path!=s) strcpy(snap_path,s);
 	return snap_done=!puff_fclose(f),0;
 }
 
@@ -1558,10 +1554,10 @@ char session_menudata[]=
 	"0x8900 Debug\tF9\n"
 	"=\n"
 	"0x8600 Realtime\tF6\n"
-	"0x0601 100% CPU speed\n"
-	"0x0602 200% CPU speed\n"
-	"0x0603 300% CPU speed\n"
-	"0x0604 400% CPU speed\n"
+	"0x0601 1x CPU speed\n"
+	"0x0602 2x CPU speed\n"
+	"0x0603 3x CPU speed\n"
+	"0x0604 4x CPU speed\n"
 	//"0x0600 Raise Z80 speed\tCtrl+F6\n"
 	//"0x4600 Lower Z80 speed\tCtrl+Shift+F6\n"
 	"=\n"
@@ -1583,6 +1579,7 @@ char session_menudata[]=
 	"0x8513 Issue-2 ULA line\n"
 	"0x8514 AY-Melodik chip\n"
 	#ifdef Z80_ZXS_DANDANATOR
+	"=\n"
 	"0xC500 Insert Dandanator..\tShift+F5\n"
 	"0x4500 Remove Dandanator\tCtrl+Shift+F5\n"
 	"0x0510 Writeable Dandanator\n"
@@ -1705,7 +1702,7 @@ void session_redomenu(void)
 	#endif
 	video_resetscanline(); // video scanline cfg
 	z80_multi=1+z80_turbo; // setup overclocking
-	sprintf(session_info,"%i:%s ULAv%c %0.1fMHz"//" | disc %s | tape %s | %s"
+	sprintf(session_info,"%d:%s ULAv%c %0.1fMHz"//" | disc %s | tape %s | %s"
 		,(!type_id||(ula_v2&32))?48:128,type_id?(type_id!=1?(type_id!=2?(!disc_disabled?"Plus3":"Plus2A"):"Plus2"):"128K"):"48K",ula_clash_disabled?'0':type_id?type_id>2?'3':'2':'1',3.5*z80_multi);
 	video_lastscanline=video_table[video_type][0]; // BLACK in the CLUT
 	video_halfscanline=VIDEO_FILTER_SCAN(video_table[video_type][15],video_lastscanline); // WHITE in the CLUT
@@ -1802,7 +1799,7 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 					session_message(txt_error_snap_save,txt_error);
 			break;
 		case 0x8300: // F3: LOAD ANY FILE.. // LOAD SNAPSHOT..
-			if (puff_session_getfile(session_shift?snap_path:autorun_path,session_shift?"*.sna;*.z80":file_pattern,session_shift?"Load snapshot":"Load file"))
+			if (puff_session_getfile(session_shift?snap_path:autorun_path,session_shift?snap_pattern:file_pattern,session_shift?"Load snapshot":"Load file"))
 		case 0x8000: // DRAG AND DROP
 			{
 				if (globbing(puff_pattern,session_parmtr,1))
@@ -1896,7 +1893,7 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 			if (s=puff_session_getfile(bios_path,"*.rom","Load firmware"))
 			{
 				if (bios_load(s)) // error? warn and undo!
-					session_message("Cannot load firmware!",txt_error),bios_reload(); // reload valid firmware, if required
+					session_message(txt_error_bios,txt_error),bios_reload(); // reload valid firmware, if required
 				else
 					autorun_mode=0,disc_disabled&=~2,all_reset(); // setup and reset
 			}
@@ -2068,7 +2065,7 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 			if (session_shift)
 			{
 				if (psg_closelog()) // toggles recording
-					if (psg_nextlog=session_savenext("%s%08i.ym",psg_nextlog))
+					if (psg_nextlog=session_savenext("%s%08u.ym",psg_nextlog))
 						psg_createlog(session_parmtr);
 			}
 			else if (session_closewave()) // toggles recording
@@ -2132,12 +2129,12 @@ void session_configreadmore(char *s)
 }
 void session_configwritemore(FILE *f)
 {
-	fprintf(f,"type %i\njoy1 %i\nxsna %i\nfdcw %i\n"
+	fprintf(f,"type %d\njoy1 %d\nxsna %d\nfdcw %d\n"
 		"file %s\nsnap %s\ntape %s\ndisc %s\ncard %s\n"
 	#ifdef Z80_ZXS_DANDANATOR
 		"dntr %s\n"
 	#endif
-		"palette %i\ncasette %i\ndebug %i\n"
+		"palette %d\ncasette %d\ndebug %d\n"
 		,type_id,joy1_type,snap_extended,disc_filemode,
 		autorun_path,snap_path,tape_path,disc_path,bios_path,
 	#ifdef Z80_ZXS_DANDANATOR
@@ -2295,7 +2292,7 @@ int main(int argc,char *argv[])
 			"\t-!\tforce software render\n"
 			),1;
 	if (bios_reload())
-		return printferror("Cannot load firmware!"),1;
+		return printferror(txt_error_bios),1;
 	char *s; if (s=session_create(session_menudata))
 		return sprintf(session_scratch,"Cannot create session: %s!",s),printferror(session_scratch),1;
 	session_kbdreset();
@@ -2353,13 +2350,13 @@ int main(int argc,char *argv[])
 				onscreen_byte(+1,+1,ula_clash_delta,0);
 				onscreen_byte(+4,+1,ula_clash_gamma,0);
 				#endif
-				/*#ifdef SDL2
+				#if defined(SDL2) && defined(DEBUG)
 				if (session_audio) // SDL2 audio queue
 				{
 					if ((j=session_audioqueue)<0) j=0; else if (j>AUDIO_N_FRAMES) j=AUDIO_N_FRAMES;
 					onscreen_bool(+11,-2,j,1,1); onscreen_bool(j+11,-2,AUDIO_N_FRAMES-j,1,0);
 				}
-				#endif*/
+				#endif
 			}
 			// update session and continue
 			if (autorun_mode)

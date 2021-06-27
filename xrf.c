@@ -7,7 +7,7 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "XRF"
-#define MY_VERSION "20210526"//"2555"
+#define MY_VERSION "20210626"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -532,7 +532,7 @@ int main(int argc,char *argv[])
 		return xrf_close(),fprintf(stderr,"error: cannot open source!\n"),1;
 	if (!count_z)
 		return xrf_close(),fprintf(stderr,"error: source is empty!\n"),1;
-	fprintf(stderr,audio_z?"VIDEO %ix%ipx %iHz - AUDIO %ich%02ib %iHz\n":"VIDEO %ix%ipx %iHz - NO AUDIO\n",video_x,video_y,clock_z,(flags_z&2)?2:1,(flags_z&1)?16:8,audio_z*clock_z);
+	fprintf(stderr,audio_z?"VIDEO %dx%dpx %dHz - AUDIO %dch%02db %dHz\n":"VIDEO %dx%dpx %dHz - NO AUDIO\n",video_x,video_y,clock_z,(flags_z&2)?2:1,(flags_z&1)?16:8,audio_z*clock_z);
 
 	if (t) // process
 	{
@@ -550,13 +550,13 @@ int main(int argc,char *argv[])
 				if (avi_file=fopen(t,"rb"))
 					fseek(avi_file,0,SEEK_END),avi_length=ftell(avi_file),fclose(avi_file);
 			#endif
-			fprintf(stderr,"%i frames (%i unused), %lld bytes.\n",xrf_count,xrf_dummy,avi_length);
+			fprintf(stderr,"%d frames (%d unused), %lld bytes.\n",xrf_count,xrf_dummy,avi_length);
 		}
 	}
 	else // examine
 	{
 		long long int lv=count_z*video_x*video_y*3,la=count_z*audio_z*flags_audio[flags_z&3],lz=lv+la;
-		printf("%i frames, %lld video + %lld audio = %lld bytes.\n",count_z,lv,la,lz); // not "%lli"!
+		printf("%d frames, %lld video + %lld audio = %lld bytes.\n",count_z,lv,la,lz); // not "%lli"!
 	}
 	return xrf_close(),t&&xrf_cursor!=xrf_length;
 }

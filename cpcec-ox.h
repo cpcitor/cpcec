@@ -1244,7 +1244,7 @@ SDL_version sdl_version; char session_version[8];
 INLINE char* session_create(char *s) // create video+audio devices and set menu; 0 OK, !0 ERROR
 {
 	SDL_SetMainReady();
-	SDL_GetVersion(&sdl_version); sprintf(session_version,"%i.%i.%i",sdl_version.major,sdl_version.minor,sdl_version.patch);
+	SDL_GetVersion(&sdl_version); sprintf(session_version,"%d.%d.%d",sdl_version.major,sdl_version.minor,sdl_version.patch);
 	if (SDL_Init(SDL_INIT_EVENTS|SDL_INIT_VIDEO|SDL_INIT_AUDIO|SDL_INIT_TIMER|SDL_INIT_JOYSTICK|SDL_INIT_GAMECONTROLLER)<0)
 		return (char *)SDL_GetError();
 	if (!(session_hwnd=SDL_CreateWindow(session_caption,SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,0))
@@ -1271,8 +1271,8 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	if (session_stick)
 	{
 		int i=SDL_NumJoysticks();
-		logprintf("Detected %i joystick[s]: ",i);
-		while (--i>=0&&!((session_pad=SDL_IsGameController(i)),(logprintf("%s #%i = '%s'. ",session_pad?"Controller":"Joystick",i,session_pad?SDL_GameControllerNameForIndex(i):SDL_JoystickNameForIndex(i))),
+		logprintf("Detected %d joystick[s]: ",i);
+		while (--i>=0&&!((session_pad=SDL_IsGameController(i)),(logprintf("%s #%d = '%s'. ",session_pad?"Controller":"Joystick",i,session_pad?SDL_GameControllerNameForIndex(i):SDL_JoystickNameForIndex(i))),
 			session_joy=(session_pad?(void*)SDL_GameControllerOpen(i):(void*)SDL_JoystickOpen(i)))) // scan joysticks and game controllers until we run out or one is OK
 			; // unlike Win32, SDL2 lists the joysticks from last to first
 		session_stick=i>=0;

@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20210624"//"2555"
+#define MY_VERSION "20210626"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -344,7 +344,7 @@ int plus_dma_index,plus_dma_delay,plus_dma_cache[3]; // DMA channel counters and
 //BYTE plus_dirtysprite; // tag sprite as "dirty"
 BYTE plus_8k_bug; // ASIC IRQ bug flag
 
-// the following block is a hacky way to implement the entire Plus configuration RAM page:
+// the following block is a hacky way to implement the entire Plus configuration RAM bank:
 BYTE plus_bank[1<<14];
 #define plus_sprite_bmp (plus_bank) // i.e. RAM address range 0x4000-0x4FFF
 #define plus_sprite_xyz (&plus_bank[0x2000]) // i.e. range 0x6000-0x607F
@@ -462,11 +462,11 @@ INLINE void crtc_table_send(BYTE i)
 			case 0:
 				if (crtc_table[7]?i==7:i<31) // tell apart between "Chapelle Sixteen" and "Onescreen Colonies" (for example) ... or "Chany Dream" (part 4)
 					video_threshold=VIDEO_LENGTH_X*5/8; // harder HSYNC threshold
-				if (crtc_limit_r2!=i)
+				if (crtc_table[2]<i) // better than `!=i`
 					crtc_count_r3x=crtc_limit_r3x-1; // "S&KOH" relies on this to cut HSYNC!
 				if (crtc_type==0&&!i)
 					crtc_table[0]=1; // CRTC0: REG0 CANNOT BE 0!
-				if (crtc_count_r0==i||(crtc_type>=3&&crtc_count_r0>i)) // "PhX" outro for CRTC3 and CRTC4 needs this (?)
+				if (crtc_count_r0==i||(crtc_count_r0>i&&crtc_type>=3)) // S&KOH intro needs the first check; "PhX" outro for CRTC3 and CRTC4 needs the second check
 					crtc_status|=CRTC_STATUS_R0_OK;
 				else
 					crtc_status&=~CRTC_STATUS_R0_OK;
@@ -507,7 +507,7 @@ INLINE void crtc_table_send(BYTE i)
 					crtc_status&=~CRTC_STATUS_R4_OK;
 				break;
 			case 7:
-				if (crtc_count_r4==i&&(crtc_type!=3||crtc_status&CRTC_STATUS_V_OFF))//&&!crtc_count_r9) // "BYTE 98" (second half) forces a VSYNC, but CROCO1-4 and PHX-3-4 don't
+				if (crtc_count_r4==i&&(crtc_type!=3||crtc_status&CRTC_STATUS_R4_OK))//&&!crtc_count_r9) // "BYTE 98" (second half) forces a VSYNC, but CROCO1-4 and PHX-3-4 don't
 				{
 					//if (!(crtc_status&CRTC_STATUS_VSYNC))
 						CRTC_STATUS_VSYNC_SET; // "PhX" expects these events to happen!
@@ -569,9 +569,8 @@ const int mmu_ram_mode[8][4]= // relative offsets of every bank for each +128K R
 void mmu_update(void) // update the MMU tables with all the new offsets
 {
 	// classic CPC RAM/ROM paging
-	int i=gate_ram&(gate_ram_depth?(4<<gate_ram_depth)-1:0);
-	int j=i?128+64*(i/8):64;
-	if (gate_ram_dirty<j) // tag memory as dirty?
+	int i=gate_ram&(gate_ram_depth?(4<<gate_ram_depth)-1:0),j;
+	if (gate_ram_dirty<(j=i?128+64*(i/8):64)) // tag memory as dirty?
 		session_dirtymenu=gate_ram_dirty=j;
 	int k=(i/8)<<16; i&=7; // k = bank offset, i = paging mode
 
@@ -632,7 +631,7 @@ void mmu_update(void) // update the MMU tables with all the new offsets
 				else if (!(dandanator_cfg[5]&1)) // must check this for "MOJON TWINS ROMSET" to work
 				{
 					mmu_rom[0]=&mem_dandanator[((dandanator_cfg[6]&31)<<14)-0x0000];
-					if ((dandanator_cfg[4]&2)&&(dandanator_cfg[6]&30)&&dandanator_canwrite) // forbid writing on pages 0 and 1 (!?)
+					if ((dandanator_cfg[4]&2)&&(dandanator_cfg[6]&30)&&dandanator_canwrite) // forbid writing on sectors 0 and 1 (!?)
 						//logprintf("R/W %02X%02X%02X%02X\n",dandanator_cfg[4],dandanator_cfg[5],dandanator_cfg[6],dandanator_cfg[7]),
 						mmu_ram[0]=mmu_rom[0],dandanator_dirty=1;
 				}
@@ -816,19 +815,22 @@ void video_main_sprites(void)
 		switch (zoomx) // `xx` will never be zero!
 		{
 			case 0:
-				for (;xx--;++t)
+				do
 					if (x=*s++)
 						*t=video_clut[16+x];
+				while (++t,--xx);
 				break;
 			case 1:
-				for (;xx--;t+=2)
+				do
 					if (x=*s++)
 						t[0]=t[1]=video_clut[16+x];
+				while (t+=2,--xx);
 				break;
 			case 2:
-				for (;xx--;t+=4)
+				do
 					if (x=*s++)
 						t[0]=t[1]=t[2]=t[3]=video_clut[16+x];
+				while (t+=4,--xx);
 				break;
 		}
 	}
@@ -1481,35 +1483,29 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 			mmu_update();
 		}
 	}
-	if (!(p&0x4000)) // 0xBC00-0xBF00, CRTC 6845
+	if (!(p&0x4200)) // 0xBC00-0xBD00, CRTC 6845 // "Night Shift" sends bytes to BFFD by mistake!
 	{
-		if (!(p&0x0200)) // "Night Shift" sends bytes to BFFD by mistake!
+		if (!(p&0x0100))
 		{
-			if (!(p&0x0100))
-			{
-				if (plus_enabled) // PLUS ASIC UNLOCKING SEQUENCE
+			if (plus_enabled) // PLUS ASIC UNLOCKING SEQUENCE
+				{
+					if (!plus_gate_counter)
+						plus_gate_counter=!b; // first byte must be nonzero
+					else if (b!=plus_gate_lock[plus_gate_counter]) // ignore repetitions (SWITCHBLADE)
 					{
-						if (!plus_gate_counter)
-							plus_gate_counter=!b; // first byte must be nonzero
-						else if (b!=plus_gate_lock[plus_gate_counter]) // ignore repetitions (SWITCHBLADE)
-						{
-							if (++plus_gate_counter>=length(plus_gate_lock))
-								plus_gate_counter=0,plus_gate_enabled=b==0xCD;
-							else if (b!=plus_gate_lock[plus_gate_counter])
-								plus_gate_counter=!b; // detect nonzero case (DICK TRACY)
-						}
+						if (++plus_gate_counter>=length(plus_gate_lock))
+							plus_gate_counter=0,plus_gate_enabled=b==0xCD;
+						else if (b!=plus_gate_lock[plus_gate_counter])
+							plus_gate_counter=!b; // detect nonzero case (DICK TRACY)
 					}
-				crtc_table_select(b); // 0xBC00: SELECT CRTC REGISTER
-			}
-			else
-				crtc_table_send(b); // 0xBD00: WRITE CRTC REGISTER
+				}
+			crtc_table_select(b); // 0xBC00: SELECT CRTC REGISTER
 		}
+		else
+			crtc_table_send(b); // 0xBD00: WRITE CRTC REGISTER
 	}
 	if (!(p&0x2000)) // 0xDF00, GATE ARRAY (2/2)
-	{
-		gate_rom=b; // SELECT ROM BANK
-		mmu_update();
-	}
+		gate_rom=b,mmu_update(); // SELECT ROM BANK
 	//if (!(p&0x1000)) // 0xEF00, PRINTER
 		//audio_dirty=1,digiblaster=b<<5; // *!* todo *!*
 	if (!(p&0x0800)) // 0xF400-0xF700, PIO 8255
@@ -1720,7 +1716,7 @@ int z80_tape_testfeed(WORD p)
 	int i; if ((i=z80_tape_index[p])>length(z80_tape_fastfeed))
 	{
 		for (i=0;i<length(z80_tape_fastfeed)&&!fasttape_test(z80_tape_fastfeed[i],p);++i) ;
-		z80_tape_index[p]=i; logprintf("FASTFEED: %04X=%02i\n",p,(i<length(z80_tape_fastfeed))?i:-1);
+		z80_tape_index[p]=i; logprintf("FASTFEED: %04X=%02d\n",p,(i<length(z80_tape_fastfeed))?i:-1);
 	}
 	return i;
 }
@@ -1729,7 +1725,7 @@ int z80_tape_testdump(WORD p)
 	int i; if ((i=z80_tape_index[p-1])>length(z80_tape_fastdump)) // the offset avoid conflicts with TABLE2
 	{
 		for (i=0;i<length(z80_tape_fastdump)&&!fasttape_test(z80_tape_fastdump[i],p);++i) ;
-		z80_tape_index[p-1]=i; logprintf("FASTDUMP: %04X=%02i\n",p,(i<length(z80_tape_fastdump))?i:-1);
+		z80_tape_index[p-1]=i; logprintf("FASTDUMP: %04X=%02d\n",p,(i<length(z80_tape_fastdump))?i:-1);
 	}
 	return i;
 }
@@ -1748,7 +1744,7 @@ void z80_tape_trap(void)
 	if ((i=z80_tape_index[z80_pc.w])>length(z80_tape_fastload))
 	{
 		for (i=0;i<length(z80_tape_fastload)&&!fasttape_test(z80_tape_fastload[i],z80_pc.w);++i) ;
-		z80_tape_index[z80_pc.w]=i; logprintf("FASTLOAD: %04X=%02i\n",z80_pc.w,(i<length(z80_tape_fastload))?i:-1);
+		z80_tape_index[z80_pc.w]=i; logprintf("FASTLOAD: %04X=%02d\n",z80_pc.w,(i<length(z80_tape_fastload))?i:-1);
 	}
 	if (i>=length(z80_tape_fastload)) return; // only known methods can reach here!
 	if (!tape_skipping) tape_skipping=-1;
@@ -2002,29 +1998,26 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 {
 	// as in z80_send, multiple devices can answer to the Z80 request at the same time if the bit patterns match; hence the use of "b&=" from the second device onward.
 	BYTE b=255;
-	if (!(p&0x4000)) // 0xBC00-0xBF00, CRTC 6845
+	if ((p&0x4200)==0x0200) // 0xBE00-0xBF00, CRTC 6845
 	{
-		if (p&0x0200)
+		if (!(p&0x100))
 		{
-			if (!(p&0x100))
-			{
-				// 0xBE00: depends on the CRTC type!
-				if (crtc_type>=3)
-					b=crtc_table_recv(); // CRTC3,CRTC4: READ CRTC REGISTER
-				else if (crtc_type==1)
-					b=crtc_table_info(); // CRTC1: READ CRTC INFORMATION STATUS
-				else if (crtc_type==0)
-					b=0; // CRTC0: ALL RESET!
-				//else b=255; // CRTC2: ALL SET!
-			}
+			// 0xBE00: depends on the CRTC type!
+			if (crtc_type>=3)
+				b=crtc_table_recv(); // CRTC3,CRTC4: READ CRTC REGISTER
+			else if (crtc_type==1)
+				b=crtc_table_info(); // CRTC1: READ CRTC INFORMATION STATUS
+			else if (crtc_type==0)
+				b=0; // CRTC0: ALL RESET!
+			//else b=255; // CRTC2: ALL SET!
+		}
+		else
+		{
+			// 0xBF00: depends on the CRTC type too!
+			if (crtc_type>0&&crtc_type<3)
+				b=0; // CRTC1,CRTC2: ALL RESET!
 			else
-			{
-				// 0xBF00: depends on the CRTC type too!
-				if (crtc_type>0&&crtc_type<3)
-					b=0; // CRTC1,CRTC2: ALL RESET!
-				else
-					b=crtc_table_recv(); // CRTC0,CRTC3,CRTC4: READ CRTC REGISTER
-			}
+				b=crtc_table_recv(); // CRTC0,CRTC3,CRTC4: READ CRTC REGISTER
 		}
 	}
 	if (!(p&0x0800)) // 0xF400-0xF700, PIO 8255
@@ -2065,13 +2058,10 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 		if (!disc_disabled)
 			if ((p&0x0380)==0x0300) // 0xFB7F: DATA I/O // 0xFB7E: STATUS
 					b&=p&1?disc_data_recv():disc_data_info(); // 0xF87E+n
-	if (p==0xFEFE)
-		b=0xCE; // emulator ID styled after the old CPCE
-	return b;
+	return p==0xFEFE?0xCE:b; // emulator ID styled after the old CPCE
 }
 
-// the PLUS ASIC features a special memory bank that behaves like a hardware address set rather than as a completely normal memory page.
-void z80_trap(WORD p,BYTE b)
+void z80_trap(WORD p,BYTE b) // catch Z80 write operations
 {
 	switch (p>>8)
 	{
@@ -2080,7 +2070,7 @@ void z80_trap(WORD p,BYTE b)
 		// besides, does any write operation NOT reach any memory, besides when we modify the EEPROM?
 		// case 0x15: case 0x2A: break; // 0x1555 and 0x2AAA are EEPROM chip control addresses
 		#endif
-		// PLUS ASIC: range 0x4000-0x6C0F
+		// PLUS ASIC: the range 0x4000-0x6C0F behaves like a hardware address set
 		case 0x40: case 0x41: case 0x42: case 0x43:
 		case 0x44: case 0x45: case 0x46: case 0x47:
 		case 0x48: case 0x49: case 0x4A: case 0x4B:
@@ -2307,13 +2297,11 @@ void z80_debug_hard(int q,int x,int y)
 		for (i=0;i<7;++i)
 			t+=sprintf(t,"%02X",disc_result[i]);
 	}
-	char *r=t;
-	for (t=s;t<r;++y)
+	char *r=t; t=s; do
 	{
-		debug_locate(x,y);
-		MEMNCPY(debug_output,t,20);
-		t+=20;
-	}
+		debug_locate(x,y); ++y;
+		MEMNCPY(debug_output,t,20); t+=20;
+	} while (t<r);
 }
 #define ONSCREEN_GRAFX_RATIO 4
 void onscreen_grafx_step0(VIDEO_UNIT *t,BYTE b)
@@ -2594,7 +2582,7 @@ int z80_active_delay=0; // cannot be local, it must stick :-(
 #define Z80_XCF_BUG 1 // replicate the SCF/CCF quirk
 #define Z80_DEBUG_MMU 1 // allow ROM/RAM toggling, it's useful on CPC!
 #define Z80_DEBUG_EXT 1 // allow EXTRA hardware debugging info pages
-#define z80_out0() 0 //  whether OUT (C) sends 0 (NMOS) or 255 (CMOS)
+#define Z80_NO_OUT 0 //  whether OUT (C) sends 0 (NMOS) or 255 (CMOS)
 
 #include "cpcec-z8.h"
 
@@ -2643,7 +2631,7 @@ void all_reset(void) // reset everything!
 
 // firmware/cartridge ROM file handling operations ------------------ //
 
-BYTE biostype_id=64; // keeper of the latest loaded BIOS type
+BYTE old_type_id=0xFF; // keeper of the latest loaded BIOS type
 char bios_system[][13]={"cpc464.rom","cpc664.rom","cpc6128.rom","cpcplus.rom"};
 char bios_path[STRMAX]="";
 
@@ -2652,9 +2640,10 @@ int bios_wrong_dword(DWORD t) // catch fingerprints that belong to other file ty
 	return t==0x4D56202D // "MV - CPC" (floppy disc image) and "MV - SNA" (CPC Snapshot)
 		||t==0x45585445 // "EXTENDED" (advanced floppy disc image)
 		||t==0x5A585461 // "ZXTape!" (advanced tape image)
-		||t==0x13000000 // TAP BASIC (tape image)
+		||t==0x13000000 // BASIC header (tape image)
 		||t==0x436F6D70 // "Compressed Wave File" (advanced audio file)
-		//||t==0x52494646 // "RIFF" (WAVE audio file, CPC PLUS cartridge)
+		//||t==0x52494646 // "RIFF" (WAVE audio file, but also CPC PLUS cartridge)
+		//||t==0x01897FED // Amstrad CPC firmware (we actually may want this here)
 	;
 }
 
@@ -2755,7 +2744,7 @@ int bios_load(char *s) // load a cartridge file or a firmware ROM file. 0 OK, !0
 			type_id=mem_rom[0x4002]; // firmware revision
 			if (crtc_type==3) crtc_type=0; // adjust hardware
 			plus_reset(); // PLUS ASIC can be safely reset
-			logprintf("ROM firmware v%i.\n",1+type_id);
+			logprintf("ROM firmware v%d.\n",1+type_id);
 		}
 		else // Amstrad PLUS cartridge
 		{
@@ -2765,7 +2754,7 @@ int bios_load(char *s) // load a cartridge file or a firmware ROM file. 0 OK, !0
 			if (j>i) memset(&mem_rom[i],-1,j-i); // pad memory
 			while (j<(1<<19)) // mirror low ROM up
 				memcpy(&mem_rom[j],mem_rom,j),j<<=1;
-			logprintf("PLUS cartridge %iK.\n",i>>10);
+			logprintf("PLUS cartridge %dK.\n",i>>10);
 		}
 	}
 	#if 0//1 // fast tape hack!!
@@ -2774,11 +2763,10 @@ int bios_load(char *s) // load a cartridge file or a firmware ROM file. 0 OK, !0
 	else if (equalsmmmm(&mem_rom[0x2A89],0x0182060B))
 		mem_rom[0x2A89+2]/=2;//mputii(&mem_rom[0x2A89+1],1); // ditto, for CPC464
 	#endif
-	if (!memcmp(&mem_rom[0xCE06],"\xCD\x1B\xBB\x30\xF0\xFE\x81\x28\x0C\xEE\x82",11))
+	if (!memcmp(&mem_rom[0xCE07],"\x1B\xBB\x30\xF0\xFE\x81\x28\x0C\xEE\x82",10))
 		mem_rom[0xCE07]=0x09,mem_rom[0xCE0C]=0x31,mem_rom[0xCE10]=0x32; // PLUS HACK: boot menu accepts '1' and '2'!
-	if (bios_path!=s&&(char*)session_substr!=s)
-		strcpy(bios_path,s);
-	return biostype_id=type_id,mmu_update(),0;
+	if (bios_path!=s&&(char*)session_substr!=s) strcpy(bios_path,s);
+	return old_type_id=type_id,mmu_update(),0;
 }
 int bios_path_load(char *s) // ditto, but from the base path
 {
@@ -2786,7 +2774,7 @@ int bios_path_load(char *s) // ditto, but from the base path
 }
 int bios_reload(void) // ditto, but from the current type_id
 {
-	return type_id>3?1:biostype_id==type_id?0:bios_load(strcat(strcpy(session_substr,session_path),bios_system[type_id]));
+	return type_id>3?1:old_type_id==type_id?0:bios_load(strcat(strcpy(session_substr,session_path),bios_system[type_id]));
 }
 
 int bdos_path_load(char *s) // load AMSDOS ROM. `s` path; 0 OK, !0 ERROR
@@ -2939,50 +2927,49 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 	}
 	#endif
 
-	if (snap_path!=s)
-		strcpy(snap_path,s);
+	if (snap_path!=s) strcpy(snap_path,s);
 	return snap_done=!fclose(f),0;
 }
 
 void snap_load_plus(FILE *f,int i)
 {
 	BYTE *s=session_scratch,*t=plus_sprite_bmp;
-	fread1(s,i,f);
-	//if (plus_enabled)
+	if (i<sizeof(session_scratch)) // the buffer is very big, but we must avoid accidents!
+		fread1(s,i,f),memset(&session_scratch[i],0,sizeof(session_scratch)-i);
+	else
+		fread1(s,sizeof(session_scratch),f),fseek(f,i-sizeof(session_scratch),SEEK_CUR);
+	for (i=0;i<16*16*8;++i)
+		*t++=*s>>4,*t++=15&*s++; // 0x000-0x7FF bytes => 0x4000-0x4FFF nibbles
+	//MEMNCPY(plus_sprite_xyz,&session_scratch[0x800],128); // 0x800-0x87F => 0x6000-0x607F
+	for (i=0;i<16*8;i+=8) // sanitize sprite values
 	{
-		for (i=0;i<16*16*8;++i)
-			*t++=*s>>4,*t++=15&*s++; // 0x000-0x7FF bytes => 0x4000-0x4FFF nibbles
-		//MEMNCPY(plus_sprite_xyz,&session_scratch[0x800],128); // 0x800-0x87F => 0x6000-0x607F
-		for (i=0;i<16*8;i+=8)
-		{
-			plus_sprite_xyz[i+0]=session_scratch[0x800+i+0];
-			char b=session_scratch[0x800+i+1]&3; plus_sprite_xyz[i+1]=b==3?-1:b; // POSX ranges from -256 to 767
-			plus_sprite_xyz[i+2]=session_scratch[0x800+i+2];
-			plus_sprite_xyz[i+3]=session_scratch[0x800+i+3]&1?-1:0; // POSY ranges from -256 to 256
-			plus_sprite_xyz[i+4]=session_scratch[0x800+i+4]&15;
-			plus_sprite_xyz[i+5]=plus_sprite_xyz[i+6]=plus_sprite_xyz[i+7]=0; // can these be anything but zero?
-		}
-		//MEMNCPY(plus_palette,&session_scratch[0x880],64); // 0x880-0x8BF => 0x6400-0x643F
-		for (i=0;i<32*2;i+=2)
-		{
-			plus_palette[i+0]=session_scratch[0x880+i+0];
-			plus_palette[i+1]=session_scratch[0x880+i+1]&15; // a nibble, not a byte
-		}
-		MEMNCPY(&plus_bank[0x2800],&session_scratch[0x8C0],6); // 0x8C0-0x8CF => 0x6800-0x680F
-		MEMNCPY(&plus_bank[0x2C00],&session_scratch[0x8D0],16); // 0x8D0-0x8DF => 0x6C00-0x6C0F
-		for (i=0;i<3;++i)
-		{
-			plus_dma_regs[i][0]=mgetii(&session_scratch[0x8E0+i*7+0]);
-			plus_dma_regs[i][1]=mgetii(&session_scratch[0x8E0+i*7+2]);
-			plus_dma_regs[i][2]=mgetii(&session_scratch[0x8E0+i*7+4]);
-			plus_dma_regs[i][3]=session_scratch[0x8E0+i*7+6];
-		}
-		if  (!((plus_gate_mcr=session_scratch[0x8C6])>=0xA0&&plus_gate_mcr<0xC0)) // Winape uses 0x8C6!?
-			plus_gate_mcr=session_scratch[0x8F5]; // ACE uses 0x8F5!?
-		plus_gate_mcr&=31;
-		plus_gate_enabled=!!session_scratch[0x8F6];
-		plus_gate_counter=session_scratch[0x8F7];
+		plus_sprite_xyz[i+0]=session_scratch[0x800+i+0];
+		char b=session_scratch[0x800+i+1]&3; plus_sprite_xyz[i+1]=b==3?-1:b; // POSX ranges from -256 to 767
+		plus_sprite_xyz[i+2]=session_scratch[0x800+i+2];
+		plus_sprite_xyz[i+3]=session_scratch[0x800+i+3]&1?-1:0; // POSY ranges from -256 to 256
+		plus_sprite_xyz[i+4]=session_scratch[0x800+i+4]&15;
+		plus_sprite_xyz[i+5]=plus_sprite_xyz[i+6]=plus_sprite_xyz[i+7]=0; // can these be anything but zero?
 	}
+	//MEMNCPY(plus_palette,&session_scratch[0x880],64); // 0x880-0x8BF => 0x6400-0x643F
+	for (i=0;i<32*2;i+=2) // sanitize colour values
+	{
+		plus_palette[i+0]=session_scratch[0x880+i+0];
+		plus_palette[i+1]=session_scratch[0x880+i+1]&15; // a nibble, not a byte
+	}
+	MEMNCPY(&plus_bank[0x2800],&session_scratch[0x8C0],6); // 0x8C0-0x8CF => 0x6800-0x680F
+	MEMNCPY(&plus_bank[0x2C00],&session_scratch[0x8D0],16); // 0x8D0-0x8DF => 0x6C00-0x6C0F
+	for (i=0;i<3;++i)
+	{
+		plus_dma_regs[i][0]=mgetii(&session_scratch[0x8E0+i*7+0]);
+		plus_dma_regs[i][1]=mgetii(&session_scratch[0x8E0+i*7+2]);
+		plus_dma_regs[i][2]=mgetii(&session_scratch[0x8E0+i*7+4]);
+		plus_dma_regs[i][3]=session_scratch[0x8E0+i*7+6];
+	}
+	if  (!((plus_gate_mcr=session_scratch[0x8C6])>=0xA0&&plus_gate_mcr<0xC0)) // Winape uses 0x8C6!?
+		plus_gate_mcr=session_scratch[0x8F5]; // ACE uses 0x8F5!?
+	plus_gate_mcr&=31;
+	plus_gate_enabled=!!session_scratch[0x8F6];
+	plus_gate_counter=session_scratch[0x8F7];
 }
 #define SNAP_LOAD_Z80W(x,r) r.b.l=header[x],r.b.h=header[x+1]
 int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ERROR
@@ -3038,7 +3025,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 	if (header[0x10]>1) // V2?
 	{
 		if ((type_id=header[0x6D])>3) type_id=3; // merge all PLUS types together
-		logprintf("SNAv2 ROM type v%i.\n",1+type_id);
+		logprintf("SNAv2 ROM type v%d.\n",1+type_id);
 	}
 	if (header[0x10]>2) // V3?
 	{
@@ -3050,7 +3037,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 			video_target+=(i-video_pos_y)*VIDEO_LENGTH_X;
 			video_pos_y=i;
 		}
-		crtc_type=header[0xA4]&7; // logprintf("SNAv3 CRTC type %i.\n",header[0xA4]); // unreliable too, just print it!
+		crtc_type=header[0xA4]&7; // logprintf("SNAv3 CRTC type %d.\n",header[0xA4]); // unreliable too, just print it!
 		crtc_count_r0=header[0xA9];
 		crtc_count_r4=header[0xAB];
 		crtc_count_r9=header[0xAC];
@@ -3112,7 +3099,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 		#ifdef Z80_CPC_DANDANATOR
 		else if (k==0x444E5452&&l>=sizeof(dandanator_cfg)) // DANDANATOR "DNTR"
 		{
-			q|=2,fread1(dandanator_cfg,sizeof(dandanator_cfg),f);
+			q|=2; fread1(dandanator_cfg,sizeof(dandanator_cfg),f);
 			if (!mem_dandanator&&*dandanator_path)
 				dandanator_load(dandanator_path); // insert last known Dandanator file
 			fseek(f,l-sizeof(dandanator_cfg),SEEK_CUR);
@@ -3121,7 +3108,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 		else
 			fseek(f,l,SEEK_CUR); // skip unknown block
 	}
-	if (!(q&1)) // PLUS ASIC present?
+	if (!(q&1)) // missing PLUS ASIC block?
 	{
 		plus_reset(); // reset PLUS hardware if the snapshot is OLD style!
 		for (i=0;i<17;++i) // avoid accidents in old snapshots recorded as PLUS but otherwise sticking to old hardware
@@ -3131,12 +3118,12 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 		}
 	}
 	#ifdef Z80_CPC_DANDANATOR
-	if (!(q&2)) // DANDANATOR present?
+	if (!(q&2)) // missing DANDANATOR block?
 		dandanator_remove();
 	#endif
 	// we adjust the REAL RAM SIZE if the snapshot is bigger than the current setup!
 	dumpsize=j>>10;
-	logprintf("SNAv1 RAM size %iK.\n",dumpsize);
+	logprintf("SNAv1 RAM size %dK.\n",dumpsize);
 	if (dumpsize>(gate_ram_dirty=64))
 	{
 		q=0; // look for lowest RAM limit that fits
@@ -3156,8 +3143,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 	mmu_update();
 	z80_debug_reset();
 	autorun_mode=0,disc_disabled&=~2; // autorun is now irrelevant
-	if (snap_path!=s)
-		strcpy(snap_path,s);
+	if (snap_path!=s) strcpy(snap_path,s);
 	return snap_done=!puff_fclose(f),0;
 }
 
@@ -3223,7 +3209,7 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 											k+=30; // ditto
 										else if (!memcmp(&disc_buffer[i+9],"BIN",3))
 											k+=28; // still standard, but the worst case
-										logprintf("`%s`:%i ",&disc_buffer[i+1],k);
+										logprintf("`%s`:%d ",&disc_buffer[i+1],k);
 										if (bestscore<k)
 										{
 											bestscore=k;
@@ -3244,7 +3230,7 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 					disc_disabled|=2,disc_close(0),disc_close(1); // open tape? close discs!
 				if (q) // autorun for tape and disc
 				{
-					dandanator_remove(),biostype_id=biostype_id>2?-1:biostype_id,all_reset(),bios_reload(); // set PLUS BIOS if required
+					dandanator_remove(),old_type_id=old_type_id>2?-1:old_type_id,all_reset(),bios_reload(); // set PLUS BIOS if required
 					autorun_mode=disc_disabled?1:2,autorun_t=(type_id<3?0:-50); // -50 to handle the PLUS menu
 				}
 			}
@@ -3300,10 +3286,10 @@ char session_menudata[]=
 	"0x8900 Debug\tF9\n"
 	"=\n"
 	"0x8600 Realtime\tF6\n"
-	"0x0601 100% CPU speed\n"
-	"0x0602 200% CPU speed\n"
-	"0x0603 300% CPU speed\n"
-	"0x0604 400% CPU speed\n"
+	"0x0601 1x CPU speed\n"
+	"0x0602 2x CPU speed\n"
+	"0x0603 3x CPU speed\n"
+	"0x0604 4x CPU speed\n"
 	//"0x0600 Raise Z80 speed\tCtrl+F6\n"
 	//"0x4600 Lower Z80 speed\tCtrl+Shift+F6\n"
 	"=\n"
@@ -3330,6 +3316,7 @@ char session_menudata[]=
 	"0x8514 320k RAM\n"
 	"0x8515 576k RAM\n"
 	#ifdef Z80_CPC_DANDANATOR
+	"=\n"
 	"0xC500 Insert Dandanator..\tShift+F5\n"
 	"0x4500 Remove Dandanator\tCtrl+Shift+F5\n"
 	"0x0510 Writeable Dandanator\n"
@@ -3468,7 +3455,7 @@ void session_redomenu(void)
 	#endif
 	video_resetscanline(); // video scanline cfg
 	z80_multi=1+z80_turbo; // setup overclocking
-	sprintf(session_info,"%i:%iK %s%c %0.1fMHz"//" | disc %s | tape %s | %s"
+	sprintf(session_info,"%d:%dK %s%c %0.1fMHz"//" | disc %s | tape %s | %s"
 		,gate_ram_dirty,gate_ram_kbyte[gate_ram_depth],plus_enabled?"ASIC":"CRTC",48+crtc_type,4.0*z80_multi);
 	video_lastscanline=video_table[video_type][20]; // BLACK in the CLUT
 	video_halfscanline=VIDEO_FILTER_SCAN(video_table[video_type][11],video_lastscanline); // WHITE in the CLUT
@@ -3833,7 +3820,7 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 			if (session_shift)
 			{
 				if (psg_closelog()) // toggles recording
-					if (psg_nextlog=session_savenext("%s%08i.ym",psg_nextlog))
+					if (psg_nextlog=session_savenext("%s%08u.ym",psg_nextlog))
 						psg_createlog(session_parmtr);
 			}
 			else if (session_closewave()) // toggles recording
@@ -3891,15 +3878,15 @@ void session_configreadmore(char *s)
 }
 void session_configwritemore(FILE *f)
 {
-	fprintf(f,"type %i\ncrtc %i\nbank %i\nfdcw %i\njoy1 %i\n"
+	fprintf(f,"type %d\ncrtc %d\nbank %d\nfdcw %d\njoy1 %d\n"
 	#ifdef PSG_PLAYCITY
-		"plct %i\n"
+		"plct %d\n"
 	#endif
 		"file %s\nsnap %s\ntape %s\ndisc %s\ncard %s\n"
 	#ifdef Z80_CPC_DANDANATOR
 		"dntr %s\n"
 	#endif
-		"palette %i\ncasette %i\ndebug %i\n",
+		"palette %d\ncasette %d\ndebug %d\n",
 		type_id,crtc_type,gate_ram_depth,disc_filemode,key2joy_flag,
 	#ifdef PSG_PLAYCITY
 		!playcity_disabled,
@@ -4119,13 +4106,13 @@ int main(int argc,char *argv[])
 					if (video_threshold>VIDEO_LENGTH_X/4)
 						onscreen_bool(-4,-6,1,1,0);
 				}
-				/*#ifdef SDL2
+				#if defined(SDL2) && defined(DEBUG)
 				if (session_audio) // SDL2 audio queue
 				{
 					if ((j=session_audioqueue)<0) j=0; else if (j>AUDIO_N_FRAMES) j=AUDIO_N_FRAMES;
 					onscreen_bool(+11,-2,j,1,1); onscreen_bool(j+11,-2,AUDIO_N_FRAMES-j,1,0);
 				}
-				#endif*/
+				#endif
 			}
 			video_threshold=VIDEO_LENGTH_X/4; // softer HSYNC threshold
 			// update session and continue
