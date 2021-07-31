@@ -98,7 +98,7 @@ int playcity_stereo[2][2];
 void playcity_set_config(BYTE b)
 {
 	if (b<16)
-		playcity_clock=b;
+		playcity_clock=b,cprintf("playcity:%i\n",b);
 }
 #define playcity_get_config() (playcity_clock)
 void playcity_select(BYTE x,BYTE b)
@@ -153,13 +153,12 @@ int psg_closelog(void)
 	fclose(psg_tmpfile);
 	if (psg_tmpfile=fopen(psg_tmpname,"rb"))
 	{
-		int c,l,i,o;
-		for (c=0;c<14;++c) // arrange byte dumps into long byte channels
+		for (int c=0,l,o;c<14;++c) // arrange byte dumps into long byte channels
 		{
-			fseek(psg_tmpfile,0,SEEK_SET);
+			fseek(psg_tmpfile,o=0,SEEK_SET);
 			while (l=fread1(psg_tmp,sizeof(psg_tmp),psg_tmpfile))
 			{
-				for (i=c,o=0;i<l;i+=14)
+				for (int i=c;i<l;i+=14)
 					psg_log[o++]=psg_tmp[i];
 				fwrite1(psg_log,o,psg_logfile);
 			}

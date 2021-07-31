@@ -18,7 +18,7 @@
 	"and you are welcome to redistribute it under certain conditions."
 
 #define MEMZERO(x) memset((x),0,sizeof(x))
-#define MEMFULL(x) memset((x),255,sizeof(x))
+#define MEMFULL(x) memset((x),-1,sizeof(x))
 #define MEMSAVE(x,y) memcpy((x),(y),sizeof(y))
 #define MEMLOAD(x,y) memcpy((x),(y),sizeof(x))
 #define MEMNCPY(x,y,z) memcpy((x),(y),sizeof(*(x))*(z))
@@ -28,9 +28,9 @@ int fwrite1(void *t,int l,FILE *f) { int k=0,i; while (l&&(i=fwrite(t,1,l,f))) {
 
 // byte-order based operations -------------------------------------- //
 
-//#define mgetc(x) (*(x))
-//#define mputc(x,y) (*(x)=(y))
-// 'i' = lil-endian (Intel), 'm' = big-endian (Motorola)
+// based on the hypothetical `mgetc(x) (*(x))` and `mputc(x,y) (*(x)=(y))`,
+// and considering 'i' = lil-endian (Intel) and 'm' = big-endian (Motorola)
+// notice that the fgetXXXX functions cannot ensure that a negative number always means EOF was met!
 
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
 
@@ -50,9 +50,9 @@ void mputiiii(unsigned char *x,int y) { x[3]=y>>24; x[2]=y>>16; x[1]=y>>8; *x=y;
 int equalsii(unsigned char *x,unsigned int i) { return (x[1]<<8)+*x==i; }
 int equalsiiii(unsigned char *x,unsigned int i) { return (x[3]<<24)+(x[2]<<16)+(x[1]<<8)+*x==i; }
 
-int fgetii(FILE *f) { int i=fgetc(f); return i+(fgetc(f)<<8); } // common lil-endian 16-bit fgetc()
+int fgetii(FILE *f) { int i=fgetc(f); return i|(fgetc(f)<<8); } // common lil-endian 16-bit fgetc()
 int fputii(int i,FILE *f) { fputc(i,f); return fputc(i>>8,f); } // common lil-endian 16-bit fputc()
-int fgetiiii(FILE *f) { int i=fgetc(f); i+=fgetc(f)<<8; i+=fgetc(f)<<16; return i+(fgetc(f)<<24); } // common lil-endian 32-bit fgetc()
+int fgetiiii(FILE *f) { int i=fgetc(f); i|=fgetc(f)<<8; i|=fgetc(f)<<16; return i|(fgetc(f)<<24); } // common lil-endian 32-bit fgetc()
 int fputiiii(int i,FILE *f) { fputc(i,f); fputc(i>>8,f); fputc(i>>16,f); return fputc(i>>24,f); } // common lil-endian 32-bit fputc()
 int fgetmm(FILE *f) { int i=0; return (fread(&i,1,2,f)!=2)?EOF:i; } // native lil-endian 16-bit fgetc()
 int fputmm(int i,FILE *f) { return (fwrite(&i,1,2,f)!=2)?EOF:i; } // native lil-endian 16-bit fputc()
@@ -81,9 +81,9 @@ int fgetii(FILE *f) { int i=0; return (fread(&i,1,2,f)!=2)?EOF:i; } // native li
 int fputii(int i,FILE *f) { return (fwrite(&i,1,2,f)!=2)?EOF:i; } // native lil-endian 16-bit fputc()
 int fgetiiii(FILE *f) { int i=0; return (fread(&i,1,4,f)!=4)?EOF:i; } // native lil-endian 32-bit fgetc()
 int fputiiii(int i,FILE *f) { return (fwrite(&i,1,4,f)!=4)?EOF:i; } // native lil-endian 32-bit fputc()
-int fgetmm(FILE *f) { int i=fgetc(f)<<8; return i+fgetc(f); } // common big-endian 16-bit fgetc()
+int fgetmm(FILE *f) { int i=fgetc(f)<<8; return i|fgetc(f); } // common big-endian 16-bit fgetc()
 int fputmm(int i,FILE *f) { fputc(i>>8,f); return fputc(i,f); } // common big-endian 16-bit fputc()
-int fgetmmmm(FILE *f) { int i=fgetc(f)<<24; i+=fgetc(f)<<16; i+=fgetc(f)<<8; return i+fgetc(f); } // common big-endian 32-bit fgetc()
+int fgetmmmm(FILE *f) { int i=fgetc(f)<<24; i|=fgetc(f)<<16; i|=fgetc(f)<<8; return i|fgetc(f); } // common big-endian 32-bit fgetc()
 int fputmmmm(int i,FILE *f) { fputc(i>>24,f); fputc(i>>16,f); fputc(i>>8,f); return fputc(i,f); } // common big-endian 32-bit fputc()
 
 #endif
@@ -106,24 +106,43 @@ char *strrstr(char *h,char *n) // = strrchr + strstr
 }
 int globbing(char *w,char *t,int q) // wildcard pattern *w against string *t; q = strcasecmp/strcmp; 0 on mismatch!
 {
-	char *ww=NULL,*tt=NULL,c,k;
-	while (c=*t)
-		if ((k=*w++)=='*')
-		{
-			while (*w==k) // skip additional wildcards
-				++w;
-			if (!*w)
-				return 1; // end of pattern, succeed!
-			tt=t,ww=w; // remember wildcard and continue
-		}
-		else if (k!='?'&&(q?lcase(k)!=lcase(c):k!=c)) // compare character
-		{
-			if (!ww)
-				return 0; // no past wildcards, fail!
-			t=++tt,w=ww; // return to wildcard and continue
-		}
-		else
-			++t;
+	char *ww=NULL,*tt=NULL,c,k; // a terribly dumbed-down take on Kirk J. Krauss' algorithm
+	if (q) // case insensitive
+		while (c=*t)
+			if ((k=*w++)=='*')
+			{
+				while (*w==k) // skip additional wildcards
+					++w;
+				if (!*w)
+					return 1; // end of pattern, succeed!
+				tt=t,ww=w; // remember wildcard and continue
+			}
+			else if (k!='?'&&lcase(k)!=lcase(c)) // compare character
+			{
+				if (!ww)
+					return 0; // no past wildcards, fail!
+				t=++tt,w=ww; // return to wildcard and continue
+			}
+			else
+				++t;
+	else // case sensitive
+		while (c=*t)
+			if ((k=*w++)=='*')
+			{
+				while (*w==k) // skip additional wildcards
+					++w;
+				if (!*w)
+					return 1; // end of pattern, succeed!
+				tt=t,ww=w; // remember wildcard and continue
+			}
+			else if (k!='?'&&k!=c) // compare character
+			{
+				if (!ww)
+					return 0; // no past wildcards, fail!
+				t=++tt,w=ww; // return to wildcard and continue
+			}
+			else
+				++t;
 	while (*w=='*') // skip additional wildcards, if any
 		++w;
 	return !*w; // succeed on end of pattern
@@ -133,7 +152,7 @@ int multiglobbing(char *w,char *t,int q) // like globbing(), but with multiple p
 	char n=1,c,*m; // up to 127 patterns (!)
 	do
 	{
-		m=session_substr;
+		m=session_substr; // the caller must not use this variable
 		while ((c=*w++)&&c!=';')
 			*m++=c;
 		*m=0;
@@ -179,22 +198,22 @@ int sortedsearch(char *t,int z,char *s) // look for string 's' in an alphabetica
 #define VIDEO_FILTER_X_MASK 1
 #define VIDEO_FILTER_Y_MASK 2
 #define VIDEO_FILTER_SMUDGE 4
-
 int video_scanblend=0,audio_mixmode=1; // 0 = pure mono, 1 = pure stereo, 2 = 50%, 3 = 25%
 VIDEO_UNIT video_lastscanline,video_halfscanline,video_litegun; // the fillers used in video_endscanlines() and the lightgun buffer
 
-INLINE void video_newscanlines(int x,int y)
-{
-	video_target=video_frame+(video_pos_y=y)*VIDEO_LENGTH_X+(video_pos_x=x); // *!* video_pos_y=((VIDEO_LENGTH_Y-video_pos_y)/2-(video_pos_y<VIDEO_LENGTH_Y))&-2
-	if (video_interlaces&&(video_scanline&2))
-		++video_pos_y,video_target+=VIDEO_LENGTH_X;
-}
-void video_resetscanline(void)
+void video_resetscanline(void) // reset scanline filler values on new video options
 {
 	static int b=-1; if (b!=video_scanblend) // do we need to reset the blending buffer?
 		if (b=video_scanblend)
 			for (int y=0;y<VIDEO_PIXELS_Y/2;++y)
 				MEMNCPY(&video_blend[y*VIDEO_PIXELS_X],&video_frame[(VIDEO_OFFSET_Y+y*2)*VIDEO_LENGTH_X+VIDEO_OFFSET_X],VIDEO_PIXELS_X);
+}
+
+INLINE void video_newscanlines(int x,int y) // reset `video_target`, `video_pos_x` and `video_pos_y` when a frame begins
+{
+	video_target=video_frame+(video_pos_y=y)*VIDEO_LENGTH_X+(video_pos_x=x); // new coordinates
+	if (video_interlaces&&(video_scanline&2))
+		++video_pos_y,video_target+=VIDEO_LENGTH_X; // current scanline mode
 }
 // do not manually unroll the following operations, GCC is smart enough to do a better job on its own: 1820% > 1780%!
 INLINE void video_drawscanline(void) // call between scanlines; memory caching makes this more convenient than gathering all operations in video_endscanlines()
@@ -317,7 +336,7 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 		}
 	}
 }
-INLINE void video_endscanlines(void) // call between frames
+INLINE void video_endscanlines(void) // fill gaps and clean up when a frame ends
 {
 	if (video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y) // empty bottom lines?
 	{
@@ -395,12 +414,13 @@ INLINE void audio_playframe(int q,AUDIO_UNIT *ao) // call between frames by the 
 }
 
 int video_pos_z=0; // for statistics and debugging
-int session_signal_frames=0,session_signal_scanlines=0;
+int session_signal_frames=0,session_signal_scanlines=0; //,session_rhythm=1
 INLINE void session_update(void) // render video+audio thru OS and handle realtime logic (self-adjusting delays, automatic frameskip, etc.)
 {
-	session_render();
 	session_signal&=~SESSION_SIGNAL_FRAME; // new frame!
-	audio_target=audio_frame;
+	//static int i=0; if (++i<session_rhythm) break; i=0; // speed-up all emulation
+	session_render();
+	audio_target=audio_frame; audio_pos_z=0;
 	if (video_scanline==3)
 		video_interlaced|=1;
 	else
@@ -434,9 +454,7 @@ int puff_read(int n) // reads N bits from source; <0 ERROR
 }
 int puff_decode(struct puff_huff *h) // decodes Huffman code from source; <0 ERROR
 {
-	int l=1;
-	short *next=h->cnt;
-	int i=0,base=0,code=0;
+	short *next=h->cnt; int l=1,i=0,base=0,code=0;
 	int buff=puff_buff,bits=puff_bits; // local copies are faster!
 	for (;;)
 	{
@@ -464,8 +482,7 @@ int puff_decode(struct puff_huff *h) // decodes Huffman code from source; <0 ERR
 }
 int puff_tables(struct puff_huff *h,short *l,int n) // generates Huffman tables from canonical table; !0 ERROR
 {
-	int i,a;
-	short o[15+1];
+	short o[15+1]; int i,a;
 	for (i=0;i<=15;++i)
 		h->cnt[i]=0; // reset all bit counts
 	for (i=0;i<n;++i)
@@ -539,8 +556,7 @@ struct puff_huff puff_lcode={ puff_lencnt,puff_lensym };
 struct puff_huff puff_ocode={ puff_offcnt,puff_offsym };
 INLINE int puff_static(void) // generates default Huffman codes and expands block from source to target; !0 ERROR
 {
-	short t[288+32];
-	int i=0;
+	short t[288+32]; int i=0;
 	for (;i<144;++i) t[i]=8;
 	for (;i<256;++i) t[i]=9;
 	for (;i<280;++i) t[i]=7;
@@ -552,18 +568,15 @@ INLINE int puff_static(void) // generates default Huffman codes and expands bloc
 }
 INLINE int puff_dynamic(void) // generates custom Huffman codes and expands block from source to target; !0 ERROR
 {
-	int l,o,h;
+	short t[288+32]; int l,o,h,i=0;
 	if ((l=puff_read(5)+257)<257||l>286||(o=puff_read(5)+1)<1||o>30||(h=puff_read(4)+4)<4)
 		return -1; // invalid value!
-	static const short hcode[19]={ 16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15 }; // Huffman constants
-	short t[288+32];
-	int i=0;
-	while (i<h) t[hcode[i++]]=puff_read(3); // read bit sizes for the Huffman-encoded header
-	while (i<19) t[hcode[i++]]=0; // padding
+	static const short hh[19]={ 16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15 }; // Huffman constants
+	while (i<h) t[hh[i++]]=puff_read(3); // read bit sizes for the Huffman-encoded header
+	while (i<19) t[hh[i++]]=0; // padding
 	if (puff_tables(&puff_lcode,t,19)) // clear the remainder of this header
 		return -1; // invalid table!
-	i=0;
-	while (i<l+o)
+	for (i=0;i<l+o;)
 	{
 		int a;
 		if ((a=puff_decode(&puff_lcode))<16) // literal?
@@ -709,13 +722,17 @@ unsigned int puff_dohash(unsigned int k,unsigned char *s,int l)
 	return k;
 }
 // ZIP-aware fopen()
-char PUFF_STR[]={PATHCHAR,PATHCHAR,PATHCHAR,0},puff_path[STRMAX]; // i.e. "TREE/PATH///ARCHIVE/FILE"
+char puff_pattern[]="*.zip",PUFF_STR[]={PATHCHAR,PATHCHAR,PATHCHAR,0},puff_path[STRMAX]; // i.e. "TREE/PATH///ARCHIVE/FILE"
 FILE *puff_ffile=NULL;
 FILE *puff_fopen(char *s,char *m) // mimics fopen(), so NULL on error, *FILE otherwise
 {
 	if (!s||!m)
 		return NULL; // wrong parameters!
+	#ifdef _WIN32
+	if (puff_ffile&&!strcasecmp(puff_path,s))
+	#else
 	if (puff_ffile&&!strcmp(puff_path,s))
+	#endif
 		return fseek(puff_ffile,0,SEEK_SET),puff_ffile; // recycle last file!
 	// TODO: handle more than one puff_ffile at once so the file caching is smart
 	//if (puff_ffile) fclose(puff_ffile),puff_ffile=NULL; // it's a new file, destroy old one and start anew
@@ -725,10 +742,14 @@ FILE *puff_fopen(char *s,char *m) // mimics fopen(), so NULL on error, *FILE oth
 	strcpy(puff_path,s);
 	puff_path[z-s]=0;
 	z+=strlen(PUFF_STR);
-	if (puff_open(puff_path))
+	if (!globbing(puff_pattern,puff_path,1)||puff_open(puff_path))
 		return 0;
 	while (!puff_head()) // scan archive
-		if (!strcasecmp(puff_name,z)) // found?
+		#ifdef _WIN32
+		if (!strcasecmp(puff_name,z))
+		#else
+		if (!strcmp(puff_name,z))
+		#endif
 		{
 			if (!(puff_ffile=tmpfile()))
 				return puff_close(),NULL; // file failure!
@@ -760,7 +781,6 @@ void puff_byebye(void)
 }
 
 // ZIP-aware user interfaces
-char puff_pattern[]="*.zip";
 char *puff_session_subdialog(char *r,char *s,char *t,char *zz,int qq) // let the user pick a file within a ZIP archive ('r' ZIP path, 's' pattern, 't' title, 'zz' default file or NULL); NULL for cancel, 'r' (with full path) for OK
 {
 	unsigned char rr[STRMAX],*z=session_scratch; // list of files in archive
@@ -888,8 +908,10 @@ void onscreen_bool(int x,int y,int lx,int ly,int q) // draw dots
 #define KBDBG_SPC	32
 #define KBDBG_SPC_S	160 // cfr. "non-breaking space"
 #define KBDBG_ESCAPE	27
-int debug_xlat(int k) // turns non-alphanumeric keypresses into pseudo-ASCII codes
+#define KBDBG_CLICK	128
+int debug_xlat(int k) // turns non-alphanumeric keypresses (-1 for mouse click) into pseudo-ASCII codes
 { switch (k) {
+	case -1: return KBDBG_CLICK;
 	case KBCODE_LEFT : return KBDBG_LEFT;
 	case KBCODE_RIGHT: return KBDBG_RIGHT;
 	case KBCODE_UP   : return KBDBG_UP;
@@ -951,14 +973,18 @@ void onscreen_clear(void) // get a copy of the visible screen
 	session_backupvideo(debug_frame);
 	if (video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-1)
 		for (int x=0,z=((video_pos_y&-2)-VIDEO_OFFSET_Y)*VIDEO_PIXELS_X;x<VIDEO_PIXELS_X;++x,++z)
-			debug_frame[z]=debug_frame[z+VIDEO_PIXELS_X]^=x&16?VIDEO1(0x00FFFF):VIDEO1(0xFF0000);
+			debug_frame[z]=debug_frame[z+VIDEO_PIXELS_X]^=x&16?0x00FFFF:0xFF0000;
 	if (video_pos_x>=VIDEO_OFFSET_X&&video_pos_x<VIDEO_OFFSET_X+VIDEO_PIXELS_X-1)
 		for (int y=0,z=(video_pos_x&-2)-VIDEO_OFFSET_X;y<VIDEO_PIXELS_Y;++y,z+=VIDEO_PIXELS_X)
-			debug_frame[z]=debug_frame[z+1]^=y&2?VIDEO1(0x00FFFF):VIDEO1(0xFF0000);
+			debug_frame[z]=debug_frame[z+1]^=y&2?0x00FFFF:0xFF0000;
 }
 WORD onscreen_grafx_addr=0; BYTE onscreen_grafx_size=1;
 WORD onscreen_grafx(int q,VIDEO_UNIT *v,int w,int x,int y); // defined later!
 VIDEO_UNIT onscreen_ascii0,onscreen_ascii1;
+#define debug_posx() ((VIDEO_PIXELS_X-DEBUG_LENGTH_X*8)/2)
+#define debug_posy() ((VIDEO_PIXELS_Y-DEBUG_LENGTH_Y*ONSCREEN_SIZE)/2)
+#define debug_maus_x() (((unsigned)(session_maus_x-debug_posx()))/8)
+#define debug_maus_y() (((unsigned)(session_maus_y-debug_posy()))/ONSCREEN_SIZE)
 void onscreen_ascii(int x,int y,int z) // not exactly the same as onscreen_char
 {
 	const unsigned char *zz=&onscreen_debug_chrs[((z&127)-32)*ONSCREEN_SIZE];
@@ -967,21 +993,21 @@ void onscreen_ascii(int x,int y,int z) // not exactly the same as onscreen_char
 		q1=onscreen_ascii1,q0=onscreen_ascii0;
 	else
 		q0=onscreen_ascii1,q1=onscreen_ascii0;
-	z=(y*VIDEO_PIXELS_X*ONSCREEN_SIZE)+x*8+((VIDEO_PIXELS_Y-DEBUG_LENGTH_Y*ONSCREEN_SIZE)*VIDEO_PIXELS_X+VIDEO_PIXELS_X-DEBUG_LENGTH_X*8)/2;
+	z=(y*VIDEO_PIXELS_X*ONSCREEN_SIZE)+x*8+debug_posy()*VIDEO_PIXELS_X+debug_posx();
 	for (int yy=0;yy<ONSCREEN_SIZE;++yy,z+=VIDEO_PIXELS_X-8)
 		for (int w=128,bb=*zz++;w;w>>=1)
 			debug_frame[z++]=(w&bb)?q1:q0;
 }
 void onscreen_debug(int q) // rewrite debug texts or redraw graphics
 {
-	static int videox=-1,videoy=-1,videoz=-1;
-	session_signal_frames=0,session_signal_scanlines=0; // reset traps
+	static int videox,videoy,videoz;
+	session_signal_frames=session_signal_scanlines=0; // reset traps
 	if (videox!=video_pos_x||videoy!=video_pos_y||videoz!=video_pos_z)
 		videox=video_pos_x,videoy=video_pos_y,videoz=video_pos_z,onscreen_clear(); // flush background if required!
 	if (onscreen_debug_mask&1) // normal or inverse?
-		onscreen_ascii1=VIDEO1(0xFFFFFF),onscreen_ascii0=VIDEO1(0x000000);
+		onscreen_ascii1=0xFFFFFF,onscreen_ascii0=0x000000;
 	else
-		onscreen_ascii0=VIDEO1(0xFFFFFF),onscreen_ascii1=VIDEO1(0x000000);
+		onscreen_ascii0=0xFFFFFF,onscreen_ascii1=0x000000;
 	if ((onscreen_debug_mask_^onscreen_debug_mask)&~1)
 		switch ((onscreen_debug_mask_=(onscreen_debug_mask&=7))&6) // font styles
 		{
@@ -1033,7 +1059,7 @@ unsigned int session_savenext(char *z,unsigned int i) // scans for available fil
 	return i;
 }
 
-unsigned char waveheader[44]="RIFF\000\000\000\000WAVEfmt \020\000\000\000\001\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000data";
+unsigned char waveheader[44]="RIFF____WAVEfmt \020\000\000\000\001\000\000\000________\000\000\000\000data";
 unsigned int session_nextwave=1,session_wavesize;
 int session_createwave(void) // create a wave file; !0 ERROR
 {
@@ -1269,6 +1295,7 @@ INLINE int session_savebitmap(void) // save a RGB888 bitmap file; !0 ERROR
 
 // configuration functions ------------------------------------------ //
 
+#define UTF8_BOM(s) ((-17==(char)*s&&-69==(char)s[1]&&-65==(char)s[2])?&s[3]:s) // skip UTF8 BOM if present
 void session_detectpath(char *s) // detects session path using argv[0] as reference
 {
 	if (s=strrchr(strcpy(session_path,s),PATHCHAR))
@@ -1276,7 +1303,7 @@ void session_detectpath(char *s) // detects session path using argv[0] as refere
 	else
 		*session_path=0; // no path (?)
 }
-FILE *session_configfile(char *s) // returns handle to configuration file
+FILE *session_configfile(int q) // returns handle to configuration file, `q`?read:write
 {
 	return fopen(strcat(strcpy(session_parmtr,session_path),
 	#ifdef _WIN32
@@ -1284,26 +1311,26 @@ FILE *session_configfile(char *s) // returns handle to configuration file
 	#else
 	"." my_caption "rc" // ".filenamerc"
 	#endif
-	),s);
+	),q?"r":"w");
 }
 
-char *session_configread(char *t) // reads configuration file; s points to the parameter value, *s is ZERO if unhandleable
+char *session_configread(unsigned char *t) // reads configuration file; t points to the current line; returns NULL if handled, a string otherwise
 {
 	unsigned char *s=t; while (*s) ++s; // go to trail
 	while (*--s<=' ') *s=0; // clean trail up
-	s=t;
+	s=t=UTF8_BOM(t);
 	while (*s>' ') ++s; *s++=0; // divide name and data
 	while (*s==' ') ++s; // skip spaces between both
-	//if (*s) // handle common parameters, if valid
+	if (*s) // handle common parameters, unless empty
 	{
-		if (!strcasecmp(session_parmtr,"polyphony")) return audio_mixmode=*s&3,NULL;
-		if (!strcasecmp(session_parmtr,"scanlines")) return video_scanline=*s&3,video_scanblend=*s&4,NULL;
-		if (!strcasecmp(session_parmtr,"softaudio")) return audio_filter=*s&3,NULL;
-		if (!strcasecmp(session_parmtr,"softvideo")) return video_filter=*s&7,NULL;
-		if (!strcasecmp(session_parmtr,"zoomvideo")) return session_intzoom=*s&1,NULL;
-		if (!strcasecmp(session_parmtr,"safevideo")) return session_softblit=*s&1,NULL;
-		if (!strcasecmp(session_parmtr,"film")) return session_filmscale=*s&1,session_filmtimer=(*s>>1)&1,NULL;
-		if (!strcasecmp(session_parmtr,"info")) return onscreen_flag=*s&1,NULL;
+		if (!strcasecmp(t,"polyphony")) return audio_mixmode=*s&3,NULL;
+		if (!strcasecmp(t,"scanlines")) return video_scanline=*s&3,video_scanblend=*s&4,NULL;
+		if (!strcasecmp(t,"softaudio")) return audio_filter=*s&3,NULL;
+		if (!strcasecmp(t,"softvideo")) return video_filter=*s&7,NULL;
+		if (!strcasecmp(t,"zoomvideo")) return session_intzoom=*s&1,NULL;
+		if (!strcasecmp(t,"safevideo")) return session_softblit=*s&1,NULL;
+		if (!strcasecmp(t,"film")) return session_filmscale=*s&1,session_filmtimer=(*s>>1)&1,NULL;
+		if (!strcasecmp(t,"info")) return onscreen_flag=*s&1,NULL;
 	}
 	return s;
 }

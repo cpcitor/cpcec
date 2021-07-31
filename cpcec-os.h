@@ -24,7 +24,6 @@ unsigned char session_scratch[1<<18]; // at least 256k!
 #define INLINE // 'inline' is useless in TCC and GCC4, and harmful in GCC5!
 INLINE int ucase(int i) { return i>='a'&&i<='z'?i-32:i; }
 INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
-INLINE int hex16(int i) { return i<10?'0'+i:'7'+i; }
 #define length(x) (sizeof(x)/sizeof(*(x)))
 
 #include "cpcec-a7.h" //unsigned char *onscreen_chrs;
@@ -41,9 +40,9 @@ INLINE int hex16(int i) { return i<10?'0'+i:'7'+i; }
 #endif
 
 #ifdef DEBUG
-#define logprintf(...) (fprintf(stdout,__VA_ARGS__))
+#define cprintf(...) fprintf(stdout,__VA_ARGS__)
 #else
-#define logprintf(...) 0
+#define cprintf(...) 0
 #endif
 
 #ifdef SDL2 // SDL2 is mandatory outside Win32 and optional inside Win32
@@ -70,10 +69,10 @@ INLINE int hex16(int i) { return i<10?'0'+i:'7'+i; }
 // general engine constants and variables --------------------------- //
 
 #define VIDEO_UNIT DWORD // 0x00RRGGBB style
-#define VIDEO1(x) (x) // no conversion required!
 
 //#define VIDEO_FILTER_HALF(x,y) (((((x&0XFF00FF)+(y&0XFF00FF)+(x<y?0X10001:0))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+(x<y?0X100:0))&0X1FE00))>>1) // 50%:50%
 #define VIDEO_FILTER_HALF(x,y) ((x<y?((0X10001+(x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+((0X100+(x&0XFF00)+(y&0XFF00))&0X1FE00):(((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1) // 50:50
+//#define VIDEO_FILTER_HALF(x,y) ((x&0XFFFF00)+(y&0X0000FF)) // red+green:blue
 //#define VIDEO_FILTER_BLUR(r,x,y,z) r=VIDEO_FILTER_HALF(y,z),y=z
 //#define VIDEO_FILTER_BLUR(r,x,y,z) r=VIDEO_FILTER_HALF(y,z),y=r
 //#define VIDEO_FILTER_BLUR(r,x,y,z) r=(x&0XFF0000)+(z&0XFF00)+(y&0XFF),x=y,y=z // colour bleed
@@ -91,12 +90,10 @@ INLINE int hex16(int i) { return i<10?'0'+i:'7'+i; }
 	#define AUDIO_UNIT unsigned char
 	#define AUDIO_BITDEPTH 8
 	#define AUDIO_ZERO 128
-	#define AUDIO1(x) (x)
 #else // 16 bits
 	#define AUDIO_UNIT signed short
 	#define AUDIO_BITDEPTH 16
 	#define AUDIO_ZERO 0
-	#define AUDIO1(x) (x)
 #endif // bitsize
 #define AUDIO_CHANNELS 2 // 1 mono, 2 stereo
 
@@ -495,8 +492,14 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 				session_event=wparam&0xBFFF; // cfr infra: bit 7 means CONTROL KEY OFF
 			}
 			break;
-		case WM_LBUTTONDOWN:
+		case WM_MBUTTONDBLCLK+1: // workaround: WINUSER.H sometimes lacks WM_MOUSEWHEEL
+			if ((short)HIWORD(wparam)<0) session_event=debug_xlat(KBCODE_NEXT);
+			else if ((short)HIWORD(wparam)) session_event=debug_xlat(KBCODE_PRIOR);
+			break;
 		case WM_LBUTTONUP:
+			if (session_signal&SESSION_SIGNAL_DEBUG)
+				session_event=debug_xlat(-1);
+		case WM_LBUTTONDOWN:
 		case WM_MOUSEMOVE: // no `break`!
 			#ifdef MAUS_EMULATION
 			session_maus_z=wparam&MK_LBUTTON;
@@ -612,7 +615,7 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	session_ideal.right-=session_ideal.left;
 	session_ideal.bottom-=session_ideal.top;
 	session_ideal.left=session_ideal.top=0; // ensure that the ideal area is defined as (0,0,WIDTH,HEIGHT)
-	if (!(session_hwnd=CreateWindow(wc.lpszClassName,session_caption,i,CW_USEDEFAULT,CW_USEDEFAULT,session_ideal.right,session_ideal.bottom,NULL,session_hidemenu?NULL:session_menu,wc.hInstance,NULL))
+	if (!(session_hwnd=CreateWindow(wc.lpszClassName,NULL,i,CW_USEDEFAULT,CW_USEDEFAULT,session_ideal.right,session_ideal.bottom,NULL,session_hidemenu?NULL:session_menu,wc.hInstance,NULL))
 		||!(video_blend=malloc(sizeof(VIDEO_UNIT)*VIDEO_PIXELS_Y/2*VIDEO_PIXELS_X)))
 		return "cannot create window";
 	DragAcceptFiles(session_hwnd,1);
@@ -675,8 +678,7 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 		session_dbg=CreateDIBSection(session_dc1,&bmi,DIB_RGB_COLORS,(void**)&debug_frame,NULL,0);
 	}
 
-	// sound setup and cleanup
-
+	// cleanup, joystick and sound
 	ShowWindow(session_hwnd,SW_SHOWDEFAULT);
 	UpdateWindow(session_hwnd);
 	session_timer=GetTickCount();
@@ -685,11 +687,11 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	if (session_stick)
 	{
 		JOYCAPS jc; int i=joyGetNumDevs(),j=0;
-		logprintf("Detected %d joystick[s]: ",i);
-		while (j<i&&((!joyGetDevCaps(j,&jc,sizeof(jc))&&logprintf("Joystick/controller #%d = '%s'. ",j,jc.szPname)),joyGetPosEx(j,&session_joy))) // scan joysticks until we run out or one is OK
+		cprintf("Detected %d joystick[s]: ",i);
+		while (j<i&&((!joyGetDevCaps(j,&jc,sizeof(jc))&&cprintf("Joystick/controller #%d = '%s'. ",j,jc.szPname)),joyGetPosEx(j,&session_joy))) // scan joysticks until we run out or one is OK
 			++j;
 		session_stick=(j<i)?j+1:0; // ID+1 if available, 0 if missing
-		logprintf(session_stick?"Joystick enabled!\n":"No joystick!\n");
+		cprintf(session_stick?"Joystick enabled!\n":"No joystick!\n");
 	}
 	session_wo=0; // no audio unless device is detected
 	if (session_audio)
@@ -762,8 +764,7 @@ void session_writewave(AUDIO_UNIT *t); // save the current sample frame. Must be
 FILE *session_filmfile=NULL; void session_writefilm(void); // must be defined later on, too!
 INLINE void session_render(void) // update video, audio and timers
 {
-	int i,j;
-	static int performance_t=-9999,performance_f=0,performance_b=0; ++performance_f;
+	int i,j; static int performance_t=-9999,performance_f=0,performance_b=0; ++performance_f;
 	if (!video_framecount) // do we need to hurry up?
 	{
 		if ((video_interlaces=!video_interlaces)||!video_interlaced)

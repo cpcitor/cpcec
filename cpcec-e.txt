@@ -750,7 +750,7 @@ analysis (CPCEC: the algorithm for TITUS caused trouble in "The Blues Brothers";
 ZXSEC: Speedlock5 didn't recognize the heading noise; both systems add patches
 to shorten the initial delays), another one in the loading of CPC snapshots (a
 snapshot saved on Plus hardware without the "CPC+" block showed a completely
-black palette), another one in the Z80 debugger (the command 'P0 could generate
+black palette), another one in the Z80 debugger (the command 'P' could generate
 an infinite disassembly), another one on tape handling (reading a WAV file must
 use >128 as reference instead of >=128) and some problems in Win32 (the screen
 stopped updating after pausing, switching windows in and out) and SDL2 (boot
@@ -909,3 +909,13 @@ F3. Several heuristics ensure that the cartridges match the current system.
 "%u" and so on), a bug in the CRTC (3D cylinders part of "PhX" on CRTC3) and
 another one in the Spectrum Dandanator ("LD (DE),A" trap). Slightly safer
 snapshot block loading on both CPCEC and ZXSEC.
+- 20210730 -- minor patch adding mouse support to the debugger and fixing bugs
+in the ASIC (modifying register 9 tests whether the new value is equal or lower
+than its counter, horizontal splitting doesn't draw garbage or retrigger IRQs:
+final scroller of "PhX") and the CRTC: reading the wrong port no longer returns
+the right value (secret part of "École Buissonière") and HSYNC events are
+filtered more carefully ("Chany Dream Demo 5", "Madness Demo", "Sub Hunter"...)
+unless the user prefers the old behavior ("Hard H-Hold" option). Several menu
+items have been relocated to set hardware traits and emulation options apart.
+CPCEC saves compressed memory blocks within snapshots unless "Strict SNA files"
+is enabled.

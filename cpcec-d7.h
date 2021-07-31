@@ -17,7 +17,7 @@
 // BEGINNING OF DISC SUPPORT ======================================== //
 
 FILE *disc[4]={NULL,NULL,NULL,NULL}; // disc file handles
-BYTE disc_change[4],disc_motor,disc_action,disc_track[4],disc_flip[4],disc_canwrite[4]; // current motor status, drive tracks, sides and protections
+BYTE disc_change[4],disc_motor,disc_track[4],disc_flip[4],disc_canwrite[4]; // current motor status, drive tracks, sides and protections
 
 // the general idea is that each drive can be handled independently;
 // as a result, we must assign each drive a set of data structures.
@@ -178,7 +178,7 @@ int disc_track_load(int d,int c) // setup track `c` from drive `d`; 0 OK, !0 ERR
 			if ((i=128<<disc_track_table[k][0x14])<(128<<7)) // sector size is defined in the track header
 				for (j=0;j<disc_track_table[k][0x15];++j)
 					disc_track_table[k][j*8+0x1E]=i,disc_track_table[k][j*8+0x1F]=i>>8;
-	//logprintf("(%08X:%08X %d:%d) ",disc_track_offset[d],disc_track_offset[d+4],disc_track_table[d][0x15],disc_track_table[d+4][0x15]);
+	//cprintf("(%08X:%08X %d:%d) ",disc_track_offset[d],disc_track_offset[d+4],disc_track_table[d][0x15],disc_track_table[d+4][0x15]);
 	return 0;
 }
 void disc_track_update(void) // force reload of all tracks
@@ -204,7 +204,7 @@ int disc_sector_find(int d) // look for sector `CHRN` in disc_parmtr[2..5] in tr
 		//#define DISC_TIMER_STEP (14<<6) // rough approximation too, to make "MOKTAR / TITUS THE FOX" run on CPC.
 		//if (disc_parmtr[2]>=89&&disc_parmtr[4]==12&&disc_parmtr[5]==5&&disc_track[disc_trueunit]>=39) disc_timer+=DISC_TIMER_STEP;
 		disc_sector_timer+=2;
-		//logprintf("{%02X%02X%02X%02X} ",disc_track_table[d][disc_sector_last*8+0x18],disc_track_table[d][disc_sector_last*8+0x19],disc_track_table[d][disc_sector_last*8+0x1A],disc_track_table[d][disc_sector_last*8+0x1B]);
+		//cprintf("{%02X%02X%02X%02X} ",disc_track_table[d][disc_sector_last*8+0x18],disc_track_table[d][disc_sector_last*8+0x19],disc_track_table[d][disc_sector_last*8+0x1A],disc_track_table[d][disc_sector_last*8+0x1B]);
 	}
 	if (disc_parmtr[4]==0xFF&&disc_parmtr[5]==0x00&&disc_parmtr[6]==0xFF)
 		disc_sector_last=-1; // kludge: satisfy TCOPY3 (that performs 46 00,00,00,FF,00,FF,00,80 before the first READ ID) without hurting neither DALEY TOC, 5KB DEMO 3 or DESIGN DESIGN games!
@@ -225,9 +225,9 @@ void disc_sector_seek(int d,int z) // seek sector `z` (usually `disc_sector_last
 	if (disc_length>=disc_lengthfull) // explicit size is smaller than implicit size?
 	{
 		if (disc_length==0x0800&&disc_lengthfull==0x0100)/*&&disc_track_table[d][j*8+0x1C]==0x20*/ // ERE SOFTWARE (is this used elsewhere?)
-			disc_skew_length=32,disc_skew_filler=disc_track_table[d][0x22],logprintf("(ERE!:%02X) ",disc_skew_filler); // this is where the 0x44 comes from; it's part of a complex header but it works
+			disc_skew_length=32,disc_skew_filler=disc_track_table[d][0x22],cprintf("(ERE!:%02X) ",disc_skew_filler); // this is where the 0x44 comes from; it's part of a complex header but it works
 		else if (disc_length==0x2000&&disc_lengthfull<0x0900) // the educational "REUSSIR..." series
-			disc_skew_length=disc_length-disc_lengthfull,disc_skew_filler=disc_buffer[511]/*0xCB*/,logprintf("(REU!:%02X) ",disc_skew_filler); // this is what the strange filler byte is compared against
+			disc_skew_length=disc_length-disc_lengthfull,disc_skew_filler=disc_buffer[511]/*0xCB*/,cprintf("(REU!:%02X) ",disc_skew_filler); // this is what the strange filler byte is compared against
 		else
 			disc_skew_length=0;
 		disc_length=disc_lengthfull; // clip the size accordingly!
@@ -244,7 +244,7 @@ void disc_sector_seek(int d,int z) // seek sector `z` (usually `disc_sector_last
 		}
 	}
 	fseek(disc[d&3],disc_track_offset[d]+i,SEEK_SET);
-	logprintf("<%08X:%04X> ",disc_track_offset[d]+i,disc_length);
+	cprintf("<%08X:%04X> ",disc_track_offset[d]+i,disc_length);
 }
 
 #define DISC_RESULT_LAST_CHRN() memcpy(&disc_result[3],&disc_parmtr[2],4)
@@ -300,7 +300,7 @@ void disc_sector_loadgaps(void) // used by READ TRACK
 	{
 		int i=2+disc_track_table[disc_trueunithead][0x16]+12+3+7+(disc_sector_last+1==disc_track_table[disc_trueunithead][0x15]?374:22); // size of padding
 		disc_length=disc_lengthfull;
-		logprintf("(GAP!:%04X) ",i);
+		cprintf("(GAP!:%04X) ",i);
 		memset(&disc_buffer[disc_length],0x4E,i); // first layer: enough to satisfy "Conspiration de l'an III"
 		memset(&disc_buffer[disc_length+i-12-3-7-22],0,12); // second layer: required by "E.X.I.T." and "Le Necromancien"
 		//memset(&disc_buffer[disc_length+i-3-7-22],0xA1,3); // third layer, it happens always, but not sure if necessary
@@ -308,7 +308,6 @@ void disc_sector_loadgaps(void) // used by READ TRACK
 	}
 	else
 		disc_length=disc_lengthfull; // clip! Batman the Movie for Spectrum doesn't want any inter-sector data!
-	disc_action|=1;
 	disc_delay=1,disc_phase=3;
 	disc_timer=DISC_TIMER_INIT;
 }
@@ -334,10 +333,10 @@ void disc_sector_load(void) // read a sector and set the status flags accordingl
 				disc_result[2]^=0x40; // toggle `deleted` bit
 			if ((disc_parmtr[0]&32)&&(disc_result[2]&0x40)) // command includes SKIP DELETED DATA bit and the data is deleted?
 			{
-				logprintf("<SKIP> ");
+				cprintf("<SKIP> ");
 				if (disc_parmtr[4]==disc_parmtr[6]) // is it the last requested sector?
 				{
-					logprintf("<STOP> ");
+					cprintf("<STOP> ");
 					disc_exitstate();
 					disc_length=7;
 					disc_phase=4;
@@ -350,8 +349,7 @@ void disc_sector_load(void) // read a sector and set the status flags accordingl
 				if (disc_result[2]&0x40) // if DELETED data and operations don't match the operation stops
 					disc_parmtr[6]=disc_parmtr[4];
 				disc_sector_seek(disc_trueunithead,disc_sector_last);
-				logprintf("[RD %04X] ",disc_length);
-				disc_action|=1;
+				cprintf("[RD %04X] ",disc_length);
 				fread1(disc_buffer,disc_length,disc[disc_trueunit]);
 				disc_delay=1,disc_phase=3;
 				disc_timer=DISC_TIMER_INIT*disc_sector_timer;
@@ -386,7 +384,7 @@ void disc_track_format(void)
 	int j=0,l128=0; // length of new track (header and data) in 128-byte chunks
 	for (int i=0;i<disc_parmtr[3];++i) // disc_parmtr[2] is useless to calculate the REAL length of the track!
 	{
-		logprintf("%02X%02X%02X%02X ",disc_buffer[0+i*4],disc_buffer[1+i*4],disc_buffer[2+i*4],disc_buffer[3+i*4]);
+		cprintf("%02X%02X%02X%02X ",disc_buffer[0+i*4],disc_buffer[1+i*4],disc_buffer[2+i*4],disc_buffer[3+i*4]);
 		//if (disc_buffer[0+i*4]|disc_buffer[1+i*4]|disc_buffer[2+i*4]|disc_buffer[3+i*4]) // skip dummy sectors? (Rubi's self-copier for "The Demo")
 		{
 			memmove(&disc_buffer[j*4],&disc_buffer[i*4],4),++j; // keep non-dummy sector
@@ -416,7 +414,7 @@ void disc_track_format(void)
 	// is the new track formatted or unformatted?
 	BYTE q=disc_index_table[disc_trueunit][j+0x34];
 	MEMZERO(disc_track_table[disc_trueunithead]);
-	logprintf("[FR %02X:%02X:%04X] ",disc_parmtr[2],disc_parmtr[3],l128);
+	cprintf("[FR %02X:%02X:%04X] ",disc_parmtr[2],disc_parmtr[3],l128);
 	if (disc_parmtr[2]>=7||disc_parmtr[3]>29||l128>49)
 		disc_index_table[disc_trueunit][j+0x34]=l128=0; // track is unformatted, no header or body
 	else
@@ -506,7 +504,7 @@ void disc_data_send(BYTE b) // DATA I/O
 {
 	if (disc_phase==0) // IDLE?
 	{
-		logprintf("FDC %08X: %02X ",DISC_CURRENT_PC,b);
+		cprintf("FDC %08X: %02X ",DISC_CURRENT_PC,b);
 		disc_offset=disc_phase=1;
 		switch ((disc_parmtr[0]=b)&31)
 		{
@@ -579,12 +577,12 @@ void disc_data_send(BYTE b) // DATA I/O
 	}
 	else if (disc_phase==1) // PARAMETERS?
 	{
-		logprintf("%02X",b);
+		cprintf("%02X",b);
 		disc_parmtr[disc_offset]=b;
 		if (++disc_offset>=disc_length)
 		{
 			disc_offset=0;
-			logprintf(" ");
+			cprintf(" ");
 			switch (disc_parmtr[0]&31)
 			{
 				case 0x05: // WRITE DATA
@@ -731,12 +729,12 @@ void disc_data_send(BYTE b) // DATA I/O
 					// no `break`!
 				case 0x03: // SPECIFY STEP AND HEAD LOAD
 					disc_phase=0;
-					logprintf("\n");
+					cprintf("\n");
 					break;
 			}
 		}
 		else
-			logprintf(",");
+			cprintf(",");
 	}
 	else if (disc_phase==2) // WRITE DATA?
 	{
@@ -762,8 +760,7 @@ void disc_data_send(BYTE b) // DATA I/O
 					else // write sector proper
 					{
 						disc_sector_seek(disc_trueunithead,disc_sector_last);
-						logprintf("[WR %04X] ",disc_length);
-						disc_action|=2;
+						cprintf("[WR %04X] ",disc_length);
 						if (disc_canwrite[disc_trueunit])
 						{
 							fwrite(disc_buffer,1,disc_length,disc[disc_trueunit]); // warning: this silently fails if the file mode is "rb" instead of "rb+"
@@ -879,10 +876,10 @@ BYTE disc_data_recv(void) // DATA I/O
 	{
 		i=disc_result[disc_offset];
 		if (++disc_offset<disc_length)
-			logprintf("%02X:",i);
+			cprintf("%02X:",i);
 		else
 		{
-			logprintf("%02X\n",i);
+			cprintf("%02X\n",i);
 			disc_offset=disc_phase=disc_timer=0; // results are over, return to IDLE.
 		}
 	}
@@ -917,7 +914,7 @@ INLINE void disc_main(int t) // handle disc drives for `t` clock ticks
 	if ((disc_phase&2)&&!(disc_parmtr[0]==0x46&&(i=disc_parmtr[4])==disc_parmtr[6]&&i==disc_parmtr[7]&&i==disc_parmtr[8])) // kludge: the second condition helps 5KB DEMO 3 and ORION PRIME work
 	{
 		static int r=0;
-		//logprintf("%d ",t);
+		//cprintf("%d ",t);
 		t=(t*DISC_PER_FRAME)+r;
 		r=t%TICKS_PER_FRAME;
 		disc_timer-=t/TICKS_PER_FRAME;

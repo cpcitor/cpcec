@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20210626"//"2555"
+#define MY_VERSION "20210730"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -42,8 +42,7 @@ Contact information: <mailto:cngsoft@gmail.com> */
 
 // ZX Spectrum metrics and constants defined as general types ------- //
 
-#define MAIN_FRAMESKIP_FULL 25
-#define MAIN_FRAMESKIP_MASK 31 // lowest (2**n)-1 that fits
+#define MAIN_FRAMESKIP_BITS 4
 #define VIDEO_PLAYBACK 50
 #define VIDEO_LENGTH_X (56<<4)
 #define VIDEO_LENGTH_Y (39<<4)
@@ -170,38 +169,38 @@ const VIDEO_UNIT video_table[][16]= // colour table, 0xRRGGBB style
 {
 	// monochrome - black and white // =(b+r*3+g*9+13/2)/13;
 	{
-		VIDEO1(0X000000),VIDEO1(0X1B1B1B),VIDEO1(0X373737),VIDEO1(0X525252),
-		VIDEO1(0X6E6E6E),VIDEO1(0X898989),VIDEO1(0XA5A5A5),VIDEO1(0XC0C0C0),
-		VIDEO1(0X000000),VIDEO1(0X242424),VIDEO1(0X494949),VIDEO1(0X6D6D6D),
-		VIDEO1(0X929292),VIDEO1(0XB6B6B6),VIDEO1(0XDBDBDB),VIDEO1(0XFFFFFF)
+		0X000000,0X1B1B1B,0X373737,0X525252,
+		0X6E6E6E,0X898989,0XA5A5A5,0XC0C0C0,
+		0X000000,0X242424,0X494949,0X6D6D6D,
+		0X929292,0XB6B6B6,0XDBDBDB,0XFFFFFF
 	},
 	// dark colour
 	{
-		VIDEO1(0X000000),VIDEO1(0X000080),VIDEO1(0X800000),VIDEO1(0X800080),
-		VIDEO1(0X008000),VIDEO1(0X008080),VIDEO1(0X808000),VIDEO1(0X808080),
-		VIDEO1(0X000000),VIDEO1(0X0000FF),VIDEO1(0XFF0000),VIDEO1(0XFF00FF),
-		VIDEO1(0X00FF00),VIDEO1(0X00FFFF),VIDEO1(0XFFFF00),VIDEO1(0XFFFFFF)
+		0X000000,0X000080,0X800000,0X800080,
+		0X008000,0X008080,0X808000,0X808080,
+		0X000000,0X0000FF,0XFF0000,0XFF00FF,
+		0X00FF00,0X00FFFF,0XFFFF00,0XFFFFFF
 	},
 	// normal colour
 	{
-		VIDEO1(0X000000),VIDEO1(0X0000C0),VIDEO1(0XC00000),VIDEO1(0XC000C0),
-		VIDEO1(0X00C000),VIDEO1(0X00C0C0),VIDEO1(0XC0C000),VIDEO1(0XC0C0C0),
-		VIDEO1(0X000000),VIDEO1(0X0000FF),VIDEO1(0XFF0000),VIDEO1(0XFF00FF),
-		VIDEO1(0X00FF00),VIDEO1(0X00FFFF),VIDEO1(0XFFFF00),VIDEO1(0XFFFFFF)
+		0X000000,0X0000C0,0XC00000,0XC000C0,
+		0X00C000,0X00C0C0,0XC0C000,0XC0C0C0,
+		0X000000,0X0000FF,0XFF0000,0XFF00FF,
+		0X00FF00,0X00FFFF,0XFFFF00,0XFFFFFF
 	},
 	// bright colour
 	{
-		VIDEO1(0X000000),VIDEO1(0X0000E0),VIDEO1(0XE00000),VIDEO1(0XE000E0),
-		VIDEO1(0X00E000),VIDEO1(0X00E0E0),VIDEO1(0XE0E000),VIDEO1(0XE0E0E0),
-		VIDEO1(0X000000),VIDEO1(0X0000FF),VIDEO1(0XFF0000),VIDEO1(0XFF00FF),
-		VIDEO1(0X00FF00),VIDEO1(0X00FFFF),VIDEO1(0XFFFF00),VIDEO1(0XFFFFFF)
+		0X000000,0X0000E0,0XE00000,0XE000E0,
+		0X00E000,0X00E0E0,0XE0E000,0XE0E0E0,
+		0X000000,0X0000FF,0XFF0000,0XFF00FF,
+		0X00FF00,0X00FFFF,0XFFFF00,0XFFFFFF
 	},
 	// monochrome - green screen
 	{
-		VIDEO1(0X003C00),VIDEO1(0X084808),VIDEO1(0X176017),VIDEO1(0X1E6C1E),
-		VIDEO1(0X449044),VIDEO1(0X4B9C4B),VIDEO1(0X5AB45A),VIDEO1(0X62C062),
-		VIDEO1(0X003C00),VIDEO1(0X0A4B0A),VIDEO1(0X1E691E),VIDEO1(0X287828),
-		VIDEO1(0X5AC35A),VIDEO1(0X64D264),VIDEO1(0X78F078),VIDEO1(0X82FF82)
+		0X003C00,0X084808,0X176017,0X1E6C1E,
+		0X449044,0X4B9C4B,0X5AB45A,0X62C062,
+		0X003C00,0X0A4B0A,0X1E691E,0X287828,
+		0X5AC35A,0X64D264,0X78F078,0X82FF82
 	},
 };
 
@@ -355,7 +354,7 @@ void mmu_update(void) // update the MMU tables with all the new offsets
 #define dandanator_clear() (dandanator_cfg[0]=dandanator_cfg[1]=dandanator_cfg[2]=dandanator_cfg[3]=dandanator_temp=0)
 void dandanator_update(void) // parse and run Dandanator commands, if any
 {
-	logprintf("DAN! %08X: %03d,%03d,%03d,%03d\n",z80_pc.w,dandanator_cfg[0],dandanator_cfg[1],dandanator_cfg[2],dandanator_cfg[3]);
+	cprintf("DAN! %08X: %03d,%03d,%03d,%03d\n",z80_pc.w,dandanator_cfg[0],dandanator_cfg[1],dandanator_cfg[2],dandanator_cfg[3]);
 	if (dandanator_cfg[0]==46) // wake up!
 	{
 		if (dandanator_cfg[1]==dandanator_cfg[2]) // parameters must match
@@ -388,7 +387,7 @@ void dandanator_update(void) // parse and run Dandanator commands, if any
 			else if (dandanator_cfg[1]==32) // request EEPROM sector for writing
 				if (dandanator_cfg[7]=dandanator_cfg[2]&127) // keep EEPROM sector 0 read-only
 					;//if (dandanator_canwrite&&mem_dandanator)
-						//memset(mem_16k,255,4<<12),dandanator_dirty=1; // reset dummy bank
+						//memset(mem_16k,-1,4<<12),dandanator_dirty=1; // reset dummy bank
 		}
 	}
 	mmu_update(); dandanator_clear(); // update MMU and reset command queue
@@ -397,7 +396,7 @@ void dandanator_eeprom(void) // modify the cartridge, if allowed
 {
 	if (dandanator_cfg[7]) // before doing RET, "SWORD OF IANNA" sends 4K to 0000-0FFF and "BOBBY CARROT" sends 4K to 3000-3FFF
 	{
-		logprintf("DAN! %08X: %02X,%04X: %02X%02X%02X%02X%02X%02X%02X%02X...\n",z80_pc.w,dandanator_cfg[7],dandanator_base
+		cprintf("DAN! %08X: %02X,%04X: %02X%02X%02X%02X%02X%02X%02X%02X...\n",z80_pc.w,dandanator_cfg[7],dandanator_base
 			,mem_16k[dandanator_base+0],mem_16k[dandanator_base+1],mem_16k[dandanator_base+2],mem_16k[dandanator_base+3]
 			,mem_16k[dandanator_base+4],mem_16k[dandanator_base+5],mem_16k[dandanator_base+6],mem_16k[dandanator_base+7]
 			);
@@ -464,7 +463,7 @@ int psg_stereo[3][2]; const int psg_stereos[][3]={{0,0,0},{+256,-256,0},{+128,-1
 int tape_enabled=0; // tape motor and delay
 #define TAPE_MAIN_TZX_STEP (35<<0) // amount of T units per packet
 #define TAPE_OPEN_TAP_FORMAT // required for Spectrum!
-#define TAPE_KANSAS_CITY // not too useful outside MSX...
+//#define TAPE_KANSAS_CITY // not too useful outside MSX...
 #include "cpcec-k7.h"
 
 // 0x1FFD,0x2FFD,0x3FFD: FDC 765 ------------------------------------ //
@@ -493,8 +492,8 @@ int audio_dirty,audio_queue=0; // used to clump audio updates together to gain s
 
 BYTE ula_temp; // Spectrum hardware before PLUS3 "forgets" cleaning the data bus
 int ula_flash,ula_count_x=0,ula_count_y=0; // flash+horizontal+vertical counters
-int ula_pos_x=0,ula_pos_y=0,ula_scr_x,ula_scr_y=0; // screen bitmap counters
-int ula_snow_disabled=0,ula_snow_z,ula_snow_a;
+int ula_pos_x=0,ula_pos_y=192,ula_scr_x,ula_scr_y=0; // screen bitmap counters
+int ula_snow_disabled=1,ula_snow_z,ula_snow_a; // disabled by default
 BYTE ula_clash_attrib[32];//,ula_clash_bitmap[32];
 int ula_clash_alpha=0,ula_clash_omega=0;
 
@@ -577,12 +576,11 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 		}
 		if (ula_pos_x==0&&ula_count_y>=ula_limit_y)
 		{
-			if (!video_framecount) video_endscanlines(); // 15 = WHITE, 0 = BLACK
-			video_newscanlines(video_pos_x,(312-ula_limit_y)*2); // 128K screen is one line shorter, but begins one line later than 48K
-			ula_bitmap=0; ula_attrib=0x1800;
-			++ula_flash;
+			ula_bitmap=0; ula_attrib=0x1800; ++ula_flash;
 			ula_count_y=0,ula_pos_y=248-ula_limit_y; // lines of BORDER before the top byte
 			z80_irq=1; irq_delay=(type_id?33:32); // 128K/+3 VS 48K "early"
+			if (!video_framecount) video_endscanlines();
+			video_newscanlines(video_pos_x,(312-ula_limit_y)*2); // 128K screen is one line shorter, but begins one line later than 48K
 			++video_pos_z; session_signal|=SESSION_SIGNAL_FRAME+session_signal_frames; // end of frame!
 		}
 	}
@@ -754,6 +752,7 @@ BYTE z80_tape_fastload[][32] = { // codes that read pulses : <offset, length, da
 	/* 12 */ {  -5,  11,0X4F,0X3E,0X7F,0XDB,0XFE,0XE6,0X40,0XA9,0X28,0X0E,0X2A }, // SPEEDLOCK V3 SETUP
 	/* 13 */ {  -6,  13,0X04,0X20,0X01,0XC9,0XDB,0XFE,0X1F,0XC8,0XA9,0XE6,0X20,0X28,0XF3 }, // "CHIP'S CHALLENGE"
 	/* 14 */ {  -2,   9,0XDB,0XFE,0X14,0XC8,0XE6,0X40,0XA9,0X28,0XF7 }, // "BOBBY CARROT"
+	/* 15 */ {  -4,   9,0X04,0XC8,0XDB,0XFE,0XA9,0XE6,0X40,0X28,0XF7 }, // "TIMING TESTS (48K+128K)"
 };
 BYTE z80_tape_fastfeed[][32] = { // codes that build bytes
 	/*  0 */ {  -0,   2,0XD0,0X3E,  +1,   4,0XB8,0XCB,0X15,0X06,  +1,   1,0XD2,-128, -14 }, // ZX SPECTRUM FIRMWARE + TOPO
@@ -784,7 +783,7 @@ int z80_tape_testfeed(WORD p)
 	int i; if ((i=z80_tape_index[p])>length(z80_tape_fastfeed))
 	{
 		for (i=0;i<length(z80_tape_fastfeed)&&!fasttape_test(z80_tape_fastfeed[i],p);++i) ;
-		z80_tape_index[p]=i; logprintf("FASTFEED: %04X=%02d\n",p,(i<length(z80_tape_fastfeed))?i:-1);
+		z80_tape_index[p]=i; cprintf("FASTFEED: %04X=%02d\n",p,(i<length(z80_tape_fastfeed))?i:-1);
 	}
 	return i;
 }
@@ -793,7 +792,7 @@ int z80_tape_testdump(WORD p)
 	int i; if ((i=z80_tape_index[p-1])>length(z80_tape_fastdump)) // the offset avoid conflicts with TABLE2
 	{
 		for (i=0;i<length(z80_tape_fastdump)&&!fasttape_test(z80_tape_fastdump[i],p);++i) ;
-		z80_tape_index[p-1]=i; logprintf("FASTDUMP: %04X=%02d\n",p,(i<length(z80_tape_fastdump))?i:-1);
+		z80_tape_index[p-1]=i; cprintf("FASTDUMP: %04X=%02d\n",p,(i<length(z80_tape_fastdump))?i:-1);
 	}
 	return i;
 }
@@ -804,7 +803,7 @@ void z80_tape_trap(void)
 	if ((i=z80_tape_index[z80_pc.w])>length(z80_tape_fastload))
 	{
 		for (i=0;i<length(z80_tape_fastload)&&!fasttape_test(z80_tape_fastload[i],z80_pc.w);++i) ;
-		z80_tape_index[z80_pc.w]=i; logprintf("FASTLOAD: %04X=%02d\n",z80_pc.w,(i<length(z80_tape_fastload))?i:-1);
+		z80_tape_index[z80_pc.w]=i; cprintf("FASTLOAD: %04X=%02d\n",z80_pc.w,(i<length(z80_tape_fastload))?i:-1);
 	}
 	if (i>=length(z80_tape_fastload)) return; // only known methods can reach here!
 	if (tape_enabled>=0&&tape_enabled<2) // automatic tape playback/stop?
@@ -900,6 +899,12 @@ void z80_tape_trap(void)
 		case 14: // "BOBBY CARROT"
 			z80_r7+=fasttape_add8(z80_bc.b.l>>6,43,&z80_de.b.h,1)*6;
 			break;
+		case 15: // "TIMING TESTS (48K+128K)"
+			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==3)
+				k=fasttape_feed(z80_bc.b.l>>6,43),tape_skipping=z80_hl.b.l=128+(k>>1),z80_bc.b.h=-(k&1);
+			else
+				z80_r7+=fasttape_add8(z80_bc.b.l>>6,43,&z80_bc.b.h,1)*6;
+			break;
 	}
 }
 
@@ -947,20 +952,14 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 			if (type_id||!psg_disabled) // !48K?
 				b=psg_table_recv();
 	}
-	else if ((p&255)==255&&type_id<3) // NON-PLUS3: FLOATING BUS
+	else if ((BYTE)p==255&&type_id<3) // NON-PLUS3: FLOATING BUS
 		b=ula_temp; // not completely equivalent to z80_bus()
-	//else logprintf("%04X! ",p);
+	//else cprintf("%04X! ",p);
 	return b;
 }
 
-int z80_debug_hard_tab(char *t)
-{
-	return sprintf(t,"    ");
-}
-int z80_debug_hard1(char *t,int q,BYTE i)
-{
-	return q?sprintf(t,":%02X",i):sprintf(t,":--");
-}
+int z80_debug_hard_tab(char *t) { return sprintf(t,"    "); }
+int z80_debug_hard1(char *t,int q,BYTE i) { return q?sprintf(t,":%02X",i):sprintf(t,":--"); }
 void z80_debug_hard(int q,int x,int y)
 {
 	char s[16*20],*t;
@@ -987,7 +986,6 @@ void z80_debug_hard(int q,int x,int y)
 	#ifdef Z80_ZXS_DANDANATOR
 	t+=sprintf(t,"DANDANATOR:         " "%c: %02X:%02X:%02X %02X:%02X:%02X",mem_dandanator?'0'+dandanator_temp:'-',dandanator_cfg[0],dandanator_cfg[1],dandanator_cfg[2],dandanator_cfg[4],dandanator_cfg[5],dandanator_cfg[6]);
 	#endif
-	printf(s);
 	char *r=t; t=s; do
 	{
 		debug_locate(x,y); ++y;
@@ -997,14 +995,14 @@ void z80_debug_hard(int q,int x,int y)
 #define ONSCREEN_GRAFX_RATIO 8
 void onscreen_grafx_step(VIDEO_UNIT *t,BYTE b)
 {
-	t[0]=b&128?VIDEO1(0):VIDEO1(0xFFFFFF); // avoid "*t++=*t++=..." bug in GCC 4.6
-	t[1]=b& 64?VIDEO1(0):VIDEO1(0xFFFFFF);
-	t[2]=b& 32?VIDEO1(0):VIDEO1(0xFFFFFF);
-	t[3]=b& 16?VIDEO1(0):VIDEO1(0xFFFFFF);
-	t[4]=b&  8?VIDEO1(0):VIDEO1(0xFFFFFF);
-	t[5]=b&  4?VIDEO1(0):VIDEO1(0xFFFFFF);
-	t[6]=b&  2?VIDEO1(0):VIDEO1(0xFFFFFF);
-	t[7]=b&  1?VIDEO1(0):VIDEO1(0xFFFFFF);
+	t[0]=b&128?0:0xFFFFFF; // avoid "*t++=*t++=..." bug in GCC 4.6
+	t[1]=b& 64?0:0xFFFFFF;
+	t[2]=b& 32?0:0xFFFFFF;
+	t[3]=b& 16?0:0xFFFFFF;
+	t[4]=b&  8?0:0xFFFFFF;
+	t[5]=b&  4?0:0xFFFFFF;
+	t[6]=b&  2?0:0xFFFFFF;
+	t[7]=b&  1?0:0xFFFFFF;
 }
 WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 {
@@ -1012,41 +1010,28 @@ WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 	{
 		int xx=0,lx=onscreen_grafx_size;
 		if (lx*=8)
-			while (xx+lx<=mx)
-			{
+			do
 				for (int y=0;y<my;++y)
 					for (int x=0;x<lx;x+=8)
 						onscreen_grafx_step(&v[xx+x+y*ww],PEEK(s)),++s;
-				xx+=lx;
-			}
-		// fill remainders
-		for (int y=0;y<my;++y)
-		{
-			v+=xx;
+			while ((xx+=lx)+lx<=mx);
+		for (int y=0;v+=xx,y<my;v+=ww-mx,++y) // fill remainders
 			for (int x=xx;x<mx;++x)
-				*v++=VIDEO1(0x808080);
-			v+=ww-mx;
-		}
+				*v++=0x808080;
 	}
 	else
 	{
 		int yy=0,ly=onscreen_grafx_size;
 		if (ly)
-			while (yy+ly<=my)
-			{
+			do
 				for (int x=0;x<mx;x+=8)
 					for (int y=0;y<ly;++y)
 						onscreen_grafx_step(&v[x+(yy+y)*ww],PEEK(s)),++s;
-				yy+=ly;
-			}
-		// fill remainders
+			while ((yy+=ly)+ly<=my);
 		v+=yy*ww;
-		for (int y=yy;y<my;++y)
-		{
+		for (int y=yy;y<my;v+=ww-mx,++y) // fill remainders
 			for (int x=0;x<mx;++x)
-				*v++=VIDEO1(0x808080);
-			v+=ww-mx;
-		}
+				*v++=0x808080;
 	}
 	return s;
 }
@@ -1078,9 +1063,9 @@ WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 #define Z80_PEEK2 Z80_PEEK
 #define Z80_PEEKPC(w) ( Z80_MREQ(4,w), mmu_rom[z80_aux1][w] ) // read opcode
 #define Z80_POKE(w,b) ( Z80_MREQ(3,w), mmu_ram[z80_aux1][w]=b ) // a single write
-#define Z80_POKE0 Z80_POKE // non-unique twin write
-#define Z80_POKE1 Z80_POKE // unique 1st twin write
-#define Z80_POKE2 Z80_POKE // unique 2nd twin write
+#define Z80_POKE0 Z80_POKE // identical twin writes
+#define Z80_POKE1 Z80_POKE // 1st twin write
+#define Z80_POKE2 Z80_POKE // 2nd twin write
 #define Z80_WAIT(t) ( z80_t+=t, ula_clash_z+=t )
 #define Z80_BEWARE int z80_t_=z80_t,ula_clash_z_=ula_clash_z
 #define Z80_REWIND z80_t=z80_t_,ula_clash_z=ula_clash_z_
@@ -1135,7 +1120,7 @@ void all_reset(void) // reset everything!
 
 // firmware ROM file handling operations ---------------------------- //
 
-BYTE old_type_id=0xFF; // keeper of the latest loaded BIOS type
+BYTE old_type_id=99; // the last loaded BIOS type
 char bios_system[][13]={"spectrum.rom","spec128k.rom","spec-p-2.rom","spec-p-3.rom"};
 char bios_path[STRMAX]="";
 
@@ -1153,6 +1138,7 @@ int bios_wrong_dword(DWORD t) // catch fingerprints that belong to other file ty
 
 int bios_load(char *s) // load ROM. `s` path; 0 OK, !0 ERROR
 {
+	if (globbing("*.mld",s,1)) return 1; // Dandanator [sub]cartridge!
 	FILE *f=puff_fopen(s,"rb");
 	if (!f) return 1;
 	fseek(f,0,SEEK_END); int i=ftell(f),j;
@@ -1163,16 +1149,16 @@ int bios_load(char *s) // load ROM. `s` path; 0 OK, !0 ERROR
 	fseek(f,0,SEEK_SET);
 	fread1(mem_rom,sizeof(mem_rom),f);
 	puff_fclose(f);
-	#if 0//1 // fast tape hack!!
-	if (equalsiiii(&mem_rom[i-0x4000+0x0571],0x10041521))
-		mem_rom[i-0x4000+0x0571+2]/=2;//mputii(&mem_rom[i-0x4000+0x0571+1],1); // HACK: reduced initial tape reading delay!
+	#if 0 // fast tape hack!!
+	if (equalsmmmm(&mem_rom[i-0x4000+0x0579],0x20F9CDE3))
+		mem_rom[i-0x4000+0x0571+2]=1;//=4;//mputii(&mem_rom[i-0x4000+0x0571+1],1); // HACK: reduced initial tape reading delay!
 	#endif
 	if (i<(1<<15))
 		memcpy(&mem_rom[1<<14],mem_rom,1<<14); // mirror 16k ROM up
 	if (i<(1<<16))
 		memcpy(&mem_rom[1<<15],mem_rom,1<<15); // mirror 32k ROM up
 	old_type_id=type_id=i>(1<<14)?i>(1<<15)?3:mem_rom[0x5540]=='S'?1:2:0; // original Sinclair 128K or modified Amstrad PLUS2?
-	//logprintf("Firmware %dk m%d\n",i>>10,type_id);
+	//cprintf("Firmware %dk m%d\n",i>>10,type_id);
 	if (bios_path!=s&&(char*)session_substr!=s) strcpy(bios_path,s);
 	return 0;
 }
@@ -1190,15 +1176,15 @@ int dandanator_load(char *s) // inserts Dandanator cartridge, performs several t
 {
 	FILE *f=puff_fopen(s,"rb");
 	if (!f) return 1;
-	unsigned char t[0x1000]; fread1(t,sizeof(t),f);
+	BYTE t[0x1000]; fread1(t,sizeof(t),f); fseek(f,0,SEEK_END);
 	// the Spectrum Dandanator heuristic is weak: it relies on FAILING basic filetypes and the strong CPC Dandanator test :-/
-	int k=!bios_wrong_dword(mgetmmmm(t))?4+2:0,i=0; for (;k&&i<sizeof(t)-4;++i)
+	int l=ftell(f),k=l&&!(l&0x3FFF)&&!bios_wrong_dword(mgetmmmm(t))?4+2:0,i=0; for (;k&&i<sizeof(t)-4;++i)
 		if (t[i+0]==0xFD&&t[i+1]==0xFD&&t[i+2]==0xFD)
 			if (t[i+3]==0x77) k&=~4;
 			else if (t[i+3]==0x71) k&=~2;
 	if (k) // ensure that this is NOT a firmware dump: check the Spectrum TAPE LOAD fingerprint
 		k=fseek(f,-0x4000+0x0601,SEEK_END)||fgetmmmm(f)!=0xD3FE37C9;
-	puff_fclose(f); logprintf("Dandanator flags: %04X:%d\n",i,k);
+	puff_fclose(f); cprintf("Dandanator flags: %04X:%d\n",i,k);
 	if (!k) return 1; // fail!
 	dandanator_remove(); if (dandanator_insert(s)) return 1;
 	if (dandanator_path!=s) strcpy(dandanator_path,s); return 0;
@@ -1240,15 +1226,15 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 	header[25]=z80_imd&3;
 	header[26]=ula_v1&7;
 	fwrite1(header,27,f);
-	fwrite1(&mem_ram[0x14000],1<<14,f); // bank 5
-	fwrite1(&mem_ram[0x08000],1<<14,f); // bank 2
+	fwrite1(&mem_ram[5<<14],1<<14,f); // bank 5
+	fwrite1(&mem_ram[2<<14],1<<14,f); // bank 2
 	fwrite1(&mem_ram[(ula_v2&7)<<14],1<<14,f); // active bank
 	if (q||!(ula_v2&32)) // relaxed or 128k?
 	{
 		SNAP_SAVE_Z80W(0,z80_pc);
 		header[2]=ula_v2;
 		if (mem_dandanator&&dandanator_cfg[4]<32) // the active Dandanator overrides Plus3 special memory modes!!
-			header[3]=dandanator_cfg[4]+32; // i.e. Dandanator bank +32
+			header[3]=dandanator_cfg[4]+32; // i.e. Dandanator bank ID + 32
 		else
 			header[3]=type_id==3&&(!snap_extended||(!(ula_v2&32)&&(ula_v3&7)!=4))?(ula_v3&15)+16:0; // using this byte for Plus3 config (low nibble + 16) is questionable and unreliable; most emus write 0 here :-(
 		fwrite1(header,4,f);
@@ -1296,15 +1282,17 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 	FILE *f=puff_fopen(s,"rb");
 	if (!f) return 1;
 	BYTE header[96]; int i,q;
-	fseek(f,0,SEEK_END); i=ftell(f); // snapshots are defined by filesizes, there's no magic number!
-	if ((q=snap_not_z80(s))&&i!=49179&&i!=49183&&i!=131103&&i!=147487) // ||(!memcmp("MV - SNA",header,8) fails on TAP files, for example
+	fread1(header,8,f); if (!memcmp("MV - SNA",header,8)) // CPC snapshot?
+		return puff_fclose(f),1;
+	fseek(f,0,SEEK_END); i=ftell(f); // Z80 files are defined by extension, and SNA files by filesize -- no magic numbers!
+	if ((q=snap_not_z80(s))&&i!=49179&&i!=49183&&i!=131103&&i!=147487)
 		return puff_fclose(f),1;
 	fseek(f,0,SEEK_SET);
 	MEMFULL(z80_tape_index); // clean tape trap cache to avoid false positives
 	ula_v3=4; ula_v2_send(48); // disable PLUS3 and enable 48K! (and update the MMU)
 	if (!q) // Z80 format
 	{
-		logprintf("Z80 snapshot",i);
+		cprintf("Z80 snapshot: ");
 		fread1(header,30,f);
 		z80_af.b.h=header[0];
 		z80_af.b.l=header[1];
@@ -1325,12 +1313,12 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 		z80_af2.b.l=header[22];
 		SNAP_LOAD_Z80W(23,z80_iy);
 		SNAP_LOAD_Z80W(25,z80_ix);
-		z80_iff.w=header[27]?257:0;
+		z80_iff.w=header[27]&1?257:0;
 		z80_imd=header[29]&3;
 		if (header[12]!=255&&!z80_pc.w) // HEADER V2+
 		{
 			i=fgetii(f);
-			logprintf(" (+%d)",i);
+			cprintf(" +%d",i);
 			if (i<=64)
 				fread1(&header[32],i,f);
 			else
@@ -1353,9 +1341,9 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 			}
 			if (q!=type_id)
 				bios_reload(); // reload BIOS if required!
-			while ((i=fgetii(f))&&(q=fgetc(f),!feof(f)))
+			while ((i=fgetii(f))&&(q=fgetc(f))>=0) // q<0 = feof
 			{
-				logprintf(" %05d:%03d",i,q);
+				cprintf(" [%05d:%03d]",i,q);
 				if ((q-=3)<0||q>7) // ignore ROM copies
 					q=8; // dummy 16K
 				else if (!type_id) // 128K banks follow the normal order,
@@ -1377,30 +1365,30 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 				if (i==0xFFFF) // uncompressed
 					fread1(&mem_ram[q<<14],1<<14,f);
 				else if (snap_load_z80block(f,i,q<<14,(q+1)<<14))
-					logprintf(" ERROR!");
+					cprintf(" V2+ ERROR!");
 			}
 		}
 		else // HEADER V1
 		{
 			if (header[12]&32) // compressed V1
 			{
-				logprintf(" PACKED");
+				cprintf(" PACKED");
 				if (snap_load_z80block(f,i,5<<14,8<<14))
-					logprintf(" ERROR!");
+					cprintf(" V1 ERROR!");
 				//memcpy(&mem_ram[5<<14],&mem_ram[5<<14],1<<14);
 				memcpy(&mem_ram[2<<14],&mem_ram[6<<14],1<<14);
 				memcpy(&mem_ram[0<<14],&mem_ram[7<<14],1<<14);
 			}
 			else // uncompressed 48K body
 			{
-				fread1(&mem_ram[0x14000],1<<14,f); // bank 5
-				fread1(&mem_ram[0x08000],1<<14,f); // bank 2
-				fread1(&mem_ram[0x00000],1<<14,f); // bank 0
+				fread1(&mem_ram[5<<14],1<<14,f); // bank 5
+				fread1(&mem_ram[2<<14],1<<14,f); // bank 2
+				fread1(&mem_ram[0<<14],1<<14,f); // bank 0
 			}
 			if (type_id)
 				type_id=0,bios_reload();
 		}
-		logprintf(" PC=$%04X\n",z80_pc.w);
+		//cprintf(" PC=$%04X\n",z80_pc.w);
 	}
 	else // SNA format
 	{
@@ -1421,9 +1409,9 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 		SNAP_LOAD_Z80W(23,z80_sp);
 		z80_imd=header[25]&3;
 		ula_v1_send(header[26]&7);
-		fread1(&mem_ram[0x14000],1<<14,f); // bank 5
-		fread1(&mem_ram[0x08000],1<<14,f); // bank 2
-		fread1(&mem_ram[0x00000],1<<14,f); // bank 0
+		fread1(&mem_ram[5<<14],1<<14,f); // bank 5
+		fread1(&mem_ram[2<<14],1<<14,f); // bank 2
+		fread1(&mem_ram[0<<14],1<<14,f); // bank 0
 		q=type_id; dandanator_cfg[4]=32; dandanator_cfg[5]=dandanator_cfg[6]=dandanator_cfg[7]=0;
 		if (fread1(header,4,f)==4) // new snapshot type, 128k-ready?
 		{
@@ -1519,6 +1507,7 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 
 // auxiliary user interface operations ------------------------------ //
 
+#define MAIN_FRAMESKIP_MASK ((1<<MAIN_FRAMESKIP_BITS)-1)
 char txt_error_snap_save[]="Cannot save snapshot!";
 char snap_pattern[]="*.sna";
 char file_pattern[]="*.sna;*.z80;*.rom;*.mld;*.dsk;*.tap;*.tzx;*.csw;*.wav";
@@ -1547,12 +1536,23 @@ char session_menudata[]=
 	"0x4800 Play tape\tCtrl+Shift+F8\n"
 	"=\n"
 	"0x3F00 E_xit\n"
-	"Edit\n"
+	"Machine\n"
 	"0x8500 Select firmware..\tF5\n"
 	"0x0500 Reset emulation\tCtrl+F5\n"
 	"0x8F00 Pause\tPause\n"
 	"0x8900 Debug\tF9\n"
 	"=\n"
+	"0x8511 Memory contention\n"
+	"0x8512 ULA video noise\n"
+	"0x8513 Issue-2 ULA line\n"
+	"=\n"
+	"0x8514 AY-Melodik chip\n"
+	#ifdef Z80_ZXS_DANDANATOR
+	"0xC500 Insert Dandanator..\tShift+F5\n"
+	"0x4500 Remove Dandanator\tCtrl+Shift+F5\n"
+	"0x0510 Writeable Dandanator\n"
+	#endif
+	"Settings\n"
 	"0x8600 Realtime\tF6\n"
 	"0x0601 1x CPU speed\n"
 	"0x0602 2x CPU speed\n"
@@ -1561,12 +1561,7 @@ char session_menudata[]=
 	//"0x0600 Raise Z80 speed\tCtrl+F6\n"
 	//"0x4600 Lower Z80 speed\tCtrl+Shift+F6\n"
 	"=\n"
-	"0x0900 Tape speed-up\tCtrl+F9\n"
-	"0x4900 Tape analysis\tCtrl+Shift+F9\n"
-	//"0x4901 Tape analysis+cheating\n"
-	"0x0901 Tape auto-rewind\n"
 	"0x0400 Virtual joystick\tCtrl+F4\n"
-	"Settings\n"
 	"0x8501 Kempston joystick\n"
 	"0x8502 Sinclair 1 joystick\n"
 	"0x8503 Sinclair 2 joystick\n"
@@ -1574,21 +1569,15 @@ char session_menudata[]=
 	"0x8505 QAOP+Space joystick\n"
 	"0x8506 Gunstick (MHT)\n"
 	"=\n"
-	"0x8511 Memory contention\n"
-	"0x8512 ULA video noise\n"
-	"0x8513 Issue-2 ULA line\n"
-	"0x8514 AY-Melodik chip\n"
-	#ifdef Z80_ZXS_DANDANATOR
-	"=\n"
-	"0xC500 Insert Dandanator..\tShift+F5\n"
-	"0x4500 Remove Dandanator\tCtrl+Shift+F5\n"
-	"0x0510 Writeable Dandanator\n"
-	#endif
-	"=\n"
 	"0x851F Strict SNA files\n"
 	"0x8510 Disc controller\n"
 	"0x8590 Strict disc writes\n"
 	"0x8591 Read-only as default\n"
+	//"=\n"
+	"0x0900 Tape speed-up\tCtrl+F9\n"
+	"0x4900 Tape analysis\tCtrl+Shift+F9\n"
+	//"0x4901 Tape analysis+cheating\n"
+	"0x0901 Tape auto-rewind\n"
 	"Video\n"
 	"0x8A00 Full screen\tAlt+Return\n"
 	"0x8A01 Zoom to integer\n"
@@ -2078,7 +2067,7 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 			break;
 		case 0x9100: // ^NUM.+
 		case 0x1100: // NUM.+: INCREASE FRAMESKIP
-			if ((video_framelimit&MAIN_FRAMESKIP_MASK)<MAIN_FRAMESKIP_FULL)
+			if ((video_framelimit&MAIN_FRAMESKIP_MASK)<MAIN_FRAMESKIP_MASK)
 				++video_framelimit;
 			break;
 		case 0x9200: // ^NUM.-
@@ -2088,7 +2077,7 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 			break;
 		case 0x9300: // ^NUM.*
 		case 0x1300: // NUM.*: MAXIMUM FRAMESKIP
-			video_framelimit=(video_framelimit&~MAIN_FRAMESKIP_MASK)|MAIN_FRAMESKIP_FULL;
+			video_framelimit|=MAIN_FRAMESKIP_MASK;
 			break;
 		case 0x9400: // ^NUM./
 		case 0x1400: // NUM./: MINIMUM FRAMESKIP
@@ -2157,7 +2146,7 @@ int main(int argc,char *argv[])
 {
 	int i,j; FILE *f;
 	session_detectpath(argv[0]);
-	if (f=session_configfile("r"))
+	if (f=session_configfile(1))
 	{
 		while (fgets(session_parmtr,STRMAX-1,f))
 			session_configreadmore(session_configread(session_parmtr));
@@ -2299,7 +2288,7 @@ int main(int argc,char *argv[])
 	session_kbdsetup(kbd_map_xlt,length(kbd_map_xlt)/2);
 	video_target=&video_frame[video_pos_y*VIDEO_LENGTH_X+video_pos_y]; audio_target=audio_frame;
 	audio_disabled=!session_audio;
-	video_clut_update(); onscreen_inks(VIDEO1(0xAA0000),VIDEO1(0x55FF55));
+	video_clut_update(); onscreen_inks(0xAA0000,0x55FF55);
 	if (session_fullscreen) session_togglefullscreen();
 	// it begins, "alea jacta est!"
 	while (!session_listen())
@@ -2320,19 +2309,17 @@ int main(int argc,char *argv[])
 					onscreen_text(+1, -3, "--\t--", 0);
 				else
 				{
-					int q=(disc_phase&2)&&!(disc_parmtr[1]&1);
-					onscreen_byte(+1,-3,disc_track[0],q);
-					if (disc_motor|disc_action) // disc drive is busy?
-						onscreen_char(+3,-3,!disc_action?'-':(disc_action>1?'W':'R'),1),disc_action=0;
-					q=(disc_phase&2)&&(disc_parmtr[1]&1);
-					onscreen_byte(+4,-3,disc_track[1],q);
+					int q=disc_phase&2; // disc drive is busy?
+					if (q) onscreen_char(+3,-3,disc_phase&1?'R':'W',1);
+					onscreen_byte(+1,-3,disc_track[0],q&&((disc_parmtr[1]&3)==0));
+					onscreen_byte(+4,-3,disc_track[1],q&&((disc_parmtr[1]&3)==1));
 				}
-				int i,q=tape_enabled;
+				int q=tape_enabled;
 				if (tape_skipping)
 					onscreen_char(+6,-3,tape_skipping>0?'*':'+',q);
 				if (tape_filesize)
 				{
-					i=(long long)tape_filetell*1000/(tape_filesize+1);
+					int i=(long long)tape_filetell*1000/(tape_filesize+1);
 					onscreen_char(+7,-3,'0'+i/100,q);
 					onscreen_byte(+8,-3,i%100,q);
 				}
@@ -2347,8 +2334,8 @@ int main(int argc,char *argv[])
 					onscreen_bool(-4,-4,1,1,kbd_bit_tst(kbd_joy[4]));
 				}
 				#ifdef DEBUG
-				onscreen_byte(+1,+1,ula_clash_delta,0);
-				onscreen_byte(+4,+1,ula_clash_gamma,0);
+				onscreen_byte(+1,+1,50+ula_clash_delta,0);
+				onscreen_byte(+4,+1,50+ula_clash_gamma,0);
 				#endif
 				#if defined(SDL2) && defined(DEBUG)
 				if (session_audio) // SDL2 audio queue
@@ -2381,7 +2368,7 @@ int main(int argc,char *argv[])
 				--tape_enabled; // tape is still busy?
 			if (tape_closed)
 				tape_closed=0,session_dirtymenu=1; // tag tape as closed
-			tape_skipping=audio_pos_z=audio_queue=0; // reset tape and audio queues and hacks
+			tape_skipping=audio_queue=0; // reset tape and audio flags
 			if (tape&&tape_skipload&&tape_enabled)
 				session_fast|=2,video_framelimit|=(MAIN_FRAMESKIP_MASK+1),video_interlaced|=2,audio_disabled|=2; // abuse binary logic to reduce activity
 			else
@@ -2394,7 +2381,7 @@ int main(int argc,char *argv[])
 	tape_close();
 	disc_closeall();
 	psg_closelog();
-	if (f=session_configfile("w"))
+	if (f=session_configfile(0))
 		session_configwritemore(f),session_configwrite(f),fclose(f);
 	return session_cleanup(),session_byebye(),0;
 }

@@ -937,7 +937,7 @@ bandera de interrupciones, y OUTI envía la señal OUT durante su último
 microsegundo en lugar del penúltimo; la demo "KKB First" necesitaba ambas
 correcciones para funcionar; avisado por Hicks) y ele FDC (los errores conllevan
 retrasos que deben ser emulados; el disco protegido original de "Bad Cat"
-dependía de esto por accidente; avisado por Dlfrsilver). El depurador acepta
+dependía de esto por accidente; avisado por Dlfrsilver). El debugger acepta
 expresiones muy simples (sumas y restas) al escribir valores de 16 bits
 (dirección de "Go To", longitud de "Output"...) y el zoom entero emplea pasos de
 50% en lugar de 100% porque el tamaño por defecto es técnicamente 200% y no
@@ -948,7 +948,7 @@ bits (ambos avisados por Cpcitor), y suciedad acumulada entre múltiples
 grabaciones dentro de una misma sesión. XRF también muestra la longitud del
 resultado.
 - 20210526 -- parche menor que alinea el efecto X-Masking a la derecha en lugar
-de la izquierda. Las expresiones del depurador aceptan tres operadores nuevos: &
+de la izquierda. Las expresiones del debugger aceptan tres operadores nuevos: &
 (AND), | (OR) y ^ (XOR). XRF muestra la longitud del resultado con una precisión
 de bytes en lugar de megabytes, y ejecutarlo sin un parámetro de destino imprime
 los parámetros del vídeo de fuente y el tamaño esperado.
@@ -969,3 +969,13 @@ de "%d" o "%u" y semejantes), un bug en el CRTC (parte de los cilindros 3D de
 "PhX" para CRTC3) y otro en Dandanator para Spectrum (atrapar "LD A,(DE)"). La
 carga de bloques de snapshots es ligeramente más segura tanto en CPCEC como en
 ZXSEC.
+- 20210730 -- parche menor que añade soporte de ratón al debugger y corrige
+errores en el ASIC (cambiar el registro 9 comprueba que el valor nuevo es igual
+o menor que su contador, el splitting horizontal no dibuja basura ni redispara
+los IRQ: scroll final de "PhX") y el CRTC: leer el puerto equivocado no devuelve
+el valor adecuado (parte secreta de "École Buissonière") y los eventos HSYNC se
+filtran con más cuidado ("Chany Dream Demo 5", "Madness Demo", "Sub Hunter"..) a
+menos que el usuario prefiera el método antiguo (opción "Hard H-Hold"). Algunos
+elementos del menú han cambiado de sitio para separar las propiedades del
+hardware y las opciones de la emulación. CPCEC guarda bloques de memoria
+comprimidos en los snapshots menos si "Strict SNA files" está activo.

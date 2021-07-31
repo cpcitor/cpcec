@@ -49,10 +49,10 @@
 // general engine constants and variables --------------------------- //
 
 #define VIDEO_UNIT DWORD // 0x00RRGGBB style
-#define VIDEO1(x) (x) // no conversion required!
 
 //#define VIDEO_FILTER_HALF(x,y) (((((x&0XFF00FF)+(y&0XFF00FF)+(x<y?0X10001:0))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+(x<y?0X100:0))&0X1FE00))>>1) // 50%:50%
 #define VIDEO_FILTER_HALF(x,y) ((x<y?((0X10001+(x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+((0X100+(x&0XFF00)+(y&0XFF00))&0X1FE00):(((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1) // 50:50
+//#define VIDEO_FILTER_HALF(x,y) ((x&0XFFFF00)+(y&0X0000FF)) // red+green:blue
 //#define VIDEO_FILTER_BLUR(r,x,y,z) r=VIDEO_FILTER_HALF(y,z),y=z
 //#define VIDEO_FILTER_BLUR(r,x,y,z) r=VIDEO_FILTER_HALF(y,z),y=r
 //#define VIDEO_FILTER_BLUR(r,x,y,z) r=(x&0XFF0000)+(z&0XFF00)+(y&0XFF),x=y,y=z // colour bleed
@@ -70,12 +70,10 @@
 	#define AUDIO_UNIT unsigned char
 	#define AUDIO_BITDEPTH 8
 	#define AUDIO_ZERO 128
-	#define AUDIO1(x) (x)
 #else // 16 bits
 	#define AUDIO_UNIT signed short
 	#define AUDIO_BITDEPTH 16
 	#define AUDIO_ZERO 0
-	#define AUDIO1(x) (x)
 #endif // bitsize
 #define AUDIO_CHANNELS 2 // 1 mono, 2 stereo
 
@@ -289,7 +287,7 @@ SDL_Window *session_hwnd=NULL;
 VIDEO_UNIT *debug_frame;
 BYTE debug_buffer[DEBUG_LENGTH_X*DEBUG_LENGTH_Y]; // [0] can be a valid character, 128 (new redraw required) or 0 (redraw not required)
 SDL_Texture *session_dbg=NULL;
-#define session_hidemenu *debug_buffer
+#define session_hidemenu *debug_buffer // dummy, useless on SDL2
 SDL_Texture *session_dib=NULL,*session_gui_dib=NULL; SDL_Renderer *session_blitter=NULL;
 SDL_Rect session_ideal; // used for calculations, see below
 
@@ -339,7 +337,7 @@ void session_redraw(int q) // redraw main canvas (!0) or user interface (0)
 }
 
 #ifdef __TINYC__
-#define session_clrscr() 0 // Tiny C Compiler causes a segmentation fault (!?)
+#define session_clrscr() 0 // TCC causes a segmentation fault (!?)
 #else
 #define session_clrscr() SDL_RenderClear(session_blitter) // defaults to black
 #endif
@@ -355,7 +353,7 @@ void session_togglefullscreen(void)
 
 #define SESSION_UI_HEIGHT 14
 
-BYTE session_ui_chrs[96*SESSION_UI_HEIGHT];//,session_ui_chr_size[96];
+BYTE session_ui_chrs[96*SESSION_UI_HEIGHT];//,session_ui_chrlen[96];
 void session_ui_makechrs(void)
 {
 	memset(session_ui_chrs,0,sizeof(session_ui_chrs));
@@ -375,13 +373,15 @@ void session_ui_makechrs(void)
 				++k,bits<<=1;
 			while (!(bits&1))
 				--l,bits>>=1;
-			session_ui_chr_size[i]=l;
+			session_ui_chrlen[i]=l;
 			for (int j=0;j<SESSION_UI_HEIGHT;++j)
 				l=session_ui_chrs[i*SESSION_UI_HEIGHT+j]<<k;
 		}
 	}
-	session_ui_chr_size[0]=session_ui_chr_size[1];*/ // space is as wide as "!"
+	session_ui_chrlen[0]=session_ui_chrlen[1];*/ // space is as wide as "!"
 }
+/*int session_ui_strlen(char *s) // get proportional string length in pixels
+	{ int i=0; while (*s) i+=session_ui_chrlen[(*s++-32)&127]; return i; }*/
 
 BYTE session_ui_menudata[1<<12],session_ui_menusize; // encoded menu data
 #ifdef _WIN32
@@ -392,8 +392,7 @@ SDL_Surface *session_ui_icon=NULL; // the window icon
 
 void session_fillrect(int rx,int ry,int rw,int rh,VIDEO_UNIT a) // n.b.: coords in pixels
 {
-	VIDEO_UNIT *p=&menus_frame[ry*VIDEO_PIXELS_X+rx];
-	for (;rh>0;--rh,p+=VIDEO_PIXELS_X-rw)
+	for (VIDEO_UNIT *p=&menus_frame[ry*VIDEO_PIXELS_X+rx];rh>0;--rh,p+=VIDEO_PIXELS_X-rw)
 		for (int x=rw;x>0;--x)
 			*p++=a;
 }
@@ -405,22 +404,22 @@ void session_ui_drawframes(int x,int y,int w,int h) // coords in characters
 	int rx,ry,rw,rh;
 	// top border
 	rx=x-2; ry=y-2;
-	rw=w+4; rh=2; session_fillrect(rx,ry,rw,rh,VIDEO1(0x00C0C0C0));
+	rw=w+4; rh=2; session_fillrect(rx,ry,rw,rh,0x00C0C0C0);
 	// bottom border
-	ry=y+h; session_fillrect(rx,ry,rw,rh,VIDEO1(0x00404040));
+	ry=y+h; session_fillrect(rx,ry,rw,rh,0x00404040);
 	// left border
 	ry=y-1;
-	rw=2; rh=h+2; session_fillrect(rx,ry,rw,rh,VIDEO1(0x00808080));
+	rw=2; rh=h+2; session_fillrect(rx,ry,rw,rh,0x00808080);
 	// right border
-	rx=x+w; session_fillrect(rx,ry,rw,rh,VIDEO1(0x00808080));
+	rx=x+w; session_fillrect(rx,ry,rw,rh,0x00808080);
 }
 int session_ui_printglyph(VIDEO_UNIT *p,BYTE z)
 {
 	BYTE const *r=&session_ui_chrs[((z-32)&127)*SESSION_UI_HEIGHT];
-	const int w=8; //=session_ui_chr_size[(z-32)&127];
-	VIDEO_UNIT q0=VIDEO1(0x00FFFFFF),q1=VIDEO1(0);
+	const int w=8; //=session_ui_chrlen[(z-32)&127];
+	VIDEO_UNIT q0=0x00FFFFFF,q1=0;
 	if (z&128)
-		q0=VIDEO1(0),q1=VIDEO1(0x00FFFFFF);
+		q0=0,q1=0x00FFFFFF;
 	for (int yy=0;yy<SESSION_UI_HEIGHT;++yy)
 	{
 		BYTE rr=*r++;
@@ -472,13 +471,15 @@ int session_ui_exchange(void) // wait for a keystroke or a mouse motion
 				if (event.window.event==SDL_WINDOWEVENT_EXPOSED)
 					SDL_RenderPresent(session_blitter);//SDL_UpdateWindowSurface(session_hwnd); // fast redraw
 				break;
+			case SDL_MOUSEWHEEL:
+				if (event.wheel.direction==SDL_MOUSEWHEEL_FLIPPED) event.wheel.y=-event.wheel.y;
+				if (event.wheel.y<0) return KBCODE_NEXT;
+				if (event.wheel.y) return KBCODE_PRIOR;
+				break;
 			case SDL_MOUSEBUTTONUP: // better than SDL_MOUSEBUTTONDOWN
 			case SDL_MOUSEMOTION:
 				session_ui_maus_x=(event.button.x-session_ideal.x)*VIDEO_PIXELS_X/session_ideal.w/8-session_ui_base_x,session_ui_maus_y=(event.button.y-session_ideal.y)*VIDEO_PIXELS_Y/session_ideal.h/SESSION_UI_HEIGHT-session_ui_base_y;
 				return event.type==SDL_MOUSEBUTTONUP?event.button.button==SDL_BUTTON_RIGHT?-3:-2:-1;
-			case SDL_MOUSEWHEEL:
-				if (event.wheel.direction==SDL_MOUSEWHEEL_FLIPPED) event.wheel.y=-event.wheel.y;
-				return event.wheel.y>0?KBCODE_PRIOR:event.wheel.y<0?KBCODE_NEXT:0;
 			case SDL_KEYDOWN:
 				session_ui_shift=!!(event.key.keysym.mod&KMOD_SHIFT);
 				return event.key.keysym.mod&KMOD_ALT?0:event.key.keysym.scancode;
@@ -724,13 +725,13 @@ int session_ui_text(char *s,char *t,char q) // see session_message
 	session_ui_printasciz("",textx+q,texty+(++i),1,textw-q,1,0); // blank
 	if (q) // draw icon?
 	{
-		session_ui_fillrect(textx,texty+1,q,texth-1,VIDEO1(0x00C0C0C0));
-		//for (int z=0;z<q;++z) session_ui_fillrect(textx+z,texty+1,1,texth-1,VIDEO1(0x00010101*((0xFF*z+0xC0*(q-z)+q/2)/q))); // gradient!
+		session_ui_fillrect(textx,texty+1,q,texth-1,0x00C0C0C0);
+		//for (int z=0;z<q;++z) session_ui_fillrect(textx+z,texty+1,1,texth-1,0x00010101*((0xFF*z+0xC0*(q-z)+q/2)/q)); // gradient!
 		VIDEO_UNIT *tgt=&menus_frame[(texty+2)*SESSION_UI_HEIGHT*VIDEO_PIXELS_X+(textx+1)*8];
 		for (int z=0,y=0;y<32;++y,tgt+=VIDEO_PIXELS_X-32)
 			for (int a,x=0;x<32;++x,++tgt)
 				if ((a=session_icon32xx16[z++])&0x8000)
-					*tgt=VIDEO1((a&0x00F)*0x0011+(a&0x0F0)*0x00110+(a&0xF00)*0x1100);
+					*tgt=(a&0x00F)*0x0011+(a&0x0F0)*0x00110+(a&0xF00)*0x1100;
 	}
 	session_redraw(0);
 	for (;;)
@@ -1247,7 +1248,7 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	SDL_GetVersion(&sdl_version); sprintf(session_version,"%d.%d.%d",sdl_version.major,sdl_version.minor,sdl_version.patch);
 	if (SDL_Init(SDL_INIT_EVENTS|SDL_INIT_VIDEO|SDL_INIT_AUDIO|SDL_INIT_TIMER|SDL_INIT_JOYSTICK|SDL_INIT_GAMECONTROLLER)<0)
 		return (char *)SDL_GetError();
-	if (!(session_hwnd=SDL_CreateWindow(session_caption,SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,0))
+	if (!(session_hwnd=SDL_CreateWindow(NULL,SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,0))
 		||!(video_blend=malloc(sizeof(VIDEO_UNIT)*VIDEO_PIXELS_Y/2*VIDEO_PIXELS_X)))
 		return SDL_Quit(),(char *)SDL_GetError();
 	if (session_hardblit=1,session_softblit||!(session_blitter=SDL_CreateRenderer(session_hwnd,-1,SDL_RENDERER_ACCELERATED)))
@@ -1271,12 +1272,12 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	if (session_stick)
 	{
 		int i=SDL_NumJoysticks();
-		logprintf("Detected %d joystick[s]: ",i);
-		while (--i>=0&&!((session_pad=SDL_IsGameController(i)),(logprintf("%s #%d = '%s'. ",session_pad?"Controller":"Joystick",i,session_pad?SDL_GameControllerNameForIndex(i):SDL_JoystickNameForIndex(i))),
+		cprintf("Detected %d joystick[s]: ",i);
+		while (--i>=0&&!((session_pad=SDL_IsGameController(i)),(cprintf("%s #%d = '%s'. ",session_pad?"Controller":"Joystick",i,session_pad?SDL_GameControllerNameForIndex(i):SDL_JoystickNameForIndex(i))),
 			session_joy=(session_pad?(void*)SDL_GameControllerOpen(i):(void*)SDL_JoystickOpen(i)))) // scan joysticks and game controllers until we run out or one is OK
 			; // unlike Win32, SDL2 lists the joysticks from last to first
 		session_stick=i>=0;
-		logprintf(session_stick?"Joystick enabled!\n":"No joystick!\n");
+		cprintf(session_stick?"Joystick enabled!\n":"No joystick!\n");
 	}
 	if (session_audio)
 	{
@@ -1435,10 +1436,22 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 				if (event.window.event==SDL_WINDOWEVENT_EXPOSED)
 					session_clrscr(),session_redraw(1);// clear and redraw
 				break;
+			case SDL_MOUSEWHEEL:
+				if (event.wheel.direction==SDL_MOUSEWHEEL_FLIPPED) event.wheel.y=-event.wheel.y;
+				if (event.wheel.y<0) session_event=debug_xlat(KBCODE_NEXT);
+				else if (event.wheel.y) session_event=debug_xlat(KBCODE_PRIOR);
+				break;
 			case SDL_MOUSEBUTTONUP:
 				if (event.button.button==SDL_BUTTON_RIGHT) // better here than in SDL_MOUSEBUTTONDOWN
 				{
 					session_event=0x8080; // show menu
+					break;
+				}
+				if (event.button.button==SDL_BUTTON_LEFT&&session_signal&SESSION_SIGNAL_DEBUG)
+				{
+					session_maus_x=((event.button.x-session_r_x)*VIDEO_PIXELS_X+session_r_w/2)/session_r_w; // notice the `button`
+					session_maus_y=((event.button.y-session_r_y)*VIDEO_PIXELS_Y+session_r_h/2)/session_r_h; // instead of `motion`!
+					session_event=debug_xlat(-1);
 					break;
 				}
 			#ifdef MAUS_EMULATION
@@ -1551,8 +1564,7 @@ void session_writewave(AUDIO_UNIT *t); // save the current sample frame. Must be
 FILE *session_filmfile=NULL; void session_writefilm(void); // must be defined later on, too!
 INLINE void session_render(void) // update video, audio and timers
 {
-	int i,j;
-	static int performance_t=-9999,performance_f=0,performance_b=0; ++performance_f;
+	int i,j; static int performance_t=-9999,performance_f=0,performance_b=0; ++performance_f;
 	if (!video_framecount) // do we need to hurry up?
 	{
 		if ((video_interlaces=!video_interlaces)||!video_interlaced)

@@ -7,8 +7,13 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "XRF"
-#define MY_VERSION "20210626"//"2555"
+#define MY_VERSION "20210717"//"1555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
+
+#define GPL_3_INFO \
+	"This program comes with ABSOLUTELY NO WARRANTY; for more details" "\n" \
+	"please read the GNU General Public License. This is free software" "\n" \
+	"and you are welcome to redistribute it under certain conditions."
 
 /* This notice applies to the source code of CPCEC and its binaries.
 
@@ -516,9 +521,7 @@ int main(int argc,char *argv[])
 			#endif
 			"       xrf source.xrf - | ffmpeg [filters] -i - [options] target\n"
 			"\n"
-			"This program comes with ABSOLUTELY NO WARRANTY; for more details" "\n" \
-			"please read the GNU General Public License. This is free software" "\n" \
-			"and you are welcome to redistribute it under certain conditions." // GPL_3_INFO
+			GPL_3_INFO
 			"\n");
 			#ifdef _WIN32
 			ICINFO lpicinfo; ICInfo(0,-1,&lpicinfo); int n=lpicinfo.fccHandler;

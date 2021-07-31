@@ -526,7 +526,7 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 										int j; for (j=0;j<i;++j)
 											blah[j]=tape_fgetc();
 										blah[j]=0;
-										logprintf("TZX: '%s'\n",blah);
+										cprintf("TZX: '%s'\n",blah);
 									}
 									#else
 									tape_skip(tape_fgetc()); // avoid macro gotcha, cfr. CLANG 3.7.1
@@ -580,7 +580,7 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 									tape_skip(tape_fgetcccc()); // all unknown blocks are defined this way
 									break;
 							}
-							//if (x) logprintf("TZX: BLOCK 0x%02X!\n",x);
+							//if (x) cprintf("TZX: BLOCK 0x%02X!\n",x);
 						}
 				}
 				tape_count-=TAPE_MAIN_TZX_STEP;
