@@ -34,14 +34,11 @@ INLINE int tape_fgetc(void) // reads one byte from tape. returns <0 on error!
 }
 int tape_fgetcc(void) // reads two little-endian bytes; cfr. tape_fgetc()
 {
-	int i=tape_fgetc();
-	return i+(tape_fgetc()<<8); // this keeps the sign of the byte!
+	int i=tape_fgetc(); return i+(tape_fgetc()<<8); // this keeps the sign of the byte!
 }
 int tape_fgetcccc(void) // reads four little-endian bytes; cfr. tape_fgetc()
 {
-	int i=tape_fgetc();
-	i+=tape_fgetc()<<8;
-	i+=tape_fgetc()<<16;
+	int i=tape_fgetc(); i+=tape_fgetc()<<8; i+=tape_fgetc()<<16;
 	return i+(tape_fgetc()<<24); // in 32-bit systems the sign will be lost!
 }
 #define tape_ungetc() (--tape_filetell,--tape_offset) // cheating the buffer!
@@ -89,7 +86,7 @@ int tape_pilot,tape_pilots,tape_sync,tape_syncs,tape_syncz[256],tape_bits,tape_b
 #ifdef TAPE_KANSAS_CITY
 int tape_kansas,tape_kansasin,tape_kansasi,tape_kansason,tape_kansaso,tape_kansas0n,tape_kansas1n,tape_kansasrl,tape_kansas_i,tape_kansas_n,tape_kansas_b,tape_kansas_o; // TZX block $4B: Kansas City Standard
 #else
-#define tape_kansas tape_wave // dummy definition!
+#define tape_kansas tape_wave // dummy variable!
 #endif
 int tape_general_totp,tape_general_npp,tape_general_asp,tape_general_totd,tape_general_npd,tape_general_asd,tape_general_count,
 	tape_general_mask,tape_general_step,tape_general_bits; WORD tape_general_symdef[256][128]; // TZX block $19: Generalized Data
@@ -144,14 +141,14 @@ int tape_open(char *s) // open a tape file. `s` path; 0 OK, !0 ERROR
 	tape_close();
 	if (!(tape=puff_fopen(s,"rb")))
 		return 1; // cannot open tape!
-	int q=1,l; // temporary integer and error flag
+	int l=0,q=1; // temporary integer and error flag
 	tape_closed=tape_offset=tape_length=tape_bits=tape_playback=0; // reset buffer!
 	if (fread(tape_buffer,1,8,tape)==8) // guess the format
 	{
 		if (!memcmp("RIFF",tape_buffer,4)) // WAV?
 		{
 			if (fgetmmmm(tape)==0x57415645) // "WAVE" ID
-				while ((q=fgetmmmm(tape))>0&&(l=fgetiiii(tape))>=0&&q!=0x64617461) // read chunks until "data"
+				while ((q=fgetmmmm(tape),l=fgetiiii(tape))>=0&&q>0&&q!=0x64617461) // read chunks until "data"
 				{
 					if (q==0x666D7420) // "fmt " is the only chunk that we must process!
 					{
@@ -189,7 +186,7 @@ int tape_open(char *s) // open a tape file. `s` path; 0 OK, !0 ERROR
 			else
 			#endif
 				fgetii(tape),tape_type=2; // TZX/CDT: major.minor version
-			tape_status=tape_count=q=tape_pilots=tape_syncs/*=tape_bits*/=tape_wave=tape_kansas=tape_general_totp=tape_general_totd=tape_loop=0; // force HOLD
+			tape_status=tape_count=q=tape_pilots=tape_syncs/*=tape_bits*/=tape_kansas=tape_wave=tape_general_totp=tape_general_totd=tape_loop=0; // force HOLD
 			tape_playback=3500000/TAPE_MAIN_TZX_STEP; tape_hold=2*1000; // 2000 ms -> 3500 T = 1 ms
 		}
 	}
@@ -343,10 +340,12 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 							tape_main_general_load(tape_byte=tape_fgetc()); tape_general_count=tape_fgetcc();
 						}
 						if (tape_main_general_next()) // end of symbol?
+						{
 							if (--tape_general_count)
 								tape_main_general_load(tape_byte); // repeat item
 							else
 								--tape_general_totp;
+						}
 					}
 					else if (tape_general_totd) // GENERALIZED DATA BYTES?
 					{
@@ -366,7 +365,7 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 					else if (tape_hold) // HOLD?
 					{
 						tape_count+=3500;
-						if (tape_hold>0)
+						if (tape_hold>0) // positive = first millisecond; negative = next milliseconds
 							tape_status^=1,tape_hold=1-tape_hold;
 						else
 							tape_status=0,++tape_hold;
@@ -405,7 +404,7 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 					}
 					else // TZX/CDT
 					#endif
-						while (!(tape_pilots|tape_syncs|tape_bits|tape_wave|tape_hold))
+						while (!(tape_pilots|tape_syncs|tape_bits|tape_hold)&&!(tape_wave|tape_general_totp|tape_general_totd|tape_kansas))
 						{
 							tape_half=tape_mask=tape_general_count=tape_general_bits=0;
 							int i=tape_fgetc();
@@ -630,8 +629,7 @@ int tape_catalog(char *t,int x)
 			while (t<s&&(i=tape_fgetcc())>=0)
 			{
 				t+=1+sprintf(t,TAPE_CATALOG_HEAD " STANDARD DATA, %d bytes",j=tape_filetell-2,i);
-				if (j<=z)
-					++p;
+				if (j<=z) ++p; // locate current block
 				tape_skip(i);
 			}
 		else // TZX/CDT
@@ -639,8 +637,7 @@ int tape_catalog(char *t,int x)
 			while (t<s&&(i=tape_fgetc())>=0)
 			{
 				t+=sprintf(t,TAPE_CATALOG_HEAD " ",j=tape_filetell-1);
-				if (j<=z&&!u)
-					++p;
+				if (j<=z&&!u) ++p; // locate current block
 				k=l=0;
 				switch (i)
 				{
@@ -760,7 +757,7 @@ void tape_select(int i) // caller must provide a valid offset
 	if (!tape||tape_type<0)
 		return;
 	tape_seek(i);
-	tape_count=tape_pilots=tape_syncs=tape_bits=tape_wave=tape_kansas=tape_general_totp=tape_general_totd=0,tape_hold=2*1000; // reset counter and playback // 2-second gap
+	tape_count=tape_pilots=tape_syncs=tape_bits=tape_kansas=tape_wave=tape_general_totp=tape_general_totd=0,tape_hold=2*1000; // reset counter and playback // 2-second gap
 }
 
 // tape speed-up hacks ---------------------------------------------- //
@@ -786,63 +783,82 @@ int fasttape_test(const BYTE *s,WORD p) // compares a chunk of memory against a 
 
 void fasttape_skip(int q,int x) // skip the signal in steps of `x` until it changes
 {
-	q&=1; while (q==tape_status&&(tape||tape_hold)) tape_main(x);
+	q&=1; while (q==tape_status&&(tape_hold|(size_t)tape)) tape_main(x);
 }
-int fasttape_add8(int q,int tape_step,BYTE *counter8,int step) // scan tape signal until it changes (or timeouts!) and update counter
+int fasttape_add8(int q,int tape_step,BYTE *counter8,int step) // idem, but increasing a counter
 {
 	int n=0;
 	q&=1; while ((q==tape_status)&&(*counter8<(256-step))) *counter8+=step,tape_main(tape_step),++n;
 	return n;
 }
-int fasttape_sub8(int q,int tape_step,BYTE *counter8,int step) // idem, but negative
+int fasttape_sub8(int q,int tape_step,BYTE *counter8,int step) // idem, but decreasing a counter
 {
 	int n=0;
 	q&=1; while ((q==tape_status)&&(*counter8>step)) *counter8-=step,tape_main(tape_step),++n;
 	return n;
 }
 
-int FASTTAPE_CAN_FEED(void) { return tape_general_bits?!tape_general_totp&&tape_general_totd>16&&tape_general_count==7:
-	(!(tape_pilots+tape_syncs)&&(tape_bits>16)&&(tape_mask==128)); } // check for a single full byte (not the last one!)
+char fasttape_log2[256]= // precalc'd bitlength; [0] stands for 1<<8= 256
+{
+	8,0,1,1,2,2,2,2,3,3,3,3,3,3,3,3, 4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+	5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5, 5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,
+	6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6, 6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,
+	6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6, 6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,
+	7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7, 7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,
+	7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7, 7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,
+	7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7, 7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,
+	7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7, 7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,
+};
+
+int FASTTAPE_CAN_FEED(void) { return tape_general_bits?!tape_general_totp&&tape_general_totd>16&&tape_general_count>=0&&tape_main_general_subsym==1:
+	(!(tape_pilots+tape_syncs)&&tape_bits>16&&tape_mask>0&&!tape_half); } // check for a single full byte (not the last one!) from its first pulse
 BYTE fasttape_feed(int q,int x) // get a whole byte from the stream, but leave the last signal in
+{
+	int i=tape_byte; // keep for later
+	if (tape_general_bits)
 	{
-		int i=tape_byte; // keep for later
-		if (tape_general_bits)
-			tape_general_totd-=7,tape_general_count-=7;
+		tape_general_totd-=8-tape_general_bits; if (tape_general_count!=8-tape_general_bits)
+			i=(((i<<8)+(tape_byte=tape_fgetc()))>>(tape_general_count+=tape_general_bits));
 		else
-			tape_bits-=7,tape_mask>>=7;
-		fasttape_skip(q,x); return i;
+			tape_general_count=0;
 	}
+	else
+	{
+		tape_bits-=7; if (tape_mask!=128)
+			i=(((i<<8)+(tape_byte=tape_fgetc()))>>fasttape_log2[tape_mask<<=1]);
+		else
+			tape_mask=1;
+	}
+	fasttape_skip(q,x); return i;
+}
 int FASTTAPE_CAN_DUMP(void) { return tape_general_bits?tape_general_totd>=24:tape_bits>=24; } // all but the final bytes!
 BYTE fasttape_dump(void) // get a whole byte from the stream and consume all signals
+{
+	int i=tape_byte; tape_byte=tape_fgetc();
+	if (tape_general_bits)
 	{
-		int i=tape_byte; tape_byte=tape_fgetc();
-		if (tape_general_bits)
-			tape_general_totd-=8;
-		else
-			tape_bits-=8;
-		return i; // no `fasttape_skip` here
+		tape_general_totd-=8; if (tape_general_count!=8-tape_general_bits)
+			i=(((i<<8)+tape_byte)>>(tape_general_count+tape_general_bits));
 	}
+	else
+	{
+		tape_bits-=8; if (tape_mask!=128)
+			i=(((i<<8)+tape_byte)>>(fasttape_log2[tape_mask]+1));
+	}
+	return i; // no `fasttape_skip` here
+}
 
 void fasttape_gotonext(void) // skips the current block (minus the last bits) if the PILOT and SYNCS are already over
 {
 	if (!(tape_pilots|tape_syncs|tape_general_totp)&&(tape_bits|tape_wave|tape_kansas|tape_general_totd|tape_hold))
 	{
 		int i; if (tape_bits>8)
-		{
-			tape_skip(i=(tape_bits-1)/8);
-			tape_bits-=i*8;
-		}
+			tape_skip(i=(tape_bits-1)/8),tape_bits-=i*8;
 		else if (tape_wave>8)
-		{
-			tape_skip(i=(tape_wave-1)/8);
-			tape_wave-=i*8;
-		}
+			tape_skip(i=(tape_wave-1)/8),tape_wave-=i*8;
 		#ifdef TAPE_KANSAS_CITY
 		else if (tape_kansas>1)
-		{
-			tape_skip(tape_kansas-1);
-			tape_kansas=1;
-		}
+			tape_skip(tape_kansas-1),tape_kansas=1;
 		#endif
 		else if ((tape_general_totd*tape_general_bits)&&(tape_general_totd>8/tape_general_bits))
 		{
@@ -850,7 +866,7 @@ void fasttape_gotonext(void) // skips the current block (minus the last bits) if
 			tape_skip(i=(tape_general_totd-1)/j);
 			tape_general_totd-=i*j;
 		}
-		else if (tape_hold!=1&&tape_hold&&!(tape_bits|tape_wave))
+		else if (tape_hold!=1&&tape_hold&&!(tape_bits|tape_wave|tape_kansas|tape_general_totd))
 			tape_hold=1;
 	}
 	tape_loop=0; // just in case a tape uses this!

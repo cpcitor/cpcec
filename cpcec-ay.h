@@ -98,7 +98,8 @@ int playcity_stereo[2][2];
 void playcity_set_config(BYTE b)
 {
 	if (b<16)
-		playcity_clock=b,cprintf("playcity:%i\n",b);
+		//cprintf("playcity:%i\n",b),
+		playcity_clock=b;
 }
 #define playcity_get_config() (playcity_clock)
 void playcity_select(BYTE x,BYTE b)
@@ -119,6 +120,10 @@ void playcity_send(BYTE x,BYTE b)
 			playcity_hard_flag2[x]=(playcity_hard_style[x]=b<4?9:b<8?15:b)&4?0:15;
 		}
 	}
+}
+BYTE playcity_recv(BYTE x)
+{
+	return (x<2&&playcity_index[x]<16)?playcity_table[x][playcity_index[x]]:0xFF;
 }
 void playcity_reset(void)
 {
@@ -155,10 +160,10 @@ int psg_closelog(void)
 	{
 		for (int c=0,l,o;c<14;++c) // arrange byte dumps into long byte channels
 		{
-			fseek(psg_tmpfile,o=0,SEEK_SET);
+			fseek(psg_tmpfile,0,SEEK_SET);
 			while (l=fread1(psg_tmp,sizeof(psg_tmp),psg_tmpfile))
 			{
-				for (int i=c;i<l;i+=14)
+				o=0; for (int i=c;i<l;i+=14)
 					psg_log[o++]=psg_tmp[i];
 				fwrite1(psg_log,o,psg_logfile);
 			}
@@ -308,7 +313,7 @@ void psg_main(int t,int d) // render audio output for `t` clock ticks, with `d` 
 void playcity_main(AUDIO_UNIT *t,int l)
 {
 	int dirty_l=playcity_table[0][7]==0x3F,dirty_h=playcity_table[1][7]!=0x3F;
-	if (dirty_l>dirty_h||!l) return; // disabled chips? no buffer!
+	if (dirty_l>dirty_h||!l) return; // disabled chips? no buffer? quit!
 	int playcity_tone_limit[2][3],playcity_tone_power[2][3],playcity_tone_mixer[2][3],playcity_noise_limit[2],playcity_hard_limit[2];
 	static int playcity_tone_count[2][3],playcity_tone_state[2][3]={{0,0,0},{0,0,0}},playcity_noise_state[2],playcity_noise_count[2],playcity_noise_trash[2]={1,1},playcity_hard_power[2];
 	for (int x=dirty_l;x<=dirty_h;++x)

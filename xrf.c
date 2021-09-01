@@ -7,7 +7,7 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "XRF"
-#define MY_VERSION "20210717"//"1555"
+#define MY_VERSION "20210831"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 #define GPL_3_INFO \
@@ -51,9 +51,9 @@ Contact information: <mailto:cngsoft@gmail.com> */
 #else // "char", "short int" and "long long int" are 8, 16 and 64 bits, but "long int" can be 32 or 64 bits
 
 #include <stdint.h>
-#define BYTE uint8_t
-#define WORD uint16_t
-#define DWORD uint32_t
+#define BYTE uint8_t // can this be safely reduced to "unsigned char"?
+#define WORD uint16_t // can this be safely reduced to "unsigned short"?
+#define DWORD uint32_t // this CANNOT be safely reduced to "unsigned int"!
 
 #endif
 
@@ -103,7 +103,6 @@ int xrf_decode(BYTE *t,BYTE *s,int *l,int x) // equally hacky decoder based on a
 	return *l=(z-t)/x,w-s;
 }
 
-#define xrf_feof() feof(xrf_file)
 #define xrf_fgetc() fgetc(xrf_file)
 int xrf_fgetcc(void) { int m=xrf_fgetc()<<8; return m+xrf_fgetc(); } // Motorola order, (*(WORD*))(x) is no use
 int xrf_fgetcccc(void) { int m=xrf_fgetc()<<24; m+=xrf_fgetc()<<16; m+=xrf_fgetc()<<8; return m+xrf_fgetc(); }
@@ -132,7 +131,7 @@ int xrf_open(char *s) // opens a XRF file and sets the common parameters up; !0 
 	xrf_cursor=8+8+4; // the bytes we've read so far
 	xrf_count=xrf_dummy=0;
 	argb32=xrf_bitmap; diff32=xrf_shadow; // this speeds things up later: swapping pointers instead of their contents
-	return (!(video_x*video_y*clock_z)||xrf_feof()||strcmp(id,"XRF1!\015\012\032"))?fclose(xrf_file),1:0; // XRF-1 was limited to 8-bit RLE lengths, and XRF+1 didn't store the amount of frames!
+	return (!(video_x>0&&video_y>0&&clock_z>0&&audio_z>=0)||strcmp(id,"XRF1!\015\012\032"))?fclose(xrf_file),1:0; // XRF-1 was limited to 8-bit RLE lengths, and XRF+1 didn't store the amount of frames!
 }
 int xrf_read(void) // reads a XRF chunk and decodes the current video and audio frames; !0 ERROR/EOF
 {
@@ -526,7 +525,7 @@ int main(int argc,char *argv[])
 			#ifdef _WIN32
 			ICINFO lpicinfo; ICInfo(0,-1,&lpicinfo); int n=lpicinfo.fccHandler;
 			for (int i=0;i<n;++i)
-				ICInfo(0,i,&lpicinfo),printf("%s%c%c%c%c",i?i%10?" ":"\n\t\t":"\n- fourcc codes: ",lpicinfo.fccHandler&255,(lpicinfo.fccHandler>>8)&255,(lpicinfo.fccHandler>>16)&255,(lpicinfo.fccHandler>>24)&255);
+				ICInfo(0,i,&lpicinfo),printf("%s%c%c%c%c",i?i%10?" ":"\n\t\t":"\n- fourcc codes: ",(char)lpicinfo.fccHandler,(char)(lpicinfo.fccHandler>>8),(char)(lpicinfo.fccHandler>>16),(char)(lpicinfo.fccHandler>>24));
 			printf("\n");
 			#endif
 		return 1;

@@ -22,12 +22,15 @@ char session_caption[]=MY_CAPTION " " MY_VERSION;
 unsigned char session_scratch[1<<18]; // at least 256k!
 
 #define INLINE // 'inline' is useless in TCC and GCC4, and harmful in GCC5!
+#define UNUSED // '__attribute__((unused))' isn't always ready outside GCC.
 INLINE int ucase(int i) { return i>='a'&&i<='z'?i-32:i; }
 INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 #define length(x) (sizeof(x)/sizeof(*(x)))
+#define until(x) while(!(x)) // shortcut
 
-#include "cpcec-a7.h" //unsigned char *onscreen_chrs;
-#define ONSCREEN_SIZE (sizeof(onscreen_chrs)/95)
+#include "cpcec-a8.h" //unsigned char *onscreen_chrs;
+#define ONSCREEN_SIZE 12 //(sizeof(onscreen_chrs)/95)
+#define ONSCREEN_CEIL 256
 
 #ifndef SDL2
 #if defined(SDL_MAIN_HANDLED)||!defined(_WIN32)
@@ -70,19 +73,17 @@ INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 
 #define VIDEO_UNIT DWORD // 0x00RRGGBB style
 
-//#define VIDEO_FILTER_HALF(x,y) (((((x&0XFF00FF)+(y&0XFF00FF)+(x<y?0X10001:0))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+(x<y?0X100:0))&0X1FE00))>>1) // 50%:50%
-#define VIDEO_FILTER_HALF(x,y) ((x<y?((0X10001+(x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+((0X100+(x&0XFF00)+(y&0XFF00))&0X1FE00):(((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1) // 50:50
-//#define VIDEO_FILTER_HALF(x,y) ((x&0XFFFF00)+(y&0X0000FF)) // red+green:blue
-//#define VIDEO_FILTER_BLUR(r,x,y,z) r=VIDEO_FILTER_HALF(y,z),y=z
-//#define VIDEO_FILTER_BLUR(r,x,y,z) r=VIDEO_FILTER_HALF(y,z),y=r
-//#define VIDEO_FILTER_BLUR(r,x,y,z) r=(x&0XFF0000)+(z&0XFF00)+(y&0XFF),x=y,y=z // colour bleed
-//#define VIDEO_FILTER_BLUR(r,x,y,z) r=((z&0XFEFEFE)>>1)+((((z)*3)>>16)+(((z&0XFF00)*9)>>8)+(((z&0XFF)))+13)/26*0X10101 // desaturation
-#define VIDEO_FILTER_BLUR(r,x,y,z) r=(x<z?((0X10001+(x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+((0X100+(y&0XFF00)+(z&0XFF00))&0X1FE00):(((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((y&0XFF00)+(z&0XFF00))&0X1FE00))>>1,x=y,y=z // 50:50 bleed
+#define VIDEO_FILTER_HALF(x,y) ((x<y?(((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00):(((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1) // 50:50
+//#define VIDEO_FILTER_BLURDATA vxh,vxl,vzh,vzl
+//#define VIDEO_FILTER_BLUR0(z) vxh=z&0XFF00FF,vxl=z&0XFF00
+//#define VIDEO_FILTER_BLUR(r,z) r=((((vzh=z&0XFF00FF)+vxh+0X10001)&0X1FE01FE)+(((vzl=z&0XFF00)+vxl+0X100)&0X1FE00))>>1,vxh=vzh,vxl=vzl // 50:50 blur
+#define VIDEO_FILTER_BLURDATA vxh,vxl,vyh,vyl,vzh,vzl
+#define VIDEO_FILTER_BLUR0(z) vxh=vyh=z&0XFF00FF,vxl=vyl=z&0XFF00
+#define VIDEO_FILTER_BLUR(r,z) r=((((vzh=z&0XFF00FF)+vyh*2+vxh+0X20002)&0X3FC03FC)+(((vzl=z&0XFF00)+vyl*2+vxl+0X200)&0X3FC00))>>2,vxh=vyh,vyh=vzh,vxl=vyl,vyl=vzl // 25:50:25 blur
 //#define VIDEO_FILTER_X1(x) (((x>>1)&0X7F7F7F)+0X2B2B2B) // average
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)+0X404040) // heavier
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)*3+0X161616) // lighter
-//#define VIDEO_FILTER_X1(x) (((((((x&0XFF0000)>>8)+(x&0XFF00))>>8)+(x&0XFF)+1)/3)*0X10101) // fast but imprecise greyscale
-#define VIDEO_FILTER_X1(x) ((((x&0XFF0000)*76+(x&0XFF00)*(150<<8)+(x&0XFF)*(30<<16)+128)>>24)*0X10101) // natural greyscale
+#define VIDEO_FILTER_X1(x) ((((x&0XFF0000)*76+(x&0XFF00)*(150<<8)+(x&0XFF)*(30<<16)+128)>>24)*0X10101) // greyscale
 //#define VIDEO_FILTER_SCAN(w,b) (((((w&0xFF00FF)*3+(b&0xFF00FF)*13)&0xFF00FF0)+(((w&0xFF00)*3+(b&0xFF00)*13)&0xFF000))>>4) // white:black 3:13
 #define VIDEO_FILTER_SCAN(w,b) (((((w&0xFF00FF)+(b&0xFF00FF)*7)&0x7F807F8)+(((w&0xFF00)+(b&0xFF00)*7)&0x7F800))>>3) // white:black 1:7
 
@@ -139,7 +140,7 @@ HGDIOBJ session_dbg=NULL;
 	LPDIRECTDRAWSURFACE lpdd_dbg=NULL;
 #endif
 
-BYTE session_paused=0,session_signal=0;
+BYTE session_paused=0,session_signal=0,session_version[8];
 #define SESSION_SIGNAL_FRAME 1
 #define SESSION_SIGNAL_DEBUG 2
 #define SESSION_SIGNAL_PAUSE 4
@@ -416,8 +417,8 @@ void session_togglefullscreen(void)
 		SetWindowLong(session_hwnd,GWL_STYLE,(GetWindowLong(session_hwnd,GWL_STYLE)|WS_CAPTION));
 			//&~WS_POPUP&~WS_CLIPCHILDREN // show caption and buttons
 		if (!session_hidemenu) SetMenu(session_hwnd,session_menu); // show menu
-		RECT r; GetWindowRect(session_hwnd,&r); // adjust to screen center
-		ShowWindow(session_hwnd,SW_RESTORE);
+		RECT r; // GetWindowRect(session_hwnd,&r); // adjust to screen center
+		SystemParametersInfo(SPI_GETWORKAREA,0,&r,0); ShowWindow(session_hwnd,SW_RESTORE);
 		r.left+=((r.right-r.left)-session_ideal.right)/2;
 		r.top+=((r.bottom-r.top)-session_ideal.bottom)/2;
 		MoveWindow(session_hwnd,r.left,r.top,session_ideal.right,session_ideal.bottom,1);
@@ -553,12 +554,11 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 	return 0;
 }
 
-OSVERSIONINFO win32_version; char session_version[8];
-INLINE char* session_create(char *s) // create video+audio devices and set menu; 0 OK, !0 ERROR
+INLINE char *session_create(char *s) // create video+audio devices and set menu; 0 OK, !0 ERROR
 {
+	OSVERSIONINFO win32_version; HMENU session_submenu=NULL;
 	win32_version.dwOSVersionInfoSize=sizeof(win32_version); GetVersionEx(&win32_version);
-	sprintf(session_version,"%d.%d",win32_version.dwMajorVersion,win32_version.dwMinorVersion);
-	HMENU session_submenu=NULL;
+	sprintf(session_version,"%lu.%lu",win32_version.dwMajorVersion,win32_version.dwMinorVersion);
 	char c,*t; int i;
 	/*if (!session_softblit)*/ while (c=*s++)
 	{
@@ -688,7 +688,7 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	{
 		JOYCAPS jc; int i=joyGetNumDevs(),j=0;
 		cprintf("Detected %d joystick[s]: ",i);
-		while (j<i&&((!joyGetDevCaps(j,&jc,sizeof(jc))&&cprintf("Joystick/controller #%d = '%s'. ",j,jc.szPname)),joyGetPosEx(j,&session_joy))) // scan joysticks until we run out or one is OK
+		while (j<i&&(!joyGetDevCaps(j,&jc,sizeof(jc))&&cprintf("Joystick/controller #%d = '%s'. ",j,jc.szPname),joyGetPosEx(j,&session_joy))) // scan joysticks until we run out or one is OK
 			++j;
 		session_stick=(j<i)?j+1:0; // ID+1 if available, 0 if missing
 		cprintf(session_stick?"Joystick enabled!\n":"No joystick!\n");

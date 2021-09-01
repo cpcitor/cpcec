@@ -1,9 +1,9 @@
  //  ####  ######    ####  #######   ####    ----------------------- //
-//  ##  ##  ##  ##  ##  ##  ##   #  ##  ##  CPCEC, plain text Amstrad //
-// ##       ##  ## ##       ## #   ##       CPC emulator written in C //
-// ##       #####  ##       ####   ##       as a postgraduate project //
-// ##       ##     ##       ## #   ##       by Cesar Nicolas-Gonzalez //
-//  ##  ##  ##      ##  ##  ##   #  ##  ##  since 2018-12-01 till now //
+//  ##	##  ##	##  ##	##  ##	 #  ##	##  CPCEC, plain text Amstrad //
+// ##	    ##	## ##	    ## #   ##	    CPC emulator written in C //
+// ##	    #####  ##	    ####   ##	    as a postgraduate project //
+// ##	    ##	   ##	    ## #   ##	    by Cesar Nicolas-Gonzalez //
+//  ##	##  ##	    ##	##  ##	 #  ##	##  since 2018-12-01 till now //
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 // SDL2 is the second supported platform; to compile the emulator type
@@ -26,7 +26,6 @@
 	#include <io.h> // _chsize(),_fileno()...
 	#define fsetsize(f,l) _chsize(_fileno(f),(l))
 	#define strcasecmp _stricmp // SDL_strcasecmp
-	#define SDL_UTF8_CHARS 0
 #else
 	#ifdef PATH_MAX
 		#define STRMAX PATH_MAX
@@ -38,10 +37,10 @@
 	#include <sys/stat.h> // stat()...
 	#include <unistd.h> // ftruncate(),fileno()...
 	#define fsetsize(f,l) (!ftruncate(fileno(f),(l)))
-	#define BYTE Uint8
-	#define WORD Uint16
-	#define DWORD Uint32
-	#define SDL_UTF8_CHARS 1 // is there any POSIX system that does NOT rely on UTF8!?
+	#define BYTE Uint8 // can this be safely reduced to "unsigned char"?
+	#define WORD Uint16 // can this be safely reduced to "unsigned short"?
+	#define DWORD Uint32 // this CANNOT be safely reduced to "unsigned int"!
+	#define SDL2_UTF8 // is there any POSIX system that does NOT rely on UTF8?
 #endif
 
 #define MESSAGEBOX_WIDETAB "\t\t" // rely on monospace font
@@ -50,19 +49,17 @@
 
 #define VIDEO_UNIT DWORD // 0x00RRGGBB style
 
-//#define VIDEO_FILTER_HALF(x,y) (((((x&0XFF00FF)+(y&0XFF00FF)+(x<y?0X10001:0))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+(x<y?0X100:0))&0X1FE00))>>1) // 50%:50%
-#define VIDEO_FILTER_HALF(x,y) ((x<y?((0X10001+(x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+((0X100+(x&0XFF00)+(y&0XFF00))&0X1FE00):(((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1) // 50:50
-//#define VIDEO_FILTER_HALF(x,y) ((x&0XFFFF00)+(y&0X0000FF)) // red+green:blue
-//#define VIDEO_FILTER_BLUR(r,x,y,z) r=VIDEO_FILTER_HALF(y,z),y=z
-//#define VIDEO_FILTER_BLUR(r,x,y,z) r=VIDEO_FILTER_HALF(y,z),y=r
-//#define VIDEO_FILTER_BLUR(r,x,y,z) r=(x&0XFF0000)+(z&0XFF00)+(y&0XFF),x=y,y=z // colour bleed
-//#define VIDEO_FILTER_BLUR(r,x,y,z) r=((z&0XFEFEFE)>>1)+((((z)*3)>>16)+(((z&0XFF00)*9)>>8)+(((z&0XFF)))+13)/26*0X10101 // desaturation
-#define VIDEO_FILTER_BLUR(r,x,y,z) r=(x<z?((0X10001+(x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+((0X100+(y&0XFF00)+(z&0XFF00))&0X1FE00):(((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((y&0XFF00)+(z&0XFF00))&0X1FE00))>>1,x=y,y=z // 50:50 bleed
+#define VIDEO_FILTER_HALF(x,y) ((x<y?(((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00):(((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1) // 50:50
+//#define VIDEO_FILTER_BLURDATA vxh,vxl,vzh,vzl
+//#define VIDEO_FILTER_BLUR0(z) vxh=z&0XFF00FF,vxl=z&0XFF00
+//#define VIDEO_FILTER_BLUR(r,z) r=((((vzh=z&0XFF00FF)+vxh+0X10001)&0X1FE01FE)+(((vzl=z&0XFF00)+vxl+0X100)&0X1FE00))>>1,vxh=vzh,vxl=vzl // 50:50 blur
+#define VIDEO_FILTER_BLURDATA vxh,vxl,vyh,vyl,vzh,vzl
+#define VIDEO_FILTER_BLUR0(z) vxh=vyh=z&0XFF00FF,vxl=vyl=z&0XFF00
+#define VIDEO_FILTER_BLUR(r,z) r=((((vzh=z&0XFF00FF)+vyh*2+vxh+0X20002)&0X3FC03FC)+(((vzl=z&0XFF00)+vyl*2+vxl+0X200)&0X3FC00))>>2,vxh=vyh,vyh=vzh,vxl=vyl,vyl=vzl // 25:50:25 blur
 //#define VIDEO_FILTER_X1(x) (((x>>1)&0X7F7F7F)+0X2B2B2B) // average
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)+0X404040) // heavier
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)*3+0X161616) // lighter
-//#define VIDEO_FILTER_X1(x) (((((((x&0XFF0000)>>8)+(x&0XFF00))>>8)+(x&0XFF)+1)/3)*0X10101) // fast but imprecise greyscale
-#define VIDEO_FILTER_X1(x) ((((x&0XFF0000)*76+(x&0XFF00)*(150<<8)+(x&0XFF)*(30<<16)+128)>>24)*0X10101) // natural greyscale
+#define VIDEO_FILTER_X1(x) ((((x&0XFF0000)*76+(x&0XFF00)*(150<<8)+(x&0XFF)*(30<<16)+128)>>24)*0X10101) // greyscale
 //#define VIDEO_FILTER_SCAN(w,b) (((((w&0xFF00FF)*3+(b&0xFF00FF)*13)&0xFF00FF0)+(((w&0xFF00)*3+(b&0xFF00)*13)&0xFF000))>>4) // white:black 3:13
 #define VIDEO_FILTER_SCAN(w,b) (((((w&0xFF00FF)+(b&0xFF00FF)*7)&0x7F807F8)+(((w&0xFF00)+(b&0xFF00)*7)&0x7F800))>>3) // white:black 1:7
 
@@ -98,7 +95,7 @@ BYTE video_filter=0,audio_filter=0; // filter flags
 BYTE session_intzoom=0; int session_joybits=0;
 FILE *session_wavefile=NULL; // audio recording is done on each session update
 
-BYTE session_paused=0,session_signal=0;
+BYTE session_paused=0,session_signal=0,session_version[8];
 #define SESSION_SIGNAL_FRAME 1
 #define SESSION_SIGNAL_DEBUG 2
 #define SESSION_SIGNAL_PAUSE 4
@@ -114,116 +111,116 @@ BYTE kbd_bit[16],joy_bit[16]; // up to 128 keys in 16 rows of 8 bits
 // SDL2 follows the USB keyboard standard, so we're using the same values here!
 
 // function keys
-#define	KBCODE_F1	 58
-#define	KBCODE_F2	 59
-#define	KBCODE_F3	 60
-#define	KBCODE_F4	 61
-#define	KBCODE_F5	 62
-#define	KBCODE_F6	 63
-#define	KBCODE_F7	 64
-#define	KBCODE_F8	 65
-#define	KBCODE_F9	 66
-#define	KBCODE_F10	 67
-#define	KBCODE_F11	 68
-#define	KBCODE_F12	 69
+#define KBCODE_F1	 58
+#define KBCODE_F2	 59
+#define KBCODE_F3	 60
+#define KBCODE_F4	 61
+#define KBCODE_F5	 62
+#define KBCODE_F6	 63
+#define KBCODE_F7	 64
+#define KBCODE_F8	 65
+#define KBCODE_F9	 66
+#define KBCODE_F10	 67
+#define KBCODE_F11	 68
+#define KBCODE_F12	 69
 // leftmost keys
-#define	KBCODE_ESCAPE	 41
-#define	KBCODE_TAB	 43
-#define	KBCODE_CAPSLOCK	 57
-#define	KBCODE_L_SHIFT	225
-#define	KBCODE_L_CTRL	224
+#define KBCODE_ESCAPE	 41
+#define KBCODE_TAB	 43
+#define KBCODE_CAPSLOCK	 57
+#define KBCODE_L_SHIFT	225
+#define KBCODE_L_CTRL	224
 //#define KBCODE_L_ALT	226 // trapped by Win32
 // alphanumeric row 1
-#define	KBCODE_1	 30
-#define	KBCODE_2	 31
-#define	KBCODE_3	 32
-#define	KBCODE_4	 33
-#define	KBCODE_5	 34
-#define	KBCODE_6	 35
-#define	KBCODE_7	 36
-#define	KBCODE_8	 37
-#define	KBCODE_9	 38
-#define	KBCODE_0	 39
-#define	KBCODE_CHR1_1	 45
-#define	KBCODE_CHR1_2	 46
+#define KBCODE_1	 30
+#define KBCODE_2	 31
+#define KBCODE_3	 32
+#define KBCODE_4	 33
+#define KBCODE_5	 34
+#define KBCODE_6	 35
+#define KBCODE_7	 36
+#define KBCODE_8	 37
+#define KBCODE_9	 38
+#define KBCODE_0	 39
+#define KBCODE_CHR1_1	 45
+#define KBCODE_CHR1_2	 46
 // alphanumeric row 2
-#define	KBCODE_Q	 20
-#define	KBCODE_W	 26
-#define	KBCODE_E	  8
-#define	KBCODE_R	 21
-#define	KBCODE_T	 23
-#define	KBCODE_Y	 28
-#define	KBCODE_U	 24
-#define	KBCODE_I	 12
-#define	KBCODE_O	 18
-#define	KBCODE_P	 19
-#define	KBCODE_CHR2_1	 47
-#define	KBCODE_CHR2_2	 48
+#define KBCODE_Q	 20
+#define KBCODE_W	 26
+#define KBCODE_E	  8
+#define KBCODE_R	 21
+#define KBCODE_T	 23
+#define KBCODE_Y	 28
+#define KBCODE_U	 24
+#define KBCODE_I	 12
+#define KBCODE_O	 18
+#define KBCODE_P	 19
+#define KBCODE_CHR2_1	 47
+#define KBCODE_CHR2_2	 48
 // alphanumeric row 3
-#define	KBCODE_A	  4
-#define	KBCODE_S	 22
-#define	KBCODE_D	  7
-#define	KBCODE_F	  9
-#define	KBCODE_G	 10
-#define	KBCODE_H	 11
-#define	KBCODE_J	 13
-#define	KBCODE_K	 14
-#define	KBCODE_L	 15
-#define	KBCODE_CHR3_1	 51
-#define	KBCODE_CHR3_2	 52
-#define	KBCODE_CHR3_3	 49
+#define KBCODE_A	  4
+#define KBCODE_S	 22
+#define KBCODE_D	  7
+#define KBCODE_F	  9
+#define KBCODE_G	 10
+#define KBCODE_H	 11
+#define KBCODE_J	 13
+#define KBCODE_K	 14
+#define KBCODE_L	 15
+#define KBCODE_CHR3_1	 51
+#define KBCODE_CHR3_2	 52
+#define KBCODE_CHR3_3	 49
 // alphanumeric row 4
-#define	KBCODE_Z	 29
-#define	KBCODE_X	 27
-#define	KBCODE_C	  6
-#define	KBCODE_V	 25
-#define	KBCODE_B	  5
-#define	KBCODE_N	 17
-#define	KBCODE_M	 16
-#define	KBCODE_CHR4_1	 54
-#define	KBCODE_CHR4_2	 55
-#define	KBCODE_CHR4_3	 56
-#define	KBCODE_CHR4_4	 53
-#define	KBCODE_CHR4_5	100
+#define KBCODE_Z	 29
+#define KBCODE_X	 27
+#define KBCODE_C	  6
+#define KBCODE_V	 25
+#define KBCODE_B	  5
+#define KBCODE_N	 17
+#define KBCODE_M	 16
+#define KBCODE_CHR4_1	 54
+#define KBCODE_CHR4_2	 55
+#define KBCODE_CHR4_3	 56
+#define KBCODE_CHR4_4	 53
+#define KBCODE_CHR4_5	100
 // rightmost keys
-#define	KBCODE_SPACE	 44
-#define	KBCODE_BKSPACE	 42
-#define	KBCODE_ENTER	 40
-#define	KBCODE_R_SHIFT	229
-#define	KBCODE_R_CTRL	228
+#define KBCODE_SPACE	 44
+#define KBCODE_BKSPACE	 42
+#define KBCODE_ENTER	 40
+#define KBCODE_R_SHIFT	229
+#define KBCODE_R_CTRL	228
 // #define KBCODE_R_ALT	230 // trapped by Win32
 // extended keys
 // #define KBCODE_PRINT	 70 // trapped by Win32
-#define	KBCODE_SCR_LOCK	 71
-#define	KBCODE_HOLD	 72
-#define	KBCODE_INSERT	 73
-#define	KBCODE_DELETE	 76
-#define	KBCODE_HOME	 74
-#define	KBCODE_END	 77
-#define	KBCODE_PRIOR	 75
-#define	KBCODE_NEXT	 78
-#define	KBCODE_UP	 82
-#define	KBCODE_DOWN	 81
-#define	KBCODE_LEFT	 80
-#define	KBCODE_RIGHT	 79
+#define KBCODE_SCR_LOCK	 71
+#define KBCODE_HOLD	 72
+#define KBCODE_INSERT	 73
+#define KBCODE_DELETE	 76
+#define KBCODE_HOME	 74
+#define KBCODE_END	 77
+#define KBCODE_PRIOR	 75
+#define KBCODE_NEXT	 78
+#define KBCODE_UP	 82
+#define KBCODE_DOWN	 81
+#define KBCODE_LEFT	 80
+#define KBCODE_RIGHT	 79
 // numeric keypad
-#define	KBCODE_NUM_LOCK	 83
-#define	KBCODE_X_7	 95
-#define	KBCODE_X_8	 96
-#define	KBCODE_X_9	 97
-#define	KBCODE_X_4	 92
-#define	KBCODE_X_5	 93
-#define	KBCODE_X_6	 94
-#define	KBCODE_X_1	 89
-#define	KBCODE_X_2	 90
-#define	KBCODE_X_3	 91
-#define	KBCODE_X_0	 98
-#define	KBCODE_X_DOT	 99
-#define	KBCODE_X_ENTER	 88
-#define	KBCODE_X_ADD	 87
-#define	KBCODE_X_SUB	 86
-#define	KBCODE_X_MUL	 85
-#define	KBCODE_X_DIV	 84
+#define KBCODE_NUM_LOCK	 83
+#define KBCODE_X_7	 95
+#define KBCODE_X_8	 96
+#define KBCODE_X_9	 97
+#define KBCODE_X_4	 92
+#define KBCODE_X_5	 93
+#define KBCODE_X_6	 94
+#define KBCODE_X_1	 89
+#define KBCODE_X_2	 90
+#define KBCODE_X_3	 91
+#define KBCODE_X_0	 98
+#define KBCODE_X_DOT	 99
+#define KBCODE_X_ENTER	 88
+#define KBCODE_X_ADD	 87
+#define KBCODE_X_SUB	 86
+#define KBCODE_X_MUL	 85
+#define KBCODE_X_DIV	 84
 
 const BYTE kbd_k2j[]= // these keys can simulate a 4-button joystick
 	{ KBCODE_UP, KBCODE_DOWN, KBCODE_LEFT, KBCODE_RIGHT, KBCODE_Z, KBCODE_X, KBCODE_C, KBCODE_V };
@@ -349,15 +346,56 @@ void session_togglefullscreen(void)
 	session_dirtymenu=1; // update "Full screen" option (if any)
 }
 
+#ifdef SDL2_UTF8
+// SDL2 relies on the UTF-8 encoding for character and string manipulation; hence the following functions. //
+// Similarly, non-Windows systems are going to encode filenames with UTF-8, instead of sticking to 8 bits. //
+// Valid codes are those within the 0..2097151 range; technically 0..1114111 but we miss the binary logic. //
+// The logic is very overengineered anyway: the built-in font is limited to the 8-bit ISO-8859-1 codepage. //
+void utf8put(char **s,int i) // send a valid code `i` to a UTF-8 pointer `s`
+{
+	if (i&-2097152) ; else if (i<128) *((*s)++)=i; else
+		{ if (i<2048) *((*s)++)=(i>>6)-64; else
+			{ if (i<65536) *((*s)++)=(i>>12)-32; else
+				*((*s)++)=(i>>18)-16,*((*s)++)=((i>>12)&63)-128;
+			*((*s)++)=((i>>6)&63)-128; }
+		*((*s)++)=(i&63)-128; }
+}
+int utf8get(char **s) // get a code `i` from a valid UTF-8 pointer `s`; <0 ERROR
+{
+	int i=*((*s)++); if (i>=0) return i; if (i<-64) return -1;
+	int j=0; char k; while ((k=**s)<-64) j=j*64+k+128,(*s)++;
+	if (i<-32) return ((i=((i+64)<<6)+j)>=128&&i<2048)?i:-1;
+	if (i<-16) return ((i=((i+32)<<12)+j)>=2048&&i<65536)?i:-1;
+	return ((i=((i+16)<<18)+j)>=65536&&i<2097152)?i:-1;
+}
+int utf8len(char *s) // length (in codes, not bytes) of a UTF-8 string `s`
+	{ int i=0,k; while (k=*s++) if (k>-64) ++i; return i; }
+int utf8chk(int i) // size in bytes of a valid UTF-8 code `i`; 0 ERROR
+	{ return i&-2097152?0:i<128?1:i<2048?2:i<65536?3:4; }
+int utf8add(char *s,int i) // get offset `i` within a valid UTF-8 pointer `s`
+{
+	char *r=s; if (i>0) do { while (*++s<-64) ; } while (--i);
+	else if (i<0) do { while (*--s<-64) ; } while (++i); return s-r;
+}
+#define utf8tst(s) (((char)*s)>=-64)
+#else
+#define utf8put(s,i) (*((*(s))++)=i)
+#define utf8get(s) (*((*(s))++))
+#define utf8len(s) strlen((s))
+#define utf8chk(i) (1)
+#define utf8add(s,i) (i)
+#define utf8tst(s) (1)
+#endif
+
 // extremely tiny graphical user interface: SDL2 provides no widgets! //
 
 #define SESSION_UI_HEIGHT 14
 
-BYTE session_ui_chrs[96*SESSION_UI_HEIGHT];//,session_ui_chrlen[96];
+BYTE session_ui_chrs[ONSCREEN_CEIL*SESSION_UI_HEIGHT];//,session_ui_chrlen[256];
 void session_ui_makechrs(void)
 {
 	memset(session_ui_chrs,0,sizeof(session_ui_chrs));
-	for (int i=0;i<96;++i)
+	for (int i=0;i<ONSCREEN_CEIL;++i)
 		for (int j=0;j<ONSCREEN_SIZE;++j)
 		{
 			int z=onscreen_chrs[i*ONSCREEN_SIZE+j];
@@ -381,9 +419,9 @@ void session_ui_makechrs(void)
 	session_ui_chrlen[0]=session_ui_chrlen[1];*/ // space is as wide as "!"
 }
 /*int session_ui_strlen(char *s) // get proportional string length in pixels
-	{ int i=0; while (*s) i+=session_ui_chrlen[(*s++-32)&127]; return i; }*/
+	{ int i=0; while (*s) i+=session_ui_chrlen[*s++-32]; return i; }*/
 
-BYTE session_ui_menudata[1<<12],session_ui_menusize; // encoded menu data
+unsigned char session_ui_menudata[1<<12],session_ui_menusize; // encoded menu data
 #ifdef _WIN32
 int session_ui_drives=0; char session_ui_drive[]="::\\";
 #else
@@ -398,9 +436,10 @@ void session_fillrect(int rx,int ry,int rw,int rh,VIDEO_UNIT a) // n.b.: coords 
 }
 #define session_ui_fillrect(x,y,w,h,a) session_fillrect((x)*8,(y)*SESSION_UI_HEIGHT,(w)*8,(h)*SESSION_UI_HEIGHT,(a)) // coords in characters
 
+int session_ui_skew=0; // vertical skew for frames and glyphs
 void session_ui_drawframes(int x,int y,int w,int h) // coords in characters
 {
-	x*=8; w*=8; y*=SESSION_UI_HEIGHT; h*=SESSION_UI_HEIGHT;
+	x*=8; w*=8; y=y*SESSION_UI_HEIGHT+session_ui_skew; h*=SESSION_UI_HEIGHT;
 	int rx,ry,rw,rh;
 	// top border
 	rx=x-2; ry=y-2;
@@ -413,52 +452,60 @@ void session_ui_drawframes(int x,int y,int w,int h) // coords in characters
 	// right border
 	rx=x+w; session_fillrect(rx,ry,rw,rh,0x00808080);
 }
-int session_ui_printglyph(VIDEO_UNIT *p,BYTE z)
+int session_ui_printglyph(VIDEO_UNIT *p,int z,int q)
 {
-	BYTE const *r=&session_ui_chrs[((z-32)&127)*SESSION_UI_HEIGHT];
-	const int w=8; //=session_ui_chrlen[(z-32)&127];
-	VIDEO_UNIT q0=0x00FFFFFF,q1=0;
-	if (z&128)
-		q0=0,q1=0x00FFFFFF;
-	for (int yy=0;yy<SESSION_UI_HEIGHT;++yy)
+	const int w=8; //=session_ui_chrlen[z];
+	if (z<1||z>=ONSCREEN_CEIL) z=31; // :-/
 	{
-		BYTE rr=*r++;
-		for (int xx=0;xx<w;++xx)
-			*p++=(rr&(128>>xx))?q1:q0;
-		p+=VIDEO_PIXELS_X-w;
+		q=q?-1:0;
+		unsigned char const *r=&session_ui_chrs[z*SESSION_UI_HEIGHT];
+		for (int yy=0;yy<SESSION_UI_HEIGHT;++yy)
+		{
+			int rr=q^*r++;
+			for (int xx=0;xx<w;++xx)
+				*p++=(rr&(128>>xx))?0:0xFFFFFF;
+			p+=VIDEO_PIXELS_X-w;
+		}
 	}
 	return w; // pixel width
 }
-int session_ui_printasciz(char *s,int x,int y,int prae,int w,int post,int q) // coords in characters
+int session_ui_printasciz(unsigned char *s,int x,int y,int prae,int w,int post,int q1,int q2) // coords in characters
 {
-	if (q) q=128; if (w<0) w=strlen(s);
+	if (w<0) w=utf8len(s); if ((q1|q2)<0) q1=q2=-1; // default values
 	int n=prae+w+post; // remember for later
-	VIDEO_UNIT *t=&menus_frame[x*8+y*SESSION_UI_HEIGHT*VIDEO_PIXELS_X];
+	VIDEO_UNIT *t=&menus_frame[x*8+(y*SESSION_UI_HEIGHT+session_ui_skew)*VIDEO_PIXELS_X];
 	while (prae-->0)
-		t+=session_ui_printglyph(t,' '+q);
-	int i=w-strlen(s);
+		t+=session_ui_printglyph(t,' ',q1<0);
+	int i=w-utf8len(s),q=q1<0; unsigned char *r=s;
 	if (i>=0)
 	{
 		post+=i;
-		while (i=*s++)
-			t+=session_ui_printglyph(t,i+q);
+		do
+		{
+			if (s-r==q1) q=1; if (s-r==q2) q=0;
+			if (i=(utf8get(&s))) t+=session_ui_printglyph(t,i,q);
+		}
+		while (i);
 	}
 	else
 	{
 		w-=2; // ellipsis, see below
 		while (w-->0)
-			t+=session_ui_printglyph(t,(*s++)+q);
-		t+=session_ui_printglyph(t,127+q); // ellipsis,
-		t+=session_ui_printglyph(t,'.'+q); // see above
+		{
+			if (s-r==q1) q=1; if (s-r==q2) q=0;
+			t+=session_ui_printglyph(t,utf8get(&s),q);
+		}
+		t+=session_ui_printglyph(t,127,q); // ellipsis,
+		t+=session_ui_printglyph(t,'.',q); // see above
 	}
 	while (post-->0)
-		t+=session_ui_printglyph(t,' '+q);
+		t+=session_ui_printglyph(t,' ',q1<0);
 	return n;
 }
 
 int session_ui_base_x,session_ui_base_y,session_ui_size_x,session_ui_size_y; // used to calculate mouse clicks relative to widget
 int session_ui_maus_x,session_ui_maus_y; // mouse X+Y, when the "key" is -1 (move), -2 (left click) or -3 (right click)
-int session_ui_char,session_ui_shift; // ASCII+Shift of the latest keystroke
+int session_ui_char,session_ui_shift,session_ui_focusing=0; // ASCII+Shift of the latest keystroke, and focus flag
 #define SESSION_UI_MAXX (VIDEO_PIXELS_X/8-6)
 #define SESSION_UI_MAXY (VIDEO_PIXELS_Y/SESSION_UI_HEIGHT-2)
 
@@ -468,6 +515,8 @@ int session_ui_exchange(void) // wait for a keystroke or a mouse motion
 		switch (event.type)
 		{
 			case SDL_WINDOWEVENT:
+				if (event.window.event==SDL_WINDOWEVENT_FOCUS_LOST&&session_ui_focusing)
+					return KBCODE_ESCAPE;
 				if (event.window.event==SDL_WINDOWEVENT_EXPOSED)
 					SDL_RenderPresent(session_blitter);//SDL_UpdateWindowSurface(session_hwnd); // fast redraw
 				break;
@@ -490,6 +539,7 @@ int session_ui_exchange(void) // wait for a keystroke or a mouse motion
 			case SDL_QUIT:
 				return KBCODE_ESCAPE;
 		}
+	return 0; // can this ever happen?
 }
 
 void session_ui_loop(void) // get background painted again to erase old widgets
@@ -511,35 +561,34 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 	if (!session_ui_menusize)
 		return;
 	session_ui_init();
-	int menuxs[64],events[64]; // more than 64 menus, or 64 items in a menu? overkill!!!
+	int menuxs[SESSION_UI_MAXY],events[SESSION_UI_MAXY]; // the limit is the canvas height
 	int menu=0,menus=0,menuz=-1,item=0,items=0,itemz=-1,itemx=0,itemw=0;
-	char *zz,*z;
+	char *zz=NULL,*z=NULL; // `zz` points to the current submenu's first item, `z` points to the current item
 
 	int done,ox=session_ui_base_x=1,oy=session_ui_base_y=1,q=1;
-	session_event=0x8000;
-	while (session_event==0x8000) // empty menu items must be ignored
+	session_event=0x8000; do
 	{
-		done=0;
-		while (!done) // redraw menus and items as required, then obey the user
+		done=0; do // redraw menus and items as required, then obey the user
 		{
 			if (menuz!=menu)
 			{
 				menuz=menu; item=items=0;
 				q=itemz=-1; int menux=menus=0;
-				BYTE *m=session_ui_menudata;
+				unsigned char *m=session_ui_menudata;
+				session_ui_skew=-4; // extra space for the bottom and top borders (2px each)
 				while (*m) // scan menu data for menus
 				{
 					if (menus==menu)
 					{
 						itemx=menux;
-						menux+=session_ui_printasciz(m,ox+menux,oy+0,1,-1,1,1);
+						menux+=session_ui_printasciz(m,ox+menux,oy+0,1,-1,1,0,-1);
 					}
 					else
-						menux+=session_ui_printasciz(m,ox+menux,oy+0,1,-1,1,0);
+						menux+=session_ui_printasciz(m,ox+menux,oy+0,1,-1,1,0,+0);
 					int i=0,j=0,k=0;
 					while (*m++) // skip menu name
 						++j;
-					while (*m++|*m++) // skip menu items
+					int l; while (l=*m++,l|=*m++,l) // skip menu items
 					{
 						++k; i=0;
 						while (*m++) // skip item name
@@ -552,12 +601,13 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 					menuxs[menus++]=menux;
 				}
 				session_ui_drawframes(ox,oy,menux,1);
+				session_ui_skew=0;
 			}
 			if (itemz!=item)
 			{
 				itemz=item;
 				q=1; int i=0;
-				BYTE *m=session_ui_menudata;
+				unsigned char *m=session_ui_menudata;
 				while (*m) // scan menu data for items
 				{
 					while (*m++) // skip menu name
@@ -571,7 +621,7 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 						{
 							if (item==k)
 								z=&m[-2],session_event=j;
-							session_ui_printasciz(m,itemx+ox+0,1+oy+k,1,itemw,1,item==k);
+							session_ui_printasciz(m,itemx+ox+0,1+oy+k,1,itemw,1,0,item==k?-1:+0);
 							events[k++]=j;
 						}
 						while (*m++) // skip item name
@@ -583,6 +633,7 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 			}
 			if (q)
 				session_redraw(q=0);
+			session_ui_focusing=1;
 			switch (session_ui_exchange())
 			{
 				case KBCODE_UP:
@@ -615,7 +666,7 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 						done=1;
 					break;
 				case -1: // mouse move
-					if (!session_ui_maus_y&&session_ui_maus_x>=0&&session_ui_maus_x<session_ui_menusize) // select menu?
+					if (session_ui_maus_y<=0&&session_ui_maus_x>=0&&session_ui_maus_x<session_ui_menusize) // select menu?
 					{
 						menu=menus; while (menu>0&&session_ui_maus_x<menuxs[menu-1]) --menu;
 					}
@@ -624,7 +675,7 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 					break;
 				case -3: // mouse right click
 				case -2: // mouse left click
-					if (!session_ui_maus_y&&session_ui_maus_x>=0&&session_ui_maus_x<session_ui_menusize) // select menu?
+					if (session_ui_maus_y<=0&&session_ui_maus_x>=0&&session_ui_maus_x<session_ui_menusize) // select menu?
 						; // already done above
 					else if (session_ui_maus_y>0&&session_ui_maus_y<=items&&session_ui_maus_x>=itemx&&session_ui_maus_x<itemx+itemw+2) // select item?
 						session_event=events[session_ui_maus_y-1],done=1;
@@ -632,7 +683,7 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 						session_event=0,done=1;
 					break;
 				default:
-					if (session_ui_char>=32&&session_ui_char<=128)
+					if (session_ui_char>=32)
 						for (int o=lcase(session_ui_char),n=items;n;--n)
 						{
 							++z,++z; // skip ID
@@ -645,15 +696,18 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 						}
 					break;
 			}
+			session_ui_focusing=0;
 			if (menuz!=menu)
 				session_ui_loop(); // redrawing the items doesn't need any wiping, unlike the menus
 		}
+		until (done);
 	}
+	while (session_event==0x8000&&done>0); // empty menu items must be ignored, unless we're quitting
 	session_ui_exit();
 	if (done<0)
-		session_event=0;
+		session_shift=session_event=0; // quit!
 	else
-		session_shift=!!(session_event&0x4000),session_event&=0xBFFF; // cfr.shift
+		session_shift=!!(session_event&0x4000),session_event&=0xBFFF;
 	return;
 }
 
@@ -697,10 +751,10 @@ int session_ui_text(char *s,char *t,char q) // see session_message
 	session_ui_drawframes(session_ui_base_x=textx,session_ui_base_y=texty,session_ui_size_x=textw,session_ui_size_y=texth);
 	textw-=2;
 
-	session_ui_printasciz(t,textx+0,texty+0,1,textw,1,1);
+	session_ui_printasciz(t,textx+0,texty+0,1,textw,1,0,-1);
 	i=j=0;
 	m=session_parmtr;
-	session_ui_printasciz("",textx+q,texty+(++i),1,textw-q,1,0); // blank
+	session_ui_printasciz("",textx+q,texty+(++i),1,textw-q,1,0,+0); // blank
 	while (*s) // render text proper
 	{
 		int k=(*m++=*s++);
@@ -708,7 +762,7 @@ int session_ui_text(char *s,char *t,char q) // see session_message
 		if (k=='\n')
 		{
 			m[-1]=j=0;
-			session_ui_printasciz(m=session_parmtr,textx+q,texty+(++i),1,textw-q,1,0);
+			session_ui_printasciz(m=session_parmtr,textx+q,texty+(++i),1,textw-q,1,0,+0);
 		}
 		else if (k=='\t')
 		{
@@ -717,12 +771,9 @@ int session_ui_text(char *s,char *t,char q) // see session_message
 				++j,*m++=' ';
 		}
 	}
-	if (m!=session_parmtr)
-	{
-		*m=0;
-		session_ui_printasciz(m=session_parmtr,textx+q,texty+(++i),1,textw-q,1,0);
-	}
-	session_ui_printasciz("",textx+q,texty+(++i),1,textw-q,1,0); // blank
+	if (m!=session_parmtr) // last line lacks a line feed?
+		*m=0,session_ui_printasciz(m=session_parmtr,textx+q,texty+(++i),1,textw-q,1,0,+0);
+	session_ui_printasciz("",textx+q,texty+(++i),1,textw-q,1,0,+0); // blank
 	if (q) // draw icon?
 	{
 		session_ui_fillrect(textx,texty+1,q,texth-1,0x00C0C0C0);
@@ -730,8 +781,8 @@ int session_ui_text(char *s,char *t,char q) // see session_message
 		VIDEO_UNIT *tgt=&menus_frame[(texty+2)*SESSION_UI_HEIGHT*VIDEO_PIXELS_X+(textx+1)*8];
 		for (int z=0,y=0;y<32;++y,tgt+=VIDEO_PIXELS_X-32)
 			for (int a,x=0;x<32;++x,++tgt)
-				if ((a=session_icon32xx16[z++])&0x8000)
-					*tgt=(a&0x00F)*0x0011+(a&0x0F0)*0x00110+(a&0xF00)*0x1100;
+				if ((a=session_icon32xx16[z++])&0x8000) // crude alpha channel
+					*tgt=(a&0x00F)*0x11+(a&0x0F0)*0x110+(a&0xF00)*0x1100; // from 0X0RGB to 0X00RRGGBB
 	}
 	session_redraw(0);
 	for (;;)
@@ -751,8 +802,8 @@ int session_ui_text(char *s,char *t,char q) // see session_message
 
 int session_ui_input(char *s,char *t) // see session_input
 {
-	int i,j,first,dirty=1,textw=SESSION_UI_MAXX;
-	if ((i=j=first=strlen(s))>=textw)
+	int i=0,j=strlen(s),q,dirty=1,textw=SESSION_UI_MAXX;
+	if ((q=utf8len(s))>=textw)
 		return -1; // error!
 	strcpy(session_substr,s);
 
@@ -761,48 +812,37 @@ int session_ui_input(char *s,char *t) // see session_input
 	int textx=((VIDEO_PIXELS_X/8)-textw)/2,texty=((VIDEO_PIXELS_Y/SESSION_UI_HEIGHT)-2)/2;
 	session_ui_drawframes(session_ui_base_x=textx,session_ui_base_y=texty,session_ui_size_x=textw,session_ui_size_y=2);
 	textw-=2;
-	session_ui_printasciz(t,textx+0,texty+0,1,textw,1,1);
-	int done=0;
-	while (!done)
+	session_ui_printasciz(t,textx+0,texty+0,1,textw,1,0,-1);
+	int done=0; do
 	{
 		if (dirty)
 		{
-			if (first)
-			{
-				char *m=session_substr; while (*m) *m^=128,++m; // inverse video for all text
-				session_ui_printasciz(session_substr,textx+0,texty+1,1,textw,1,0);
-				m=session_substr; while (*m) *m^=128,++m; // restore video
-			}
+			if (q)
+				session_ui_printasciz(session_substr,textx+0,texty+1,1,textw,1,0,j); // the whole string is selected
 			else if (i<j)
-			{
-				session_substr[i]^=128; // inverse video
-				session_ui_printasciz(session_substr,textx+0,texty+1,1,textw,1,0);
-				session_substr[i]^=128; // restore video
-			}
+				session_ui_printasciz(session_substr,textx+0,texty+1,1,textw,1,i,i+utf8add(&session_substr[i],+1)); // the cursor is an inverse char
 			else
 			{
-				session_substr[i]=160; session_substr[i+1]=0; // inverse space
-				session_ui_printasciz(session_substr,textx+0,texty+1,1,textw,1,0);
+				session_substr[i]=' '; session_substr[i+1]=0; // the cursor is actually an inverse space at the end
+				session_ui_printasciz(session_substr,textx+0,texty+1,1,textw,1,i,i+1);
 				session_substr[i]=0; // end of string
 			}
 			session_redraw(0);
 			dirty=0;
 		}
-		switch (session_ui_exchange())
+		switch (dirty=session_ui_exchange())
 		{
 			case KBCODE_LEFT:
-				if (first||--i<0)
+				if (q||(i+=utf8add(&session_substr[i],-1))<0)
 			case KBCODE_HOME:
 					i=0;
-				first=0;
-				dirty=1;
+				q=0;
 				break;
 			case KBCODE_RIGHT:
-				if (first||++i>j)
+				if (q||(i+=utf8add(&session_substr[i],+1))>j)
 			case KBCODE_END:
 					i=j;
-				first=0;
-				dirty=1;
+				q=0;
 				break;
 			case -3: // mouse right click
 			case -2: // mouse left click
@@ -810,13 +850,11 @@ int session_ui_input(char *s,char *t) // see session_input
 					j=-1,done=1; // quit!
 				else if (session_ui_maus_y==1)
 				{
-					first=0;
-					if ((i=session_ui_maus_x-1)>j)
+					q=0; if ((i=utf8add(session_substr,session_ui_maus_x-1))>j)
 						i=j;
 					else if (i<0)
 						i=0;
 				}
-				dirty=1;
 				break;
 			case KBCODE_ESCAPE:
 				j=-1;
@@ -826,47 +864,39 @@ int session_ui_input(char *s,char *t) // see session_input
 				done=1;
 				break;
 			case KBCODE_BKSPACE:
-				if (first)
-					*session_substr=i=j=0;
-				else if (i>0)
-				{
-					memmove(&session_substr[i-1],&session_substr[i],j-i+1);
-					--i; --j;
-				}
-				first=0;
-				dirty=1;
-				break;
 			case KBCODE_DELETE:
-				if (first)
-					*session_substr=i=j=0;
-				if (i<j)
+				if (q) // erase all?
+					*session_substr=i=j=q=0;
+				else if (dirty==KBCODE_BKSPACE?i>0:i<j)
 				{
-					memmove(&session_substr[i],&session_substr[i+1],j-i+1);
-					--j;
+					int o; if (dirty==KBCODE_BKSPACE) { o=i; i+=utf8add(&session_substr[i],-1); }
+					else { unsigned char *z=&session_substr[i]; utf8get(&z); o=z-session_substr; }
+					memmove(&session_substr[i],&session_substr[o],j-i+1); j+=i-o;
 				}
-				first=0;
-				dirty=1;
 				break;
 			default:
-				if (session_ui_char>=32&&session_ui_char<=128&&j<textw-1)
+				if (dirty=(session_ui_char>=32&&session_ui_char<ONSCREEN_CEIL))
 				{
-					if (first)
+					int o=utf8chk(session_ui_char); if (q)
 					{
-						*session_substr=session_ui_char;
-						session_substr[i=j=1]=0;
+						char *z=session_substr; utf8put(&z,session_ui_char);
+						*z=q=0; i=j=o;
 					}
-					else
+					#ifdef SDL2_UTF8
+					else if (dirty=(utf8len(session_substr)<textw-1))
+					#else
+					else if (dirty=(j<textw-1))
+					#endif
 					{
-						memmove(&session_substr[i+1],&session_substr[i],j-i+1);
-						session_substr[i]=session_ui_char;
-						++i; ++j;
+						memmove(&session_substr[i+o],&session_substr[i],j-i+1);
+						char *z=&session_substr[i]; utf8put(&z,session_ui_char);
+						i+=o,j+=o;
 					}
-					first=0;
-					dirty=1;
 				}
 				break;
 		}
 	}
+	until (done);
 	if (j>=0)
 		strcpy(s,session_substr);
 	session_ui_exit();
@@ -900,13 +930,12 @@ int session_ui_list(int item,char *s,char *t,void x(void),int q) // see session_
 		if (item>=listh/2) // go to center?
 			if ((listz=item-listh/2+1)>items-listh) // too deep?
 				listz=items-listh+1;
-	int done=0;
-	while (!done)
+	int done=0; do
 	{
 		if (dirty) // showing x() must request a redraw!
 		{
 			session_ui_drawframes(session_ui_base_x=listx,session_ui_base_y=listy,session_ui_size_x=listw+2,session_ui_size_y=listh);
-			session_ui_printasciz(t,listx+0,listy+0,1,listw,1,1);
+			session_ui_printasciz(t,listx+0,listy+0,1,listw,1,0,-1);
 			dirty=0; itemz=~item;
 		}
 		if (itemz!=item)
@@ -924,7 +953,7 @@ int session_ui_list(int item,char *s,char *t,void x(void),int q) // see session_
 				{
 					if (i==item)
 						z=m;
-					session_ui_printasciz(m,listx+0,listy+1+i-listz,1,listw,1,i==item);
+					session_ui_printasciz(m,listx+0,listy+1+i-listz,1,listw,1,0,i==item?-1:0);
 				}
 				if (*m) while (*m++)
 					;
@@ -1016,9 +1045,9 @@ int session_ui_list(int item,char *s,char *t,void x(void),int q) // see session_
 				done=1;
 				break;
 			default:
-				if (session_ui_char>=32&&session_ui_char<=128)
+				if (session_ui_char>=32)
 				{
-					int itemz=item,n=items;
+					int itemo=item,n=items;
 					for (int o=lcase(session_ui_char);n;--n)
 					{
 						if (item<0)
@@ -1035,12 +1064,13 @@ int session_ui_list(int item,char *s,char *t,void x(void),int q) // see session_
 							break;
 					}
 					if (!n)
-						item=itemz; // allow rewinding to -1
+						item=itemo; // allow rewinding to -1
 					dblclk=0;
 				}
 				break;
 		}
 	}
+	until (done);
 	if (item>=0)
 		strcpy(session_parmtr,z);
 	session_ui_exit();
@@ -1111,8 +1141,8 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 		{
 			do
 				if (!(wfd.dwFileAttributes&FILE_ATTRIBUTE_HIDDEN)&&(wfd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)) // reject invisible directories
-					if (strcmp(n=wfd.cFileName,".")&&strcmp(n=wfd.cFileName,"..")) // add directory name with the separator at the end
-						++i,m=&half[sortedinsert(half,m-half,session_ui_filedialog_sanitizepath(n))];
+					if (strcmp(n=wfd.cFileName,".")&&strcmp(n,"..")) // add directory name with the separator at the end
+						if (utf8tst(n)) ++i,m=&half[sortedinsert(half,m-half,session_ui_filedialog_sanitizepath(n))];
 			while (FindNextFile(h,&wfd)&&m-(char *)session_scratch<sizeof(session_scratch)-STRMAX);
 			FindClose(h);
 		}
@@ -1122,7 +1152,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 			do
 				if (!(wfd.dwFileAttributes&FILE_ATTRIBUTE_HIDDEN)&&!(wfd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)) // reject invisible files
 					if (multiglobbing(s,n=wfd.cFileName,1)) // add file name
-						++i,m=&half[sortedinsert(half,m-half,n)];
+						if (utf8tst(n)) ++i,m=&half[sortedinsert(half,m-half,n)];
 			while (FindNextFile(h,&wfd)&&m-(char *)session_scratch<sizeof(session_scratch)-STRMAX);
 			FindClose(h);
 		}
@@ -1139,18 +1169,18 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 		if (d=opendir(basepath))
 		{
 			while ((e=readdir(d))&&m-(char *)session_scratch<sizeof(session_scratch)-STRMAX)
-				if (n=e->d_name,n[0]!='.') // reject ".*"
+				if (n=e->d_name,*n!='.') // reject ".*"
 					if (getftype(strcat(strcpy(basefind,basepath),n))>0) // add directory name with the separator at the end
-						++i,m=&half[sortedinsert(half,m-half,session_ui_filedialog_sanitizepath(n))];
+						if (utf8tst(n)) ++i,m=&half[sortedinsert(half,m-half,session_ui_filedialog_sanitizepath(n))];
 			closedir(d);
 		}
 		half=m;
 		if (d=opendir(basepath))
 		{
 			while ((e=readdir(d))&&m-(char *)session_scratch<sizeof(session_scratch)-STRMAX)
-				if (n=e->d_name,n[0]!='.'&&multiglobbing(s,n,1)) // reject ".*"
+				if (n=e->d_name,*n!='.'&&multiglobbing(s,n,1)) // reject ".*"
 					if (!getftype(strcat(strcpy(basefind,basepath),n))) // add file name
-						++i,m=&half[sortedinsert(half,m-half,n)];
+						if (utf8tst(n)) ++i,m=&half[sortedinsert(half,m-half,n)];
 			closedir(d);
 		}
 		#endif
@@ -1241,10 +1271,9 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 
 // create, handle and destroy session ------------------------------- //
 
-SDL_version sdl_version; char session_version[8];
-INLINE char* session_create(char *s) // create video+audio devices and set menu; 0 OK, !0 ERROR
+INLINE char *session_create(char *s) // create video+audio devices and set menu; 0 OK, !0 ERROR
 {
-	SDL_SetMainReady();
+	SDL_version sdl_version; SDL_SetMainReady();
 	SDL_GetVersion(&sdl_version); sprintf(session_version,"%d.%d.%d",sdl_version.major,sdl_version.minor,sdl_version.patch);
 	if (SDL_Init(SDL_INIT_EVENTS|SDL_INIT_VIDEO|SDL_INIT_AUDIO|SDL_INIT_TIMER|SDL_INIT_JOYSTICK|SDL_INIT_GAMECONTROLLER)<0)
 		return (char *)SDL_GetError();
@@ -1305,7 +1334,7 @@ INLINE char* session_create(char *s) // create video+audio devices and set menu;
 	session_ui_makechrs();
 
 	// translate menu data into custom format
-	BYTE *t=session_ui_menudata; session_ui_menusize=0;
+	unsigned char *t=session_ui_menudata; session_ui_menusize=0;
 	while (*s)
 	{
 		// scan and generate menu header
@@ -1435,6 +1464,8 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 			case SDL_WINDOWEVENT:
 				if (event.window.event==SDL_WINDOWEVENT_EXPOSED)
 					session_clrscr(),session_redraw(1);// clear and redraw
+				else if (event.window.event==SDL_WINDOWEVENT_FOCUS_LOST)
+					session_kbdclear(); // loss of focus: no keys!
 				break;
 			case SDL_MOUSEWHEEL:
 				if (event.wheel.direction==SDL_MOUSEWHEEL_FLIPPED) event.wheel.y=-event.wheel.y;
@@ -1531,9 +1562,6 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 			case SDL_CONTROLLERBUTTONUP:
 				if (session_pad)
 					session_joybits&=~session_pad2bit(event.cbutton.button);
-				break;
-			case SDL_WINDOWEVENT_FOCUS_LOST:
-				session_kbdclear(); // loss of focus: no keys!
 				break;
 			case SDL_DROPFILE:
 				strcpy(session_parmtr,event.drop.file);
@@ -1711,7 +1739,7 @@ void session_menucheck(int id,int q) // set the state of option `id` as `q`
 		while (j=*m++<<8,j+=*m++)
 		{
 			if (j==id)
-				*m=q?'*':' ';
+				*m=q?17:16;
 			while (*m++) // skip item name
 				;
 		}
@@ -1727,7 +1755,7 @@ void session_menuradio(int id,int a,int z) // set the option `id` in the range `
 		while (j=*m++<<8,j+=*m++)
 		{
 			if (j>=a&&j<=z)
-				*m=j==id?'>':' ';
+				*m=j==id?19:18;
 			while (*m++) // skip item name
 				;
 		}

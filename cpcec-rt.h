@@ -198,8 +198,12 @@ int sortedsearch(char *t,int z,char *s) // look for string 's' in an alphabetica
 #define VIDEO_FILTER_X_MASK 1
 #define VIDEO_FILTER_Y_MASK 2
 #define VIDEO_FILTER_SMUDGE 4
+int video_pos_z=0; // for timekeeping, statistics and debugging
 int video_scanblend=0,audio_mixmode=1; // 0 = pure mono, 1 = pure stereo, 2 = 50%, 3 = 25%
-VIDEO_UNIT video_lastscanline,video_halfscanline,video_litegun; // the fillers used in video_endscanlines() and the lightgun buffer
+VIDEO_UNIT video_lastscanline,video_halfscanline; // the fillers used in video_endscanlines() and the lightgun buffer
+#ifdef MAUS_LIGHTGUNS
+VIDEO_UNIT video_litegun; // lightgun data
+#endif
 
 void video_resetscanline(void) // reset scanline filler values on new video options
 {
@@ -209,131 +213,129 @@ void video_resetscanline(void) // reset scanline filler values on new video opti
 				MEMNCPY(&video_blend[y*VIDEO_PIXELS_X],&video_frame[(VIDEO_OFFSET_Y+y*2)*VIDEO_LENGTH_X+VIDEO_OFFSET_X],VIDEO_PIXELS_X);
 }
 
-INLINE void video_newscanlines(int x,int y) // reset `video_target`, `video_pos_x` and `video_pos_y` when a frame begins
+INLINE void video_newscanlines(int x,int y) // reset `video_target`, `video_pos_x` and `video_pos_y`, and update `video_pos_z`
 {
-	video_target=video_frame+(video_pos_y=y)*VIDEO_LENGTH_X+(video_pos_x=x); // new coordinates
+	++video_pos_z; video_target=video_frame+(video_pos_y=y)*VIDEO_LENGTH_X+(video_pos_x=x); // new coordinates
 	if (video_interlaces&&(video_scanline&2))
 		++video_pos_y,video_target+=VIDEO_LENGTH_X; // current scanline mode
 }
 // do not manually unroll the following operations, GCC is smart enough to do a better job on its own: 1820% > 1780%!
 INLINE void video_drawscanline(void) // call between scanlines; memory caching makes this more convenient than gathering all operations in video_endscanlines()
 {
-	if (video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y)
+	VIDEO_UNIT vt,vs,VIDEO_FILTER_BLURDATA,*vi=video_target-video_pos_x+VIDEO_OFFSET_X,*vl=vi+VIDEO_PIXELS_X,
+		*vo=video_target-video_pos_x+VIDEO_OFFSET_X+VIDEO_LENGTH_X;
+	#ifdef MAUS_LIGHTGUNS
+	if (!(((session_maus_y+VIDEO_OFFSET_Y)^video_pos_y)&-2)) // does the lightgun aim at the current scanline?
+		video_litegun=session_maus_x>=0&&session_maus_x<VIDEO_PIXELS_X?vi[session_maus_x]|vi[session_maus_x^1]:0; // keep the colours BEFORE any filtering happens!
+	#endif
+	if (video_scanblend) // blend scanlines from previous and current frame!
 	{
-		VIDEO_UNIT vt,va,vc,vb,*vi=video_target-video_pos_x+VIDEO_OFFSET_X,*vl=vi+VIDEO_PIXELS_X,
-			*vo=video_target-video_pos_x+VIDEO_OFFSET_X+VIDEO_LENGTH_X;
-		if (!(((session_maus_y+VIDEO_OFFSET_Y)^video_pos_y)&-2)) // does the lightgun aim at the current scanline?
-			video_litegun=session_maus_x>=0&&session_maus_x<VIDEO_PIXELS_X?vi[session_maus_x]|vi[session_maus_x^1]:0; // keep the colours BEFORE any filtering happens!
-		if (video_scanblend) // blend scanlines from previous and current frame!
-		{
-			VIDEO_UNIT *vp=&video_blend[(video_pos_y-VIDEO_OFFSET_Y)/2*VIDEO_PIXELS_X];
-			for (int x=VIDEO_PIXELS_X;x>0;--x)
-				vc=*vp,vb=*vp++=*vi,*vi++=VIDEO_FILTER_HALF(vc,vb); // non-accumulative (gigascreen)
-				//vc=*vp,vb=*vi,*vp++=*vi++=VIDEO_FILTER_HALF(vc,vb); // accumulative (motion blur)
-			vi-=VIDEO_PIXELS_X;
-		}
-		switch ((video_filter&7)+(video_scanlinez?0:8))
-		{
-			case 8: // nothing (full)
-				MEMNCPY(vo,vi,VIDEO_PIXELS_X);
-				// no `break` here!
-			case 0: // nothing (half)
-				break;
-			case 0+VIDEO_FILTER_Y_MASK:
-				if (video_pos_y&1)
-					do
-						vt=*vi,*vi++=VIDEO_FILTER_X1(vt);
-					while (vi<vl);
-				break;
-			case 8+VIDEO_FILTER_Y_MASK:
+		VIDEO_UNIT *vp=&video_blend[(video_pos_y-VIDEO_OFFSET_Y)/2*VIDEO_PIXELS_X];
+		for (int x=VIDEO_PIXELS_X;x>0;--x)
+			vt=*vp,vs=*vp++=*vi,*vi++=VIDEO_FILTER_HALF(vt,vs); // non-accumulative (gigascreen)
+		vi-=VIDEO_PIXELS_X;
+	}
+	switch ((video_filter&7)+(video_scanlinez?0:8))
+	{
+		case 8: // nothing (full)
+			MEMNCPY(vo,vi,VIDEO_PIXELS_X);
+			// no `break` here!
+		case 0: // nothing (half)
+			break;
+		case 0+VIDEO_FILTER_Y_MASK:
+			if (video_pos_y&1)
 				do
-					vt=*vi++,*vo++=VIDEO_FILTER_X1(vt);
+					vt=*vi,*vi++=VIDEO_FILTER_X1(vt);
+				while (vi<vl);
+			break;
+		case 8+VIDEO_FILTER_Y_MASK:
+			do
+				vt=*vi++,*vo++=VIDEO_FILTER_X1(vt);
+			while (vi<vl);
+			break;
+		case 8+VIDEO_FILTER_X_MASK:
+			do
+				*vo++=*vi++,
+				vt=*vi,*vo++=*vi++=VIDEO_FILTER_X1(vt);
+			while (vi<vl);
+			break;
+		case 0+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK:
+			if (video_pos_y&1)
+			// no `break` here!
+		case 0+VIDEO_FILTER_X_MASK:
+			do
+				vt=*++vi,*vi++=VIDEO_FILTER_X1(vt);
+			while (vi<vl);
+			break;
+		case 8+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK:
+			do
+				*vo++=*vi++,
+				vt=*vi++,*vo++=VIDEO_FILTER_X1(vt);
+			while (vi<vl);
+			break;
+		case 8+VIDEO_FILTER_SMUDGE:
+			vt=*vo++=*vi++; VIDEO_FILTER_BLUR0(vt);
+			do
+				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vo++=*vi++=vt;
+			while (vi<vl);
+			break;
+		case 0+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_SMUDGE:
+			if (video_pos_y&1)
+			{
+				vt=*vi,*vi++=VIDEO_FILTER_X1(vt); VIDEO_FILTER_BLUR0(vt);
+				do
+					vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=VIDEO_FILTER_X1(vt);
 				while (vi<vl);
 				break;
-			case 8+VIDEO_FILTER_X_MASK:
+			}
+			// no `break` here!
+		case 0+VIDEO_FILTER_SMUDGE:
+			vt=*vi++; VIDEO_FILTER_BLUR0(vt);
+			do
+				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt;
+			while (vi<vl);
+			break;
+		case 8+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_SMUDGE:
+			vt=*vi++,*vo++=VIDEO_FILTER_X1(vt); VIDEO_FILTER_BLUR0(vt);
+			do
+				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt,*vo++=VIDEO_FILTER_X1(vt);
+			while (vi<vl);
+			break;
+		case 8+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
+			vt=*vi; VIDEO_FILTER_BLUR0(vt);
+			do
+				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vo++=*vi++=vt,
+				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vo++=*vi++=VIDEO_FILTER_X1(vt);
+			while (vi<vl);
+			break;
+		case 0+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
+			vt=*vi; VIDEO_FILTER_BLUR0(vt);
+			if (video_pos_y&1)
+			{
 				do
-					*vo++=*vi++,
-					vt=*vi,*vo++=*vi++=VIDEO_FILTER_X1(vt);
+					vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt,
+					vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=VIDEO_FILTER_X1(vt);
 				while (vi<vl);
 				break;
-			case 0+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK:
-				if (video_pos_y&1)
-				// no `break` here!
-			case 0+VIDEO_FILTER_X_MASK:
-				do
-					vt=*++vi,*vi++=VIDEO_FILTER_X1(vt);
-				while (vi<vl);
-				break;
-			case 8+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK:
-				do
-					*vo++=*vi++,
-					vt=*vi++,*vo++=VIDEO_FILTER_X1(vt);
-				while (vi<vl);
-				break;
-			case 8+VIDEO_FILTER_SMUDGE:
-				va=vb=*vo++=*vi++;
-				do
-					vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vo++=*vi++=vt;
-				while (vi<vl);
-				break;
-			case 0+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_SMUDGE:
-				if (video_pos_y&1)
-				{
-					va=vb=*vi,*vi++=VIDEO_FILTER_X1(vb);
-					do
-						vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vi++=VIDEO_FILTER_X1(vt);
-					while (vi<vl);
-					break;
-				}
-				// no `break` here!
-			case 0+VIDEO_FILTER_SMUDGE:
-				va=vb=*vi++;
-				do
-					vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vi++=vt;
-				while (vi<vl);
-				break;
-			case 8+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_SMUDGE:
-				va=vb=*vi++,*vo++=VIDEO_FILTER_X1(vb);
-				do
-					vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vi++=vt,*vo++=VIDEO_FILTER_X1(vt);
-				while (vi<vl);
-				break;
-			case 8+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
-				va=vb=*vi;
-				do
-					vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vo++=*vi++=vt,
-					vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vo++=*vi++=VIDEO_FILTER_X1(vt);
-				while (vi<vl);
-				break;
-			case 0+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
-				va=vb=*vi;
-				if (video_pos_y&1)
-				{
-					do
-						vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vi++=vt,
-						vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vi++=VIDEO_FILTER_X1(vt);
-					while (vi<vl);
-					break;
-				}
-				do
-					vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vi++=vt;
-				while (vi<vl);
-				break;
-			case 0+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
-				va=vb=*vi;
-				do
-					vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vi++=vt,
-					vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vi++=VIDEO_FILTER_X1(vt);
-				while (vi<vl);
-				break;
-			case 8+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
-				va=vb=*vi;
-				do
-					vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vo++=*vi++=vt,
-					vc=*vi,VIDEO_FILTER_BLUR(vt,va,vb,vc),*vi++=vt,*vo++=VIDEO_FILTER_X1(vt);
-				while (vi<vl);
-				break;
-		}
+			}
+			do
+				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt;
+			while (vi<vl);
+			break;
+		case 0+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
+			vt=*vi; VIDEO_FILTER_BLUR0(vt);
+			do
+				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt,
+				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=VIDEO_FILTER_X1(vt);
+			while (vi<vl);
+			break;
+		case 8+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
+			vt=*vi; VIDEO_FILTER_BLUR0(vt);
+			do
+				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vo++=*vi++=vt,
+				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt,*vo++=VIDEO_FILTER_X1(vt);
+			while (vi<vl);
+			break;
 	}
 }
 INLINE void video_endscanlines(void) // fill gaps and clean up when a frame ends
@@ -355,7 +357,9 @@ INLINE void video_endscanlines(void) // fill gaps and clean up when a frame ends
 				for (int x=0;x<VIDEO_PIXELS_X;++x)
 					*p++=video_lastscanline; // render primary scanlines only
 	}
+	#ifdef MAUS_LIGHTGUNS
 	video_litegun=0; // the lightgun signal fades away between frames
+	#endif
 	static int f=-1; static VIDEO_UNIT z=-1; // first value intentionally invalid!
 	if (video_scanlinez!=video_scanline||f!=video_filter||z!=video_halfscanline) // did the config change?
 		if ((video_scanlinez=video_scanline)==1) // do we have to redo the secondary scanlines?
@@ -372,7 +376,7 @@ INLINE void video_endscanlines(void) // fill gaps and clean up when a frame ends
 
 INLINE void audio_playframe(int q,AUDIO_UNIT *ao) // call between frames by the OS wrapper
 {
-	AUDIO_UNIT aa,*ai=audio_frame; // session_filter[(aa<<8)+az] is 8-bit only and isn't faster than the calculations
+	AUDIO_UNIT aa,*ai=audio_frame;
 	#if AUDIO_CHANNELS > 1
 	static AUDIO_UNIT a0=AUDIO_ZERO,a1=AUDIO_ZERO; // independent channels
 	switch (q)
@@ -413,7 +417,6 @@ INLINE void audio_playframe(int q,AUDIO_UNIT *ao) // call between frames by the 
 	#endif
 }
 
-int video_pos_z=0; // for statistics and debugging
 int session_signal_frames=0,session_signal_scanlines=0; //,session_rhythm=1
 INLINE void session_update(void) // render video+audio thru OS and handle realtime logic (self-adjusting delays, automatic frameskip, etc.)
 {
@@ -434,36 +437,33 @@ INLINE void session_update(void) // render video+audio thru OS and handle realti
 // the INFLATE method! ... or more properly a terribly simplified mess
 // based on the RFC1951 standard and PUFF.C from the ZLIB project.
 
-// temporary variables
 unsigned char *puff_src,*puff_tgt; // source and target buffers
 int puff_srcl,puff_tgtl,puff_srco,puff_tgto,puff_buff,puff_bits;
 struct puff_huff { short *cnt,*sym; }; // Huffman table element
-// auxiliary functions
+// Huffman-bitwise operations
 int puff_read(int n) // reads N bits from source; <0 ERROR
 {
-	int a=puff_buff;
-	while (puff_bits<n)
+	int buff=puff_buff,bits=puff_bits; // local copies are faster
+	while (bits<n)
 	{
 		if (puff_srco>=puff_srcl)
 			return -1; // source overrun!
-		a+=puff_src[puff_srco++]<<puff_bits; // copy byte from source
-		puff_bits+=8; // skip byte from source
+		buff+=puff_src[puff_srco++]<<bits; // copy byte from source
+		bits+=8; // skip byte from source
 	}
-	puff_buff=a>>n; puff_bits-=n; // adjust target and flush bits
-	return a&((1<<n)-1); // result!
+	puff_buff=buff>>n; puff_bits=bits-n; // adjust target and flush bits
+	return buff&((1<<n)-1); // result!
 }
 int puff_decode(struct puff_huff *h) // decodes Huffman code from source; <0 ERROR
 {
+	int buff=puff_buff,bits=puff_bits; // local copies are faster
 	short *next=h->cnt; int l=1,i=0,base=0,code=0;
-	int buff=puff_buff,bits=puff_bits; // local copies are faster!
-	for (;;)
+	for (;;) // extract bits until they fit within an interval
 	{
 		while (bits--)
 		{
-			code+=buff&1;
-			buff>>=1;
-			int o=*++next;
-			if (code<base+o) // does the code fit the interval?
+			code+=buff&1; buff>>=1;
+			int o=*++next; if (code<base+o) // does the code fit the interval?
 			{
 				puff_buff=buff; // adjust target
 				puff_bits=(puff_bits-l)&7; // flush bits
@@ -501,10 +501,10 @@ int puff_tables(struct puff_huff *h,short *l,int n) // generates Huffman tables 
 }
 int puff_expand(struct puff_huff *puff_lcode,struct puff_huff *puff_ocode) // expands DEFLATE source into target; !0 ERROR
 {
-	static const short lcode[2][29]={ // length constants
-		{ 3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258 },
-		{ 0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0 }};
-	static const short ocode[2][30]={ // offset constants
+	static const short lcode[2][32]={ // length constants; 0, 30 and 31 are reserved
+		{ 0,3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258 },
+		{ 0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0 }};
+	static const short ocode[2][32]={ // offset constants; 30 and 31 are reserved
 		{ 1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577 },
 		{ 0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13 }};
 	int a,l,o;
@@ -518,9 +518,9 @@ int puff_expand(struct puff_huff *puff_lcode,struct puff_huff *puff_ocode) // ex
 				return -1; // target overrun!
 			puff_tgt[puff_tgto++]=a; // copy literal
 		}
-		else if (a>256) // length:offset pair?
+		else if (a-=256) // length:offset pair?
 		{
-			if ((a-=257)>=29)
+			if (a>29)
 				return -1; // invalid value!
 			if (puff_tgto+(l=lcode[0][a]+puff_read(lcode[1][a]))>puff_tgtl)
 				return -1; // target overrun!
@@ -539,10 +539,8 @@ INLINE int puff_stored(void) // copies raw uncompressed byte block from source t
 	if (puff_srco+4>puff_srcl)
 		return -1; // source overrun!
 	puff_buff=puff_bits=0; // ignore remaining bits
-	int l=puff_src[puff_srco++];
-	l+=puff_src[puff_srco++]<<8;
-	int k=puff_src[puff_srco++];
-	k+=puff_src[puff_srco++]<<8;
+	int l=puff_src[puff_srco++]; l+=puff_src[puff_srco++]<<8;
+	int k=puff_src[puff_srco++]; k+=puff_src[puff_srco++]<<8;
 	if (!l||l+k!=0xFFFF)
 		return -1; // invalid value!
 	if (puff_srco+l>puff_srcl||puff_tgto+l>puff_tgtl)
@@ -578,13 +576,11 @@ INLINE int puff_dynamic(void) // generates custom Huffman codes and expands bloc
 		return -1; // invalid table!
 	for (i=0;i<l+o;)
 	{
-		int a;
-		if ((a=puff_decode(&puff_lcode))<16) // literal?
+		int a; if ((a=puff_decode(&puff_lcode))<16) // literal?
 			t[i++]=a; // copy literal
 		else
 		{
-			int z;
-			if (a==16)
+			int z; if (a==16)
 			{
 				if (!i)
 					return -1; // invalid value!
@@ -608,8 +604,7 @@ INLINE int puff_dynamic(void) // generates custom Huffman codes and expands bloc
 }
 INLINE int puff_main(void) // inflates compressed source into target; !0 ERROR
 {
-	int q,e;
-	puff_buff=puff_bits=0; // puff_srcX and puff_tgtX are set by caller
+	int q,e; puff_buff=puff_bits=0; // puff_srcX and puff_tgtX are set by caller
 	do
 	{
 		q=puff_read(1); // is this the last block?
@@ -621,15 +616,16 @@ INLINE int puff_main(void) // inflates compressed source into target; !0 ERROR
 			default: e=1; break; // invalid value!
 		}
 	}
-	while (!(q|e));
+	until (q|e);
 	return e;
 }
 
 // standard ZIP v2.0 archive reader that relies on
-// the main directory at the end of the ZIP archive
+// the main directory at the end of the ZIP archive;
+// it includes a RFC1952 standard GZIP file handler.
 
 FILE *puff_file=NULL;
-unsigned char puff_name[256],puff_type;
+unsigned char puff_name[256],puff_type,puff_gzip;
 unsigned int puff_skip,puff_next,puff_diff,puff_hash;//,puff_time
 void puff_close(void) // closes the current ZIP archive
 {
@@ -641,8 +637,27 @@ int puff_open(char *s) // opens a new ZIP archive; !0 ERROR
 	puff_close();
 	if (!(puff_file=fopen(s,"rb")))
 		return -1;
+	// check the GZIP header first
+	if (fread1(session_scratch,10,puff_file)==10)
+		if (!memcmp(session_scratch,"\037\213\010",3))
+		{
+			if (session_scratch[3]&4)
+				fseek(puff_file,fgetii(puff_file),SEEK_SET); // skip infos
+			if (session_scratch[3]&8)
+				while (fgetc(puff_file)>0) ; // skip filename
+			if (session_scratch[3]&16)
+				while (fgetc(puff_file)>0) ; // skip comment
+			if (session_scratch[3]&2)
+				fgetii(puff_file); // skip CRC16
+			puff_skip=ftell(puff_file); fseek(puff_file,-8,SEEK_END); puff_srcl=ftell(puff_file)-puff_skip;
+			puff_hash=fgetiiii(puff_file); puff_tgtl=fgetiiii(puff_file); // CRC32 and source size at the end
+			char *t=strrchr(s,PATHCHAR); //  build target name from source filename (no path)
+			strcpy(puff_name,t?t+1:s); // copy the whole string if there's no path at all!
+			*strrchr(puff_name,'.')=0; // clip extension off to get the target filename
+			return puff_next=puff_skip+(puff_type=8),puff_gzip=2,puff_diff=0;
+		}
 	// find the central directory tree
-	fseek(puff_file,0,SEEK_END);
+	fseek(puff_file,puff_gzip=0,SEEK_END);
 	int l=ftell(puff_file),k=65536;
 	if (k>l)
 		k=l;
@@ -665,6 +680,8 @@ int puff_head(void) // reads a ZIP file header, if any; !0 ERROR
 {
 	if (!puff_file)
 		return -1;
+	if (puff_gzip)
+		return --puff_gzip!=1; // header is already pre-made; can be read once, but not twice
 	unsigned char h[46];
 	fseek(puff_file,puff_diff+puff_next,SEEK_SET);
 	if (fread(h,1,sizeof(h),puff_file)!=sizeof(h)||memcmp(h,"PK\001\002",4)||h[11]||!h[28]||h[29])//||(h[8]&8)
@@ -689,7 +706,6 @@ int puff_head(void) // reads a ZIP file header, if any; !0 ERROR
 }
 int puff_body(int q) // loads (!0) or skips (0) a ZIP file body; !0 ERROR
 {
-	puff_tgto=puff_srco=0;
 	if (!puff_file)
 		return -1;
 	if (puff_tgtl<1)
@@ -698,6 +714,9 @@ int puff_body(int q) // loads (!0) or skips (0) a ZIP file body; !0 ERROR
 	{
 		if (puff_srcl<1||puff_tgtl<0)
 			return -1; // cannot get data from nothing! cannot write negative data!
+		if (puff_gzip)
+			return fseek(puff_file,puff_diff+puff_skip,SEEK_SET),
+				fread1(puff_src,puff_srcl,puff_file),puff_tgto=puff_srco=0,puff_main();
 		unsigned char h[30];
 		fseek(puff_file,puff_diff+puff_skip,SEEK_SET);
 		fread1(h,sizeof(h),puff_file);
@@ -707,7 +726,7 @@ int puff_body(int q) // loads (!0) or skips (0) a ZIP file body; !0 ERROR
 			if (!puff_type)
 				return fread1(puff_tgt,puff_tgto=puff_srco=puff_srcl,puff_file),puff_tgtl!=puff_srcl;
 			if (puff_type==8)
-				return fread1(puff_src,puff_srcl,puff_file),puff_main();
+				return fread1(puff_src,puff_srcl,puff_file),puff_tgto=puff_srco=0,puff_main();
 		}
 	}
 	return q; // 0 skipped=OK, !0 unknown=ERROR
@@ -722,49 +741,56 @@ unsigned int puff_dohash(unsigned int k,unsigned char *s,int l)
 	return k;
 }
 // ZIP-aware fopen()
-char puff_pattern[]="*.zip",PUFF_STR[]={PATHCHAR,PATHCHAR,PATHCHAR,0},puff_path[STRMAX]; // i.e. "TREE/PATH///ARCHIVE/FILE"
-FILE *puff_ffile=NULL;
+char puff_pattern[]="*.zip;*.gz",PUFF_STR[]={PATHCHAR,PATHCHAR,PATHCHAR,0},puff_path[STRMAX]; // i.e. "TREE/PATH///ARCHIVE/FILE"
+FILE *puff_ffile=NULL; int puff_fshut=0; // used to know whether to keep a file that gets repeatedly open
+#ifdef __MSVCRT__ // the MSVCRT.DLL version of tmpfile() is unreliable, see below
+char puff_fbase[STRMAX]="",puff_fpath[STRMAX];
+#endif
+
 FILE *puff_fopen(char *s,char *m) // mimics fopen(), so NULL on error, *FILE otherwise
 {
 	if (!s||!m)
 		return NULL; // wrong parameters!
-	#ifdef _WIN32
-	if (puff_ffile&&!strcasecmp(puff_path,s))
-	#else
-	if (puff_ffile&&!strcmp(puff_path,s))
-	#endif
-		return fseek(puff_ffile,0,SEEK_SET),puff_ffile; // recycle last file!
-	// TODO: handle more than one puff_ffile at once so the file caching is smart
-	//if (puff_ffile) fclose(puff_ffile),puff_ffile=NULL; // it's a new file, destroy old one and start anew
-	char *z;
-	if (!(z=strrstr(s,PUFF_STR)))//||!strchr(m,'r')) // TODO: what to do with 'w' and 'a' file modes?
-		return fopen(s,m); // normal file logic
+	char *z; if (!(z=strrstr(s,PUFF_STR))||strchr(m,'w'))
+		return fopen(s,m); // normal file activity
+	if (puff_ffile&&puff_fshut) // can we recycle the last closed file?
+	{
+		puff_fshut=0; // closing must have happened before recycling
+		if (!strcmp(puff_path,s))
+			return fseek(puff_ffile,0,SEEK_SET),puff_ffile; // recycle last file!
+		fclose(puff_ffile),puff_ffile=NULL; // it's a new file, delete old
+	}
 	strcpy(puff_path,s);
 	puff_path[z-s]=0;
 	z+=strlen(PUFF_STR);
-	if (!globbing(puff_pattern,puff_path,1)||puff_open(puff_path))
+	if (!multiglobbing(puff_pattern,puff_path,1)||puff_open(puff_path))
 		return 0;
-	while (!puff_head()) // scan archive
-		#ifdef _WIN32
-		if (!strcasecmp(puff_name,z))
-		#else
+	until (puff_head()) // scan archive; beware, the insides MUST BE case sensitive!
+		//#ifdef _WIN32
+		//if (!strcasecmp(puff_name,z)) // `strcasecmp` cannot be here, not even on _WIN32: this isn't a general purpose ZIP reader
+		//#else
 		if (!strcmp(puff_name,z))
-		#endif
+		//#endif
 		{
+			#ifdef __MSVCRT__ // MSVCRT.DLL: tmpfile() ignores the TEMP variable and fails on read-only drives, but fopen() gives us the flags "TD"
+			if (!*puff_fbase) GetTempPath(STRMAX,puff_fbase); // do it just once
+			if (!(puff_ffile=GetTempFileName(puff_fbase,"zip",0,puff_fpath)?fopen(puff_fpath,"wb+TD"):NULL)) // "TD" = _O_SHORTLIVED | _O_TEMPORARY
+			#else
 			if (!(puff_ffile=tmpfile()))
+			#endif
 				return puff_close(),NULL; // file failure!
 			puff_src=puff_tgt=NULL;
 			if (!(!puff_type||(puff_src=malloc(puff_srcl)))||!(puff_tgt=malloc(puff_tgtl))
-				||puff_body(1)||(DWORD)~(puff_hash^puff_dohash(~0,puff_tgt,puff_tgto)))
+				||puff_body(1)||(DWORD)~(puff_hash^puff_dohash(~0,puff_tgt,puff_tgtl)))
 				fclose(puff_ffile),puff_ffile=NULL; // memory or data failure!
 			if (puff_ffile)
-				fwrite1(puff_tgt,puff_tgto,puff_ffile),fseek(puff_ffile,0,SEEK_SET); // fopen() expects ftell()=0!
+				fwrite1(puff_tgt,puff_tgtl,puff_ffile),fseek(puff_ffile,0,SEEK_SET); // fopen() expects ftell()=0!
 			if (puff_src) free(puff_src); if (puff_tgt) free(puff_tgt);
 			puff_close();
 			if (puff_ffile) // either *FILE or NULL
 				strcpy(puff_path,s); // allow recycling!
 			else
-				*puff_path=0; // don't recycle on failure!
+				*puff_path=puff_fshut=0; // don't recycle on failure!
 			return puff_ffile;
 		}
 		else
@@ -773,11 +799,11 @@ FILE *puff_fopen(char *s,char *m) // mimics fopen(), so NULL on error, *FILE oth
 }
 int puff_fclose(FILE *f)
 {
-	return (f!=puff_ffile)?fclose(f):0; // delay closing to allow recycling
+	return (f==puff_ffile)?(puff_fshut=1),0:fclose(f); // delay closing to allow recycling
 }
 void puff_byebye(void)
 {
-	if (puff_ffile) fclose(puff_ffile),puff_ffile=NULL; // cleanup is done by the runtime thanks to tmpfile()
+	if (puff_ffile) fclose(puff_ffile),puff_ffile=NULL; // cleanup of tmpfile() is done by the runtime
 }
 
 // ZIP-aware user interfaces
@@ -787,7 +813,7 @@ char *puff_session_subdialog(char *r,char *s,char *t,char *zz,int qq) // let the
 	int l=0,i=-1; // number of files, default selection
 	if (puff_open(strcpy(rr,r))) // error?
 		return NULL;
-	while (!puff_head())
+	until (puff_head())
 	{
 		if (puff_name[strlen(puff_name)-1]!='/') // file or folder?
 			if (multiglobbing(s,puff_name,1))
@@ -807,7 +833,7 @@ char *puff_session_subdialog(char *r,char *s,char *t,char *zz,int qq) // let the
 		return qq?strcpy(session_parmtr,strcat(strcat(rr,PUFF_STR),session_scratch)):NULL; // 'qq' enables automatic OK
 	i=sortedsearch(session_scratch,z-session_scratch,zz);
 	*z++=0; // END OF LIST
-	sprintf(z,"Browse archive %s",rr);
+	sprintf(z,"Archive %s",rr);
 	return session_list(i,session_scratch,z)<0?NULL:strcpy(session_parmtr,strcat(strcat(rr,PUFF_STR),session_parmtr));
 }
 #define puff_session_zipdialog(r,s,t) puff_session_subdialog(r,s,t,NULL,1)
@@ -826,7 +852,7 @@ char *puff_session_filedialog(char *r,char *s,char *t,int q,int f) // ZIP archiv
 		}
 		if (!(z=(q?session_getfilereadonly(rr,ss,t,f):session_getfile(rr,ss,t)))) // what did the user choose?
 			return NULL; // user cancel: give up
-		if (strlen(z)<4||strcasecmp(z+strlen(z)-4,&puff_pattern[1]))
+		if (!multiglobbing(puff_pattern,z,1))
 			return z; // normal file: accept it
 		strcat(strcpy(rr,z),PUFF_STR); // ZIP archive: append and try again
 		qq=1; // tag repetition
@@ -847,50 +873,45 @@ char *puff_session_newfile(char *x,char *y,char *z) // writing within ZIP archiv
 // on-screen and debug text printing -------------------------------- //
 
 VIDEO_UNIT onscreen_ink0,onscreen_ink1; BYTE onscreen_flag=1;
-#define onscreen_inks(q0,q1) onscreen_ink0=q0,onscreen_ink1=q1
-
+#define onscreen_inks(q0,q1) (onscreen_ink0=q0,onscreen_ink1=q1)
 #define ONSCREEN_XY if ((x*=8)<0) x+=VIDEO_OFFSET_X+VIDEO_PIXELS_X; else x+=VIDEO_OFFSET_X; \
 	if ((y*=ONSCREEN_SIZE)<0) y+=VIDEO_OFFSET_Y+VIDEO_PIXELS_Y; else y+=VIDEO_OFFSET_Y; \
-	int p=y*VIDEO_LENGTH_X+x,a=video_scanline==1?2:1; \
-	VIDEO_UNIT q0=q?onscreen_ink1:onscreen_ink0
-void onscreen_char(int x,int y,int z,int q) // draw a character
+	VIDEO_UNIT *p=&video_frame[y*VIDEO_LENGTH_X+x],a=video_scanline==1?2:1
+void onscreen_char(int x,int y,int z) // draw a 7-bit character; the eighth bit is the INVERSE flag
 {
-	if ((z=(z&127)-32)<0)//if (z=='\t')
-		return;
-	ONSCREEN_XY,q1=q?onscreen_ink0:onscreen_ink1;
-	unsigned const char *zz=&onscreen_chrs[z*ONSCREEN_SIZE];
+	ONSCREEN_XY; int q=z&128?-1:0;
+	unsigned const char *zz=&onscreen_chrs[(z&127)*ONSCREEN_SIZE];
 	for (y=0;y<ONSCREEN_SIZE;++y)
 	{
-		unsigned char bb=*zz++;
-		bb|=bb>>1; // normal, rather than thin or bold
-		for (int ww=0;ww<2;ww+=a)
-		{
+		int bb=*zz++; bb|=bb>>1; // normal, rather than thin or bold
+		bb^=q; // apply inverse if required
+		for (x=0;x<2;p+=VIDEO_LENGTH_X*a-8,x+=a)
 			for (z=128;z;z>>=1)
-				video_frame[p++]=(z&bb)?q1:q0;
-			p+=VIDEO_LENGTH_X*a-8;
-		}
+				*p++=(z&bb)?onscreen_ink1:onscreen_ink0;
 	}
 }
-void onscreen_text(int x, int y, char *s, int q) // write a string
+void onscreen_text(int x,int y,char *s,int q) // write a string
 {
-	while (*s)
-		onscreen_char(x++, y, *s++, q);
+	if (q) q=128; int z; while (z=*s++)
+	{
+		if (z&96) // first 32 characters are invisible
+			onscreen_char(x,y,z+q);
+		++x;
+	}
 }
-void onscreen_byte(int x, int y, int a, int q) // write two digits
+void onscreen_byte(int x,int y,int a,int q) // write two digits
 {
-	onscreen_char(x,y,'0'+(a/10),q);
-	onscreen_char(x+1,y,'0'+(a%10),q);
+	q=q?128+'0':'0';
+	onscreen_char(x,y,(a/10)+q);
+	onscreen_char(x+1,y,(a%10)+q);
 }
 void onscreen_bool(int x,int y,int lx,int ly,int q) // draw dots
 {
-	ONSCREEN_XY;
+	ONSCREEN_XY; q=q?onscreen_ink1:onscreen_ink0;
 	lx*=8; ly*=ONSCREEN_SIZE;
-	for (y=0;y<ly;y+=a)
-	{
+	for (y=0;y<ly;p+=VIDEO_LENGTH_X*a-lx,y+=a)
 		for (x=0;x<lx;++x)
-			video_frame[p++]=q0;
-		p+=VIDEO_LENGTH_X*a-lx;
-	}
+			*p++=q;
 }
 
 #define KBDBG_UP	11
@@ -987,7 +1008,7 @@ VIDEO_UNIT onscreen_ascii0,onscreen_ascii1;
 #define debug_maus_y() (((unsigned)(session_maus_y-debug_posy()))/ONSCREEN_SIZE)
 void onscreen_ascii(int x,int y,int z) // not exactly the same as onscreen_char
 {
-	const unsigned char *zz=&onscreen_debug_chrs[((z&127)-32)*ONSCREEN_SIZE];
+	const unsigned char *zz=&onscreen_debug_chrs[(z&127)*ONSCREEN_SIZE];
 	VIDEO_UNIT q1,q0;
 	if (z&128)
 		q1=onscreen_ascii1,q0=onscreen_ascii0;
@@ -1104,7 +1125,7 @@ BYTE *xrf_chunk=NULL; // this buffer contains one video frame and two audio fram
 int xrf_encode(BYTE *t,BYTE *s,int l,int x) // terribly hacky encoder based on an 8-bit RLE and an interleaved pseudo Huffman filter!
 {
 	if (l<=0) return *t++=128,*t++=0,2; // quick EOF!
-	BYTE *z=t,*y=z++,a=0,b=128,q=0; if (x<0) x=-x,q=128; // x<0 = perform XOR 128 on bytes
+	BYTE *z=t,*y=z++,a=0,b=128,q=0; if (x<0) x=-x,q=128; // x<0 = perform XOR 128 on bytes, used when turning 16s audio into 8u
 	do
 	{
 		BYTE *r=s,c=*r;
@@ -1173,17 +1194,13 @@ void session_writefilm(void) // record one frame of video and audio
 			dirty=0; // to avoid encoding multiple times a frameskipped image
 			VIDEO_UNIT *s,*t=session_filmvideo; // notice that this backup doesn't include secondary scanlines
 			if (session_filmscale)
-				for (int i=VIDEO_OFFSET_Y+(session_filmalign&1);i<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;i+=2)
-				{
-					s=session_getscanline(i); for (int j=0;j<VIDEO_PIXELS_X;j+=2)
+				for (int i=VIDEO_OFFSET_Y+(session_filmalign&1);s=session_getscanline(i),i<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;i+=2)
+					for (int j=0;j<VIDEO_PIXELS_X;j+=2)
 						*t++^=s[j]; // bitwise delta against last frame
-				}
 			else
-				for (int i=VIDEO_OFFSET_Y;i<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;++i)
-				{
-					s=session_getscanline(i); for (int j=0;j<VIDEO_PIXELS_X;++j)
+				for (int i=VIDEO_OFFSET_Y;s=session_getscanline(i),i<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;++i)
+					for (int j=0;j<VIDEO_PIXELS_X;++j)
 						*t++^=s[j]; // bitwise delta against last frame
-				}
 			#if SDL_BYTEORDER == SDL_BIG_ENDIAN
 				z+=xrf_encode(z,&((BYTE*)session_filmvideo)[3],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // B
 				z+=xrf_encode(z,&((BYTE*)session_filmvideo)[2],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // G
@@ -1197,11 +1214,9 @@ void session_writefilm(void) // record one frame of video and audio
 			#endif
 			t=session_filmvideo;
 			if (session_filmscale)
-				for (int i=VIDEO_OFFSET_Y+(session_filmalign&1);i<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;i+=2)
-				{
-					s=session_getscanline(i); for (int j=0;j<VIDEO_PIXELS_X;j+=2)
+				for (int i=VIDEO_OFFSET_Y+(session_filmalign&1);s=session_getscanline(i),i<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;i+=2)
+					for (int j=0;j<VIDEO_PIXELS_X;j+=2)
 						*t++=s[j]; // keep this frame for later
-				}
 			else // no scaling, copy
 				for (int i=VIDEO_OFFSET_Y;i<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;++i)
 					MEMNCPY(t,session_getscanline(i),VIDEO_PIXELS_X),t+=VIDEO_PIXELS_X;

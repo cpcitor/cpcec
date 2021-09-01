@@ -667,8 +667,8 @@ palette is closer to the original, the vertical filters ("Y-Masking") are
 compatible with the interlaced modes, mixing X-Masking and Y-Masking together
 shows a checkered pattern. Internal improvements: the new traits of the CRTC
 registers 3 and 9 and the delays between the Gate Array, the Z80 and the CRTC
-finally can emulate "Pinball Dreams" as a whole for all the CRTC types and solve
-the problems in several demos ("Scroll Factory", "Still Rising", parts of "The
+finally emulate "Pinball Dreams" as a whole for all the CRTC types and solve the
+problems in several demos ("Scroll Factory", "Still Rising", parts of "The
 Demo"...) and games ("Action Fighter", "Storm Warrior", "Usagi Yojimbo"),
 although some titles still need particular CRTCs ("PhX" CRTC0, "Onescreen
 Colonies" CRTC1, etc.) to work correctly.
@@ -919,3 +919,10 @@ unless the user prefers the old behavior ("Hard H-Hold" option). Several menu
 items have been relocated to set hardware traits and emulation options apart.
 CPCEC saves compressed memory blocks within snapshots unless "Strict SNA files"
 is enabled.
+- 20210831 -- minor patch adding performance improvements to TZX/CDT playback
+and emulation of the Turbo Sound musical extension for ZXSEC, and removing the
+"Hard H-Hold" option from CPCEC, now useless thanks to further CRTC tweaks and
+the incipient emulation of the LA-7800 chip. The Windows version fixes a bug in
+joystick allocation, the SDL2 version understands UTF-8 filesystems and its user
+interface is a little more agile, and both versions can open GZIP archives and
+fix bugs in temporary file handling and YM file logging. CPCEC got a new icon.

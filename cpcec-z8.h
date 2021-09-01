@@ -16,8 +16,7 @@
 
 // BEGINNING OF Z80 EMULATION ======================================= //
 
-WORD z80_wz; // internal register WZ/MEMPTR
-//WORD z80_wz2; // is WZ dual?
+WORD z80_wz; // internal register WZ/MEMPTR //,z80_wz2; // is there a WZ'?
 #if Z80_XCF_BUG
 	BYTE z80_q; // internal register Q
 	#define Z80_Q_SET(x) (z80_q=z80_af.b.l=(x))
@@ -1664,13 +1663,13 @@ void dandanator_remove(void)
 	dandanator_dirty=0;
 }
 
-#define z80_close dandanator_remove(),z80_debug_close
-
 #else
 
-#define z80_close z80_debug_close
+#define dandanator_remove() 0
 
 #endif
+
+#define z80_close() dandanator_remove(),z80_debug_close()
 
 // Z80 emulator+debugger -------------------------------------------- //
 
@@ -1986,7 +1985,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					}
 					else
 					{
-						Z80_RD_PC; ++z80_pc.w;
+						op=Z80_RD_PC; ++z80_pc.w; // dummy `op`!
 						#ifdef Z80_ZXS_DANDANATOR
 						z80_dandanator_0x10(z80_pc.w);
 						#endif
@@ -2006,7 +2005,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					}
 					else
 					{
-						Z80_RD_PC; ++z80_pc.w;
+						op=Z80_RD_PC; ++z80_pc.w; // dummy `op`!
 					}
 					break;
 				case 0x28: // JR Z,$RR
@@ -2018,7 +2017,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					}
 					else
 					{
-						Z80_RD_PC; ++z80_pc.w;
+						op=Z80_RD_PC; ++z80_pc.w; // dummy `op`!
 					}
 					break;
 				case 0x30: // JR NC,$RR
@@ -2030,7 +2029,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					}
 					else
 					{
-						Z80_RD_PC; ++z80_pc.w;
+						op=Z80_RD_PC; ++z80_pc.w; // dummy `op`!
 					}
 					break;
 				case 0x38: // JR C,$RR
@@ -2042,7 +2041,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					}
 					else
 					{
-						Z80_RD_PC; ++z80_pc.w;
+						op=Z80_RD_PC; ++z80_pc.w; // dummy `op`!
 					}
 					break;
 				case 0x27: // DAA
@@ -3063,7 +3062,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							case 0x77: // LD (IX+$XX),A
 								Z80_WZ_XY_1X(5); Z80_POKE(z80_wz,z80_af.b.h);
 								#ifdef Z80_CPC_DANDANATOR
-								z80_dandanator_0xFD77(z80_pc.w,z80_af.b.h); // catch  "FDFDFD77xx"
+								z80_dandanator_0xFD77(z80_pc.w,z80_af.b.h); // catch "FDFDFD77xx"
 								#endif
 								break;
 							case 0x7C: // LD A,XH
@@ -3353,7 +3352,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							Z80_SYNC_TRAP;
 							break;
 						case 0x70: // IN (C)
-							Z80_IN2(op,0x370);
+							Z80_IN2(op,0x370); // dummy `op`!
 							Z80_SYNC_TRAP;
 							break;
 						case 0x78: // IN A,(C)
@@ -3774,15 +3773,14 @@ void z80_debug_show(void) // redraw debug screen
 	{
 		debug_locate(0,y);
 		debug_printi("%04X:",m);
-		for (x=0;x<16;++x)
+		for (x=0;x<16;++x,++m)
 		{
-			BYTE b=z80_debug_peek(z80_debug_peekpoke,m);
+			BYTE b=z80_debug_peek(z80_debug_peekpoke,m),bb;
 			debug_locate(5+x*2,y);
 			debug_printi("%02X",b);
 			if (z80_debug_panel==2&&m==z80_debug_pnl2_w)
 				debug_output[z80_debug_pnl2_x?-1:-2]^=128;
-			debug_output[32-1-x]=(b&128)+((b&96)?b&127:'.');
-			++m;
+			debug_output[32-1-x]=(b&128)+((bb=b&127)>=32&&bb<127?bb:'.');
 		}
 		*debug_output=z80_debug_peekpoke?'\\':'/';
 	}
@@ -3959,7 +3957,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 				z80_debug_stack=z80_sp.w; // no `break`!
 		case KBDBG_ESCAPE: // ESCAPE
 			session_signal&=~SESSION_SIGNAL_DEBUG;
-		case 0: // dummy!
+		case 0: // dummy case!
 			break;
 		#if Z80_DEBUG_MMU
 		case 'M': // MEMORY
@@ -4018,7 +4016,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 					{
 						while ((i=fgetc(f))>=0)
 							POKE(w)=i,++w;
-						fclose(f);
+						puff_fclose(f);
 					}
 			}
 			break;

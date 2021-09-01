@@ -701,11 +701,11 @@ fósforo verde es más cercana al original, los filtros verticales ("Y-Masking")
 son compatiles con los modos entrelazados, combinar X-Masking con Y-Masking
 genera un patrón cuadriculado. Mejoras internas: la nuevas propiedades de los
 registros 3 y 9 del CRTC y los retrasos del Gate Array respecto del Z80 y el
-CRTC por fin permiten emular "Pinball Dreams" por completo para todos los tipos
-de CRTC y resuelven los problemas de varias demos ("Scroll Factory", "Still
-Rising", partes de "The Demo"...) y juegos ("Action Fighter", "Storm Warrior",
-"Usagi Yojimbo"...), pero algunos títulos todavía necesitan CRTCs concretos
-("PhX" CRTC0, "Onescreen Colonies" CRTC1, etc.) para funcionar bien.
+CRTC por fin emulan "Pinball Dreams" por completo para todos los tipos de CRTC y
+resuelven los problemas de varias demos ("Scroll Factory", "Still Rising",
+partes de "The Demo"...) y juegos ("Action Fighter", "Storm Warrior", "Usagi
+Yojimbo"...), pero algunos títulos todavía necesitan CRTCs concretos ("PhX"
+CRTC0, "Onescreen Colonies" CRTC1, etc.) para funcionar bien.
 - 20191231 -- parche menor para corregir un bug en el FDC (el bit 6 de SENSE
 DRIVE STATUS debe reaccionar cuando el usuario cambia discos: "Fugitif") y una
 regresión en CRTC0 (detectar REG6<REG4 en lugar de REG6<=REG4: "5KB Megademo 3:
@@ -979,3 +979,11 @@ menos que el usuario prefiera el método antiguo (opción "Hard H-Hold"). Alguno
 elementos del menú han cambiado de sitio para separar las propiedades del
 hardware y las opciones de la emulación. CPCEC guarda bloques de memoria
 comprimidos en los snapshots menos si "Strict SNA files" está activo.
+- 20210831 -- parche menor que añade mejoras de rendimiento en la lectura de
+TZX/CDT y emulación de la extensión musical Turbo Sound en ZXSEC, y que elimina
+la opción "Hard H-Hold" de CPCEC, ahora inútil gracias a retoques adicionales en
+el CRTC y la emulación incipiente del chip LA-7800. La versión para Windows
+corrige un error al reservar el joystick, la versión para SDL2 reconoce sistemas
+de ficheros UTF-8 y su interfaz de usuario es un poco más ágil, y ambas
+versiones pueden abrir archivos GZIP y corrigen errores en el uso de ficheros
+temporales y la grabación de ficheros YM. CPCEC tiene icono nuevo.
