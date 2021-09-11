@@ -101,11 +101,11 @@ BYTE session_paused=0,session_signal=0,session_version[8];
 #define SESSION_SIGNAL_PAUSE 4
 BYTE session_dirtymenu=1; // to force new status text
 
-#define kbd_bit_set(k) (kbd_bit[k/8]|=1<<(k%8))
-#define kbd_bit_res(k) (kbd_bit[k/8]&=~(1<<(k%8)))
-#define joy_bit_set(k) (joy_bit[k/8]|=1<<(k%8))
-#define joy_bit_res(k) (joy_bit[k/8]&=~(1<<(k%8)))
-#define kbd_bit_tst(k) ((kbd_bit[k/8]|joy_bit[k/8])&(1<<(k%8)))
+#define kbd_bit_set(k) (kbd_bit[k>>3]|=1<<(k&7))
+#define kbd_bit_res(k) (kbd_bit[k>>3]&=~(1<<(k&7)))
+#define joy_bit_set(k) (joy_bit[k>>3]|=1<<(k&7))
+#define joy_bit_res(k) (joy_bit[k>>3]&=~(1<<(k&7)))
+#define kbd_bit_tst(k) ((kbd_bit[k>>3]|joy_bit[k>>3])&(1<<(k&7)))
 BYTE kbd_bit[16],joy_bit[16]; // up to 128 keys in 16 rows of 8 bits
 
 // SDL2 follows the USB keyboard standard, so we're using the same values here!
@@ -572,9 +572,8 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 		{
 			if (menuz!=menu)
 			{
-				menuz=menu; item=items=0;
-				q=itemz=-1; int menux=menus=0;
-				unsigned char *m=session_ui_menudata;
+				menuz=menu; q=itemz=-1;
+				int menux=menus=item=items=0; unsigned char *m=session_ui_menudata;
 				session_ui_skew=-4; // extra space for the bottom and top borders (2px each)
 				while (*m) // scan menu data for menus
 				{

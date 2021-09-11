@@ -375,8 +375,9 @@ matter.
 ZXSEC is an emulator of the Sinclair Spectrum family (48k, 128k, +2/Plus2 and
 +3/Plus3) based on the components it shared with the Amstrad CPC family: the Z80
 microprocessor, the PSG AY-3-8192 sound chip, the tape system and the NEC765
-disc drive controller. It also optionally emulates the Spectrum Dandanator
-extension and the AY-Melodik 48k sound chip.
+disc drive controller. It also optionally emulates several add-ons: the Spectrum
+Dandanator extension, the Beta128 disc interface, the AY-Melodik 48k sound chip,
+the Pentagon 128 board, etc.
 
 It spans the files ZXSEC.EXE, SPECTRUM.ROM, SPEC128K.ROM, SPEC-P-2.ROM and
 SPEC-P-3.ROM, and otherwise runs the same as CPCEC, with several differences:
@@ -926,3 +927,10 @@ the incipient emulation of the LA-7800 chip. The Windows version fixes a bug in
 joystick allocation, the SDL2 version understands UTF-8 filesystems and its user
 interface is a little more agile, and both versions can open GZIP archives and
 fix bugs in temporary file handling and YM file logging. CPCEC got a new icon.
+- 20210909 -- minor patch fixing bugs in the video render logic of ZXSEC,
+effectively ensuring that the multicolour effects seen in the tests ULA48,
+ULA128, FPGA48 and FPGA128 and the games made with the Nirvana engine
+("Dreamwalker", "Multidude", "Stormfinch", "Sunbucket"...) show properly, and
+adding new audio extensions for CPCEC (Digiblaster audio) and ZXSEC (Covox $FB
+DAC) plus preliminary emulation of Pentagon 128 timings and (if the TRDOS.ROM
+file is available) the Beta128 disc drive and its TRD and SCL files.

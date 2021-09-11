@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20210831"//"2555"
+#define MY_VERSION "20210909"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -299,6 +299,8 @@ int audio_table[17]={0,85,121,171,241,341,483,683,965,1365,1931,2731,3862,5461,7
 // mainly defined by the simultaneous operation of the video output
 // (32 horizontal thin pixels) and the Z80 behavior (4 cycles)
 // (the clock is technically 16 MHz but we mean atomic steps here)
+DWORD main_t=0; // the global tick counter, used by the debugger
+int multi_t=1; // overclocking factor
 
 // HARDWARE DEFINITIONS ============================================= //
 
@@ -325,7 +327,6 @@ Z80W z80_af2,z80_bc2,z80_de2,z80_hl2,z80_ix,z80_iy; // AF', BC', DE', HL', IX, I
 Z80W z80_pc,z80_sp,z80_iff,z80_ir; // Program Counter, Stack Pointer, Interrupt Flip-Flops, IR pair
 BYTE z80_imd; // Interrupt Mode
 BYTE z80_r7; // low 7 bits of R, required by several `IN X,(Y)` operations
-int z80_turbo=0,z80_multi; // overclocking options
 
 // the Dandanator cartridge system can spy on the Z80 and trap its operations
 
@@ -377,6 +378,7 @@ BYTE gate_status; // low 2 bits are the current screen mode; next bits render ei
 int video_threshold=VIDEO_LENGTH_X; // self-adjusting horizontal threshold, to gain speed when possible
 int hsync_limit=VIDEO_LENGTH_X,hsync_count=0,hsync_match=0; // LA-7800: self-adjusting HSYNC timings
 int vsync_limit=VIDEO_LENGTH_Y,vsync_count=0,vsync_match=0; // LA-7800: self-adjusting VSYNC timings
+//int hsync_threshold,hsync_character; // configurable HSYNC thresholds
 
 // 0xBC00-0xBF00: CRTC 6845 ----------------------------------------- //
 
@@ -447,7 +449,7 @@ INLINE void crtc_table_send(BYTE i)
 				if (!(crtc_type|i))
 					crtc_table[0]=i=1; // CRTC0: R0 CANNOT BE ZERO!
 				if (i==(crtc_table[7]?7:39)) // detect "CHANY DREAM END" and "CHAPELLE SIXTEEN" (but not "ONESCREEN COLONIES"); some of their effects are particularly time-critical
-					video_threshold=VIDEO_LENGTH_X*5/8; // hard horizontal threshold
+					video_threshold=(VIDEO_LENGTH_X*5)>>3; // hard horizontal threshold
 				if (crtc_type<3?crtc_count_r0==i:crtc_count_r0>=i) // "S&KOH" intro needs the first check; "PHX" outro for CRTC3 and CRTC4 needs the second check
 					crtc_status|=CRTC_STATUS_R0_OK;
 				else
@@ -460,17 +462,20 @@ INLINE void crtc_table_send(BYTE i)
 				//if (crtc_count_r0==i) CRTC_STATUS_HSYNC_SET; // is this real? does any demo use it?
 				//break;
 			case 7:
-				if (crtc_count_r4==i&&crtc_type<3) CRTC_STATUS_VSYNC_SET; // "BYTE 98" (second half) triggers a VSYNC, but "CROCO CHANEL 1 part 4" and "PHX" outro for CRTC3 don't trigger it
+				if (crtc_count_r4==i&&crtc_type<3) // "BYTE 98" (second half) must trigger a VSYNC, but "CROCO CHANEL 1 part 4" and "PHX" outro for CRTC3 must NOT!
+					CRTC_STATUS_VSYNC_SET;
 				break;
 			case 3:
 				crtc_syncs_update(); // split R3 into VSYNC and HSYNC limits
-				if (crtc_count_r0==crtc_table[2]) CRTC_STATUS_HSYNC_SET; // "CHANY DREAM END part 8" (CRTC1 only) relies on this
+				if (crtc_count_r0==crtc_table[2]) // "CHANY DREAM END part 8" (CRTC1 only) relies on this
+					CRTC_STATUS_HSYNC_SET;
 				break;
 			//case 5:
 				//cprintf("%04X:R5 %02X%c%02X   ",z80_pc.w,i,CRTC_STATUS_T_F(CRTC_STATUS_V_T_A),crtc_count_r5); // can this do anything? does any demo use it?
 				//break;
 			case 6:
-				if (crtc_count_r4==i) CRTC_STATUS_V_OFF_SET; // "VOYAGE 93" hides the bouncing staff with this!
+				if (crtc_count_r4==i)
+					CRTC_STATUS_V_OFF_SET; // "VOYAGE 93" hides the bouncing staff with this!
 				// no `break`!
 			case 8:
 				crtc_invis_update(); // mix visibility of R6 and R8 together
@@ -526,9 +531,7 @@ INLINE void crtc_table_send(BYTE i)
 		}
 }
 BYTE crtc_table_recv(void)
-{
-	return (crtc_index>=12&&crtc_index<18)?crtc_table[crtc_index]:(crtc_type>=3&&crtc_index<8?crtc_table[crtc_index+8]:0);
-}
+	{ return (crtc_index>=12&&crtc_index<18)?crtc_table[crtc_index]:(crtc_type>=3&&crtc_index<8?crtc_table[crtc_index+8]:0); }
 INLINE BYTE crtc_table_info(void) { return crtc_count_r4>=crtc_table[6]?32:0; } // +64???
 
 #define crtc_setup()
@@ -568,9 +571,9 @@ void mmu_update(void) // update the MMU tables with all the new offsets
 {
 	// classic CPC RAM/ROM paging
 	int i=gate_ram&(gate_ram_depth?(4<<gate_ram_depth)-1:0),j;
-	if (gate_ram_dirty<(j=i?128+64*(i/8):64)) // tag memory as dirty?
+	if (gate_ram_dirty<(j=i?128+64*(i>>3):64)) // tag memory as dirty?
 		session_dirtymenu=gate_ram_dirty=j;
-	int k=(i/8)<<16; i&=7; // k = bank offset, i = paging mode
+	int k=(i>>3)<<16; i&=7; // k = bank offset, i = paging mode
 	// page 0x0000-0x3FFF
 	if ((j=mmu_ram_mode[i][0])>=0x10000-0x0000) j+=k;
 	mmu_ram[0]=&mem_ram[j];
@@ -728,9 +731,7 @@ void gate_reset(void) // reset the Gate Array
 // 0xF400-0xF700: PIO 8255 ------------------------------------------ //
 
 BYTE pio_port_a,pio_port_b,pio_port_c,pio_control;
-
 #define pio_setup()
-
 void pio_reset(void)
 {
 	pio_port_a=pio_port_b=pio_port_c=pio_control=0;
@@ -746,6 +747,7 @@ int psg_stereo[3][2]; const int psg_stereos[][3]={{0,0,0},{+256,0,-256},{+128,0,
 #endif
 #define PSG_PLAYCITY (2*PSG_KHZ_CLOCK) // base clock in kHz
 int playcity_disabled=0,playcity_dirty,playcity_ctc_state[4]={0,0,0,0},playcity_ctc_flags[4]={0,0,0,0},playcity_ctc_count[4]={0,0,0,0},playcity_ctc_limit[4]={0,0,0,0};
+int dac_disabled=1; // Digiblaster DAC, disabled by default to avoid trouble with the printer
 
 #include "cpcec-ay.h"
 
@@ -1286,10 +1288,12 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 	if (plus_sprite_target) if (video_pos_x>plus_sprite_latest) video_main_sprites();
 }
 
-//int digiblaster=0;
+int dac_level=0;
+#define dac_level_byte(x) dac_level=(x)<<7
+#define dac_level_zero() (dac_level=(dac_level*3)>>2) // soften signal as time passes
 void audio_main(int t) // render audio output for `t` clock ticks; t is always nonzero!
 {
-	psg_main(t,(tape_status^tape_output)<<12); // tape input / tape output
+	psg_main(t,((tape_status^tape_output)<<12)+dac_level); // merge tape signals
 }
 
 // autorun runtime logic -------------------------------------------- //
@@ -1298,8 +1302,8 @@ BYTE snap_done; // avoid accidents with ^F2, see all_reset()
 char autorun_path[STRMAX]="",autorun_line[STRMAX];
 int autorun_mode=0,autorun_t=0;
 BYTE autorun_kbd[16]; // automatic keypresses
-#define autorun_kbd_set(k) (autorun_kbd[k/8]|=1<<(k%8))
-#define autorun_kbd_res(k) (autorun_kbd[k/8]&=~(1<<(k%8)))
+#define autorun_kbd_set(k) (autorun_kbd[k>>3]|=1<<(k&7))
+#define autorun_kbd_res(k) (autorun_kbd[k>>3]&=~(1<<(k&7)))
 int autorun_kbd_bit(int k)
 {
 	if (autorun_mode)
@@ -1418,25 +1422,23 @@ void z80_irq_ack(void)
 	}
 }
 
-DWORD main_t=0;
-
 void z80_sync(int t) // the Z80 asks the hardware/video/audio to catch up
 {
 	static int r=0; main_t+=t;
-	int tt=(r+=t)/z80_multi; // calculate base value of `t`
-	r-=(t=tt*z80_multi); // adjust `t` and keep remainder
+	int tt=(r+=t)/multi_t; // calculate base value of `t`
+	r-=(t=tt*multi_t); // adjust `t` and keep remainder
 	if (t)
 	{
 		//if (!disc_disabled)
 			disc_main(t);
 		if (tape_enabled)
-			tape_main(t),audio_dirty|=(size_t)tape; // echo the tape signal thru sound!
+			audio_dirty|=(size_t)tape,tape_main(t); // echo the tape signal thru sound!
 		if (tt)
 		{
-			video_main(tt);
 			audio_queue+=tt;
 			if (audio_dirty&&!audio_disabled)
 				audio_main(audio_queue),audio_dirty=audio_queue=0;
+			video_main(tt);
 		}
 	}
 }
@@ -1507,8 +1509,11 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 	}
 	if (!(p&0x2000)) // 0xDF00, GATE ARRAY (2/2)
 		gate_rom=b,mmu_update(); // SELECT ROM BANK
-	//if (!(p&0x1000)) // 0xEF00, PRINTER
-		//audio_dirty=1,digiblaster=b<<5; // *!* todo *!*
+	if (!(p&0x1000)) // 0xEF00, PRINTER PORT
+	{
+		if (!dac_disabled)
+			audio_dirty=1,dac_level_byte(b^128); // Digiblaster DAC, signed 8-bit audio
+	}
 	if (!(p&0x0800)) // 0xF400-0xF700, PIO 8255
 	{
 		if (!(p&0x0200))
@@ -1586,8 +1591,7 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 		{
 			//disc_reset();
 		#ifdef PSG_PLAYCITY
-			playcity_reset(); playcity_dirty=0;
-			MEMZERO(playcity_ctc_count);
+			playcity_reset(); MEMZERO(playcity_ctc_count); playcity_dirty=dac_level=0;
 		}
 		if (p==0xF880)
 			//cprintf("F880:%02X ",b),
@@ -2538,7 +2542,7 @@ int z80_active_delay=0; // unlike Z80_AUXILIARY it cannot be local, it must stic
 #define Z80_PRAE_RECV(w) Z80_SYNC_IO
 #define Z80_RECV z80_recv
 #define Z80_POST_RECV(w)
-#define Z80_PRAE_SEND(w,b) do{ if (!(w&0x0900)) audio_dirty=1; Z80_SYNC_IO; }while(0)
+#define Z80_PRAE_SEND(w) do{ if (!((w)&0x0900)) audio_dirty=1; Z80_SYNC_IO; }while(0)
 #define Z80_SEND z80_send
 #define Z80_POST_SEND(w)
 // fine timings
@@ -2555,10 +2559,10 @@ int z80_active_delay=0; // unlike Z80_AUXILIARY it cannot be local, it must stic
 #define Z80_PEEK1 Z80_PEEK
 #define Z80_PEEK2 Z80_PEEK
 #define Z80_PEEKPC Z80_PEEK // read opcode
-#define Z80_POKE(x,a) do{ int z80_aux=x>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO,z80_trap(x,a),z80_t=0; else mmu_ram[z80_aux][x]=a; }while(0) // a single write
-#define Z80_POKE0(x,a) POKE(x)=a // identical twin writes, use with care
-#define Z80_POKE1(x,a) do{ --z80_t; int z80_aux=x>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO,z80_trap(x,a),z80_t=0; else mmu_ram[z80_aux][x]=a; }while(0) // 1st twin write
-#define Z80_POKE2(x,a) do{ ++z80_t; int z80_aux=x>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO,z80_trap(x,a),z80_t=0; else mmu_ram[z80_aux][x]=a; }while(0) // 2nd twin write
+#define Z80_POKE(w,b) do{ int z80_aux=(w)>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO,z80_trap(w,b),z80_t=0; else mmu_ram[z80_aux][w]=(b); }while(0) // a single write
+#define Z80_POKE0(w,b) POKE(w)=(b) // identical twin writes, use with care
+#define Z80_POKE1(w,b) do{ --z80_t; int z80_aux=(w)>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO,z80_trap(w,b),z80_t=0; else mmu_ram[z80_aux][w]=(b); }while(0) // 1st twin write
+#define Z80_POKE2(w,b) do{ ++z80_t; int z80_aux=(w)>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO,z80_trap(w,b),z80_t=0; else mmu_ram[z80_aux][w]=(b); }while(0) // 2nd twin write
 #define Z80_WAIT(t)
 #define Z80_BEWARE
 #define Z80_REWIND
@@ -2574,6 +2578,8 @@ int z80_active_delay=0; // unlike Z80_AUXILIARY it cannot be local, it must stic
 #define Z80_DEBUG_MMU 1 // allow ROM/RAM toggling, it's useful on CPC!
 #define Z80_DEBUG_EXT 1 // allow EXTRA hardware debugging info pages
 #define Z80_NO_OUT 0 // whether OUT (C) sends 0 (NMOS) or 255 (CMOS)
+#define Z80_TRDOS_ENTER // catch NOP, useless without TR-DOS
+#define Z80_TRDOS_LEAVE // catch RET, RET Z and RET NZ, ditto
 
 #include "cpcec-z8.h"
 
@@ -2608,7 +2614,7 @@ void all_reset(void) // reset everything!
 	pio_reset();
 	psg_reset();
 	#ifdef PSG_PLAYCITY
-	playcity_reset(); playcity_dirty=0; MEMZERO(playcity_ctc_count);
+	playcity_reset(); MEMZERO(playcity_ctc_count); playcity_dirty=dac_level=0;
 	#endif
 	z80_reset();
 	z80_debug_reset();
@@ -2783,7 +2789,7 @@ int dandanator_load(char *s) // inserts Dandanator cartridge, performs several t
 	if (!f) return 1;
 	BYTE t[0x1000]; fread1(t,sizeof(t),f); fseek(f,0,SEEK_END);
 	int l=ftell(f),k=4+2,i=0; // ensure that the filesize is right and that the header doesn't belong to other filetypes
-	if (l&&!(l&0x3FFF)&&!bios_wrong_dword(mgetmmmm(t))&&!equalsmmmm(t,0X52494646)&&!equalsmmmm(t,0X01897FED)) // + "RIFF" + CPC Firmware
+	if (l>=0X4000&&l<=(8<<16)&&!(l&0x3FFF)&&!bios_wrong_dword(mgetmmmm(t))&&!equalsmmmm(t,0X52494646)&&!equalsmmmm(t,0X01897FED)) // + "RIFF" + CPC Firmware
 		// the CPC Dandanator heuristic is strong: two operations must appear at least once in the first 16K
 		for (;k&&i<sizeof(t)-4;++i) // worst case is "MOJON TWINS ROMSET" (true at $096F)
 			if (t[i+0]==0xFD&&t[i+1]==0xFD&&t[i+2]==0xFD)
@@ -2860,7 +2866,7 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 	#endif
 	header[0x6B]=gate_ram_dirty; header[0x6C]=gate_ram_dirty>>8; // in V3, this field is zero if MEM0..MEM8 chunks are used. Avoid them to stay compatible.
 	// V2 data
-	header[0x6D]=type_id<3?type_id:gate_ram_depth?4:5;//bios_rom[0x4002]
+	header[0x6D]=type_id<3?type_id:gate_ram_depth?4:5; // ACE uses different values for PLUS machines and complains about mismatching firmware IDs :-/
 	// V3 data
 	header[0x9C]=!!disc_motor;
 	MEMSAVE(&header[0x9D],disc_track);
@@ -3098,8 +3104,8 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 			+(crtc_count_r0==crtc_table[0]?CRTC_STATUS_R0_OK:0)
 			+(crtc_count_r4==crtc_table[4]?CRTC_STATUS_R4_OK:0)
 			+(crtc_count_r9==crtc_table[9]?CRTC_STATUS_R9_OK:0)
-			//+(crtc_count_r0>=crtc_table[1]?CRTC_STATUS_H_OFF:0)
-			//+(crtc_count_r4>=crtc_table[6]?CRTC_STATUS_V_OFF:0)
+			+(crtc_count_r0>=crtc_table[1]?CRTC_STATUS_H_OFF:0)
+			+(crtc_count_r4>=crtc_table[6]?CRTC_STATUS_V_OFF:0)
 			+(header[0xB1]&1?CRTC_STATUS_V_T_A:0); // other emulators don't write all the bits :-(
 		if (crtc_status&CRTC_STATUS_VSYNC)
 			gate_count_r3y=26-crtc_count_r3y,irq_delay=header[0xB2]; // WINAPE sometimes stored unwanted values here
@@ -3366,6 +3372,7 @@ char session_menudata[]=
 	#ifdef PSG_PLAYCITY
 	"0x8518 PlayCity audio\n"
 	#endif
+	"0x8519 Digiblaster audio\n"
 	#ifdef Z80_CPC_DANDANATOR
 	"0xC500 Insert Dandanator..\tShift+F5\n"
 	"0x4500 Remove Dandanator\tCtrl+Shift+F5\n"
@@ -3476,7 +3483,7 @@ void session_redomenu(void)
 	//session_menucheck(0x4901,tape_fastfeed);
 	session_menucheck(0x0400,session_key2joy);
 	session_menucheck(0x0401,key2joy_flag);
-	session_menuradio(0x0601+z80_turbo,0x0601,0x0604);
+	session_menuradio(0x0601+multi_t-1,0x0601,0x0604);
 	session_menuradio(0x8501+crtc_type,0x8501,0x8505);
 	session_menuradio(0x8509+(crtc_hold<0?0:!crtc_hold?1:2),0x8509,0x850B);
 	session_menucheck(0x8590,!(disc_filemode&2));
@@ -3489,6 +3496,7 @@ void session_redomenu(void)
 	#ifdef PSG_PLAYCITY
 	session_menucheck(0x8518,!playcity_disabled);
 	#endif
+	session_menucheck(0x8519,!dac_disabled);
 	session_menuradio(0x8521+litegun,0x8521,0x8524);
 	session_menuradio(0x8511+gate_ram_depth,0x8511,0x8515);
 	session_menucheck(0x851F,!snap_extended);
@@ -3520,9 +3528,8 @@ void session_redomenu(void)
 	#endif
 	#endif
 	video_resetscanline(); // video scanline cfg
-	z80_multi=1+z80_turbo; // setup overclocking
 	sprintf(session_info,"%d:%dK %s%c %0.1fMHz"//" | disc %s | tape %s | %s"
-		,gate_ram_dirty,gate_ram_kbyte[gate_ram_depth],plus_enabled?"ASIC":"CRTC",48+crtc_type,4.0*z80_multi);
+		,gate_ram_dirty,gate_ram_kbyte[gate_ram_depth],plus_enabled?"ASIC":"CRTC",48+crtc_type,4.0*multi_t);
 	video_lastscanline=video_table[video_type][20]; // BLACK in the CLUT
 	video_halfscanline=VIDEO_FILTER_SCAN(video_table[video_type][11],video_lastscanline); // WHITE in the CLUT
 	*debug_buffer=128; // force debug redraw! (somewhat overkill)
@@ -3701,6 +3708,10 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 				playcity_reset();
 			break;
 		#endif
+		case 0x8519: // DIGIBLASTER
+			if (dac_disabled=!dac_disabled)
+				dac_level=0;
+			break;
 		case 0x8521: // JOYSTICK, NO LIGHTGUN
 		case 0x8522: // TROJAN LIGHT PHASER
 		case 0x8523: // GUNSTICK (MHT)
@@ -3755,10 +3766,10 @@ int session_user(int k) // handle the user's commands; 0 OK, !0 ERROR
 		case 0x0602:
 		case 0x0603:
 		case 0x0604:
-			z80_turbo=(k&15)-1;
+			multi_t=(k&15);
 			break;
 		case 0x0600: // ^F6: TOGGLE TURBO Z80
-			z80_turbo=(z80_turbo+(session_shift?-1:1))&3;
+			multi_t=(((multi_t+(session_shift?-1:1))-1)&3)+1;
 			break;
 		case 0x8701: // CREATE DISC..
 			if (!disc_disabled)
@@ -3946,7 +3957,7 @@ void session_configreadmore(char *s)
 	else if (!strcasecmp(session_parmtr,"bank")) { if ((i=*s&7)<length(gate_ram_kbyte)) gate_ram_depth=i; }
 	else if (!strcasecmp(session_parmtr,"fdcw")) disc_filemode=*s&3;
 	#ifdef PSG_PLAYCITY
-	else if (!strcasecmp(session_parmtr,"plct")) playcity_disabled=!(*s&1);
+	else if (!strcasecmp(session_parmtr,"plct")) playcity_disabled=!(*s&1),dac_disabled=!(*s&2);
 	#endif
 	else if (!strcasecmp(session_parmtr,"misc")) key2joy_flag=*s&1,snap_extended=!!(*s&2);
 	else if (!strcasecmp(session_parmtr,"file")) strcpy(autorun_path,s);
@@ -3974,7 +3985,7 @@ void session_configwritemore(FILE *f)
 		"palette %d\ncasette %d\ndebug %d\n",
 		type_id,crtc_type,gate_ram_depth,disc_filemode,(key2joy_flag?1:0)+(snap_extended?2:0),
 	#ifdef PSG_PLAYCITY
-		!playcity_disabled,
+		(playcity_disabled?0:1)+(dac_disabled?0:2),
 	#endif
 		autorun_path,snap_path,tape_path,disc_path,bios_path,
 	#ifdef Z80_CPC_DANDANATOR
@@ -4148,10 +4159,9 @@ int main(int argc,char *argv[])
 	{
 		until (session_signal)
 			z80_main(
-				z80_multi*( // clump Z80 instructions together to gain speed...
-				((session_fast&-2)|tape_skipping)?VIDEO_LENGTH_X/16: // tape loading allows simple timings, but some sync is still needed
-					(video_pos_x<video_threshold?1:(VIDEO_LENGTH_X-1-video_pos_x)/16) // catch particular VRAM updates, as in "CHAPELLE SIXTEEN")
-					//(VIDEO_LENGTH_X+15-video_pos_x)/40) // all IRQ events happen early in each scanline!
+				multi_t*( // clump Z80 instructions together to gain speed...
+				((session_fast&-2)|tape_skipping)?VIDEO_LENGTH_X>>4: // tape loading allows simple timings, but some sync is still needed
+					(video_pos_x<video_threshold?1:(VIDEO_LENGTH_X-1-video_pos_x)>>4) // catch VRAM effects such as "CHAPELLE SIXTEEN"
 				) // ...without missing any IRQ and CRTC deadlines!
 			);
 		if (session_signal&SESSION_SIGNAL_FRAME) // end of frame?
@@ -4190,8 +4200,8 @@ int main(int argc,char *argv[])
 						onscreen_bool(-4,-6,1,1,0);
 				}
 				#ifdef DEBUG
-				//onscreen_byte(+1,+1,hsync_threshold&63,0);
-				//onscreen_byte(+4,+1,hsync_character&63,0);
+				//onscreen_byte(+1,+1,hsync_threshold,0);
+				//onscreen_byte(+4,+1,hsync_character,0);
 				#endif
 				#if defined(SDL2) && defined(DEBUG)
 				if (session_audio) // SDL2 audio queue
@@ -4209,6 +4219,7 @@ int main(int argc,char *argv[])
 			{
 				audio_main(TICKS_PER_FRAME); // fill sound buffer to the brim!
 			#ifdef PSG_PLAYCITY
+				dac_level_zero();
 				if (!playcity_disabled)
 				{
 					if (playcity_dirty<2) // "ALCON 2020: SLAP FIGHT" uses just one Playcity chip!

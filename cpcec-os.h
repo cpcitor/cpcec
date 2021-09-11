@@ -146,11 +146,11 @@ BYTE session_paused=0,session_signal=0,session_version[8];
 #define SESSION_SIGNAL_PAUSE 4
 BYTE session_dirtymenu=1; // to force new status text
 
-#define kbd_bit_set(k) (kbd_bit[k/8]|=1<<(k%8))
-#define kbd_bit_res(k) (kbd_bit[k/8]&=~(1<<(k%8)))
-#define joy_bit_set(k) (joy_bit[k/8]|=1<<(k%8))
-#define joy_bit_res(k) (joy_bit[k/8]&=~(1<<(k%8)))
-#define kbd_bit_tst(k) ((kbd_bit[k/8]|joy_bit[k/8])&(1<<(k%8)))
+#define kbd_bit_set(k) (kbd_bit[k>>3]|=1<<(k&7))
+#define kbd_bit_res(k) (kbd_bit[k>>3]&=~(1<<(k&7)))
+#define joy_bit_set(k) (joy_bit[k>>3]|=1<<(k&7))
+#define joy_bit_res(k) (joy_bit[k>>3]&=~(1<<(k&7)))
+#define kbd_bit_tst(k) ((kbd_bit[k>>3]|joy_bit[k>>3])&(1<<(k&7)))
 BYTE kbd_bit[16],joy_bit[16]; // up to 128 keys in 16 rows of 8 bits
 
 // A modern keyboard as seen by Windows through WM_KEYDOWN and WK_KEYUP; extended keys are shown here with bit 7 on.
@@ -596,14 +596,13 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	}
 	if (session_menu&&session_submenu)
 		AppendMenu(session_menu,MF_POPUP,(UINT_PTR)session_submenu,session_parmtr);
-	WNDCLASS wc;
-	wc.style=wc.cbClsExtra=wc.cbWndExtra=0;
+	WNDCLASS wc; memset(&wc,0,sizeof(wc));
 	wc.lpfnWndProc=mainproc;
 	wc.hInstance=GetModuleHandle(0);
 	wc.hIcon=LoadIcon(wc.hInstance,MAKEINTRESOURCE(34002));//IDI_APPLICATION
 	wc.hCursor=LoadCursor(NULL,IDC_ARROW);
 	wc.hbrBackground=(HBRUSH)(1+COLOR_WINDOWTEXT);//(COLOR_WINDOW+2);//0;//
-	wc.lpszMenuName=NULL;
+	//wc.lpszMenuName=NULL;
 	wc.lpszClassName=MY_CAPTION;
 	RegisterClass(&wc);
 	session_ideal.left=session_ideal.top=0; // calculate ideal size

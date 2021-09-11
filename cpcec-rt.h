@@ -164,7 +164,7 @@ int multiglobbing(char *w,char *t,int q) // like globbing(), but with multiple p
 }
 
 // the following algorithms are weak, but proper binary search is difficult to perform on packed lists; fortunately, items are likely to be partially sorted beforehand
-int sortedinsert(char *t,int z,char *s) // insert string 's' in its alphabetical order within the packed list of strings 't' of length 'l'; returns the list's new length
+int sortedinsert(char *t,int z,char *s) // insert string 's' in its alphabetical order within the packed list of strings 't' of length 'z'; returns the list's new length
 {
 	int m=z,n; while (m>0)
 	{
@@ -178,7 +178,7 @@ int sortedinsert(char *t,int z,char *s) // insert string 's' in its alphabetical
 		memmove(&t[m+n],&t[m],z-m);
 	return memcpy(&t[m],s,n),z+n;
 }
-int sortedsearch(char *t,int z,char *s) // look for string 's' in an alphabetically ordered packed list of strings 't' of length 'l'; returns index (not offset!) in list
+int sortedsearch(char *t,int z,char *s) // look for string 's' in an alphabetically ordered packed list of strings 't' of length 'z'; returns index (not offset!) in list
 {
 	if (s&&*s)
 	{
@@ -1195,12 +1195,12 @@ void session_writefilm(void) // record one frame of video and audio
 			VIDEO_UNIT *s,*t=session_filmvideo; // notice that this backup doesn't include secondary scanlines
 			if (session_filmscale)
 				for (int i=VIDEO_OFFSET_Y+(session_filmalign&1);s=session_getscanline(i),i<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;i+=2)
-					for (int j=0;j<VIDEO_PIXELS_X;j+=2)
-						*t++^=s[j]; // bitwise delta against last frame
+					for (int j=0;j<VIDEO_PIXELS_X/2;++j)
+						*t++^=*s++,++s; // bitwise delta against last frame
 			else
 				for (int i=VIDEO_OFFSET_Y;s=session_getscanline(i),i<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;++i)
 					for (int j=0;j<VIDEO_PIXELS_X;++j)
-						*t++^=s[j]; // bitwise delta against last frame
+						*t++^=*s++; // bitwise delta against last frame
 			#if SDL_BYTEORDER == SDL_BIG_ENDIAN
 				z+=xrf_encode(z,&((BYTE*)session_filmvideo)[3],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // B
 				z+=xrf_encode(z,&((BYTE*)session_filmvideo)[2],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // G
@@ -1215,8 +1215,8 @@ void session_writefilm(void) // record one frame of video and audio
 			t=session_filmvideo;
 			if (session_filmscale)
 				for (int i=VIDEO_OFFSET_Y+(session_filmalign&1);s=session_getscanline(i),i<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;i+=2)
-					for (int j=0;j<VIDEO_PIXELS_X;j+=2)
-						*t++=s[j]; // keep this frame for later
+					for (int j=0;j<VIDEO_PIXELS_X/2;++j)
+						*t++=*s++,++s; // keep this frame for later
 			else // no scaling, copy
 				for (int i=VIDEO_OFFSET_Y;i<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;++i)
 					MEMNCPY(t,session_getscanline(i),VIDEO_PIXELS_X),t+=VIDEO_PIXELS_X;

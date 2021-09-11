@@ -1733,12 +1733,12 @@ void z80_reset(void) // reset the Z80
 #define Z80_RES1(n,x) x&=~(1<<n)
 #define Z80_SET1(n,x) x|=(1<<n)
 #define Z80_IN2(x,y) z80_r7=r7; z80_wz=z80_bc.w; Z80_PRAE_RECV(z80_wz); Z80_Q_SET(z80_flags_xor[x=Z80_RECV(z80_wz)]+(z80_af.b.l&1)); Z80_POST_RECV(z80_wz); Z80_STRIDE_IO(y); r7=z80_r7; ++z80_wz
-#define Z80_OUT2(x,y) z80_wz=z80_bc.w; Z80_PRAE_SEND(z80_wz,x); Z80_SEND(z80_wz,x); Z80_POST_SEND(z80_wz); Z80_STRIDE_IO(y); ++z80_wz
+#define Z80_OUT2(x,y) z80_wz=z80_bc.w; Z80_PRAE_SEND(z80_wz); Z80_SEND(z80_wz,x); Z80_POST_SEND(z80_wz); Z80_STRIDE_IO(y); ++z80_wz
 #define Z80_LDID2 do{ BYTE b=Z80_PEEK(z80_hl.w); Z80_POKE(z80_de.w,b); b+=z80_af.b.h; Z80_Q_SET((z80_af.b.l&0xC1)+(--z80_bc.w?4:0)+(b&8)+((b&2)<<4)); }while(0)
 #define Z80_CPID2 do{ BYTE b=Z80_PEEK(z80_hl.w); BYTE z=z80_af.b.h-b; z80_af.b.l=((z^z80_af.b.h^b)&0x10)+(z?(z&0x80):0x40)+(--z80_bc.w?6:2)+(z80_af.b.l&1); b=z-((z80_af.b.l>>4)&1); Z80_Q_SET(z80_af.b.l+((b<<4)&0x20)+(b&8)); }while(0) // ZS5H3V1-
 #define Z80_IO_F Z80_Q_SET((z80_flags_xor[z80_bc.b.h]&0xE8)+(w<b?17:0)+(z80_flags_xor[(w&7)^z80_bc.b.h]&4)+(b&0x80?2:0))
 #define Z80_INID2(x,y) do{ Z80_WAIT(1); z80_wz=z80_bc.w; Z80_PRAE_RECV(z80_wz); BYTE b=Z80_RECV(z80_wz); Z80_POST_RECV(z80_wz); Z80_STRIDE_IO(y); Z80_POKE(z80_hl.w,b); --z80_bc.b.h; BYTE w=b+z80_bc.b.l+x; Z80_IO_F; }while(0)
-#define Z80_OTID2(x,y) do{ Z80_WAIT(1); --z80_bc.b.h; z80_wz=z80_bc.w; BYTE b=Z80_PEEK(z80_hl.w); Z80_PRAE_SEND(z80_wz,b); Z80_SEND(z80_wz,b); Z80_POST_SEND(z80_wz); Z80_STRIDE_IO(y); z80_hl.w+=x; BYTE w=b+z80_hl.b.l; Z80_IO_F; }while(0)
+#define Z80_OTID2(x,y) do{ Z80_WAIT(1); --z80_bc.b.h; z80_wz=z80_bc.w; BYTE b=Z80_PEEK(z80_hl.w); Z80_PRAE_SEND(z80_wz); Z80_SEND(z80_wz,b); Z80_POST_SEND(z80_wz); Z80_STRIDE_IO(y); z80_hl.w+=x; BYTE w=b+z80_hl.b.l; Z80_IO_F; }while(0)
 #define Z80_SYNC_TRAP //if (session_signal) _t_=0 // overkill?
 
 INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
@@ -1802,8 +1802,9 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					break;
 				case 0x31: // LD SP,$NNNN
 					Z80_LD2(z80_sp.b);
-					// no `break`!
+					break;
 				case 0x00: // NOP
+					Z80_TRDOS_ENTER; // cfr. ZXSEC
 					break;
 				case 0x02: // LD (BC),A
 					Z80_POKE(z80_bc.w,z80_af.b.h);
@@ -2474,6 +2475,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					{
 						Z80_RET2;
 						Z80_STRIDE(0x1C0);
+						Z80_TRDOS_LEAVE;
 					}
 					else
 						Z80_STRIDE_1;
@@ -2484,6 +2486,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					{
 						Z80_RET2;
 						Z80_STRIDE(0x1C8);
+						Z80_TRDOS_LEAVE;
 					}
 					else
 						Z80_STRIDE_1;
@@ -2494,6 +2497,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					{
 						Z80_RET2;
 						Z80_STRIDE(0x1D0);
+						//Z80_TRDOS_LEAVE;
 					}
 					else
 						Z80_STRIDE_1;
@@ -2504,6 +2508,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					{
 						Z80_RET2;
 						Z80_STRIDE(0x1D8);
+						//Z80_TRDOS_LEAVE;
 					}
 					else
 						Z80_STRIDE_1;
@@ -2553,6 +2558,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					z80_dandanator_0xC9();
 					#endif
 					Z80_RET2;
+					Z80_TRDOS_LEAVE;
 					break;
 				case 0xC1: // POP BC
 					Z80_POP2(z80_bc.b);
@@ -2745,7 +2751,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					break;
 				case 0xD3: // OUT ($NN),A
 					z80_wz=(z80_af.b.h<<8)+Z80_RD_PC; ++z80_pc.w;
-					Z80_PRAE_SEND(z80_wz,z80_af.b.h);
+					Z80_PRAE_SEND(z80_wz);
 					Z80_SEND(z80_wz,z80_af.b.h);
 					Z80_POST_SEND(z80_wz);
 					Z80_STRIDE_IO(0x1D3);
@@ -3966,7 +3972,7 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 		case 'V': // VIDEO
 			++onscreen_debug_mask; break;
 		case KBDBG_SPC: // SPACE: STEP INTO
-			z80_main(1); break;
+			z80_main(0); break;
 		case KBDBG_SPC_S: // SHIFT+SPACE: STEP INTO (scanline)
 			session_signal_scanlines|=SESSION_SIGNAL_DEBUG; session_signal&=~SESSION_SIGNAL_DEBUG; break;
 		case KBDBG_RET_S: // SHIFT+RETURN: STEP INTO (frame)
