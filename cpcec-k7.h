@@ -86,7 +86,7 @@ int tape_pilot,tape_pilots,tape_sync,tape_syncs,tape_syncz[256],tape_bits,tape_b
 #ifdef TAPE_KANSAS_CITY
 int tape_kansas,tape_kansasin,tape_kansasi,tape_kansason,tape_kansaso,tape_kansas0n,tape_kansas1n,tape_kansasrl,tape_kansas_i,tape_kansas_n,tape_kansas_b,tape_kansas_o; // TZX block $4B: Kansas City Standard
 #else
-#define tape_kansas tape_wave // dummy variable!
+int tape_kansas; // dummy variable!
 #endif
 int tape_general_totp,tape_general_npp,tape_general_asp,tape_general_totd,tape_general_npd,tape_general_asd,tape_general_count,
 	tape_general_mask,tape_general_step,tape_general_bits; WORD tape_general_symdef[256][128]; // TZX block $19: Generalized Data
@@ -365,9 +365,9 @@ void tape_main(int t) // handle tape signal for `t` clock ticks
 					else if (tape_hold) // HOLD?
 					{
 						tape_count+=3500;
-						if (tape_hold>0) // positive = first millisecond; negative = next milliseconds
+						if (tape_hold>0) // positive = first millisecond
 							tape_status^=1,tape_hold=1-tape_hold;
-						else
+						else // negative = next milliseconds
 							tape_status=0,++tape_hold;
 					}
 					// fetch new blocks if required

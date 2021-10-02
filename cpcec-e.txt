@@ -111,6 +111,8 @@ plus blending;
 * -m3 : start emulation as an Amstrad Plus (Plus 464, Plus 6128 and GX4000 only
 differ in the amount of RAM, the disc controller and the keyboard);
 * -O : hide onscreen indicators (by default shown);
+* -p : enable Playcity audio (by default disabled);
+* -P : disable Playcity audio;
 * -R : disable real time emulation (by default enabled);
 * -S : disable sound (by default enabled if there's a sound card);
 * -T : disable stereophony (by default enabled);
@@ -257,18 +259,18 @@ power, or 2.- the user needs to speed the emulation up for a while.
 * Num.* : sets the value of frameskip to the maximum, 25;
 * Num./ : sets the value of frameskip to the minimum, 0.
 
-The menu also includes several additional options (for example CRTC type) as
-well as actions such as flipping the sides of inserted discs, browsing the
-contents of the current tape, enabling the hardware extensions Dandanator and
-Playcity, etc.
+The menu also includes several additional options (for example CRTC type and RAM
+size) as well as actions such as flipping the sides of inserted discs, browsing
+the contents of the current tape, and enabling several hardware extensions:
+Dandanator cartridges, lightguns, Playcity and Digiblaster sound chips, etc.
 
 CPCEC supports drag-and-drop. Dropped files will be automatically loaded (as F3
 does) unless the Shift key is down; in this case they will be inserted as F7 and
 F8 do.
 
-ZIP archives can be read by CPCEC (if there are more than one file inside, a
-list will be shown so the user can choose the required file) but their contents
-cannot be modified.
+ZIP and GZIP archives can be read by CPCEC (if there are more than one file
+inside, a list will be shown so the user can choose the required file) but their
+contents cannot be modified.
 
 The mapping between the real keyboard and the emulated is straightforward
 (alphanumeric table, control keys, numeric keypad, cursors...) with the only
@@ -376,8 +378,8 @@ ZXSEC is an emulator of the Sinclair Spectrum family (48k, 128k, +2/Plus2 and
 +3/Plus3) based on the components it shared with the Amstrad CPC family: the Z80
 microprocessor, the PSG AY-3-8192 sound chip, the tape system and the NEC765
 disc drive controller. It also optionally emulates several add-ons: the Spectrum
-Dandanator extension, the Beta128 disc interface, the AY-Melodik 48k sound chip,
-the Pentagon 128 board, etc.
+Dandanator extension, the Beta128 disc interface, the Pentagon 128 board, the
+64-colour ULAplus video chip and the AY-Melodik 48k and Covox $FB sound chips.
 
 It spans the files ZXSEC.EXE, SPECTRUM.ROM, SPEC128K.ROM, SPEC-P-2.ROM and
 SPEC-P-3.ROM, and otherwise runs the same as CPCEC, with several differences:
@@ -389,6 +391,8 @@ chosen model is Spectrum 48k;
 * option -X disables the disc drives if the chosen model is Spectrum +3, that
 thus becomes a +2A instead; same outcome can happen on runtime by disabling
 "Settings: Disc controller" and selecting the firmware SPEC-P-3.ROM;
+* options -p and -P enable and disable the Pentagon timings; they can be toggled
+within the emulator with Shift+F6, too;
 * Control+Shift+F8 starts (or stops) the cassette motor, because the CPC
 hardware includes a built-in tape control, while the Spectrum hardware lacks it;
 * SHIFT emulates the CAPS key, CONTROL emulates SYMBOL, BLOQ MAYUS emulates
@@ -934,3 +938,11 @@ ULA128, FPGA48 and FPGA128 and the games made with the Nirvana engine
 adding new audio extensions for CPCEC (Digiblaster audio) and ZXSEC (Covox $FB
 DAC) plus preliminary emulation of Pentagon 128 timings and (if the TRDOS.ROM
 file is available) the Beta128 disc drive and its TRD and SCL files.
+- 20210930 -- minor patch fixing many small bugs in the Z80 (ZXSEC now passes
+new Spectrum tests such as 48KNEC, EIHALT, IRCONT, BBG48 and BBG128, thanks to
+Azesmbog, Dunny, Woody and ZJoyKiLer), a glitch in the CRTC (the HSYNC filter
+required by "Onescreen Colonies" and "Scroll Factory" was harming "Paradise
+Megademo part 2" and others) and another one in the AY chip ("Stormbringer" for
+CPC needs more leeway than "Terminus"), improving the autorun logic and tape
+speedup of both CPCEC and ZXSEC, and adding the 64-colour ULAplus extension for
+Spectrum, as well as the ability to read SP and SZX snapshots.

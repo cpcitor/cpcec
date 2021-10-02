@@ -109,48 +109,38 @@ int globbing(char *w,char *t,int q) // wildcard pattern *w against string *t; q 
 	char *ww=NULL,*tt=NULL,c,k; // a terribly dumbed-down take on Kirk J. Krauss' algorithm
 	if (q) // case insensitive
 		while (c=*t)
-			if ((k=*w++)=='*')
+			if ((k=*w++)=='*') // wildcard?
 			{
-				while (*w==k) // skip additional wildcards
-					++w;
-				if (!*w)
-					return 1; // end of pattern, succeed!
+				while (*w=='*') ++w; // skip trailing wildcards
+				if (!*w) return 1; // end of pattern? succeed!
 				tt=t,ww=w; // remember wildcard and continue
 			}
-			else if (k!='?'&&lcase(k)!=lcase(c)) // compare character
+			else if (k!='?'&&lcase(k)!=lcase(c)) // wrong character?
 			{
-				if (!ww)
-					return 0; // no past wildcards, fail!
+				if (!ww) return 0; // no past wildcards? fail!
 				t=++tt,w=ww; // return to wildcard and continue
 			}
-			else
-				++t;
+			else ++t; // right character, continue
 	else // case sensitive
 		while (c=*t)
-			if ((k=*w++)=='*')
+			if ((k=*w++)=='*') // wildcard?
 			{
-				while (*w==k) // skip additional wildcards
-					++w;
-				if (!*w)
-					return 1; // end of pattern, succeed!
+				while (*w=='*') ++w; // skip trailing wildcards
+				if (!*w) return 1; // end of pattern? succeed!
 				tt=t,ww=w; // remember wildcard and continue
 			}
-			else if (k!='?'&&k!=c) // compare character
+			else if (k!='?'&&k!=c) // wrong character?
 			{
-				if (!ww)
-					return 0; // no past wildcards, fail!
+				if (!ww) return 0; // no past wildcards? fail!
 				t=++tt,w=ww; // return to wildcard and continue
 			}
-			else
-				++t;
-	while (*w=='*') // skip additional wildcards, if any
-		++w;
+			else ++t; // right character, continue
+	while (*w=='*') ++w; // skip trailing wildcards
 	return !*w; // succeed on end of pattern
 }
-int multiglobbing(char *w,char *t,int q) // like globbing(), but with multiple patterns with semicolons inbetween; 1..n tells which pattern matches
+int multiglobbing(char *w,char *t,int q) // like globbing(), but with multiple patterns with semicolons inbetween; 0 on mismatch, 1..n tells which pattern matches
 {
-	char n=1,c,*m; // up to 127 patterns (!)
-	do
+	int n=1,c; char *m; do
 	{
 		m=session_substr; // the caller must not use this variable
 		while ((c=*w++)&&c!=';')
@@ -159,8 +149,7 @@ int multiglobbing(char *w,char *t,int q) // like globbing(), but with multiple p
 		if (globbing(session_substr,t,q))
 			return n;
 	}
-	while (++n,c);
-	return 0;
+	while (++n,c); return 0;
 }
 
 // the following algorithms are weak, but proper binary search is difficult to perform on packed lists; fortunately, items are likely to be partially sorted beforehand
@@ -274,7 +263,7 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 			while (vi<vl);
 			break;
 		case 8+VIDEO_FILTER_SMUDGE:
-			vt=*vo++=*vi++; VIDEO_FILTER_BLUR0(vt);
+			vt=*vo++=*vi++,VIDEO_FILTER_BLUR0(vt);
 			do
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vo++=*vi++=vt;
 			while (vi<vl);
@@ -282,7 +271,7 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 		case 0+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_SMUDGE:
 			if (video_pos_y&1)
 			{
-				vt=*vi,*vi++=VIDEO_FILTER_X1(vt); VIDEO_FILTER_BLUR0(vt);
+				vt=*vi,*vi++=VIDEO_FILTER_X1(vt),VIDEO_FILTER_BLUR0(vt);
 				do
 					vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=VIDEO_FILTER_X1(vt);
 				while (vi<vl);
@@ -290,26 +279,26 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 			}
 			// no `break` here!
 		case 0+VIDEO_FILTER_SMUDGE:
-			vt=*vi++; VIDEO_FILTER_BLUR0(vt);
+			vt=*vi++,VIDEO_FILTER_BLUR0(vt);
 			do
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt;
 			while (vi<vl);
 			break;
 		case 8+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_SMUDGE:
-			vt=*vi++,*vo++=VIDEO_FILTER_X1(vt); VIDEO_FILTER_BLUR0(vt);
+			vt=*vi++,*vo++=VIDEO_FILTER_X1(vt),VIDEO_FILTER_BLUR0(vt);
 			do
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt,*vo++=VIDEO_FILTER_X1(vt);
 			while (vi<vl);
 			break;
 		case 8+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
-			vt=*vi; VIDEO_FILTER_BLUR0(vt);
+			vt=*vi,VIDEO_FILTER_BLUR0(vt);
 			do
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vo++=*vi++=vt,
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vo++=*vi++=VIDEO_FILTER_X1(vt);
 			while (vi<vl);
 			break;
 		case 0+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
-			vt=*vi; VIDEO_FILTER_BLUR0(vt);
+			vt=*vi,VIDEO_FILTER_BLUR0(vt);
 			if (video_pos_y&1)
 			{
 				do
@@ -323,14 +312,14 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 			while (vi<vl);
 			break;
 		case 0+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
-			vt=*vi; VIDEO_FILTER_BLUR0(vt);
+			vt=*vi,VIDEO_FILTER_BLUR0(vt);
 			do
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt,
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=VIDEO_FILTER_X1(vt);
 			while (vi<vl);
 			break;
 		case 8+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
-			vt=*vi; VIDEO_FILTER_BLUR0(vt);
+			vt=*vi,VIDEO_FILTER_BLUR0(vt);
 			do
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vo++=*vi++=vt,
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt,*vo++=VIDEO_FILTER_X1(vt);
@@ -338,25 +327,8 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 			break;
 	}
 }
-INLINE void video_endscanlines(void) // fill gaps and clean up when a frame ends
+INLINE void video_endscanlines(void) // end the current frame and clean up
 {
-	if (video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y) // empty bottom lines?
-	{
-		VIDEO_UNIT *p=video_target-video_pos_x+VIDEO_OFFSET_X;
-		if (video_scanlinez==0)
-			for (int y=video_pos_y;y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;y+=2,p+=VIDEO_LENGTH_X-VIDEO_PIXELS_X)
-			{
-				for (int x=0;x<VIDEO_PIXELS_X;++x)
-					*p++=video_lastscanline; // render primary scanlines
-				p+=VIDEO_LENGTH_X-VIDEO_PIXELS_X;
-				for (int x=0;x<VIDEO_PIXELS_X;++x)
-					*p++=video_halfscanline; // filter secondary scanlines
-			}
-		else
-			for (int y=video_pos_y;y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;y+=2,p+=VIDEO_LENGTH_X*2-VIDEO_PIXELS_X)
-				for (int x=0;x<VIDEO_PIXELS_X;++x)
-					*p++=video_lastscanline; // render primary scanlines only
-	}
 	#ifdef MAUS_LIGHTGUNS
 	video_litegun=0; // the lightgun signal fades away between frames
 	#endif
@@ -619,6 +591,15 @@ INLINE int puff_main(void) // inflates compressed source into target; !0 ERROR
 	until (q|e);
 	return e;
 }
+int puff_zlib(BYTE *t,int o,BYTE *s,int i) // inflates a RFC1950 standard ZLIB object; !0 ERROR
+{
+	if (!s||!t||o<=0||i<=6) return -1; // NULL or empty source or target!
+	if (s[0]!=0X78||s[1]&32||(s[0]*256+s[1])%31) return -1; // wrong ZLIB flags!
+	puff_tgt=t; puff_tgtl=o; puff_src=&s[2]; puff_srcl=i; puff_tgto=puff_srco=0;
+	if (puff_main()) return -1; // decompression error!
+	int j=1,k=0; do if ((k+=(j+=*t++))>=65521) k%=65521,j%=65521; while (--o);
+	return ((k<<16)+j)^mgetmmmm(&s[i-4]); // nonzero means invalid Adler32 checksum!
+}
 
 // standard ZIP v2.0 archive reader that relies on
 // the main directory at the end of the ZIP archive;
@@ -637,25 +618,23 @@ int puff_open(char *s) // opens a new ZIP archive; !0 ERROR
 	puff_close();
 	if (!(puff_file=fopen(s,"rb")))
 		return -1;
-	// check the GZIP header first
-	if (fread1(session_scratch,10,puff_file)==10)
-		if (!memcmp(session_scratch,"\037\213\010",3))
-		{
-			if (session_scratch[3]&4)
-				fseek(puff_file,fgetii(puff_file),SEEK_SET); // skip infos
-			if (session_scratch[3]&8)
-				while (fgetc(puff_file)>0) ; // skip filename
-			if (session_scratch[3]&16)
-				while (fgetc(puff_file)>0) ; // skip comment
-			if (session_scratch[3]&2)
-				fgetii(puff_file); // skip CRC16
-			puff_skip=ftell(puff_file); fseek(puff_file,-8,SEEK_END); puff_srcl=ftell(puff_file)-puff_skip;
-			puff_hash=fgetiiii(puff_file); puff_tgtl=fgetiiii(puff_file); // CRC32 and source size at the end
-			char *t=strrchr(s,PATHCHAR); //  build target name from source filename (no path)
-			strcpy(puff_name,t?t+1:s); // copy the whole string if there's no path at all!
-			*strrchr(puff_name,'.')=0; // clip extension off to get the target filename
-			return puff_next=puff_skip+(puff_type=8),puff_gzip=2,puff_diff=0;
-		}
+	if (fread1(session_scratch,10,puff_file)==10&&!memcmp(session_scratch,"\037\213\010",3)) // GZIP header?
+	{
+		if (session_scratch[3]&4)
+			fseek(puff_file,fgetii(puff_file),SEEK_SET); // skip infos
+		if (session_scratch[3]&8)
+			while (fgetc(puff_file)>0) ; // skip filename
+		if (session_scratch[3]&16)
+			while (fgetc(puff_file)>0) ; // skip comment
+		if (session_scratch[3]&2)
+			fgetii(puff_file); // skip CRC16
+		puff_skip=ftell(puff_file); fseek(puff_file,-8,SEEK_END); puff_srcl=ftell(puff_file)-puff_skip;
+		puff_hash=fgetiiii(puff_file); puff_tgtl=fgetiiii(puff_file); // get CRC32 and source size
+		char *t=strrchr(s,PATHCHAR); // build target name from source filename: skip the path,
+		strcpy(puff_name,t?t+1:s); // or copy the whole string if there's no path at all!
+		*strrchr(puff_name,'.')=0; // remove ".GZ" extension to get the real filename
+		return puff_next=puff_skip+(puff_type=8),puff_gzip=2,puff_diff=0;
+	}
 	// find the central directory tree
 	fseek(puff_file,puff_gzip=0,SEEK_END);
 	int l=ftell(puff_file),k=65536;
@@ -781,7 +760,8 @@ FILE *puff_fopen(char *s,char *m) // mimics fopen(), so NULL on error, *FILE oth
 				return puff_close(),NULL; // file failure!
 			puff_src=puff_tgt=NULL;
 			if (!(!puff_type||(puff_src=malloc(puff_srcl)))||!(puff_tgt=malloc(puff_tgtl))
-				||puff_body(1)||(DWORD)~(puff_hash^puff_dohash(~0,puff_tgt,puff_tgtl)))
+				||puff_body(1)||(puff_srco^puff_srcl)||(puff_tgto^puff_tgtl)
+				||(DWORD)~(puff_hash^puff_dohash(-1,puff_tgt,puff_tgtl)))
 				fclose(puff_ffile),puff_ffile=NULL; // memory or data failure!
 			if (puff_ffile)
 				fwrite1(puff_tgt,puff_tgtl,puff_ffile),fseek(puff_ffile,0,SEEK_SET); // fopen() expects ftell()=0!
@@ -846,7 +826,7 @@ char *puff_session_filedialog(char *r,char *s,char *t,int q,int f) // ZIP archiv
 	{
 		if (zz=strrstr(rr,PUFF_STR)) // 'rr' holds the path, does it contain the separator already?
 		{
-			*zz=0; zz+=strlen(PUFF_STR);  // *zz++=0; // now it either points to the previous file name or to a zero
+			*zz=0; zz+=strlen(PUFF_STR); // *zz++=0; // now it either points to the previous file name or to a zero
 			if (z=puff_session_subdialog(rr,s,t,zz,qq))
 				return z;
 		}
@@ -933,19 +913,19 @@ void onscreen_bool(int x,int y,int lx,int ly,int q) // draw dots
 int debug_xlat(int k) // turns non-alphanumeric keypresses (-1 for mouse click) into pseudo-ASCII codes
 { switch (k) {
 	case -1: return KBDBG_CLICK;
-	case KBCODE_LEFT : return KBDBG_LEFT;
-	case KBCODE_RIGHT: return KBDBG_RIGHT;
-	case KBCODE_UP   : return KBDBG_UP;
-	case KBCODE_DOWN : return KBDBG_DOWN;
-	case KBCODE_HOME : return KBDBG_HOME;
-	case KBCODE_END  : return KBDBG_END;
-	case KBCODE_PRIOR: return KBDBG_PRIOR;
-	case KBCODE_NEXT : return KBDBG_NEXT;
-	case KBCODE_TAB: return session_shift?KBDBG_TAB_S:KBDBG_TAB;
-	case KBCODE_SPACE: return session_shift?KBDBG_SPC_S:KBDBG_SPC;//' '
+	case KBCODE_LEFT   : return KBDBG_LEFT;
+	case KBCODE_RIGHT  : return KBDBG_RIGHT;
+	case KBCODE_UP     : return KBDBG_UP;
+	case KBCODE_DOWN   : return KBDBG_DOWN;
+	case KBCODE_HOME   : return KBDBG_HOME;
+	case KBCODE_END    : return KBDBG_END;
+	case KBCODE_PRIOR  : return KBDBG_PRIOR;
+	case KBCODE_NEXT   : return KBDBG_NEXT;
+	case KBCODE_TAB    : return session_shift?KBDBG_TAB_S:KBDBG_TAB;
+	case KBCODE_SPACE  : return session_shift?KBDBG_SPC_S:KBDBG_SPC;//' '
 	case KBCODE_BKSPACE: return session_shift?KBDBG_RIGHT:KBDBG_LEFT;
 	case KBCODE_X_ENTER: case KBCODE_ENTER: return session_shift?KBDBG_RET_S:KBDBG_RET;
-	case KBCODE_ESCAPE: return KBDBG_ESCAPE;
+	case KBCODE_ESCAPE : return KBDBG_ESCAPE;
 	default: return 0;
 } }
 
@@ -960,8 +940,7 @@ void debug_locate(int x,int y) // move debug output to (X,Y)
 }
 void debug_prints(char *s) // print string onto debug output
 {
-	char c;
-	while (c=*s++)
+	char c; while (c=*s++)
 		*debug_output++=c;
 }
 void debug_printi(char *s,int i) // idem, string and integer

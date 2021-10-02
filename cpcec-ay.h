@@ -65,16 +65,19 @@ void psg_reg_update(int c)
 void psg_all_update(void)
 {
 	for (int i=0;i<14;++i)
-		if (i!=1&&i!=3&&i!=5&&i!=12) // high bytes of words are redundant
+	{
+		psg_table[i]&=psg_valid[i];
+		if (i!=0&&i!=2&&i!=4&&i!=11) // don't update the same 16-bit register twice
 			psg_reg_update(i);
+	}
 }
 
 INLINE void psg_table_sendto(BYTE x,BYTE i)
 {
-	if (x<16) // reject invalid index! (however, the CPC+ demo "PHAT" relies on writing and reading R15)
+	if (x<16) // reject invalid index! the limit isn't 14, tho': the CPC+ demo "PHAT" relies on writing and reading R15!
 	{
 		if (x==7&&((psg_table[7]^i)&7))
-			psg_r7_filter=PSG_TICK_STEP<<5; // below <<3 "Terminus" is dirty; above <<7 "SOUND 1,1,100" is hearable
+			psg_r7_filter=PSG_TICK_STEP<<7; // below <<3 or above <<11 "Terminus" is dirty; below <<7 "Stormbringer" is wrong; above <<11 "SOUND 1,1,100" is hearable
 		psg_table[x]=(i&=psg_valid[x]);
 		psg_reg_update(x);
 	}
@@ -90,11 +93,21 @@ INLINE void psg_table_sendto(BYTE x,BYTE i)
 // The PlayCity extension requires its own logic as it isn't just an extra pair of AY chips!
 
 #ifdef PSG_PLAYCITY
+#ifdef PSG_PLAYCITY_HALF
+BYTE playcity_table[1][16],playcity_index[1],playcity_hard_new[1];
+int playcity_hard_style[1],playcity_hard_count[1],playcity_hard_level[1],playcity_hard_flag0[1],playcity_hard_flag2[1];
+#if AUDIO_CHANNELS > 1
+int playcity_stereo[1][2];
+#endif
+#else
 int playcity_clock=0; BYTE playcity_table[2][16],playcity_index[2],playcity_hard_new[2];
 int playcity_hard_style[2],playcity_hard_count[2],playcity_hard_level[2],playcity_hard_flag0[2],playcity_hard_flag2[2];
 #if AUDIO_CHANNELS > 1
 int playcity_stereo[2][2];
 #endif
+#endif
+#ifdef PSG_PLAYCITY_HALF
+#else
 void playcity_set_config(BYTE b)
 {
 	if (b<16)
@@ -102,15 +115,24 @@ void playcity_set_config(BYTE b)
 		playcity_clock=b;
 }
 #define playcity_get_config() (playcity_clock)
+#endif
 void playcity_select(BYTE x,BYTE b)
 {
+	#ifdef PSG_PLAYCITY_HALF
+	if (!x)
+	#else
 	if (x<2)
+	#endif
 		if (b<16)
 			playcity_index[x]=b;
 }
 void playcity_send(BYTE x,BYTE b)
 {
+	#ifdef PSG_PLAYCITY_HALF
+	if (!x)
+	#else
 	if (x<2)
+	#endif
 	{
 		int y=playcity_index[x];
 		playcity_table[x][y]=(b&=psg_valid[y]);
@@ -123,12 +145,22 @@ void playcity_send(BYTE x,BYTE b)
 }
 BYTE playcity_recv(BYTE x)
 {
-	return (x<2&&playcity_index[x]<16)?playcity_table[x][playcity_index[x]]:0xFF;
+	return (
+		#ifdef PSG_PLAYCITY_HALF
+			!x
+		#else
+			x<2
+		#endif
+		&&playcity_index[x]<16)?playcity_table[x][playcity_index[x]]:0xFF;
 }
 void playcity_reset(void)
 {
-	playcity_clock=0; MEMZERO(playcity_table);
-	playcity_table[0][7]=playcity_table[1][7]=0x3F; // 2 MHz, channels+noise off
+	MEMZERO(playcity_table);
+	#ifdef PSG_PLAYCITY_HALF
+	playcity_table[0][7]=0x3F; // channels+noise off
+	#else
+	playcity_clock=0; playcity_table[0][7]=playcity_table[1][7]=0x3F; // 2 MHz, channels+noise off
+	#endif
 }
 #endif
 
@@ -312,11 +344,21 @@ void psg_main(int t,int d) // render audio output for `t` clock ticks, with `d` 
 #ifdef PSG_PLAYCITY
 void playcity_main(AUDIO_UNIT *t,int l)
 {
+	#ifdef PSG_PLAYCITY_HALF
+	if (playcity_table[0][7]==0x3F||!l) return;
+	#else
 	int dirty_l=playcity_table[0][7]==0x3F,dirty_h=playcity_table[1][7]!=0x3F;
 	if (dirty_l>dirty_h||!l) return; // disabled chips? no buffer? quit!
+	#endif
+	#ifdef PSG_PLAYCITY_HALF
+	const int x=0,playcity_clock=0;
+	int playcity_tone_limit[1][3],playcity_tone_power[1][3],playcity_tone_mixer[1][3],playcity_noise_limit[1],playcity_hard_limit[1];
+	static int playcity_tone_count[1][3],playcity_tone_state[1][3]={{0,0,0}},playcity_noise_state[1],playcity_noise_count[1],playcity_noise_trash[1]={1},playcity_hard_power[1];
+	#else
 	int playcity_tone_limit[2][3],playcity_tone_power[2][3],playcity_tone_mixer[2][3],playcity_noise_limit[2],playcity_hard_limit[2];
 	static int playcity_tone_count[2][3],playcity_tone_state[2][3]={{0,0,0},{0,0,0}},playcity_noise_state[2],playcity_noise_count[2],playcity_noise_trash[2]={1,1},playcity_hard_power[2];
 	for (int x=dirty_l;x<=dirty_h;++x)
+	#endif
 	{
 		for (int c=0;c<3;++c) // preload channel limits
 		{
@@ -340,7 +382,10 @@ void playcity_main(AUDIO_UNIT *t,int l)
 	{
 		p+=playcity_clock_hi; while (p>=0)
 		{
+			#ifdef PSG_PLAYCITY_HALF
+			#else
 			for (int x=dirty_l;x<=dirty_h;++x) // update all chips
+			#endif
 			{
 				if (--playcity_noise_count[x]<=0) // update noises
 				{

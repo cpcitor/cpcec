@@ -84,7 +84,6 @@ INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)+0X404040) // heavier
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)*3+0X161616) // lighter
 #define VIDEO_FILTER_X1(x) ((((x&0XFF0000)*76+(x&0XFF00)*(150<<8)+(x&0XFF)*(30<<16)+128)>>24)*0X10101) // greyscale
-//#define VIDEO_FILTER_SCAN(w,b) (((((w&0xFF00FF)*3+(b&0xFF00FF)*13)&0xFF00FF0)+(((w&0xFF00)*3+(b&0xFF00)*13)&0xFF000))>>4) // white:black 3:13
 #define VIDEO_FILTER_SCAN(w,b) (((((w&0xFF00FF)+(b&0xFF00FF)*7)&0x7F807F8)+(((w&0xFF00)+(b&0xFF00)*7)&0x7F800))>>3) // white:black 1:7
 
 #if 0 // 8 bits
@@ -116,7 +115,7 @@ int session_maus_z=0,session_maus_x=0,session_maus_y=0; // optional mouse
 #endif
 BYTE video_scanline=0,video_scanlinez=8; // 0 = solid, 1 = scanlines, 2 = full interlace, 3 = half interlace
 BYTE video_filter=0,audio_filter=0; // filter flags
-BYTE session_intzoom=0;
+BYTE session_intzoom=0,session_focused=0;
 FILE *session_wavefile=NULL; // audio recording is done on each session update
 
 RECT session_ideal; // ideal rectangle where the window fits perfectly
@@ -290,7 +289,7 @@ unsigned char kbd_map[256]; // key-to-key translation map
 
 // general engine functions and procedures -------------------------- //
 
-int session_user(int k); // handle the user's commands; 0 OK, !0 ERROR. Must be defined later on!
+void session_user(int k); // handle the user's commands; must be defined later on!
 void session_debug_show(void);
 int session_debug_user(int k); // debug logic is a bit different: 0 UNKNOWN COMMAND, !0 OK
 int debug_xlat(int k); // translate debug keys into codes. Must be defined later on!
@@ -436,10 +435,7 @@ void session_togglefullscreen(void)
 }
 int session_contextmenu(void) // used only when the normal menu is disabled
 {
-	POINT p;
-	if (session_hidemenu&&session_menu)
-		return GetCursorPos(&p),TrackPopupMenu(session_menu,0,p.x,p.y,0,session_hwnd,NULL);
-	return 0;
+	POINT p; return (session_hidemenu&&session_menu)?GetCursorPos(&p),TrackPopupMenu(session_menu,0,p.x,p.y,0,session_hwnd,NULL):0;
 }
 LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // window callback function
 {
@@ -476,7 +472,9 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 		case WM_SIZE:
 			session_clrscr(); // force full update! there's dirt otherwise!
 			break;
-		//case WM_SETFOCUS: // force full redraw
+		case WM_SETFOCUS:
+			session_focused=1;
+			break;
 		case WM_PAINT:
 			{
 				PAINTSTRUCT ps; HDC h;
@@ -485,7 +483,7 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 			}
 			break;
 		case WM_COMMAND:
-			if (0x3F00==(WORD)wparam) // Exit
+			if (0x0080==(WORD)wparam) // Exit
 				PostMessage(hwnd,WM_CLOSE,0,0);
 			else
 			{
@@ -536,6 +534,7 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 			DragFinish((HDROP)wparam);
 			session_shift=GetKeyState(VK_SHIFT)<0,session_event=0x8000;
 			break;
+		//case WM_ENTERIDLE: // pause before showing dialogboxes or menus
 		case WM_ENTERSIZEMOVE: // pause before moving the window
 		case WM_ENTERMENULOOP: // pause before showing the menus
 			session_please();
@@ -549,6 +548,8 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 				else if (wparam==VK_F10&&session_contextmenu()) // F10 shows the popup menu
 					return 0; // skip OS if the popup menu is allowed
 			}
+			else if (msg==WM_KILLFOCUS)
+				session_focused=0;
 			return DefWindowProc(hwnd,msg,wparam,lparam);
 	}
 	return 0;
@@ -600,7 +601,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	wc.lpfnWndProc=mainproc;
 	wc.hInstance=GetModuleHandle(0);
 	wc.hIcon=LoadIcon(wc.hInstance,MAKEINTRESOURCE(34002));//IDI_APPLICATION
-	wc.hCursor=LoadCursor(NULL,IDC_ARROW);
+	wc.hCursor=LoadCursor(NULL,IDC_ARROW); // cannot be zero!!
 	wc.hbrBackground=(HBRUSH)(1+COLOR_WINDOWTEXT);//(COLOR_WINDOW+2);//0;//
 	//wc.lpszMenuName=NULL;
 	wc.lpszClassName=MY_CAPTION;
@@ -721,11 +722,8 @@ void session_redomenu(void); // set the current menu flags. Must be defined late
 
 INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 {
-	static int s=0; // catch DEBUG and PAUSE signals
-	if (s!=session_signal)
+	static int s=0; if (s!=session_signal) // catch DEBUG and PAUSE
 		s=session_signal,session_dirtymenu=1;
-	if (session_dirtymenu)
-		session_dirtymenu=0,session_redomenu();
 	if (session_signal&(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE))
 	{
 		if (session_signal&SESSION_SIGNAL_DEBUG)
@@ -744,19 +742,22 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 		}
 		WaitMessage();
 	}
-	int q=0; for (MSG msg;PeekMessage(&msg,0,0,0,PM_REMOVE);)
+	for (MSG msg;PeekMessage(&msg,0,0,0,PM_REMOVE);)
 	{
 		TranslateMessage(&msg);
-		q|=msg.message==WM_QUIT;
+		if (msg.message==WM_QUIT)
+			return 1;
 		DispatchMessage(&msg);
 		if (session_event)
 		{
 			if (!((session_signal&SESSION_SIGNAL_DEBUG)&&session_debug_user(session_event)))
-				q|=session_user(session_event);
+				session_user(session_event),session_dirtymenu=1;
 			session_event=0;
 		}
 	}
-	return q;
+	if (session_dirtymenu)
+		session_dirtymenu=0,session_redomenu();
+	return 0;
 }
 
 void session_writewave(AUDIO_UNIT *t); // save the current sample frame. Must be defined later on!
@@ -768,7 +769,7 @@ INLINE void session_render(void) // update video, audio and timers
 	{
 		if ((video_interlaces=!video_interlaces)||!video_interlaced)
 			++performance_b,session_redraw(session_hwnd,session_dc1);
-		if (session_stick&&!session_key2joy) // do we need to check the joystick?
+		if (session_stick&&!session_key2joy&&session_focused) // do we need to check the joystick?
 		{
 			session_joy.dwSize=sizeof(session_joy);
 			session_joy.dwFlags=JOY_RETURNBUTTONS|JOY_RETURNPOVCTS|JOY_RETURNX|JOY_RETURNY|JOY_RETURNZ|JOY_RETURNR|JOY_RETURNCENTERED;

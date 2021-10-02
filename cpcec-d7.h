@@ -44,7 +44,7 @@ BYTE disc_trueunit,disc_trueunithead; // current unit+head after flipping sides 
 int disc_delay; // several operations need a short delay between command and action.
 int disc_timer; // overrun timer: if nonzero, it decreases.
 int disc_overrun; // set if disc_timer dropped to zero!
-int disc_filemode=3; // +1 = read-only by default instead of read-write; +2 = relaxed disc write errors instead of strict
+int disc_filemode=1; // +1 = read-only by default instead of read-write; +2 = relaxed disc write errors instead of strict
 
 // disc file handling operations ------------------------------------ //
 
@@ -920,8 +920,7 @@ INLINE void disc_main(int t) // handle disc drives for `t` clock ticks
 		disc_timer-=t/TICKS_PER_FRAME;
 		while (disc_timer<=0)
 		{
-			disc_overrun=1;
-			if (disc_phase==3)
+			if ((disc_overrun=disc_phase)==3)
 				disc_data_recv(); // dummy RECV
 			if (disc_phase==2)
 				disc_data_send(0xFF); // dummy SEND

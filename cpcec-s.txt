@@ -116,6 +116,8 @@ C);
 solamente se distinguen en la cantidad de RAM, el controlador de disco y el
 teclado);
 * -O : ocultar indicadores en pantalla (por defecto visibles);
+* -p : habilitar audio Playcity (por defecto deshabilitado);
+* -P : deshabilitar audio Playcity;
 * -R : deshabilitar emulación en tiempo real (por defecto habilitada);
 * -S : deshabilitar sonido (por defecto habilitado si hay una tarjeta de
 sonido);
@@ -276,16 +278,17 @@ acelerar la emulación durante un tiempo.
 
 El menú también incluye algunas opciones adicionales (por ejemplo el tipo de
 CRTC) además de acciones tales como cambiar los lados de los discos insertados,
-examinar los contenidos de la cinta actual, habilitar las extensiones de
-hardware Dandanator y Playcity, etc.
+examinar los contenidos de la cinta actual y habilitar varias extensiones de
+hardware: cartuchos Dandanator, pistolas de luz, chips de sonido Playcity y
+Digiblaster, etc.
 
 CPCEC permite arrastrar y soltar ficheros. Éstos serán automáticamente
 ejecutados (como con F3) a menos que la tecla Mays esté pulsada, en cuyo caso
 serán simplemente insertados como con F7 y F8.
 
-Los archivos ZIP pueden ser leídos por CPCEC (de haber más de un fichero en su
-interior se mostrará una lista para que el usuario elija el fichero necesario)
-pero sus contenidos no pueden ser modificados.
+Los archivos GZIP y ZIP pueden ser leídos por CPCEC (de haber más de un fichero
+en su interior se mostrará una lista para que el usuario elija el fichero
+necesario) pero sus contenidos no pueden ser modificados.
 
 La relación entre el teclado real y el emulado es inmediata (tabla alfanumérica,
 teclas de control, panel numérico, cursores...) con las únicas particularidades
@@ -414,6 +417,8 @@ defecto) si el modelo elegido es Spectrum 48k;
 +3, que así se convierte en un +2A; se puede conseguir lo mismo en tiempo de
 ejecución desactivando "Settings: Disc controller" y eligiendo el firmware
 SPEC-P-3.ROM;
+* las opciones -p y -P habilitan y deshabilitan la temporización Pentagon;
+tammbién puede conmutarse desde el emulador con Mays+F6;
 * Control+Mays+F8 sirve para poner en marcha (o detener) el motor de cinta, dado
 que el hardware de CPC dispone de control de cinta incorporado, mientras que el
 de Spectrum carece de él;
@@ -996,3 +1001,12 @@ correctamente, y que añade extensiones de audio para CPCEC (audio Digiblaster) 
 ZXSEC (audio Covox $FB) así como emulación preliminar de Pentagon 128 y (si se
 dispone del fichero TRDOS.ROM) la unidad de disco Beta128 y sus ficheros TRD y
 SCL.
+- 20210930 -- parche menor que corrige muchos errorcillos en el Z80 (ZXSEC ahora
+completa más pruebas de Spectrum tales como 48KNEC, EIHALT, IRCONT, BBG48 y
+BBG128, gracias a Azesmbog, Dunny, Woody and ZJoyKiLer), un fallo en el CRTC (el
+filtro de HSYNC necesario para "Onescreen Colonies" y "Scroll Factory"
+perjudicaba "Paradise Megademo part 2" y otros) y otro en el chip AY
+("Stormbringer" para CPC necesita más tolerancia que "Terminus"), mejora la
+lógica de autoarranque y la aceleración de cintas tanto de CPCEC como de ZXSEC,
+y añade la extensión ULAplus de 64 colores para Spectrum, así como la capacidad
+de leer snapshots SP y SZX.

@@ -60,7 +60,6 @@
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)+0X404040) // heavier
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)*3+0X161616) // lighter
 #define VIDEO_FILTER_X1(x) ((((x&0XFF0000)*76+(x&0XFF00)*(150<<8)+(x&0XFF)*(30<<16)+128)>>24)*0X10101) // greyscale
-//#define VIDEO_FILTER_SCAN(w,b) (((((w&0xFF00FF)*3+(b&0xFF00FF)*13)&0xFF00FF0)+(((w&0xFF00)*3+(b&0xFF00)*13)&0xFF000))>>4) // white:black 3:13
 #define VIDEO_FILTER_SCAN(w,b) (((((w&0xFF00FF)+(b&0xFF00FF)*7)&0x7F807F8)+(((w&0xFF00)+(b&0xFF00)*7)&0x7F800))>>3) // white:black 1:7
 
 #if 0 // 8 bits
@@ -229,7 +228,7 @@ unsigned char kbd_map[256]; // key-to-key translation map
 
 // general engine functions and procedures -------------------------- //
 
-int session_user(int k); // handle the user's commands; 0 OK, !0 ERROR. Must be defined later on!
+void session_user(int k); // handle the user's commands; must be defined later on!
 void session_debug_show(void);
 int session_debug_user(int k); // debug logic is a bit different: 0 UNKNOWN COMMAND, !0 OK
 int debug_xlat(int k); // translate debug keys into codes. Must be defined later on!
@@ -632,7 +631,7 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 			}
 			if (q)
 				session_redraw(q=0);
-			session_ui_focusing=1;
+			//session_ui_focusing=1; // not too useful, enable it if you wish
 			switch (session_ui_exchange())
 			{
 				case KBCODE_UP:
@@ -1281,7 +1280,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 		return SDL_Quit(),(char *)SDL_GetError();
 	if (session_hardblit=1,session_softblit||!(session_blitter=SDL_CreateRenderer(session_hwnd,-1,SDL_RENDERER_ACCELERATED)))
 		if (session_hardblit=0,session_softblit=1,!(session_blitter=SDL_CreateRenderer(session_hwnd,-1,SDL_RENDERER_SOFTWARE)))
-			return SDL_Quit(),(char *)SDL_GetError();
+			return SDL_Quit(),(char *)SDL_GetError(); // give up if neither hard or soft blit cannot be allocated!
 
 	SDL_SetRenderTarget(session_blitter,NULL); // necessary?
 	// ARGB8888 equates to masks A = 0xFF000000, R = 0x00FF0000, G = 0x0000FF00, B = 0x000000FF ; it provides the best performance AFAIK.
@@ -1431,11 +1430,8 @@ int session_pad2bit(int i) // translate motions and buttons into codes
 void session_redomenu(void); // set the current menu flags. Must be defined later on!
 INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 {
-	static int s=0; // catch DEBUG and PAUSE signals
-	if (s!=session_signal)
+	static int s=0;	if (s!=session_signal) // catch DEBUG and PAUSE
 		s=session_signal,session_dirtymenu=1;
-	if (session_dirtymenu)
-		session_dirtymenu=0,session_redomenu();
 	if (session_signal&(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE))
 	{
 		if (session_signal&SESSION_SIGNAL_DEBUG)
@@ -1455,8 +1451,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 		}
 		SDL_WaitEvent(NULL);
 	}
-	int q=0,k; SDL_Event event;
-	while (SDL_PollEvent(&event))
+	int k; for (SDL_Event event;SDL_PollEvent(&event);)
 	{
 		switch (event.type)
 		{
@@ -1568,23 +1563,22 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 				session_event=0x8000;
 				break;
 			case SDL_QUIT:
-				q=1;
-				break;
+				return 1;
 		}
-		if (session_event==0x8080) // F10?
+		if (0x8080==session_event) // F10?
 			session_ui_menu(); // can assign new values to session_event
-		if (session_event==0x3F00) // Exit
-			q=1;
+		if (0x0080==session_event) // Exit
+			return 1;
 		else if (session_event)
 		{
 			if (!((session_signal&SESSION_SIGNAL_DEBUG)&&session_debug_user(session_event)))
-				q|=session_user(session_event);
+				session_user(session_event),session_dirtymenu=1;
 			session_event=0;
 		}
 	}
 	if (session_dirtymenu)
 		session_dirtymenu=0,session_redomenu();
-	return q;
+	return 0;
 }
 
 void session_writewave(AUDIO_UNIT *t); // save the current sample frame. Must be defined later on!
