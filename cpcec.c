@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20210930"//"2555"
+#define MY_VERSION "20211004"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -1755,8 +1755,7 @@ void z80_tape_trap(void)
 		z80_tape_index[z80_pc.w]=i; cprintf("FASTLOAD: %04X=%02d\n",z80_pc.w,(i<length(z80_tape_fastload))?i:-1);
 	}
 	if (i>=length(z80_tape_fastload)) return; // only known methods can reach here!
-	if (!tape_skipping) tape_skipping=-1;
-	//if (tape_hold<-1999) tape_hold=-1999;
+	if (!tape_skipping) tape_skipping=-1; if (tape_hold<-1999) tape_hold=-1999;
 	switch (i)
 	{
 		case  0: // AMSTRAD CPC FIRMWARE, CASSYS ("WONDER BOY"...), HEWSON ("EXOLON", "NEBULUS"...)

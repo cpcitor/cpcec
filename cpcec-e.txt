@@ -938,11 +938,13 @@ ULA128, FPGA48 and FPGA128 and the games made with the Nirvana engine
 adding new audio extensions for CPCEC (Digiblaster audio) and ZXSEC (Covox $FB
 DAC) plus preliminary emulation of Pentagon 128 timings and (if the TRDOS.ROM
 file is available) the Beta128 disc drive and its TRD and SCL files.
-- 20210930 -- minor patch fixing many small bugs in the Z80 (ZXSEC now passes
-new Spectrum tests such as 48KNEC, EIHALT, IRCONT, BBG48 and BBG128, thanks to
+- 20210930 -- minor patch fixing several bugs in the Z80 (ZXSEC now passes new
+Spectrum tests such as 48KNEC, EIHALT, IRCONT, BBG48 and BBG128, thanks to
 Azesmbog, Dunny, Woody and ZJoyKiLer), a glitch in the CRTC (the HSYNC filter
 required by "Onescreen Colonies" and "Scroll Factory" was harming "Paradise
 Megademo part 2" and others) and another one in the AY chip ("Stormbringer" for
 CPC needs more leeway than "Terminus"), improving the autorun logic and tape
 speedup of both CPCEC and ZXSEC, and adding the 64-colour ULAplus extension for
 Spectrum, as well as the ability to read SP and SZX snapshots.
+- 20211004 -- minor patch fixing a bug in ZXSEC, the Z80 snapshot loader wasn't
+checking properly the integrity of 48K compressed blocks.

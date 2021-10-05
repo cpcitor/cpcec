@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20210930"//"2555"
+#define MY_VERSION "20211004"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -490,11 +490,11 @@ void mmu_update(void) // update the MMU tables with all the new offsets
 #define dandanator_clear() (dandanator_cfg[0]=dandanator_cfg[1]=dandanator_cfg[2]=dandanator_cfg[3]=dandanator_temp=0)
 void dandanator_update(void) // parse and run Dandanator commands, if any
 {
-	cprintf("DAN! %08X: %03d,%03d,%03d,%03d\n",z80_pc.w,dandanator_cfg[0],dandanator_cfg[1],dandanator_cfg[2],dandanator_cfg[3]);
 	if (dandanator_cfg[0]==46) // wake up!
 	{
 		if (dandanator_cfg[1]==dandanator_cfg[2]) // parameters must match
 		{
+			cprintf("DAN! %08X: 046,%03d\n",dandanator_cfg[1]);
 			if (dandanator_cfg[1]==1) dandanator_cfg[6]|=4; // go to sleep
 			else if (dandanator_cfg[1]==16) dandanator_cfg[6]&=~4; // wake up
 			else if (dandanator_cfg[1]==31) dandanator_cfg[6]|=8; // sleep till reset
@@ -502,6 +502,7 @@ void dandanator_update(void) // parse and run Dandanator commands, if any
 	}
 	else if (!dandanator_cfg[6]&&dandanator_cfg[0]) // ignore if asleep or empty
 	{
+		cprintf("DAN! %08X: %03d,%03d,%03d,%03d\n",z80_pc.w,dandanator_cfg[0],dandanator_cfg[1],dandanator_cfg[2],dandanator_cfg[3]);
 		if (dandanator_cfg[0]<34) // immediate bank change
 			dandanator_cfg[4]=dandanator_cfg[0]-1;
 		else if (dandanator_cfg[0]==34) // vanish and sleep!
@@ -1235,8 +1236,7 @@ void z80_tape_trap(void)
 	if (i>=length(z80_tape_fastload)) return; // only known methods can reach here!
 	if (tape_enabled>=0&&tape_enabled<2) // automatic tape playback/stop?
 		tape_enabled=2; // amount of frames the tape should keep moving
-	if (!tape_skipping) tape_skipping=-1;
-	//if (tape_hold<-1999) tape_hold=-1999;
+	if (!tape_skipping) tape_skipping=-1; if (tape_hold<-1999) tape_hold=-1999;
 	switch (i) // always handle these special cases
 	{
 		case  1: // ZX SPECTRUM FIRMWARE (SETUP)
@@ -1750,23 +1750,23 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 }
 
 #define SNAP_LOAD_Z80W(x,r) r.b.l=header[x],r.b.h=header[x+1]
-int snap_load_z80block(FILE *f,int length,int offset,int limits) // unpack a Z80-type compressed block; 0 OK, !0 ERROR
+int snap_load_z80block(BYTE *t,int o,BYTE *s,int i) // unpack a Z80-type compressed block; 0 OK, !0 ERROR
 {
-	int x,y; while (length>0&&offset<limits)
-		if (--length,(x=fgetc(f))==0xED)
+	int x,y; while (i>0&&o>0)
+		if (--i,(x=*s++)==0xED)
 		{
-			if (--length,(y=fgetc(f))==0xED)
+			if (--i,(y=*s++)==0xED)
 			{
-				length-=2; x=fgetc(f); // can this be zero!?
-				for (y=fgetc(f);x--;)
-					mem_ram[offset++]=y;
+				i-=2;x=*s++; // can this be zero!?
+				for (y=*s++,o-=x;x;--x)
+					*t++=y;
 			}
 			else
-				mem_ram[offset++]=x,mem_ram[offset++]=y;
+				o-=2,*t++=x,*t++=y;
 		}
 		else
-			mem_ram[offset++]=x;
-	return length|(offset-limits);
+			--o,*t++=x;
+	return i+o;
 }
 int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ERROR
 {
@@ -1801,12 +1801,12 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 	}
 	else if (!memcmp("ZXST",header,4)) // SZX format; it has its own ID, too
 	{
-		cprintf("SZX file: "); ula_pentagon=0;
+		cprintf("SZX snapshot: "); ula_pentagon=0;
 		ula_v3=4,ula_v2=48; // disable PLUS3 and 128K by default
 		type_id=header[6]<2?0:header[6]<3?1:header[6]<4?2:header[6]<7?3:(ula_pentagon=1); // chMachineId
 		while ((i=fgetiiii(f))>0&&(q=fgetiiii(f))>=0)
 		{
-			cprintf("%08X:%08X ",i,q);
+			cprintf("%08X:%04X ",i,q);
 			if (i==0X5230385A) // "Z80R", the Z80 registers
 			{
 				fread1(header,29,f);
@@ -1907,7 +1907,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 		if (header[12]!=255&&!z80_pc.w) // HEADER V2+
 		{
 			i=fgetii(f);
-			cprintf(" +%d",i);
+			cprintf("+%d ",i);
 			if (i<=64)
 				fread1(&header[32],i,f);
 			else
@@ -1925,7 +1925,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 			}
 			while ((i=fgetii(f))&&(q=fgetc(f))>=0) // q<0 = feof
 			{
-				cprintf(" [%05d:%03d]",i,q);
+				cprintf("%05d:%03d ",i,q);
 				if ((q-=3)<0||q>7) // ignore ROM copies
 					q=8; // dummy 16K
 				else if (!type_id) // 128K banks follow the normal order,
@@ -1946,17 +1946,21 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 					}
 				if (i==0xFFFF) // uncompressed
 					fread1(&mem_ram[q<<14],1<<14,f);
-				else if (snap_load_z80block(f,i,q<<14,(q+1)<<14))
-					cprintf(" V2+ ERROR!");
+				else
+				{
+					fread1(&mem_ram[8<<14],i,f); if (q!=8) // don't unpack dummy 16K
+						if (snap_load_z80block(&mem_ram[q<<14],1<<14,&mem_ram[8<<14],i))
+							cprintf("V2+ ERROR! ");
+				}
 			}
 		}
 		else // HEADER V1
 		{
-			if (header[12]&32) // compressed V1
+			if (header[12]&32) // compressed 48K body
 			{
-				cprintf(" PACKED");
-				if (snap_load_z80block(f,i,5<<14,8<<14))
-					cprintf(" V1 ERROR!");
+				i=fread1(mem_ram,5<<14,f); cprintf("%05d:48K ",i);
+				// ignore errors, the V1 compression end marker is flawed
+				snap_load_z80block(&mem_ram[5<<14],3<<14,mem_ram,i-4);
 				//memcpy(&mem_ram[5<<14],&mem_ram[5<<14],1<<14);
 				memcpy(&mem_ram[2<<14],&mem_ram[6<<14],1<<14);
 				memcpy(&mem_ram[0<<14],&mem_ram[7<<14],1<<14);
@@ -1968,7 +1972,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 				fread1(&mem_ram[0<<14],1<<14,f); // bank 0
 			}
 		}
-		cprintf(" PC=$%04X\n",z80_pc.w);
+		cprintf("PC=$%04X\n",z80_pc.w);
 	}
 	else if (globbing(snap_pattern,s,1)) // SNA files can be detected by extension, more reliable than filesize (49179,49183,131103,147487)
 	{

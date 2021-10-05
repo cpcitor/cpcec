@@ -1001,7 +1001,7 @@ correctamente, y que añade extensiones de audio para CPCEC (audio Digiblaster) 
 ZXSEC (audio Covox $FB) así como emulación preliminar de Pentagon 128 y (si se
 dispone del fichero TRDOS.ROM) la unidad de disco Beta128 y sus ficheros TRD y
 SCL.
-- 20210930 -- parche menor que corrige muchos errorcillos en el Z80 (ZXSEC ahora
+- 20210930 -- parche menor que corrige varios errores en el Z80 (ZXSEC ahora
 completa más pruebas de Spectrum tales como 48KNEC, EIHALT, IRCONT, BBG48 y
 BBG128, gracias a Azesmbog, Dunny, Woody and ZJoyKiLer), un fallo en el CRTC (el
 filtro de HSYNC necesario para "Onescreen Colonies" y "Scroll Factory"
@@ -1010,3 +1010,5 @@ perjudicaba "Paradise Megademo part 2" y otros) y otro en el chip AY
 lógica de autoarranque y la aceleración de cintas tanto de CPCEC como de ZXSEC,
 y añade la extensión ULAplus de 64 colores para Spectrum, así como la capacidad
 de leer snapshots SP y SZX.
+- 20211004 -- parche menor que corrige un error en ZXSEC, el cargador de
+snapshots Z80 comprobaba mal la integridad de los bloques comprimiddos de 48K.

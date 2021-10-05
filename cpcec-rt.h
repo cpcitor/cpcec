@@ -574,7 +574,7 @@ INLINE int puff_dynamic(void) // generates custom Huffman codes and expands bloc
 		return -1; // invalid offset tables!
 	return puff_expand(&puff_lcode,&puff_ocode);
 }
-INLINE int puff_main(void) // inflates compressed source into target; !0 ERROR
+int puff_main(void) // inflates compressed source into target; !0 ERROR
 {
 	int q,e; puff_buff=puff_bits=0; // puff_srcX and puff_tgtX are set by caller
 	do
@@ -591,15 +591,38 @@ INLINE int puff_main(void) // inflates compressed source into target; !0 ERROR
 	until (q|e);
 	return e;
 }
+DWORD puff_adler32(BYTE *t,int o) // calculates Adler32 checksum of a block `t` of size `o`
+	{ int j=1,k=0; do if ((k+=(j+=*t++))>=65521) k%=65521,j%=65521; while (--o); return (k<<16)+j; }
 int puff_zlib(BYTE *t,int o,BYTE *s,int i) // inflates a RFC1950 standard ZLIB object; !0 ERROR
 {
 	if (!s||!t||o<=0||i<=6) return -1; // NULL or empty source or target!
 	if (s[0]!=0X78||s[1]&32||(s[0]*256+s[1])%31) return -1; // wrong ZLIB flags!
 	puff_tgt=t; puff_tgtl=o; puff_src=&s[2]; puff_srcl=i; puff_tgto=puff_srco=0;
 	if (puff_main()) return -1; // decompression error!
-	int j=1,k=0; do if ((k+=(j+=*t++))>=65521) k%=65521,j%=65521; while (--o);
-	return ((k<<16)+j)^mgetmmmm(&s[i-4]); // nonzero means invalid Adler32 checksum!
+	return puff_adler32(t,o)!=mgetmmmm(&s[i-4]); // nonzero means a wrong checksum!
 }
+#if 0 // too minimal to be useful
+int huff_main(BYTE *t,int o,BYTE *s,int i) // deflates source into compressed target; <0 ERROR, >=0 OUTPUT LENGTH
+{
+	if (!t||!s||o<1||i<1) return -1; // NULL or empty!
+	BYTE *r=t; while (i>0x8000) // right now it doesn't compress anything; it simply stores into blocks, 32K maximum
+	{
+		if (o<5+0x8000) return -1; // not enough room!
+		*t++=0X00; *t++=0X00; *t++=0X80; *t++=0XFF; *t++=0X7F; // non-final uncompressed 32K block
+		memcpy(t,s,0X8000); t+=0X8000; s+=0X8000; i-=0X8000; o-=5+0X8000;
+	}
+	if (o<5+i) return -1; // not enough room!
+	*t++=0X80; *t++=i; *t++=i>>8; *t++=~i; *t++=~i>>8; // final uncompressed <32K block
+	memcpy(t,s,i); return (t-r)+i;
+}
+int huff_zlib(BYTE *t,int o,BYTE *s,int i) // deflates a RFC1950 standard ZLIB object; <0 ERROR, >=0 OUTPUT LENGTH
+{
+	if (!t||!s||(o-=6)<5||i<1) return -1; // NULL or empty!
+	BYTE *r=t; *t++=0X78; *t++=0XDA; // dummy ZLIB flags
+	if ((o=huff_main(t,o,s,i))<0) return -1; // not enough room for DEFLATE!
+	t+=o; *t++=(i=puff_adler32(s,i)); *t++=i>>8; *t++=i>>16; *t++=i>>24; return t-r;
+}
+#endif
 
 // standard ZIP v2.0 archive reader that relies on
 // the main directory at the end of the ZIP archive;

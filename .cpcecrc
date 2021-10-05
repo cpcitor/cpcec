@@ -2,22 +2,22 @@ type 0
 crtc 1
 bank 1
 fdcw 3
-joy1 0
+misc 2
 plct 0
-file /home/stephane/today/retrocomputing/cookie_-_the_doctor.dsk
+file /org/gourichon/localdata/stephane/SG/project/retrocomputing/bydate/2021/2021-09-12/csw2cdt-20210329-2555/block_from_tape.wav
 snap 
-tape 
+tape /org/gourichon/localdata/stephane/SG/project/retrocomputing/bydate/2021/2021-09-12/csw2cdt-20210329-2555/block_from_tape.wav
 disc /home/stephane/today/retrocomputing/cookie_-_the_doctor.dsk
 card /org/gourichon/localdata/stephane/SG/project/retrocomputing/bydate/2020/2020-05-09/cpcec/cpc464.rom
 dntr 
 palette 2
-rewind 1
+casette 5
 debug 0
 film 3
 info 1
 polyphony 1
-scanlines 0
 softaudio 0
+scanlines 0
 softvideo 0
 zoomvideo 0
 safevideo 1

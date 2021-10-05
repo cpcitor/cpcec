@@ -631,7 +631,7 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 			}
 			if (q)
 				session_redraw(q=0);
-			//session_ui_focusing=1; // not too useful, enable it if you wish
+			session_ui_focusing=1; // not too useful, disable it if you wish
 			switch (session_ui_exchange())
 			{
 				case KBCODE_UP:

@@ -769,11 +769,11 @@ INLINE void session_render(void) // update video, audio and timers
 	{
 		if ((video_interlaces=!video_interlaces)||!video_interlaced)
 			++performance_b,session_redraw(session_hwnd,session_dc1);
-		if (session_stick&&!session_key2joy&&session_focused) // do we need to check the joystick?
+		if (session_stick&&!session_key2joy) // do we need to check the joystick?
 		{
 			session_joy.dwSize=sizeof(session_joy);
 			session_joy.dwFlags=JOY_RETURNBUTTONS|JOY_RETURNPOVCTS|JOY_RETURNX|JOY_RETURNY|JOY_RETURNZ|JOY_RETURNR|JOY_RETURNCENTERED;
-			if (!joyGetPosEx(session_stick-1,&session_joy))
+			if (session_focused&&!joyGetPosEx(session_stick-1,&session_joy)) // without focus, ignore the joystick
 			{
 				j=((session_joy.dwPOV<0||session_joy.dwPOV>=36000)?(session_joy.dwYpos< 0x4000?1:0)+(session_joy.dwYpos>=0xC000?2:0)+(session_joy.dwXpos< 0x4000?4:0)+(session_joy.dwXpos>=0xC000?8:0) // axial
 				:(session_joy.dwPOV< 2250?1:session_joy.dwPOV< 6750?9:session_joy.dwPOV<11250?8:session_joy.dwPOV<15750?10: // angular: U (0), U-R (4500), R (9000), R-D (13500)
