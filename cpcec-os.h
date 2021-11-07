@@ -26,7 +26,6 @@ unsigned char session_scratch[1<<18]; // at least 256k!
 INLINE int ucase(int i) { return i>='a'&&i<='z'?i-32:i; }
 INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 #define length(x) (sizeof(x)/sizeof(*(x)))
-#define until(x) while(!(x)) // shortcut
 
 #include "cpcec-a8.h" //unsigned char *onscreen_chrs;
 #define ONSCREEN_SIZE 12 //(sizeof(onscreen_chrs)/95)
@@ -143,7 +142,7 @@ BYTE session_paused=0,session_signal=0,session_version[8];
 #define SESSION_SIGNAL_FRAME 1
 #define SESSION_SIGNAL_DEBUG 2
 #define SESSION_SIGNAL_PAUSE 4
-BYTE session_dirtymenu=1; // to force new status text
+BYTE session_dirty=1; // to force new status text
 
 #define kbd_bit_set(k) (kbd_bit[k>>3]|=1<<(k&7))
 #define kbd_bit_res(k) (kbd_bit[k>>3]&=~(1<<(k&7)))
@@ -431,7 +430,7 @@ void session_togglefullscreen(void)
 		ShowWindow(session_hwnd,SW_MAXIMIZE); // adjust to entire screen
 		session_fullscreen=1;
 	}
-	session_dirtymenu=1; // update "Full screen" option (if any)
+	session_dirty=1; // update "Full screen" option (if any)
 }
 int session_contextmenu(void) // used only when the normal menu is disabled
 {
@@ -706,7 +705,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 		{
 			memset(&session_wh,0,sizeof(WAVEHDR));
 			memset(audio_frame=audio_memory,AUDIO_ZERO,sizeof(audio_memory));
-			session_wh.lpData=(BYTE *)audio_memory;
+			session_wh.lpData=(BYTE*)audio_memory;
 			session_wh.dwBufferLength=AUDIO_N_FRAMES*AUDIO_LENGTH_Z*wfex.nBlockAlign;
 			session_wh.dwFlags=WHDR_BEGINLOOP|WHDR_ENDLOOP; // circular buffer
 			session_wh.dwLoops=-1; // loop forever!
@@ -718,12 +717,11 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	return NULL;
 }
 
-void session_redomenu(void); // set the current menu flags. Must be defined later on!
-
+void session_clean(void); // "clean" dirty settings. Must be defined later on!
 INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 {
 	static int s=0; if (s!=session_signal) // catch DEBUG and PAUSE
-		s=session_signal,session_dirtymenu=1;
+		s=session_signal,session_dirty=1;
 	if (session_signal&(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE))
 	{
 		if (session_signal&SESSION_SIGNAL_DEBUG)
@@ -751,12 +749,12 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 		if (session_event)
 		{
 			if (!((session_signal&SESSION_SIGNAL_DEBUG)&&session_debug_user(session_event)))
-				session_user(session_event),session_dirtymenu=1;
+				session_user(session_event),session_dirty=1;
 			session_event=0;
 		}
 	}
-	if (session_dirtymenu)
-		session_dirtymenu=0,session_redomenu();
+	if (session_dirty)
+		session_dirty=0,session_clean();
 	return 0;
 }
 
@@ -775,7 +773,7 @@ INLINE void session_render(void) // update video, audio and timers
 			session_joy.dwFlags=JOY_RETURNBUTTONS|JOY_RETURNPOVCTS|JOY_RETURNX|JOY_RETURNY|JOY_RETURNZ|JOY_RETURNR|JOY_RETURNCENTERED;
 			if (session_focused&&!joyGetPosEx(session_stick-1,&session_joy)) // without focus, ignore the joystick
 			{
-				j=((session_joy.dwPOV<0||session_joy.dwPOV>=36000)?(session_joy.dwYpos< 0x4000?1:0)+(session_joy.dwYpos>=0xC000?2:0)+(session_joy.dwXpos< 0x4000?4:0)+(session_joy.dwXpos>=0xC000?8:0) // axial
+				j=((/*session_joy.dwPOV<0||*/session_joy.dwPOV>=36000)?(session_joy.dwYpos< 0x4000?1:0)+(session_joy.dwYpos>=0xC000?2:0)+(session_joy.dwXpos< 0x4000?4:0)+(session_joy.dwXpos>=0xC000?8:0) // axial
 				:(session_joy.dwPOV< 2250?1:session_joy.dwPOV< 6750?9:session_joy.dwPOV<11250?8:session_joy.dwPOV<15750?10: // angular: U (0), U-R (4500), R (9000), R-D (13500)
 				session_joy.dwPOV<20250?2:session_joy.dwPOV<24750?6:session_joy.dwPOV<29250?4:session_joy.dwPOV<33750?5:1)) // D (18000), D-L (22500), L (27000), L-U (31500)
 				+((session_joy.dwButtons&(JOY_BUTTON1/*|JOY_BUTTON5*/))?16:0)+((session_joy.dwButtons&(JOY_BUTTON2/*|JOY_BUTTON6*/))?32:0) // FIRE1, FIRE2 ...
@@ -866,14 +864,12 @@ INLINE void session_render(void) // update video, audio and timers
 	}
 }
 
+INLINE void session_wrapup(void); // clean runtime stuff up
 INLINE void session_byebye(void) // delete video+audio devices
 {
+	session_wrapup();
 	if (session_wo)
-	{
-		waveOutReset(session_wo);
-		waveOutUnprepareHeader(session_wo,&session_wh,sizeof(WAVEHDR));
-		waveOutClose(session_wo);
-	}
+		waveOutReset(session_wo),waveOutUnprepareHeader(session_wo,&session_wh,sizeof(WAVEHDR)),waveOutClose(session_wo);
 	if (session_menu)
 		DestroyMenu(session_menu);
 
@@ -911,7 +907,7 @@ void session_writebitmap(FILE *f,int half) // write current OS-dependent bitmap 
 		}
 		else
 		{
-			BYTE *t=r,*s=(BYTE *)session_getscanline(i);
+			BYTE *t=r,*s=(BYTE*)session_getscanline(i);
 			for (int j=0;j<VIDEO_PIXELS_X;++j) // turn RGBA (32 bits) into RGB (24 bits)
 				*t++=*s++, // copy B
 				*t++=*s++, // copy G
@@ -1013,7 +1009,7 @@ LRESULT CALLBACK listproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // dia
 			{
 				SetWindowText(hwnd,session_dialog_text);
 				session_dialog_item=GetDlgItem(hwnd,12345);
-				char *l=(char *)lparam;
+				char *l=(char*)lparam;
 				while (*l)
 				{
 					SendMessage(session_dialog_item,LB_ADDSTRING,0,(LPARAM)l);

@@ -253,7 +253,7 @@ void psg_main(int t,int d) // render audio output for `t` clock ticks, with `d` 
 		psg_r7_filter=0;
 	int psg_tone_catch[3];
 	for (int c=0;c<3;++c) // catch ultrasounds, but keep any noise channels
-		psg_tone_catch[c]=psg_tone_mixer[c]|((psg_tone_limit[c]<=(PSG_KHZ_CLOCK*256/AUDIO_PLAYBACK)&&!psg_r7_filter)?7*1:0); // safe margin? (200-250)
+		psg_tone_catch[c]=psg_tone_mixer[c]|((psg_tone_limit[c]<=((PSG_KHZ_CLOCK<<(8-PSG_MAIN_EXTRABITS))/AUDIO_PLAYBACK)&&!psg_r7_filter)?7*1:0); // safe margin? (200-250)
 	do
 	{
 		if (--psg_noise_count<=0) // update noise

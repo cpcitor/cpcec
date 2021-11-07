@@ -47,8 +47,8 @@ void mputiiii(unsigned char *x,int y) { x[3]=y>>24; x[2]=y>>16; x[1]=y>>8; *x=y;
 
 #define equalsmm(x,i) (*(WORD*)(x)==(i))
 #define equalsmmmm(x,i) (*(DWORD*)(x)==(i))
-int equalsii(unsigned char *x,unsigned int i) { return (x[1]<<8)+*x==i; }
-int equalsiiii(unsigned char *x,unsigned int i) { return (x[3]<<24)+(x[2]<<16)+(x[1]<<8)+*x==i; }
+#define equalsii(x,i) (*(WORD*)(x)==(WORD)(((i>>8))+((i&255)<<8)))
+#define equalsiiii(x,i) (*(DWORD*)(x)==(DWORD)(((i>>24))+((i&(255<<16))>>8)+((i&(255<<8))<<8)+(i<<24)))
 
 int fgetii(FILE *f) { int i=fgetc(f); return i|(fgetc(f)<<8); } // common lil-endian 16-bit fgetc()
 int fputii(int i,FILE *f) { fputc(i,f); return fputc(i>>8,f); } // common lil-endian 16-bit fputc()
@@ -74,8 +74,8 @@ void mputmmmm(unsigned char *x,int y) { *x=y>>24; x[1]=y>>16; x[2]=y>>8; x[3]=y;
 
 #define equalsii(x,i) (*(WORD*)(x)==(i))
 #define equalsiiii(x,i) (*(DWORD*)(x)==(i))
-int equalsmm(unsigned char *x,unsigned int i) { return (*x<<8)+x[1]==i; }
-int equalsmmmm(unsigned char *x,unsigned int i) { return (*x<<24)+(x[1]<<16)+(x[2]<<8)+x[3]==i; }
+#define equalsmm(x,i) (*(WORD*)(x)==(WORD)(((i>>8))+((i&255)<<8)))
+#define equalsmmmm(x,i) (*(DWORD*)(x)==(DWORD)(((i>>24))+((i&(255<<16))>>8)+((i&(255<<8))<<8)+(i<<24)))
 
 int fgetii(FILE *f) { int i=0; return (fread(&i,1,2,f)!=2)?EOF:i; } // native lil-endian 16-bit fgetc()
 int fputii(int i,FILE *f) { return (fwrite(&i,1,2,f)!=2)?EOF:i; } // native lil-endian 16-bit fputc()
@@ -332,7 +332,7 @@ INLINE void video_endscanlines(void) // end the current frame and clean up
 	#ifdef MAUS_LIGHTGUNS
 	video_litegun=0; // the lightgun signal fades away between frames
 	#endif
-	static int f=-1; static VIDEO_UNIT z=-1; // first value intentionally invalid!
+	static int f=-128; static VIDEO_UNIT z=~0; // first value intentionally invalid!
 	if (video_scanlinez!=video_scanline||f!=video_filter||z!=video_halfscanline) // did the config change?
 		if ((video_scanlinez=video_scanline)==1) // do we have to redo the secondary scanlines?
 		{
@@ -418,8 +418,7 @@ int puff_read(int n) // reads N bits from source; <0 ERROR
 	int buff=puff_buff,bits=puff_bits; // local copies are faster
 	while (bits<n)
 	{
-		if (puff_srco>=puff_srcl)
-			return -1; // source overrun!
+		if (puff_srco>=puff_srcl) return -1; // source overrun!
 		buff+=puff_src[puff_srco++]<<bits; // copy byte from source
 		bits+=8; // skip byte from source
 	}
@@ -443,63 +442,45 @@ int puff_decode(struct puff_huff *h) // decodes Huffman code from source; <0 ERR
 			}
 			i+=o,base=(base+o)<<1,code<<=1,++l; // calculate next interval
 		}
-		if (!(bits=(15+1)-l))
-			return -1; // invalid value!
-		if (puff_srco>=puff_srcl)
-			return -1; // source overrun!
+		if (!(bits=(15+1)-l)) return -1; // invalid value!
+		if (puff_srco>=puff_srcl) return -1; // source overrun!
 		buff=puff_src[puff_srco++]; // copy byte from source
-		if (bits>8)
-			bits=8; // flush source bits
+		if (bits>8) bits=8; // flush source bits
 	}
 }
 int puff_tables(struct puff_huff *h,short *l,int n) // generates Huffman tables from canonical table; !0 ERROR
 {
 	short o[15+1]; int i,a;
-	for (i=0;i<=15;++i)
-		h->cnt[i]=0; // reset all bit counts
-	for (i=0;i<n;++i)
-		++(h->cnt[l[i]]); // increase relevant bit counts
-	if (h->cnt[0]==n)
-		return 0; // already done!
-	for (a=i=1;i<=15;++i)
-		if ((a=(a<<1)-(h->cnt[i]))<0)
-			return a; // invalid value!
-	for (o[i=1]=0;i<15;++i)
-		o[i+1]=o[i]+h->cnt[i]; // reset all bit offsets
-	for (i=0;i<n;++i)
-		if (l[i])
-			h->sym[o[l[i]]++]=i; // define symbols from bit offsets
+	for (i=0;i<=15;++i) h->cnt[i]=0; // reset all bit counts
+	for (i=0;i<n;++i) ++(h->cnt[l[i]]); // increase relevant bit counts
+	if (h->cnt[0]==n) return 0; // already done!
+	for (a=i=1;i<=15;++i) if ((a=(a<<1)-(h->cnt[i]))<0) return a; // invalid value!
+	for (o[i=1]=0;i<15;++i) o[i+1]=o[i]+h->cnt[i]; // reset all bit offsets
+	for (i=0;i<n;++i) if (l[i]) h->sym[o[l[i]]++]=i; // define symbols from bit offsets
 	return a; // 0 if complete, >0 otherwise!
 }
-int puff_expand(struct puff_huff *puff_lcode,struct puff_huff *puff_ocode) // expands DEFLATE source into target; !0 ERROR
+const short puff_lcode0[2][32]={ // length constants; 0, 30 and 31 are reserved
+	{ 0,3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258 },
+	{ 0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0 }};
+const short puff_ocode0[2][32]={ // offset constants; 30 and 31 are reserved
+	{ 1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577 },
+	{ 0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13 }};
+int puff_expand(struct puff_huff *puff_lcode,struct puff_huff *puff_ocode) // decodes source into target; !0 ERROR
 {
-	static const short lcode[2][32]={ // length constants; 0, 30 and 31 are reserved
-		{ 0,3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258 },
-		{ 0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0 }};
-	static const short ocode[2][32]={ // offset constants; 30 and 31 are reserved
-		{ 1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577 },
-		{ 0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13 }};
-	int a,l,o;
-	for (;;)
+	int a,l,o; for (;;)
 	{
-		if ((a=puff_decode(puff_lcode))<0)
-			return a; // invalid value!
+		if ((a=puff_decode(puff_lcode))<0) return a; // invalid value!
 		if (a<256) // literal?
 		{
-			if (puff_tgto>=puff_tgtl)
-				return -1; // target overrun!
+			if (puff_tgto>=puff_tgtl) return -1; // target overrun!
 			puff_tgt[puff_tgto++]=a; // copy literal
 		}
 		else if (a-=256) // length:offset pair?
 		{
-			if (a>29)
-				return -1; // invalid value!
-			if (puff_tgto+(l=lcode[0][a]+puff_read(lcode[1][a]))>puff_tgtl)
-				return -1; // target overrun!
-			if ((a=puff_decode(puff_ocode))<0)
-				return a; // invalid value!
-			if ((o=puff_tgto-ocode[0][a]-puff_read(ocode[1][a]))<0)
-				return -1; // source underrun!
+			if (a>29) return -1; // invalid value!
+			if (puff_tgto+(l=puff_lcode0[0][a]+puff_read(puff_lcode0[1][a]))>puff_tgtl) return -1; // target overrun!
+			if ((a=puff_decode(puff_ocode))<0) return a; // invalid value!
+			if ((o=puff_tgto-puff_ocode0[0][a]-puff_read(puff_ocode0[1][a]))<0) return -1; // source underrun!
 			do puff_tgt[puff_tgto++]=puff_tgt[o++]; while (--l);
 		}
 		else return 0; // end of block
@@ -513,10 +494,8 @@ INLINE int puff_stored(void) // copies raw uncompressed byte block from source t
 	puff_buff=puff_bits=0; // ignore remaining bits
 	int l=puff_src[puff_srco++]; l+=puff_src[puff_srco++]<<8;
 	int k=puff_src[puff_srco++]; k+=puff_src[puff_srco++]<<8;
-	if (!l||l+k!=0xFFFF)
-		return -1; // invalid value!
-	if (puff_srco+l>puff_srcl||puff_tgto+l>puff_tgtl)
-		return -1; // source/target overrun!
+	if (!l||l+k!=0xFFFF) return -1; // invalid value!
+	if (puff_srco+l>puff_srcl||puff_tgto+l>puff_tgtl) return -1; // source/target overrun!
 	do puff_tgt[puff_tgto++]=puff_src[puff_srco++]; while (--l); // copy source to target and update pointers
 	return 0;
 }
@@ -524,16 +503,21 @@ short puff_lencnt[15+1],puff_lensym[288]; // 286 and 287 are reserved
 short puff_offcnt[15+1],puff_offsym[32]; // 30 and 31 are reserved
 struct puff_huff puff_lcode={ puff_lencnt,puff_lensym };
 struct puff_huff puff_ocode={ puff_offcnt,puff_offsym };
+short puff_tablez[288+32]; // 0..287 lengths, 288..319 offsets
+void puff_table0(void) // generates static Huffman bit counts
+{
+	int i=0; // lengths: 8 x144, 9 x112, 7 x24, 8 x8; offsets: 5 x32
+	for (;i<144;++i) puff_tablez[i]=8; // 000..143 : 00110000...10111111.
+	for (;i<256;++i) puff_tablez[i]=9; // 144..255 : 110010000..111111111
+	for (;i<280;++i) puff_tablez[i]=7; // 256..279 : 0000000....0010111..
+	for (;i<288;++i) puff_tablez[i]=8; // 280..287 : 11000000...11000111.
+	for (;i<288+32;++i) puff_tablez[i]=5;
+}
 INLINE int puff_static(void) // generates default Huffman codes and expands block from source to target; !0 ERROR
 {
-	short t[288+32]; int i=0;
-	for (;i<144;++i) t[i]=8;
-	for (;i<256;++i) t[i]=9;
-	for (;i<280;++i) t[i]=7;
-	for (;i<288;++i) t[i]=8;
-	for (;i<288+32;++i) t[i]=5;
-	puff_tables(&puff_lcode,t,288); // THERE MUST BE EXACTLY 288 LENGTH CODES!!
-	puff_tables(&puff_ocode,t+288,32); // CAN THERE BE AS FEW AS 30 OFFSET CODES??
+	puff_table0();
+	puff_tables(&puff_lcode,puff_tablez,288); // THERE MUST BE EXACTLY 288 LENGTH CODES!!
+	puff_tables(&puff_ocode,puff_tablez+288,32); // CAN THERE BE AS FEW AS 30 OFFSET CODES??
 	return puff_expand(&puff_lcode,&puff_ocode);
 }
 INLINE int puff_dynamic(void) // generates custom Huffman codes and expands block from source to target; !0 ERROR
@@ -542,7 +526,7 @@ INLINE int puff_dynamic(void) // generates custom Huffman codes and expands bloc
 	if ((l=puff_read(5)+257)<257||l>286||(o=puff_read(5)+1)<1||o>30||(h=puff_read(4)+4)<4)
 		return -1; // invalid value!
 	static const short hh[19]={ 16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15 }; // Huffman constants
-	while (i<h) t[hh[i++]]=puff_read(3); // read bit sizes for the Huffman-encoded header
+	while (i<h) t[hh[i++]]=puff_read(3); // read bit counts for the Huffman-encoded header
 	while (i<19) t[hh[i++]]=0; // padding
 	if (puff_tables(&puff_lcode,t,19)) // clear the remainder of this header
 		return -1; // invalid table!
@@ -554,33 +538,27 @@ INLINE int puff_dynamic(void) // generates custom Huffman codes and expands bloc
 		{
 			int z; if (a==16)
 			{
-				if (!i)
-					return -1; // invalid value!
-				z=t[i-1],a=3+puff_read(2); // copy last value 3+0..3 times
+				if (i<1) return -1; // invalid value!
+				z=t[i-1],a=3+puff_read(2); // copy last value 3..6 times
 			}
 			else if (a==17)
-				z=0,a=3+puff_read(3); // store zero 3+0..7 times
+				z=0,a=3+puff_read(3); // store zero 3..10 times
 			else // (a==18)
-				z=0,a=11+puff_read(7); // store zero 11+0..127 times
-			if (i+a>l+o)
-				return -1; // overflow!
-			while (a--)
-				t[i++]=z; // copy or store value
+				z=0,a=11+puff_read(7); // store zero 11..138 times
+			if (i+a>l+o) return -1; // overflow!
+			while (a--) t[i++]=z; // copy or store value
 		}
 	}
-	if (puff_tables(&puff_lcode,t,l)&&(l-puff_lcode.cnt[0]!=1))
-		return -1; // invalid length tables!
-	if (puff_tables(&puff_ocode,t+l,o)&&(o-puff_ocode.cnt[0]!=1))
-		return -1; // invalid offset tables!
+	if (puff_tables(&puff_lcode,t,l)&&(l-puff_lcode.cnt[0]!=1)) return -1; // invalid length tables!
+	if (puff_tables(&puff_ocode,t+l,o)&&(o-puff_ocode.cnt[0]!=1)) return -1; // invalid offset tables!
 	return puff_expand(&puff_lcode,&puff_ocode);
 }
-int puff_main(void) // inflates compressed source into target; !0 ERROR
+int puff_main(void) // inflates deflated source into target; !0 ERROR
 {
 	int q,e; puff_buff=puff_bits=0; // puff_srcX and puff_tgtX are set by caller
 	do
 	{
-		q=puff_read(1); // is this the last block?
-		switch (puff_read(2)) // which type of block it is?
+		q=puff_read(1); switch (puff_read(2)) // which type of block it is?
 		{
 			case 0: e=puff_stored(); break; // uncompressed raw bytes
 			case 1: e=puff_static(); break; // default Huffman coding
@@ -588,39 +566,111 @@ int puff_main(void) // inflates compressed source into target; !0 ERROR
 			default: e=1; break; // invalid value!
 		}
 	}
-	until (q|e);
+	while (!(q|e)); // is this the last block? did something go wrong?
 	return e;
 }
+// RFC1950 standard data decoder
 DWORD puff_adler32(BYTE *t,int o) // calculates Adler32 checksum of a block `t` of size `o`
 	{ int j=1,k=0; do if ((k+=(j+=*t++))>=65521) k%=65521,j%=65521; while (--o); return (k<<16)+j; }
-int puff_zlib(BYTE *t,int o,BYTE *s,int i) // inflates a RFC1950 standard ZLIB object; !0 ERROR
+int puff_zlib(BYTE *t,int o,BYTE *s,int i) // decodes a RFC1950 standard ZLIB object; !0 ERROR
 {
 	if (!s||!t||o<=0||i<=6) return -1; // NULL or empty source or target!
-	if (s[0]!=0X78||s[1]&32||(s[0]*256+s[1])%31) return -1; // wrong ZLIB flags!
-	puff_tgt=t; puff_tgtl=o; puff_src=&s[2]; puff_srcl=i; puff_tgto=puff_srco=0;
-	if (puff_main()) return -1; // decompression error!
-	return puff_adler32(t,o)!=mgetmmmm(&s[i-4]); // nonzero means a wrong checksum!
+	if (s[0]!=0X78||s[1]&32||(s[0]*256+s[1])%31) return -1; // wrong ZLIB prefix!
+	puff_tgt=t; puff_tgtl=o; puff_tgto=0; puff_src=s; puff_srcl=i-4; puff_srco=2;
+	return puff_main()||puff_adler32(t,o)!=mgetmmmm(&s[i-4]);
 }
-#if 0 // too minimal to be useful
-int huff_main(BYTE *t,int o,BYTE *s,int i) // deflates source into compressed target; <0 ERROR, >=0 OUTPUT LENGTH
+
+// the DEFLATE method! ... or (once again) a quick-and-dirty implementation
+// based on the RFC1951 standard and reusing bits from INFLATE functions.
+
+#ifdef DEFLATE_LEVEL
+int huff_stored(BYTE *t,int o,BYTE *s,int i) // the storage part of DEFLATE
 {
-	if (!t||!s||o<1||i<1) return -1; // NULL or empty!
-	BYTE *r=t; while (i>0x8000) // right now it doesn't compress anything; it simply stores into blocks, 32K maximum
+	if (o<=i+(i>>12)) return -1; // not enough room!
+	BYTE *r=t; while (i>32768) // cuts source into 32K blocks
 	{
-		if (o<5+0x8000) return -1; // not enough room!
-		*t++=0X00; *t++=0X00; *t++=0X80; *t++=0XFF; *t++=0X7F; // non-final uncompressed 32K block
-		memcpy(t,s,0X8000); t+=0X8000; s+=0X8000; i-=0X8000; o-=5+0X8000;
+		*t++=0; *t++=0; *t++=128; *t++=255; *t++=127; // non-final block
+		memcpy(t,s,32768); t+=32768; s+=32768; i-=32768;
 	}
-	if (o<5+i) return -1; // not enough room!
-	*t++=0X80; *t++=i; *t++=i>>8; *t++=~i; *t++=~i>>8; // final uncompressed <32K block
-	memcpy(t,s,i); return (t-r)+i;
+	*t++=1; *t++=i; *t++=i>>8; *t++=~i; *t++=~i>>8; // final block
+	memcpy(t,s,i); return puff_tgtl=(t-r)+i;
 }
-int huff_zlib(BYTE *t,int o,BYTE *s,int i) // deflates a RFC1950 standard ZLIB object; <0 ERROR, >=0 OUTPUT LENGTH
+#if DEFLATE_LEVEL > 0 // if you must save DEFLATE data and perform compression on it
+#if DEFLATE_LEVEL >= 9
+	#define DEFLATE_SHL 32768 // strongest compression and slowest performance!!
+#else
+	#define DEFLATE_SHL (64<<DEFLATE_LEVEL) // better than 32768*DEFLATE_LEVEL/9
+#endif
+// Huffman-bitwise operations
+void huff_write(int n,int i) // sends `n`-bit word `i` to bitstream
 {
-	if (!t||!s||(o-=6)<5||i<1) return -1; // NULL or empty!
-	BYTE *r=t; *t++=0X78; *t++=0XDA; // dummy ZLIB flags
-	if ((o=huff_main(t,o,s,i))<0) return -1; // not enough room for DEFLATE!
-	t+=o; *t++=(i=puff_adler32(s,i)); *t++=i>>8; *t++=i>>16; *t++=i>>24; return t-r;
+	puff_buff|=i<<puff_bits; puff_bits+=n; while (puff_bits>=8)
+		puff_tgt[puff_tgtl++]=puff_buff,puff_buff>>=8,puff_bits-=8;
+}
+struct puff_huff huff_lcode={ &puff_tablez[  0],puff_lensym };
+struct puff_huff huff_ocode={ &puff_tablez[288],puff_offsym };
+void huff_tables(struct puff_huff *h,short *l,int n) // generates Huffman output tables from canonical table
+{
+	for (int j=1,k=0;j<16;++j,k<<=1) for (int i=0;i<n;++i)
+		if (l[i]==j) // do the bit counts match?
+		{
+			int t=0,s=k++; // select Huffman item
+			for (int m=h->cnt[i]=j;m>0;--m) t=(t<<1)+(s&1),s>>=1;
+			h->sym[i]=t; // Huffman bits must be stored upside down
+		}
+}
+void huff_encode(struct puff_huff *h,int i) { huff_write(h->cnt[i],h->sym[i]); }
+void huff_append(const short h[2][32],int i,int z) { huff_write(h[1][i],z-h[0][i]); }
+// block type handling
+INLINE void huff_static(BYTE *t,BYTE *s,int i) // the compression part of DEFLATE
+{
+	int p=0,hash2s=0; static int hash2[256*256]; // too big, must be "static"
+	#define HUFF_HASH2(x) hash2[s[x+1]*256+s[x]] // cfr. "hash2[*(WORD*)(&s[x])]"
+	memset(hash2,-1,sizeof(hash2)); // reset the hash table to -1, right below zero
+	huff_write(3,3); puff_table0(); // tag the single block as "final" and "static"
+	huff_tables(&huff_lcode,puff_tablez,288); // 288 codes, but the last two are reserved
+	huff_tables(&huff_ocode,puff_tablez+288,32); // ditto, 32 codes but only 30 are valid
+	huff_encode(&huff_lcode,s[p++]); // first byte is always a literal
+	while (p+2<i)
+	{
+		while (hash2s<p) HUFF_HASH2(hash2s)=hash2s,++hash2s; // update hash table
+		int len=p+1,off=0,x=p-DEFLATE_SHL,y=p+258; if (x<0) x=0; if (y>i) y=i;
+		for (int o=HUFF_HASH2(p);o>=x;--o) // search: the slowest part of the function
+			if (s[o]==s[p]&&s[o+1]==s[p+1]&&s[o+2]==s[p+2]) // is there a match?
+			{
+				int cmp1=o+2,cmp2=p+2; while (++cmp2<y&&s[cmp2]==s[++cmp1]);
+				if (len<cmp2) if (off=p-o,(len=cmp2)>=y) break; // maximum?
+			}
+		if ((len-=p)>2)
+		{
+			p+=len; // greedy algorithm always chooses the longest match
+			for (x=len/9;x<29;++x) if (len<puff_lcode0[0][x+1]) break;
+			huff_encode(&huff_lcode,256+x); huff_append(puff_lcode0,x,len);
+			for (y=off/1130;y<29;++y) if (off<puff_ocode0[0][y+1]) break;
+			huff_encode(&huff_ocode,    y); huff_append(puff_ocode0,y,off);
+		}
+		else
+			huff_encode(&huff_lcode,s[p++]); // too short, store a literal
+	}
+	while (p<i) huff_encode(&huff_lcode,s[p++]); // last bytes (if any) are always literals
+	huff_encode(&huff_lcode,256); // store end marker
+}
+int huff_main(BYTE *t,int o,BYTE *s,int i) // deflates inflated source into target; <0 ERROR, >=0 LENGTH
+{
+	puff_tgt=t; puff_tgtl=puff_buff=puff_bits=0; // beware, a bitstream isn't a bytestream!
+	if (o>i+(i>>3)) { huff_static(t,s,i),huff_write(7,0); if (puff_tgtl<i) return puff_tgtl; }
+	return huff_stored(t,o,s,i); // the actual compression failed, fall back to storage
+}
+#else // if you must save DEFLATE data but don't want to perform any compression at all
+#define huff_main(t,o,s,i) huff_stored(t,o,s,i)
+#endif
+// RFC1950 standard data encoder
+int huff_zlib(BYTE *t,int o,BYTE *s,int i) // encodes a RFC1950 standard ZLIB object; <0 ERROR, >=0 LENGTH
+{
+	if (!t||!s||(o-=6)<=0||i<=0) return -1; // NULL or empty!
+	BYTE *r=t; *t++=0X78; *t++=0XDA; // compatible ZLIB prefix
+	if ((o=huff_main(t,o,s,i))<0) return -1; // out of memory!
+	mputmmmm(t+=o,puff_adler32(s,i)); return t+4-r;
 }
 #endif
 
@@ -680,10 +730,8 @@ int puff_open(char *s) // opens a new ZIP archive; !0 ERROR
 }
 int puff_head(void) // reads a ZIP file header, if any; !0 ERROR
 {
-	if (!puff_file)
-		return -1;
-	if (puff_gzip)
-		return --puff_gzip!=1; // header is already pre-made; can be read once, but not twice
+	if (!puff_file) return -1;
+	if (puff_gzip) return --puff_gzip!=1; // header is already pre-made; can be read once, but not twice
 	unsigned char h[46];
 	fseek(puff_file,puff_diff+puff_next,SEEK_SET);
 	if (fread(h,1,sizeof(h),puff_file)!=sizeof(h)||memcmp(h,"PK\001\002",4)||h[11]||!h[28]||h[29])//||(h[8]&8)
@@ -708,10 +756,8 @@ int puff_head(void) // reads a ZIP file header, if any; !0 ERROR
 }
 int puff_body(int q) // loads (!0) or skips (0) a ZIP file body; !0 ERROR
 {
-	if (!puff_file)
-		return -1;
-	if (puff_tgtl<1)
-		q=0; // no data, can safely skip the source
+	if (!puff_file) return -1;
+	if (puff_tgtl<1) q=0; // no data, can safely skip the source
 	if (q)
 	{
 		if (puff_srcl<1||puff_tgtl<0)
@@ -736,10 +782,9 @@ int puff_body(int q) // loads (!0) or skips (0) a ZIP file body; !0 ERROR
 // simple ANSI X3.66
 unsigned int puff_dohash(unsigned int k,unsigned char *s,int l)
 {
-	static unsigned int z[]= {0,0x1DB71064,0x3B6E20C8,0x26D930AC,0x76DC4190,0x6B6B51F4,0x4DB26158,0x5005713C,
+	static const unsigned int z[]= {0,0x1DB71064,0x3B6E20C8,0x26D930AC,0x76DC4190,0x6B6B51F4,0x4DB26158,0x5005713C,
 		0xEDB88320,0xF00F9344,0xD6D6A3E8,0xCB61B38C,0x9B64C2B0,0x86D3D2D4,0xA00AE278,0xBDBDF21C}; // precalc'd!
-	for (int i=0;i<l;++i)
-		k^=s[i],k=(k>>4)^z[k&15],k=(k>>4)^z[k&15];
+	for (int i=0;i<l;++i) k^=s[i],k=(k>>4)^z[k&15],k=(k>>4)^z[k&15];
 	return k;
 }
 // ZIP-aware fopen()
@@ -767,7 +812,7 @@ FILE *puff_fopen(char *s,char *m) // mimics fopen(), so NULL on error, *FILE oth
 	z+=strlen(PUFF_STR);
 	if (!multiglobbing(puff_pattern,puff_path,1)||puff_open(puff_path))
 		return 0;
-	until (puff_head()) // scan archive; beware, the insides MUST BE case sensitive!
+	while (!puff_head()) // scan archive; beware, the insides MUST BE case sensitive!
 		//#ifdef _WIN32
 		//if (!strcasecmp(puff_name,z)) // `strcasecmp` cannot be here, not even on _WIN32: this isn't a general purpose ZIP reader
 		//#else
@@ -816,7 +861,7 @@ char *puff_session_subdialog(char *r,char *s,char *t,char *zz,int qq) // let the
 	int l=0,i=-1; // number of files, default selection
 	if (puff_open(strcpy(rr,r))) // error?
 		return NULL;
-	until (puff_head())
+	while (!puff_head())
 	{
 		if (puff_name[strlen(puff_name)-1]!='/') // file or folder?
 			if (multiglobbing(s,puff_name,1))
@@ -883,7 +928,7 @@ VIDEO_UNIT onscreen_ink0,onscreen_ink1; BYTE onscreen_flag=1;
 void onscreen_char(int x,int y,int z) // draw a 7-bit character; the eighth bit is the INVERSE flag
 {
 	ONSCREEN_XY; int q=z&128?-1:0;
-	unsigned const char *zz=&onscreen_chrs[(z&127)*ONSCREEN_SIZE];
+	const unsigned char *zz=&onscreen_chrs[(z&127)*ONSCREEN_SIZE];
 	for (y=0;y<ONSCREEN_SIZE;++y)
 	{
 		int bb=*zz++; bb|=bb>>1; // normal, rather than thin or bold
@@ -932,7 +977,8 @@ void onscreen_bool(int x,int y,int lx,int ly,int q) // draw dots
 #define KBDBG_SPC	32
 #define KBDBG_SPC_S	160 // cfr. "non-breaking space"
 #define KBDBG_ESCAPE	27
-#define KBDBG_CLICK	128
+#define KBDBG_CLOSE	128
+#define KBDBG_CLICK	129
 int debug_xlat(int k) // turns non-alphanumeric keypresses (-1 for mouse click) into pseudo-ASCII codes
 { switch (k) {
 	case -1: return KBDBG_CLICK;
@@ -1361,7 +1407,7 @@ void session_configwrite(FILE *f) // save common parameters
 		);
 }
 
-void session_cleanup(void) // final cleanup before `session_byebye`
+void session_wrapup(void) // final operations before `session_byebye`
 {
 	puff_byebye();
 	session_closefilm();

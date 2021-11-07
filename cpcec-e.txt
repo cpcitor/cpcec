@@ -948,3 +948,10 @@ speedup of both CPCEC and ZXSEC, and adding the 64-colour ULAplus extension for
 Spectrum, as well as the ability to read SP and SZX snapshots.
 - 20211004 -- minor patch fixing a bug in ZXSEC, the Z80 snapshot loader wasn't
 checking properly the integrity of 48K compressed blocks.
+- 20211105 -- minor patch adding PZX file support to ZXSEC and reorganising the
+tape handling code (the TZX1 blocks JUMP, CALL and RETURN from are properly
+handled), improving the Pentagon video logic ("Across the Edge" and "Rage" show
+their pixel-precise border effects), making the CPCEC option "Strict SNA files"
+write V2 snapshots when enabled, and simplifying the $EDA0-$EDBB Z80 opcode
+block. Experimental compile-time options include saving SZX snapshots from ZXSEC
+and reading Kansas City blocks from CDT and TZX files.

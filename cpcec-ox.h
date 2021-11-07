@@ -98,7 +98,7 @@ BYTE session_paused=0,session_signal=0,session_version[8];
 #define SESSION_SIGNAL_FRAME 1
 #define SESSION_SIGNAL_DEBUG 2
 #define SESSION_SIGNAL_PAUSE 4
-BYTE session_dirtymenu=1; // to force new status text
+BYTE session_dirty=1; // to force new status text
 
 #define kbd_bit_set(k) (kbd_bit[k>>3]|=1<<(k&7))
 #define kbd_bit_res(k) (kbd_bit[k>>3]&=~(1<<(k&7)))
@@ -342,7 +342,7 @@ void session_togglefullscreen(void)
 {
 	SDL_SetWindowFullscreen(session_hwnd,session_fullscreen=((SDL_GetWindowFlags(session_hwnd)&SDL_WINDOW_FULLSCREEN_DESKTOP)?0:SDL_WINDOW_FULLSCREEN_DESKTOP));
 	session_clrscr(); // SDL2 cleans up, but not on all systems
-	session_dirtymenu=1; // update "Full screen" option (if any)
+	session_dirty=1; // update "Full screen" option (if any)
 }
 
 #ifdef SDL2_UTF8
@@ -373,17 +373,15 @@ int utf8chk(int i) // size in bytes of a valid UTF-8 code `i`; 0 ERROR
 	{ return i&-2097152?0:i<128?1:i<2048?2:i<65536?3:4; }
 int utf8add(char *s,int i) // get offset `i` within a valid UTF-8 pointer `s`
 {
-	char *r=s; if (i>0) do { while (*++s<-64) ; } while (--i);
-	else if (i<0) do { while (*--s<-64) ; } while (++i); return s-r;
+	char *r=s; if (i>0) { do { if (*s) while (*++s<-64) ; } while (--i); }
+	else if (i<0) { do { while (*--s<-64) ; } while (++i); } return s-r;
 }
-#define utf8tst(s) (((char)*s)>=-64)
 #else
 #define utf8put(s,i) (*((*(s))++)=i)
 #define utf8get(s) (*((*(s))++))
 #define utf8len(s) strlen((s))
 #define utf8chk(i) (1)
 #define utf8add(s,i) (i)
-#define utf8tst(s) (1)
 #endif
 
 // extremely tiny graphical user interface: SDL2 provides no widgets! //
@@ -698,7 +696,7 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 			if (menuz!=menu)
 				session_ui_loop(); // redrawing the items doesn't need any wiping, unlike the menus
 		}
-		until (done);
+		while (!done);
 	}
 	while (session_event==0x8000&&done>0); // empty menu items must be ignored, unless we're quitting
 	session_ui_exit();
@@ -778,9 +776,12 @@ int session_ui_text(char *s,char *t,char q) // see session_message
 		//for (int z=0;z<q;++z) session_ui_fillrect(textx+z,texty+1,1,texth-1,0x00010101*((0xFF*z+0xC0*(q-z)+q/2)/q)); // gradient!
 		VIDEO_UNIT *tgt=&menus_frame[(texty+2)*SESSION_UI_HEIGHT*VIDEO_PIXELS_X+(textx+1)*8];
 		for (int z=0,y=0;y<32;++y,tgt+=VIDEO_PIXELS_X-32)
-			for (int a,x=0;x<32;++x,++tgt)
-				if ((a=session_icon32xx16[z++])&0x8000) // crude alpha channel
-					*tgt=(a&0x00F)*0x11+(a&0x0F0)*0x110+(a&0xF00)*0x1100; // from 0X0RGB to 0X00RRGGBB
+			for (int a,i,o,x=0;x<32;++x,++tgt)
+			{
+				a=(i=session_icon32xx16[z++])&0xF000; if ((a>>=12)>=8) ++a; i=(i&0xF00)*0x1100+(i&0xF0)*0x110+(i&0xF)*0x11; o=*tgt;
+				*tgt=(i>o?(((i&0XFF00FF)*a+(o&0XFF00FF)*(16-a)+0X10001)&0XFF00FF0)+(((i&0XFF00)*a+(o&0XFF00)*(16-a)+0X100)&0XFF000)
+					:(((i&0XFF00FF)*a+(o&0XFF00FF)*(16-a))&0XFF00FF0)+(((i&0XFF00)*a+(o&0XFF00)*(16-a))&0XFF000))>>4;
+			}
 	}
 	session_redraw(0);
 	for (;;)
@@ -831,13 +832,13 @@ int session_ui_input(char *s,char *t) // see session_input
 		switch (dirty=session_ui_exchange())
 		{
 			case KBCODE_LEFT:
-				if (q||(i+=utf8add(&session_substr[i],-1))<0)
+				if (q||i<=0||(i+=utf8add(&session_substr[i],-1))<0)
 			case KBCODE_HOME:
 					i=0;
 				q=0;
 				break;
 			case KBCODE_RIGHT:
-				if (q||(i+=utf8add(&session_substr[i],+1))>j)
+				if (q||i>=j||(i+=utf8add(&session_substr[i],+1))>j)
 			case KBCODE_END:
 					i=j;
 				q=0;
@@ -848,10 +849,12 @@ int session_ui_input(char *s,char *t) // see session_input
 					j=-1,done=1; // quit!
 				else if (session_ui_maus_y==1)
 				{
-					q=0; if ((i=utf8add(session_substr,session_ui_maus_x-1))>j)
+					q=0; if (session_ui_maus_x>j)
 						i=j;
-					else if (i<0)
+					else if (session_ui_maus_x<=1||(i=utf8add(session_substr,session_ui_maus_x-1))<0)
 						i=0;
+					else if (i>j)
+						i=j;
 				}
 				break;
 			case KBCODE_ESCAPE:
@@ -894,7 +897,7 @@ int session_ui_input(char *s,char *t) // see session_input
 				break;
 		}
 	}
-	until (done);
+	while (!done);
 	if (j>=0)
 		strcpy(s,session_substr);
 	session_ui_exit();
@@ -1068,7 +1071,7 @@ int session_ui_list(int item,char *s,char *t,void x(void),int q) // see session_
 				break;
 		}
 	}
-	until (done);
+	while (!done);
 	if (item>=0)
 		strcpy(session_parmtr,z);
 	session_ui_exit();
@@ -1140,8 +1143,8 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 			do
 				if (!(wfd.dwFileAttributes&FILE_ATTRIBUTE_HIDDEN)&&(wfd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)) // reject invisible directories
 					if (strcmp(n=wfd.cFileName,".")&&strcmp(n,"..")) // add directory name with the separator at the end
-						if (utf8tst(n)) ++i,m=&half[sortedinsert(half,m-half,session_ui_filedialog_sanitizepath(n))];
-			while (FindNextFile(h,&wfd)&&m-(char *)session_scratch<sizeof(session_scratch)-STRMAX);
+						++i,m=&half[sortedinsert(half,m-half,session_ui_filedialog_sanitizepath(n))];
+			while (FindNextFile(h,&wfd)&&m-(char*)session_scratch<sizeof(session_scratch)-STRMAX);
 			FindClose(h);
 		}
 		half=m;
@@ -1150,8 +1153,8 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 			do
 				if (!(wfd.dwFileAttributes&FILE_ATTRIBUTE_HIDDEN)&&!(wfd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)) // reject invisible files
 					if (multiglobbing(s,n=wfd.cFileName,1)) // add file name
-						if (utf8tst(n)) ++i,m=&half[sortedinsert(half,m-half,n)];
-			while (FindNextFile(h,&wfd)&&m-(char *)session_scratch<sizeof(session_scratch)-STRMAX);
+						++i,m=&half[sortedinsert(half,m-half,n)];
+			while (FindNextFile(h,&wfd)&&m-(char*)session_scratch<sizeof(session_scratch)-STRMAX);
 			FindClose(h);
 		}
 		#else
@@ -1166,19 +1169,19 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 		char *half=m;
 		if (d=opendir(basepath))
 		{
-			while ((e=readdir(d))&&m-(char *)session_scratch<sizeof(session_scratch)-STRMAX)
+			while ((e=readdir(d))&&m-(char*)session_scratch<sizeof(session_scratch)-STRMAX)
 				if (n=e->d_name,*n!='.') // reject ".*"
 					if (getftype(strcat(strcpy(basefind,basepath),n))>0) // add directory name with the separator at the end
-						if (utf8tst(n)) ++i,m=&half[sortedinsert(half,m-half,session_ui_filedialog_sanitizepath(n))];
+						++i,m=&half[sortedinsert(half,m-half,session_ui_filedialog_sanitizepath(n))];
 			closedir(d);
 		}
 		half=m;
 		if (d=opendir(basepath))
 		{
-			while ((e=readdir(d))&&m-(char *)session_scratch<sizeof(session_scratch)-STRMAX)
+			while ((e=readdir(d))&&m-(char*)session_scratch<sizeof(session_scratch)-STRMAX)
 				if (n=e->d_name,*n!='.'&&multiglobbing(s,n,1)) // reject ".*"
 					if (!getftype(strcat(strcpy(basefind,basepath),n))) // add file name
-						if (utf8tst(n)) ++i,m=&half[sortedinsert(half,m-half,n)];
+						++i,m=&half[sortedinsert(half,m-half,n)];
 			closedir(d);
 		}
 		#endif
@@ -1274,13 +1277,13 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	SDL_version sdl_version; SDL_SetMainReady();
 	SDL_GetVersion(&sdl_version); sprintf(session_version,"%d.%d.%d",sdl_version.major,sdl_version.minor,sdl_version.patch);
 	if (SDL_Init(SDL_INIT_EVENTS|SDL_INIT_VIDEO|SDL_INIT_AUDIO|SDL_INIT_TIMER|SDL_INIT_JOYSTICK|SDL_INIT_GAMECONTROLLER)<0)
-		return (char *)SDL_GetError();
+		return (char*)SDL_GetError();
 	if (!(session_hwnd=SDL_CreateWindow(NULL,SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,0))
 		||!(video_blend=malloc(sizeof(VIDEO_UNIT)*VIDEO_PIXELS_Y/2*VIDEO_PIXELS_X)))
-		return SDL_Quit(),(char *)SDL_GetError();
+		return SDL_Quit(),(char*)SDL_GetError();
 	if (session_hardblit=1,session_softblit||!(session_blitter=SDL_CreateRenderer(session_hwnd,-1,SDL_RENDERER_ACCELERATED)))
 		if (session_hardblit=0,session_softblit=1,!(session_blitter=SDL_CreateRenderer(session_hwnd,-1,SDL_RENDERER_SOFTWARE)))
-			return SDL_Quit(),(char *)SDL_GetError(); // give up if neither hard or soft blit cannot be allocated!
+			return SDL_Quit(),(char*)SDL_GetError(); // give up if neither hard or soft blit cannot be allocated!
 
 	SDL_SetRenderTarget(session_blitter,NULL); // necessary?
 	// ARGB8888 equates to masks A = 0xFF000000, R = 0x00FF0000, G = 0x0000FF00, B = 0x000000FF ; it provides the best performance AFAIK.
@@ -1427,11 +1430,11 @@ int session_pad2bit(int i) // translate motions and buttons into codes
 			return 0;
 	}
 }
-void session_redomenu(void); // set the current menu flags. Must be defined later on!
+void session_clean(void); // clean "dirty" settings. Must be defined later on!
 INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 {
 	static int s=0;	if (s!=session_signal) // catch DEBUG and PAUSE
-		s=session_signal,session_dirtymenu=1;
+		s=session_signal,session_dirty=1;
 	if (session_signal&(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE))
 	{
 		if (session_signal&SESSION_SIGNAL_DEBUG)
@@ -1572,12 +1575,12 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 		else if (session_event)
 		{
 			if (!((session_signal&SESSION_SIGNAL_DEBUG)&&session_debug_user(session_event)))
-				session_user(session_event),session_dirtymenu=1;
+				session_user(session_event),session_dirty=1;
 			session_event=0;
 		}
 	}
-	if (session_dirtymenu)
-		session_dirtymenu=0,session_redomenu();
+	if (session_dirty)
+		session_dirty=0,session_clean();
 	return 0;
 }
 
@@ -1656,10 +1659,14 @@ INLINE void session_render(void) // update video, audio and timers
 	}
 }
 
+INLINE void session_wrapup(void); // clean runtime stuff up
 INLINE void session_byebye(void) // delete video+audio devices
 {
-	if (session_joy) session_pad?SDL_GameControllerClose(session_joy):SDL_JoystickClose(session_joy);
-	if (session_audio) SDL_ClearQueuedAudio(session_audio),SDL_CloseAudioDevice(session_audio);
+	session_wrapup();
+	if (session_joy)
+		session_pad?SDL_GameControllerClose(session_joy):SDL_JoystickClose(session_joy);
+	if (session_audio)
+		SDL_ClearQueuedAudio(session_audio),SDL_CloseAudioDevice(session_audio);
 	SDL_StopTextInput();
 	SDL_UnlockTexture(session_dib);
 	SDL_DestroyTexture(session_dib);
@@ -1702,7 +1709,7 @@ void session_writebitmap(FILE *f,int half) // write current OS-dependent bitmap 
 		}
 		else
 		{
-			BYTE *t=r,*s=(BYTE *)session_getscanline(i);
+			BYTE *t=r,*s=(BYTE*)session_getscanline(i);
 			for (int j=0;j<VIDEO_PIXELS_X;++j) // turn ARGB (32 bits) into RGB (24 bits)
 			{
 				#if SDL_BYTEORDER == SDL_BIG_ENDIAN

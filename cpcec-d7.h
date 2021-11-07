@@ -76,8 +76,7 @@ int disc_open(char *s,int drive,int canwrite) // open a disc file. `s` path, `dr
 	disc_track_reset(drive);
 	if (q)
 		disc_close(drive); // unknown disc format!
-	else if (disc_path!=s)
-		strcpy(disc_path,s); // valid format
+	else if (disc_path!=s) strcpy(disc_path,s); // valid format
 	return q;
 }
 
@@ -891,13 +890,11 @@ BYTE disc_data_info(void) // STATUS
 	BYTE i=0x80; // bit 7: Data Register Ready
 	if (disc_phase) // is the FDC busy at all? (any phases but 0)
 	{
-		i+=0x10; // bit 4: Busy
-		//if (disc_phase&2) // is the FDC performing reads or writes (phases 2 and 3)
+		i+=0x10; //if (disc_phase&2) // bit 4: Busy; is the FDC performing reads or writes (phases 2 and 3)
 		{
 			if (disc_delay)
 				--disc_delay,i=0x10; // bit 4 minus bit 7
-			else
-			if (disc_phase&2) // is the FDC performing reads or writes (phases 2 and 3)
+			else if (disc_phase&2) // is the FDC performing reads or writes (phases 2 and 3)
 				i+=0x20; // bit 5: Reading or Writing
 		}
 		if (disc_phase>2) // is the FDC sending bytes to the CPU? (phases 3 and 4)

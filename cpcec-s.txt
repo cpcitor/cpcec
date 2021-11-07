@@ -1012,3 +1012,11 @@ y añade la extensión ULAplus de 64 colores para Spectrum, así como la capacid
 de leer snapshots SP y SZX.
 - 20211004 -- parche menor que corrige un error en ZXSEC, el cargador de
 snapshots Z80 comprobaba mal la integridad de los bloques comprimiddos de 48K.
+- 20211105 -- parche menor que añade soporte de ficheros PZX para ZXSEC y
+reorganiza el código de lectura de cinta (los bloques JUMP, CALL y RETURN de
+TZX1 se manejan debidamente), mejora la lógica de vídeo del Pentagon ("Across
+the Edge" y "Rage" muestran sus efectos de border al píxel), hace que la opción
+"Strict SNA files" de CPCEC escriba snapshots v2 al activarse, y simplifica el
+bloque de operaciones $EDA0-$EDBB del Z80. Las opciones experimentales de tiempo
+de compilación incluyen escribir snapshots SZX desde ZXSEC y leer los bloques
+Kansas City de ficheros CDT y TZX.
