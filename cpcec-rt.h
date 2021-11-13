@@ -467,7 +467,7 @@ const short puff_ocode0[2][32]={ // offset constants; 30 and 31 are reserved
 	{ 0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13 }};
 int puff_expand(struct puff_huff *puff_lcode,struct puff_huff *puff_ocode) // decodes source into target; !0 ERROR
 {
-	int a,l,o; for (;;)
+	for (int a,l,o;;)
 	{
 		if ((a=puff_decode(puff_lcode))<0) return a; // invalid value!
 		if (a<256) // literal?
@@ -569,6 +569,7 @@ int puff_main(void) // inflates deflated source into target; !0 ERROR
 	while (!(q|e)); // is this the last block? did something go wrong?
 	return e;
 }
+#ifdef INFLATE_RFC1950
 // RFC1950 standard data decoder
 DWORD puff_adler32(BYTE *t,int o) // calculates Adler32 checksum of a block `t` of size `o`
 	{ int j=1,k=0; do if ((k+=(j+=*t++))>=65521) k%=65521,j%=65521; while (--o); return (k<<16)+j; }
@@ -579,6 +580,7 @@ int puff_zlib(BYTE *t,int o,BYTE *s,int i) // decodes a RFC1950 standard ZLIB ob
 	puff_tgt=t; puff_tgtl=o; puff_tgto=0; puff_src=s; puff_srcl=i-4; puff_srco=2;
 	return puff_main()||puff_adler32(t,o)!=mgetmmmm(&s[i-4]);
 }
+#endif
 
 // the DEFLATE method! ... or (once again) a quick-and-dirty implementation
 // based on the RFC1951 standard and reusing bits from INFLATE functions.
@@ -624,7 +626,7 @@ void huff_append(const short h[2][32],int i,int z) { huff_write(h[1][i],z-h[0][i
 // block type handling
 INLINE void huff_static(BYTE *t,BYTE *s,int i) // the compression part of DEFLATE
 {
-	int p=0,hash2s=0; static int hash2[256*256]; // too big, must be "static"
+	int p=0,hash2s=0; static int hash2[256*256]; // too big, must be "static" :-(
 	#define HUFF_HASH2(x) hash2[s[x+1]*256+s[x]] // cfr. "hash2[*(WORD*)(&s[x])]"
 	memset(hash2,-1,sizeof(hash2)); // reset the hash table to -1, right below zero
 	huff_write(3,3); puff_table0(); // tag the single block as "final" and "static"
@@ -644,9 +646,9 @@ INLINE void huff_static(BYTE *t,BYTE *s,int i) // the compression part of DEFLAT
 		if ((len-=p)>2)
 		{
 			p+=len; // greedy algorithm always chooses the longest match
-			for (x=len/9;x<29;++x) if (len<puff_lcode0[0][x+1]) break;
+			for (x=len/   9;x<29;++x) if (len<puff_lcode0[0][x+1]) break; //    9=(  258/30)+1
 			huff_encode(&huff_lcode,256+x); huff_append(puff_lcode0,x,len);
-			for (y=off/1130;y<29;++y) if (off<puff_ocode0[0][y+1]) break;
+			for (y=off/1093;y<29;++y) if (off<puff_ocode0[0][y+1]) break; // 1093=(32768/30)+1
 			huff_encode(&huff_ocode,    y); huff_append(puff_ocode0,y,off);
 		}
 		else
@@ -664,6 +666,7 @@ int huff_main(BYTE *t,int o,BYTE *s,int i) // deflates inflated source into targ
 #else // if you must save DEFLATE data but don't want to perform any compression at all
 #define huff_main(t,o,s,i) huff_stored(t,o,s,i)
 #endif
+#ifdef DEFLATE_RFC1950
 // RFC1950 standard data encoder
 int huff_zlib(BYTE *t,int o,BYTE *s,int i) // encodes a RFC1950 standard ZLIB object; <0 ERROR, >=0 LENGTH
 {
@@ -672,6 +675,7 @@ int huff_zlib(BYTE *t,int o,BYTE *s,int i) // encodes a RFC1950 standard ZLIB ob
 	if ((o=huff_main(t,o,s,i))<0) return -1; // out of memory!
 	mputmmmm(t+=o,puff_adler32(s,i)); return t+4-r;
 }
+#endif
 #endif
 
 // standard ZIP v2.0 archive reader that relies on
@@ -745,12 +749,10 @@ int puff_head(void) // reads a ZIP file header, if any; !0 ERROR
 	puff_next+=46+h[28]+mgetii(&h[30])+mgetii(&h[32]); // next ZIP file header
 	puff_name[fread1(puff_name,h[28],puff_file)]=0;
 	#if PATHCHAR != '/' // ZIP archives use the UNIX style
-		char *s=puff_name;
-		while (*s)
-		{
+		char *s=puff_name; // this will never be blank
+		do
 			if (*s=='/') *s=PATHCHAR;
-			++s;
-		}
+		while (*++s);
 	#endif
 	return 0;
 }
@@ -1128,6 +1130,8 @@ unsigned int session_savenext(char *z,unsigned int i) // scans for available fil
 	return i;
 }
 
+// multimedia: audio file output ------------------------------------ //
+
 unsigned char waveheader[44]="RIFF____WAVEfmt \020\000\000\000\001\000\000\000________\000\000\000\000data";
 unsigned int session_nextwave=1,session_wavesize;
 int session_createwave(void) // create a wave file; !0 ERROR
@@ -1160,7 +1164,7 @@ int session_closewave(void) // close a wave file; !0 ERROR
 	return 1;
 }
 
-// extremely primitive video+audio output! -------------------------- //
+// multimedia: extremely primitive video+audio output! -------------- //
 
 unsigned int session_nextfilm=1,session_filmfreq,session_filmcount;
 BYTE session_filmflag,session_filmscale=1,session_filmtimer=1,session_filmalign; // format options
@@ -1336,6 +1340,8 @@ int session_closefilm(void) // stop recording video and audio; !0 ERROR
 	return fclose(session_filmfile),session_filmfile=NULL,0;
 }
 
+// multimedia: screenshot output ------------------------------------ //
+
 unsigned char bitmapheader[54]="BM\000\000\000\000\000\000\000\000\066\000\000\000\050\000\000\000\000\000\000\000\000\000\000\000\001\000\030\000";
 unsigned int session_nextbitmap=1;
 INLINE int session_savebitmap(void) // save a RGB888 bitmap file; !0 ERROR
@@ -1345,14 +1351,51 @@ INLINE int session_savebitmap(void) // save a RGB888 bitmap file; !0 ERROR
 	FILE *f;
 	if (!(f=fopen(session_parmtr,"wb")))
 		return 1; // cannot create file!
-
 	int i=VIDEO_PIXELS_X*VIDEO_PIXELS_Y*3>>(2*session_filmscale);
 	mputiiii(&bitmapheader[0x02],sizeof(bitmapheader)+i);
 	mputii(&bitmapheader[0x12],VIDEO_PIXELS_X>>session_filmscale);
 	mputii(&bitmapheader[0x16],VIDEO_PIXELS_Y>>session_filmscale);
 	mputiiii(&bitmapheader[0x22],i);
 	fwrite(bitmapheader,1,sizeof(bitmapheader),f);
-	session_writebitmap(f,session_filmscale); // conversion can be OS-dependent!
+
+	static BYTE r[VIDEO_PIXELS_X*3]; // target scanline buffer
+	for (i=VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-session_filmscale-1;i>=VIDEO_OFFSET_Y;fwrite(r,1,VIDEO_PIXELS_X*3>>session_filmscale,f),i-=session_filmscale+1)
+		if (session_filmscale)
+		{
+			BYTE *t=r; VIDEO_UNIT *s=session_getscanline(i);
+			for (int j=0;j<VIDEO_PIXELS_X;j+=2) // turn two ARGB into one RGB
+			{
+				VIDEO_UNIT v=VIDEO_FILTER_HALF(s[0],s[1]);
+				#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+				*t++=v>>24, // copy B
+				*t++=v>>16, // copy G
+				*t++=v>>8, // copy R
+				#else
+				*t++=v, // copy B
+				*t++=v>>8, // copy G
+				*t++=v>>16, // copy R
+				#endif
+				s+=2;
+			}
+		}
+		else
+		{
+			BYTE *t=r,*s=(BYTE*)session_getscanline(i);
+			for (int j=0;j<VIDEO_PIXELS_X;++j) // turn each ARGB into one RGB
+			{
+				#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+				*t++=s[3], // copy B
+				*t++=s[2], // copy G
+				*t++=s[1], // copy R
+				s+=4; // skip A
+				#else
+				*t++=*s++, // copy B
+				*t++=*s++, // copy G
+				*t++=*s++, // copy R
+				s++; // skip A
+				#endif
+			}
+		}
 	return fclose(f),0;
 }
 
@@ -1387,8 +1430,8 @@ char *session_configread(unsigned char *t) // reads configuration file; t points
 	if (*s) // handle common parameters, unless empty
 	{
 		if (!strcasecmp(t,"polyphony")) return audio_mixmode=*s&3,NULL;
-		if (!strcasecmp(t,"scanlines")) return video_scanline=*s&3,video_scanblend=*s&4,NULL;
 		if (!strcasecmp(t,"softaudio")) return audio_filter=*s&3,NULL;
+		if (!strcasecmp(t,"scanlines")) return video_scanline=*s&3,video_scanblend=*s&4,NULL;
 		if (!strcasecmp(t,"softvideo")) return video_filter=*s&7,NULL;
 		if (!strcasecmp(t,"zoomvideo")) return session_intzoom=*s&1,NULL;
 		if (!strcasecmp(t,"safevideo")) return session_softblit=*s&1,NULL;

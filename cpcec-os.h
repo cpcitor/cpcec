@@ -289,7 +289,7 @@ unsigned char kbd_map[256]; // key-to-key translation map
 // general engine functions and procedures -------------------------- //
 
 void session_user(int k); // handle the user's commands; must be defined later on!
-void session_debug_show(void);
+void session_debug_show(void); // redraw the debugger text; must be defined later on, too!
 int session_debug_user(int k); // debug logic is a bit different: 0 UNKNOWN COMMAND, !0 OK
 int debug_xlat(int k); // translate debug keys into codes. Must be defined later on!
 INLINE void audio_playframe(int q,AUDIO_UNIT *ao); // handle the sound filtering; is defined in CPCEC-RT.H!
@@ -758,6 +758,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 	return 0;
 }
 
+#define session_getscanline(i) (&video_frame[i*VIDEO_LENGTH_X+VIDEO_OFFSET_X]) // pointer to scanline `i`
 void session_writewave(AUDIO_UNIT *t); // save the current sample frame. Must be defined later on!
 FILE *session_filmfile=NULL; void session_writefilm(void); // must be defined later on, too!
 INLINE void session_render(void) // update video, audio and timers
@@ -886,34 +887,6 @@ INLINE void session_byebye(void) // delete video+audio devices
 	if (session_dib) DeleteObject(session_dib);
 	ReleaseDC(session_hwnd,session_dc1);
 	free(video_blend);
-}
-
-#define session_getscanline(i) (&video_frame[i*VIDEO_LENGTH_X+VIDEO_OFFSET_X]) // no transformations required, VIDEO_UNIT is ARGB8888
-void session_writebitmap(FILE *f,int half) // write current OS-dependent bitmap into a RGB888 BMP file
-{
-	static BYTE r[VIDEO_PIXELS_X*3];
-	for (int i=VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-half-1;i>=VIDEO_OFFSET_Y;fwrite(r,1,VIDEO_PIXELS_X*3>>half,f),i-=half+1)
-		if (half)
-		{
-			BYTE *t=r; VIDEO_UNIT *s=session_getscanline(i);
-			for (int j=0;j<VIDEO_PIXELS_X;j+=2) // soft scale 2x RGBA (32 bits) into 1x RGB (24 bits)
-			{
-				VIDEO_UNIT v=VIDEO_FILTER_HALF(s[0],s[1]);
-				*t++=v, // copy B
-				*t++=v>>8, // copy G
-				*t++=v>>16, // copy R
-				s+=2;
-			}
-		}
-		else
-		{
-			BYTE *t=r,*s=(BYTE*)session_getscanline(i);
-			for (int j=0;j<VIDEO_PIXELS_X;++j) // turn RGBA (32 bits) into RGB (24 bits)
-				*t++=*s++, // copy B
-				*t++=*s++, // copy G
-				*t++=*s++, // copy R
-				s++; // skip A
-		}
 }
 
 // menu item functions ---------------------------------------------- //

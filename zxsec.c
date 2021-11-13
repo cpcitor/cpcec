@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20211105"//"2555"
+#define MY_VERSION "20211111"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -112,7 +112,9 @@ unsigned char kbd_joy[]= // ATARI norm: up, down, left, right, fire1-4
 	{ 0,0,0,0,0,0,0,0 }; // variable instead of constant, there are several joystick types
 #define MAUS_EMULATION // emulation can examine the mouse
 #define MAUS_LIGHTGUNS // lightguns are emulated with the mouse
-#define DEFLATE_LEVEL 6 // ZXS files need DEFLATE, but blocks are never >16K
+#define INFLATE_RFC1950 // reading ZXS files requires inflating RFC1950 data
+#define DEFLATE_RFC1950 // writing ZXS files requires deflating RFC1950 data
+#define DEFLATE_LEVEL 6 // compression level 0..9 -- ZXS files never go >16k
 #include "cpcec-os.h" // OS-specific code!
 #include "cpcec-rt.h" // OS-independent code!
 BYTE joy1_type=2;
@@ -392,7 +394,6 @@ BYTE ula_v1,ula_v2,ula_v3; // 48K, 128K and PLUS3 respectively
 #define ULA_V1_ISSUE2 24 // ditto, on Issue-2
 BYTE disc_disabled=0,psg_disabled=0,ula_v1_issue=ULA_V1_ISSUE3,ula_v1_cache=0; // auxiliar ULA variables
 BYTE *ula_screen; int ula_bitmap,ula_attrib; // VRAM pointers
-
 BYTE ula_clash[4][1<<16],*ula_clash_mreq[5],*ula_clash_iorq[5]; // the fifth entry stands for constant clashing
 int ula_clash_z; // 16-bit cursor that follows the ULA clash map
 int ula_fix_chr,ula_fix_out; // ULA adjustment for attribute and border effects
@@ -763,7 +764,7 @@ BYTE DISC_NEW_SECTOR_IDS[]={0xC1,0xC6,0xC2,0xC7,0xC3,0xC8,0xC4,0xC9,0xC5};
 
 int audio_dirty,audio_queue=0; // used to clump audio updates together to gain speed
 
-int ula_temp; // Spectrum hardware before PLUS3 "forgets" cleaning the data bus
+int ula_temp; // floating bus: -1 if we're beyond the bitmap, latest ATTRIB otherwise
 int ula_count_x=0,ula_count_y=0; // horizontal+vertical counters
 int ula_shown_x,ula_shown_y=192; // screen bitmap (within bounds)/border counters
 int ula_snow_disabled=1,ula_snow_z,ula_snow_a; // the ULA snow parameters
@@ -771,42 +772,48 @@ int ula_clash_a=0; // the still unprocessed T units: 0, 1, 2 or 3
 
 INLINE void video_main(int t) // render video output for `t` clock ticks; t is always nonzero!
 {
-	int a=ula_temp; // `ula_temp` is required because the video loop may fail if the Z80 is overclocked
+	int a=ula_temp,b; // `ula_temp` is required because the video loop may fail if the Z80 is overclocked
 	for (ula_clash_a+=t;ula_clash_a>=4;ula_clash_a-=4)
 	{
-		if (/*z80_irq&&*/(z80_irq-=4)<=0)
-			z80_irq=0; // IRQs are lost after few microseconds
+		z80_irq=z80_irq<4?0:z80_irq-4;
 		if (ula_shown_x==ula_start_x) // HBLANK? (the Pentagon timings imply this test is done in advance)
 		{
 			if (!video_framecount&&video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y) video_drawscanline();
 			video_pos_y+=2,video_target+=VIDEO_LENGTH_X*2-video_pos_x; video_pos_x=0; session_signal|=session_signal_scanlines;
 		}
-		if (ula_shown_y>=0&&ula_shown_y<192&&ula_shown_x>=0&&ula_shown_x<32)
-			(a=ula_shown_x&1?ula_screen[ula_attrib]:ula_screen[ula_attrib^ula_snow_z]),++ula_attrib; // even if we don't draw the bitmap because of frameskip, we still need to drop the attribute on the bus
-		else
-			a=-1; // border!
-		if (!video_framecount&&(video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y)&&(video_pos_x>VIDEO_OFFSET_X-16&&video_pos_x<VIDEO_OFFSET_X+VIDEO_PIXELS_X))
+		if ((video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y)&&(video_pos_x>VIDEO_OFFSET_X-16&&video_pos_x<VIDEO_OFFSET_X+VIDEO_PIXELS_X))
 		{
-			#define VIDEO_NEXT *video_target++ // "VIDEO_NEXT = VIDEO_NEXT = ..." generates invalid code on VS13 and slower code on TCC
-			if (a<0) // BORDER
+			if ((ula_shown_y>=0&&ula_shown_y<192)&&(ula_shown_x>=0&&ula_shown_x<32))
 			{
-				VIDEO_UNIT p=video_clut[64];
-				VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
-				VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
+				if (ula_shown_x&1)
+					a=ula_screen[ula_attrib],b=ula_screen[ula_bitmap];
+				else
+					a=ula_screen[ula_attrib^ula_snow_z],b=ula_screen[ula_bitmap+ula_snow_z];
+				++ula_attrib; ++ula_bitmap;
 			}
-			else // BITMAP
+			else
+				a=-1; // border! (no matter how badly we do, the bitmap is always inside the visible screen)
+			if (!video_framecount)
 			{
-				int b=ula_shown_x&1?ula_screen[ula_bitmap]:ula_screen[ula_bitmap+ula_snow_z]; // the bitmap data does NOT stick
-				++ula_bitmap;
-				VIDEO_UNIT p,v1=ula_clut[1][a],v0=ula_clut[0][a];
-				VIDEO_NEXT=p=b&128?v1:v0; VIDEO_NEXT=p;
-				VIDEO_NEXT=p=b& 64?v1:v0; VIDEO_NEXT=p;
-				VIDEO_NEXT=p=b& 32?v1:v0; VIDEO_NEXT=p;
-				VIDEO_NEXT=p=b& 16?v1:v0; VIDEO_NEXT=p;
-				VIDEO_NEXT=p=b&  8?v1:v0; VIDEO_NEXT=p;
-				VIDEO_NEXT=p=b&  4?v1:v0; VIDEO_NEXT=p;
-				VIDEO_NEXT=p=b&  2?v1:v0; VIDEO_NEXT=p;
-				VIDEO_NEXT=p=b&  1?v1:v0; VIDEO_NEXT=p;
+				#define VIDEO_NEXT *video_target++ // "VIDEO_NEXT = VIDEO_NEXT = ..." generates invalid code on VS13 and slower code on TCC
+				if (a<0) // BORDER
+				{
+					VIDEO_UNIT p=video_clut[64];
+					VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
+					VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
+				}
+				else // BITMAP
+				{
+					VIDEO_UNIT p,v1=ula_clut[1][a],v0=ula_clut[0][a];
+					VIDEO_NEXT=p=b&128?v1:v0; VIDEO_NEXT=p;
+					VIDEO_NEXT=p=b& 64?v1:v0; VIDEO_NEXT=p;
+					VIDEO_NEXT=p=b& 32?v1:v0; VIDEO_NEXT=p;
+					VIDEO_NEXT=p=b& 16?v1:v0; VIDEO_NEXT=p;
+					VIDEO_NEXT=p=b&  8?v1:v0; VIDEO_NEXT=p;
+					VIDEO_NEXT=p=b&  4?v1:v0; VIDEO_NEXT=p;
+					VIDEO_NEXT=p=b&  2?v1:v0; VIDEO_NEXT=p;
+					VIDEO_NEXT=p=b&  1?v1:v0; VIDEO_NEXT=p;
+				}
 			}
 		}
 		else
@@ -834,10 +841,7 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 			// "Abu Simbel Profanation" (menu doesn't obey keys; in-game is stuck jumping to the right) and "Rasputin" (menu fails to play the music) rely on this on 48K.
 			if (++ula_count_y>=ula_limit_y)
 			{
-				if (trdos_enabled&trdos_mapped) // TRDOS.ROM hacks (5.04T, 6.03...) imply IRQ tampering:
-					z80_irq=65; // normal values will make the demo "Manifesto" crash on boot!
-				else
-					z80_irq=type_id?33:32; // 128K/+3 VS 48K "early"
+				z80_irq=(trdos_mapped|ula_pentagon)?48:type_id?33:32;
 				if (!(video_pos_z&15)) // FLASH update?
 					if (!(ulaplus_table[64]&ulaplus_enabled))
 						ula_clut_flash(); // ULAPLUS lacks FLASH!
@@ -913,9 +917,8 @@ INLINE void autorun_next(void)
 
 // Z80-hardware procedures ------------------------------------------ //
 
-//#define Z80_NMI 1 // allow throwing NMIs
-//#define z80_nmi_ack() (z80_irq=0) // NMI overrides IRQ
-
+//#define Z80_NMI_ACK (z80_irq=0) // allow throwing NMIs // NMI overrides IRQ
+//int z80_doze=0; // slow I/O operations introduce extra delays (besides the address bus contention slowdowns)
 // the Spectrum hands the Z80 a mainly empty data bus value
 #define z80_irq_bus 255
 // the Spectrum doesn't obey the Z80 IRQ ACK signal
@@ -946,6 +949,7 @@ int tape_skipload=1,tape_fastload=1,tape_skipping=0;
 
 void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 {
+	//z80_doze=0;
 	if ((p&31)==31) // BETA128 interface
 	{
 		if (trdos_mapped)
@@ -1092,7 +1096,7 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 	if (!(p&1)) // 0x??FE, ULA 48K
 	{
 		ula_v1_send(b),tape_output=(b>>3)&1; // tape record signal
-		if ((ula_temp*ula_pentagon)==-1&&!video_framecount&&video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y
+		if (ula_temp*ula_pentagon<0&&!video_framecount&&video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y
 			&&video_pos_x>VIDEO_OFFSET_X&&video_pos_x<VIDEO_OFFSET_X+VIDEO_PIXELS_X+16) // special case: Pentagon border?
 			switch (ula_clash_a&3) // editing the bitmap from here is a dirty kludge, but the performance hit is lower
 			{
@@ -1208,6 +1212,7 @@ BYTE z80_tape_fastfeed[][32] = { // codes that build bytes
 	/* 11 */ {  -0,   1,0X3E,  +1,   4,0XB8,0XCB,0X15,0X06,  +1,   1,0XD2,-128, -13 }, // "ELEVATOR ACTION"
 	/* 12 */ {  -0,   1,0XFE,  +1,   4,0X3F,0XCB,0X11,0XD2,-128, -11 }, // GREMLIN
 	/* 13 */ {  -0,   2,0X84,0X21,  +2,   7,0XBE,0X3F,0XD9,0XCB,0X15,0XD9,0X21,  +2,   2,0X30,0XE9 }, // "BC'S QUEST FOR TIRES"
+	/* 14 */ {  -0,   4,0XD2,0X00,0X00,0X3E,  +1,   4,0XB8,0XCB,0X15,0X06,  +1,   1,0XD2,-128, -16 }, // MIKRO-GEN ("AUTOMANIA")
 };
 BYTE z80_tape_fastdump[][32] = { // codes that fill blocks
 	/*  0 */ { -36,  10,0X08,0X20,0X07,0X30,0X0F,0XDD,0X75,0X00,0X18,0X0F, +15,   3,0XDD,0X23,0X1B, +19,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XCA }, // ZX SPECTRUM FIRMWARE
@@ -1312,8 +1317,8 @@ void z80_tape_trap(void)
 			else
 				z80_r7+=fasttape_add8(z80_de.b.h>>6,41,&z80_de.b.l,1)*6;
 			break;
-		case  6: // "HYDROFOOL" (2/2), GREMLIN OLD ("THING BOUNCES BACK"...), SPEEDLOCK V1 ("BOUNTY BOB STRIKES BACK"...), SPEEDLOCK V2+V3 ("ATHENA", "THE ADDAMS FAMILY"...), DINAMIC ("COBRA'S ARC"...)
-			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&((j=z80_tape_testfeed(z80_tape_spystack(0)))==0||j==3||j==5||j==6))
+		case  6: // "HYDROFOOL" (2/2), GREMLIN OLD ("THING BOUNCES BACK"...), SPEEDLOCK V1 ("BOUNTY BOB STRIKES BACK"...), SPEEDLOCK V2+V3 ("ATHENA", "THE ADDAMS FAMILY"...), DINAMIC ("COBRA'S ARC"...), MIKRO-GEN ("AUTOMANIA"...)
+			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&((j=z80_tape_testfeed(z80_tape_spystack(0)))==0||j==3||j==5||j==6||j==14))
 			{
 				if ((((k=z80_tape_testdump(z80_tape_spystack(0)))==1||k==5)&&z80_af2.b.l&0x40)||k==6) // SPEEDLOCK V1 ignores AF2
 					while (FASTTAPE_CAN_DUMP()&&z80_de.b.l>1)
@@ -1380,6 +1385,7 @@ void z80_tape_trap(void)
 #define z80_recv_gunstick(button,sensor) ((session_maus_z?button:0)+((video_litegun&0x00C000)?sensor:0)) // GUNSTICK detects bright pixels
 BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 {
+	//z80_doze=0;
 	if ((p&31)==31) // tell apart between KEMPSTON and BETA128 ports
 	{
 		if (trdos_mapped) // BETA128 interface
@@ -1403,7 +1409,22 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 		}
 		if ((p&63)==31) // KEMPSTON port
 			return litegun?z80_recv_gunstick(16,4):autorun_kbd_bit(8); // catch special case: lightgun or joystick ("TARGET PLUS", "MIKE GUNNER")
-		return type_id<3?ula_temp:255; // NON-PLUS3: FLOATING BUS
+		if (type_id<3) // non-PLUS3 floating bus?
+		{
+			//return ula_temp; // "Cobra" and "Arkanoid" were happy with this, but the tests "FLOATSPY" and "HALT2INT" need more precision
+			if (!(ula_shown_x&1)&&(ula_shown_y>=0&&ula_shown_y<192)&&(ula_shown_x>=0&&ula_shown_x<32))
+			{
+				//printf("%05d:%d.%d ",ula_clash_z,ula_shown_x,ula_clash_a);
+				switch (ula_clash_a)
+				{
+					case 0: return ula_screen[ula_bitmap];
+					case 1: return ula_screen[ula_attrib];
+					case 2: return ula_screen[ula_bitmap+1];
+					case 3: return ula_screen[ula_attrib+1];
+				}
+			}
+		}
+		return 255;
 	}
 	if ((p&7)==6) // 0x??FE, ULA 48K
 	{
@@ -1544,12 +1565,12 @@ WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 #define Z80_IORQ_PAGE(t,p) ( z80_t+=(z80_aux2=(t+ula_clash_iorq[p][(WORD)ula_clash_z])), ula_clash_z+=z80_aux2 )
 // input/output
 #define Z80_SYNC_IO(t) ( _t_-=z80_t-t, z80_sync(z80_t-t), z80_t=t )
-#define Z80_PRAE_RECV(w) do{ Z80_IORQ(1,w); if ((w)&1) Z80_IORQ_1X_NEXT(3); else Z80_IORQ_PAGE(3,4); Z80_SYNC_IO(0); }while(0)
+#define Z80_PRAE_RECV(w) do{ Z80_IORQ(1,w); Z80_SYNC_IO(ula_fix_out); }while(0)
 #define Z80_RECV z80_recv
-#define Z80_POST_RECV(w)
+#define Z80_POST_RECV(w) do{ /*z80_t+=z80_doze,ula_clash_z+=z80_doze;*/ if ((w)&1) Z80_IORQ_1X_NEXT(3); else Z80_IORQ_PAGE(3,4); }while(0)
 #define Z80_PRAE_SEND(w) do{ if ((w)&3) audio_dirty=1; Z80_IORQ(1,w); Z80_SYNC_IO(ula_fix_out); }while(0)
 #define Z80_SEND z80_send
-#define Z80_POST_SEND(w) do{ if ((w)&1) Z80_IORQ_1X_NEXT(3); else Z80_IORQ_PAGE(3,4); }while(0)
+#define Z80_POST_SEND(w) do{ /*z80_t+=z80_doze,ula_clash_z+=z80_doze;*/ if ((w)&1) Z80_IORQ_1X_NEXT(3); else Z80_IORQ_PAGE(3,4); }while(0)
 // fine timings
 #define Z80_AUXILIARY int z80_aux1,z80_aux2 // they must stick between macros :-/
 #define Z80_MREQ(t,w) Z80_MREQ_PAGE(t,z80_aux1=((w)>>14))
@@ -1585,7 +1606,7 @@ WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 #define Z80_XCF_BUG 1 // replicate the SCF/CCF quirk
 #define Z80_DEBUG_MMU 0 // forbid ROM/RAM toggling, it's useless on Spectrum
 #define Z80_DEBUG_EXT 0 // forbid EXTRA hardware debugging info pages
-#define Z80_NO_OUT 0 // whether OUT (C) sends 0 (NMOS) or 255 (CMOS)
+#define Z80_0XED71 0 // whether OUT (C) sends 0 (NMOS) or 255 (CMOS)
 #define Z80_TRDOS_CATCH(r) if (trdos_mapped) { if (r.b.h>=0X40) z80_trdos_leave(); } else Z80_TRDOS_ENTER(r) // page TR-DOS in and out
 #define Z80_TRDOS_ENTER(r) if (r.b.h==0X3D) z80_trdos_enter() // optimisation, TR-DOS uses a limited set of opcodes to leave
 #define Z80_TRDOS_LEAVE(r) if (trdos_mapped&&r.b.h>=0X40) z80_trdos_leave() // used only when an IM2 INT takes over

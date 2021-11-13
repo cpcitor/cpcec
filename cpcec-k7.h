@@ -27,10 +27,12 @@ int tape_rewind,tape_filebase; // option: does the tape rewind after running out
 int tape_signal; // signal set by the tape playback if something happens: >0 STOP, <0 END!
 int tape_status,tape_output,tape_record; // tape input and output values: 0 or 1, nothing else
 
-int tape_count,tape_heads,tape_tones,tape_datas,tape_waves,tape_tails,tape_loops,tape_loop0,tape_calls,tape_call0;
+int tape_t,tape_n,tape_heads,tape_tones,tape_datas,tape_waves,tape_tails,tape_loops,tape_loop0,tape_calls,tape_call0;
 #ifdef TAPE_KANSAS_CITY
 int tape_kansas,tape_kansas0n,tape_kansas1n,tape_kansasin,tape_kansasi,tape_kansason,tape_kansaso,tape_kansasrl;
 #endif
+
+#define tape_safetydelay() (tape_status=0,tape_t=tape_playback*-TAPE_MAIN_TZX_STEP*2)
 
 // tape file handling operations ------------------------------------ //
 
@@ -66,13 +68,13 @@ void tape_putc(BYTE i) // sends a byte to the buffer
 }
 void tape_putcccc(int i) // sends an Intel-style DWORD to the buffer
 	{ tape_putc(i); tape_putc(i>>8); tape_putc(i>>16); tape_putc(i>>24); }
-void tape_flush(void) // sends the final recorded samples
+void tape_flush(void) // sends the final recorded samples in CSW1-style
 {
-	if (tape_count>=256)
-		tape_putc(0),tape_putcccc(tape_count);
-	else if (tape_count>0)
-		tape_putc(tape_count);
-	tape_record=tape_output,tape_count=0;
+	if (tape_n>=256)
+		tape_putc(0),tape_putcccc(tape_n);
+	else if (tape_n>0)
+		tape_putc(tape_n);
+	tape_record=tape_output,tape_n=0;
 }
 
 // tape file handling operations ------------------------------------ //
@@ -90,7 +92,7 @@ int tape_close(void) // closes the tape file, if any; 0 OK
 		puff_fclose(tape);
 	}
 	tape=NULL; return tape_status=tape_output=tape_filesize=tape_filetell=tape_offset=tape_length=
-		tape_count=tape_heads=tape_tones=tape_datas=
+		tape_t=tape_n=tape_heads=tape_tones=tape_datas=
 		#ifdef TAPE_KANSAS_CITY
 		tape_kansas=
 		#endif
@@ -141,7 +143,7 @@ int tape_open(char *s) // opens a tape file `s` for input; 0 OK, !0 ERROR
 	else
 		return tape_close(),1; // unknown file!
 	if (tape_path!=s) strcpy(tape_path,s); // valid format
-	return tape_filebase=tape_filetell,(tape_type>=2)&&(tape_count=tape_playback*TAPE_MAIN_TZX_STEP*5),0; // 5-second pause
+	return tape_filebase=tape_filetell,(tape_type>=2)&&tape_safetydelay(),0;
 }
 int tape_create(char *s) // creates a tape file `s` for output; 0 OK, !0 ERROR
 {
@@ -150,7 +152,7 @@ int tape_create(char *s) // creates a tape file `s` for output; 0 OK, !0 ERROR
 	fwrite(tape_header_csw1,1,24,tape); // CSW1 format
 	tape_offset=0; tape_putcccc(((tape_playback=44100)<<8)+0x1000001); tape_putcccc(tape_record=0); // 44100Hz, starting status = 0
 	if (tape_path!=s) strcpy(tape_path,s); // why not?
-	return tape_type=-1,tape_filesize=tape_filetell=tape_count=tape_output=0; // reset buffer and format
+	return tape_type=-1,tape_filesize=tape_filetell=tape_n=tape_output=0; // reset buffer and format
 }
 
 int tape_tzx1size(int i) // reads some bytes, if required, then returns its expected size; `i` is the current TZX block ID
@@ -370,9 +372,9 @@ short tape_tzxpilot,tape_tzxpilots,tape_tzxsync1,tape_tzxsync2,
 	tape_tzxbit0,tape_tzxbit1,tape_tzxfinal,tape_tzxhold; // TZX config values
 void tape_tzx20(void) // TZX BLOCK $20 et al. sets the "tails"
 	{ tape_tail=0; tape_tails=3500*tape_tzxhold; } // 1 ms = 3500 T
-void tape_tzx14(int l) // TZX BLOCK $14 et al. sets the "datas"
+void tape_tzx14(int l) // TZX BLOCK $14 et al. sets the "datas" and the "tails"
 {
-	tape_time=tape_datacodes=0;
+	tape_datacodes=tape_time=tape_item=0;
 	tape_mask=tape_bits=1; // eight 1-bit codes per byte
 	tape_datas=tape_tzxfinal-8; if (tape_datas==-8) tape_datas=0; // catch dodgy tapes!
 	tape_datas+=l*8;
@@ -415,25 +417,24 @@ void tape_firstbit(int m) // set the status according to BLOCK $19 flags
 	{ if (m&2) tape_status=m&1; else if (!(m&1)) tape_status^=1; }
 void tape_eofmet(void) // rewinds the tape or stops it depending on options
 {
-	tape_tzxhold=5000,tape_tzx20(); // 5-second pause
-	if (tape_rewind) tape_seek(tape_filebase);
+	tape_safetydelay(); if (tape_rewind) tape_seek(tape_filebase);
 	tape_signal=-1; // signal that we met EOF
 }
 void tape_select(int i) // seeks the position `i` in the tape input
-	{ tape_seek(i); tape_count=tape_heads=tape_tones=tape_datas=
+	{ tape_seek(i); tape_t=tape_n=tape_heads=tape_tones=tape_datas=
 		#ifdef TAPE_KANSAS_CITY
 		tape_kansas=
 		#endif
-		tape_waves=tape_tails=tape_calls=tape_loops=0; tape_tzxhold=5000,tape_tzx20(); } // 5-second pause
+		tape_waves=tape_tails=tape_calls=tape_loops=0; tape_safetydelay(); }
 
 void tape_main(int t) // plays tape back for `t` ticks; t must be >0!
 {
-	static int r; int p=(r+=(t*tape_playback))/TICKS_PER_SECOND;
-	r%=TICKS_PER_SECOND; // *!* a possible solution without `long long`
+	int p=(tape_t+=(t*tape_playback))/TICKS_PER_SECOND;
+	tape_t%=TICKS_PER_SECOND; // *!* a possible solution without `long long`
 	if (p>0) switch (tape_type)
 	{
 		case -1: // RECORD to CSW
-			if (tape_count+=p,tape_record!=tape_output) tape_flush();
+			if (tape_n+=p,tape_record!=tape_output) tape_flush();
 			break;
 		case 0: // WAV
 			tape_skip((p-1)*(tape_step+1)+tape_step);
@@ -443,9 +444,9 @@ void tape_main(int t) // plays tape back for `t` ticks; t must be >0!
 			break;
 		case 1: // CSW
 			do
-				if (--tape_count<=0)
-					if (tape_status^=1,(tape_count=tape_getc())<=0)
-						if ((tape_count=tape_getcccc())<0) // EOF?
+				if (--tape_n<=0)
+					if (tape_status^=1,(tape_n=tape_getc())<=0)
+						if ((tape_n=tape_getcccc())<0) // EOF?
 							{ tape_eofmet(); return; }
 			while (--p);
 			break;
@@ -454,9 +455,9 @@ void tape_main(int t) // plays tape back for `t` ticks; t must be >0!
 		case 3: // TAP
 		case 4: // PZX
 		#endif
-			tape_count-=TAPE_MAIN_TZX_STEP*p; // "flush" the "bucket"
+			tape_n-=TAPE_MAIN_TZX_STEP*p; // "flush" the "bucket"
 			int watchdog=127; // the watchdog catches corrupted tapes!!
-			while (tape_count<=0)
+			while (tape_n<=0)
 				if (tape_heads) // predef'd head
 				{
 					if (!tape_time)
@@ -477,7 +478,7 @@ void tape_main(int t) // plays tape back for `t` ticks; t must be >0!
 						#endif
 							tape_time=tape_headcode[tape_head++];
 					}
-					tape_status^=1; tape_count+=tape_headcode[tape_head];
+					tape_status^=1; tape_n+=tape_headcode[tape_head];
 					if (!--tape_time)
 						++tape_head,--tape_heads;
 				}
@@ -493,7 +494,7 @@ void tape_main(int t) // plays tape back for `t` ticks; t must be >0!
 					if (!tape_item) // start loop?
 						tape_firstbit(*tape_code);
 					if ((t=*++tape_code)>=0)
-						(tape_item++&&(tape_status^=1)),tape_count+=t; // toggle signal
+						(tape_item++&&(tape_status^=1)),tape_n+=t; // toggle signal
 					else if (tape_item=0,--tape_time)
 						tape_code=tape_codeitem[tape_byte]; // next loop
 					else
@@ -519,7 +520,7 @@ void tape_main(int t) // plays tape back for `t` ticks; t must be >0!
 					if (!tape_item) // start loop?
 						tape_firstbit(*(tape_code=tape_codeitem[(tape_byte>>(tape_time-tape_bits))&tape_mask]));
 					if ((t=*++tape_code)>=0)
-						(tape_item++&&(tape_status^=1)),tape_count+=t; // toggle signal
+						(tape_item++&&(tape_status^=1)),tape_n+=t; // toggle signal
 					else
 						tape_item=0,tape_time-=tape_bits,--tape_datas; // end loop
 				}
@@ -541,7 +542,7 @@ void tape_main(int t) // plays tape back for `t` ticks; t must be >0!
 							tape_mask=tape_kansaso,tape_item=tape_kansason;
 					}
 					if (tape_item) // it's zero if `tape_kansasin` or `tape_kansason` are zero!
-						tape_status^=1,tape_count+=tape_mask,--tape_item;
+						tape_status^=1,tape_n+=tape_mask,--tape_item;
 					if (!tape_item)
 						if (!--tape_time) --tape_kansas;
 				}
@@ -551,12 +552,12 @@ void tape_main(int t) // plays tape back for `t` ticks; t must be >0!
 					if (!tape_time)
 						tape_time=8,tape_byte=tape_getc();
 					tape_status=(tape_byte>>--tape_time)&1;
-					tape_count+=tape_mask,--tape_waves;
+					tape_n+=tape_mask,--tape_waves;
 				}
 				else if (tape_tails) // predef'd tail
 				{
-					if (tape_tails>3500) tape_count+=3500,tape_tails-=3500; // 3500 T = 1 ms
-						else tape_count+=tape_tails,tape_tails=0;
+					if (tape_tails>3500) tape_n+=3500,tape_tails-=3500; // 3500 T = 1 ms
+						else tape_n+=tape_tails,tape_tails=0;
 					if (tape_tail++) tape_status=0; else tape_status^=1; // quiet after 1 ms
 				}
 				else do

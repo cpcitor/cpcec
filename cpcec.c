@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20211105"//"2555"
+#define MY_VERSION "20211111"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -1375,9 +1375,8 @@ INLINE void autorun_next(void)
 
 // Z80-hardware procedures ------------------------------------------ //
 
-#define Z80_NMI 1 // allow throwing NMIs
-#define z80_nmi_ack() (z80_irq&=~256)
-
+#define Z80_NMI_ACK (z80_irq&=~256) // allow throwing NMIs
+//int z80_doze=0; // slow I/O operations introduce extra delays, f.e. operating the PIO when the PLUS DMA is busy updating the PSG
 // the CPC hands the Z80 a data bus value that is NOT constant on the PLUS ASIC
 #define z80_irq_bus (plus_enabled?(plus_ivr&-8)+(z80_irq&128? ((z80_pc.w&0x2000)?6:plus_8k_bug) :z80_irq&16?0:z80_irq&32?2:4):255) // 6 = PRI, 0 = DMA2, 2 = DMA1, 4 = DMA0.
 // the CPC obeys the Z80 IRQ ACK signal unless the PLUS ASIC IVR bit 0 is off (?)
@@ -1440,6 +1439,7 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 	// * 0xF600 : "Bombfusion" sends PIO bytes (start tape signal) to 0210 by mistake!
 	// * (p&0x100)+0xBC00 : "Knight Rider" sends CRTC bytes to 0088 by mistake! "Camenbert Meeting 4" sends CRTC bytes to $0C00! "The Demo" sends CRTC bytes to 0x1D00 and 0x1C00!
 	// * 0x00XX : "Overflow Preview part 3" ($521D et al.) switches RAM and ROM by mistake!
+	//z80_doze=0;
 	if (!(p&0x8000)) // 0x7F00, GATE ARRAY (1/2)
 	{
 		if (!(b&0x80))
@@ -1507,6 +1507,8 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 	}
 	if (!(p&0x0800)) // 0xF400-0xF700, PIO 8255
 	{
+		while (plus_dma_delay>0)
+			z80_sync(plus_dma_delay); // the PLUS DMA hogs the PIO 8255!
 		if (!(p&0x0200))
 		{
 			if (!(p&0x0100)) // 0xF400, PIO PORT A
@@ -1552,6 +1554,12 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 					pio_control=b;
 					if (!plus_enabled) // CRTC3 has a PIO bug! CRTC0,CRTC1,CRTC2,CRTC4 have a good PIO
 						pio_port_a=pio_port_b=pio_port_c=0; // reset all ports!
+					else if (b&16)
+					{
+						pio_port_a=255; // the famous PLUS keyboard bug!
+						if (pio_port_c>=0XC0)
+							psg_table_select(pio_port_a);
+					}
 				}
 				else
 				{
@@ -1565,7 +1573,7 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 							for (int i=mem_rom[0x4002]?0XB7D5:0XB1DA,j=0;j<16;++i,++j)
 								gate_table_select(j),gate_table_send(64+(PEEK(i)&63));
 							gate_table_select(k);
-						}*/ // this optimisation does more harm than good, f.e. NEBULUS:CDT :-(
+						}*/ // this optimisation does more harm than good, f.e. NEBULUS.CDT :-(
 					}
 					else
 						pio_port_c&=~(1<<((b>>1)&7)); // RESET BIT
@@ -1599,7 +1607,7 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 			playcity_set_config(b); // CTC CHANNEL 0 CONFIG
 		else if (!playcity_disabled)
 		{
-			//#ifdef Z80_NMI
+			//#ifdef Z80_NMI_ACK
 			if (p==0xF881)
 			{
 				//cprintf("F881:%02X ",b); // CTC CHANNEL 1 CONFIG
@@ -2027,6 +2035,7 @@ void z80_tape_trap(void)
 BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 {
 	BYTE b=255; // as in z80_send, multiple devices can answer to the Z80 request at the same time if the bit patterns match; hence the use of "b&=" from the second device onward.
+	//z80_doze=0;
 	if ((p&0x4200)==0x0200) // 0xBE00-0xBF00, CRTC 6845
 	{
 		if (!(p&0x100))
@@ -2538,7 +2547,7 @@ const BYTE z80_delays[0x700]= // precalc'd coarse timings
 
 int z80_ack_delay=0; // unlike Z80_AUXILIARY it cannot be local, it must stick :-(
 // input/output
-#define Z80_SYNC_IO ( _t_-=z80_t, z80_sync(z80_t), z80_t=0 )
+#define Z80_SYNC_IO ( _t_-=z80_t,z80_sync(z80_t) )
 #define Z80_PRAE_RECV(w) Z80_SYNC_IO
 #define Z80_RECV z80_recv
 #define Z80_POST_RECV(w)
@@ -2574,13 +2583,13 @@ int z80_ack_delay=0; // unlike Z80_AUXILIARY it cannot be local, it must stick :
 #define Z80_STRIDE_0 z80_ack_delay=1 // default "slow ACK" behavior
 #define Z80_STRIDE_1 z80_ack_delay=0 // special "fast ACK" behavior
 #define Z80_STRIDE_X(o) z80_t+=z80_delays[o]+z80_ack_delay
-#define Z80_STRIDE_IO(o) z80_t=z80_delays[o]
+#define Z80_STRIDE_IO(o) z80_t=z80_delays[o] //+z80_doze // notice the "z80_t=XXX" makes "z80_t=0" redundant in Z80_SYNC_IO
 
 #define Z80_HALT_STRIDE 1 // i.e. optimal HALT, can be handled a single go
 #define Z80_XCF_BUG 1 // replicate the SCF/CCF quirk
 #define Z80_DEBUG_MMU 1 // allow ROM/RAM toggling, it's useful on CPC!
 #define Z80_DEBUG_EXT 1 // allow EXTRA hardware debugging info pages
-#define Z80_NO_OUT 0 // whether OUT (C) sends 0 (NMOS) or 255 (CMOS)
+#define Z80_0XED71 0 // whether OUT (C) sends 0 (NMOS) or 255 (CMOS)
 #define Z80_TRDOS_CATCH(r) // TR-DOS only, useless
 #define Z80_TRDOS_ENTER(r) // ditto
 #define Z80_TRDOS_LEAVE(r) // ditto
@@ -3040,7 +3049,7 @@ void snap_load_plus(FILE *f,int i)
 		plus_dma_regs[i][3]=session_scratch[0x8E0+i*7+6];
 	}
 	if ((plus_gate_mcr=session_scratch[0x8C6])&&!(plus_gate_mcr>=0xA0&&plus_gate_mcr<0xC0)) // Winape uses 0x8C6!?
-		cprintf("ACE:%02X:%02X!? ",session_scratch[0x8C6],session_scratch[0x8F5]),plus_gate_mcr=session_scratch[0x8F5]; // ACE uses 0x8F5!?
+		plus_gate_mcr=session_scratch[0x8F5],cprintf("ACE:%02X:%02X!? ",session_scratch[0x8C6],plus_gate_mcr); // ACE uses 0x8F5!?
 	plus_gate_mcr&=31;
 	plus_gate_enabled=!!session_scratch[0x8F6];
 	plus_gate_counter=session_scratch[0x8F7];
@@ -3094,7 +3103,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 	MEMLOAD(psg_table,&header[0x5B]);
 	#ifdef PSG_PLAYCITY
 	if (psg_table[14]>=240)
-		playcity_disabled=0,playcity_set_config(psg_table[14]-240); // Playcity kludge, see snap_save()
+		playcity_disabled=0,dac_disabled=1,playcity_set_config(psg_table[14]-240); // Playcity kludge, see snap_save()
 	#endif
 	if (header[0x10]>1) // V2?
 	{

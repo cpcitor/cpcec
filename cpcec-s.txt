@@ -1020,3 +1020,8 @@ the Edge" y "Rage" muestran sus efectos de border al píxel), hace que la opció
 bloque de operaciones $EDA0-$EDBB del Z80. Las opciones experimentales de tiempo
 de compilación incluyen escribir snapshots SZX desde ZXSEC y leer los bloques
 Kansas City de ficheros CDT y TZX.
+- 20211111 -- parche menor que corrige un error en la reproducción de ficheros
+TZX que hacía que todas las cintas tras la primera perdiesen el primer elemento
+del primer bloque, añade contención básica DMA-PIO al ASIC de CPC Plus y mejora
+el bus flotante de Spectrum: las pruebas HALT2INT (48K) y FLOATSPY (48K y 128K)
+ahora van bien.
