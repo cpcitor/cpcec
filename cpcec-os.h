@@ -66,19 +66,20 @@ INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 
 #define MESSAGEBOX_WIDETAB "\t" // expect proportional font
 
-#define AUDIO_N_FRAMES 8 // safe on almost all Windows machines
-
 // general engine constants and variables --------------------------- //
 
 #define VIDEO_UNIT DWORD // 0x00RRGGBB style
 
-#define VIDEO_FILTER_HALF(x,y) ((x<y?(((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00):(((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1) // 50:50
+#define VIDEO_FILTER_HALF(x,y) (x!=y?(x<y?(((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00):(((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1:x) // 50:50
 //#define VIDEO_FILTER_BLURDATA vxh,vxl,vzh,vzl
 //#define VIDEO_FILTER_BLUR0(z) vxh=z&0XFF00FF,vxl=z&0XFF00
 //#define VIDEO_FILTER_BLUR(r,z) r=((((vzh=z&0XFF00FF)+vxh+0X10001)&0X1FE01FE)+(((vzl=z&0XFF00)+vxl+0X100)&0X1FE00))>>1,vxh=vzh,vxl=vzl // 50:50 blur
-#define VIDEO_FILTER_BLURDATA vxh,vxl,vyh,vyl,vzh,vzl
-#define VIDEO_FILTER_BLUR0(z) vxh=vyh=z&0XFF00FF,vxl=vyl=z&0XFF00
-#define VIDEO_FILTER_BLUR(r,z) r=((((vzh=z&0XFF00FF)+vyh*2+vxh+0X20002)&0X3FC03FC)+(((vzl=z&0XFF00)+vyl*2+vxl+0X200)&0X3FC00))>>2,vxh=vyh,vyh=vzh,vxl=vyl,vyl=vzl // 25:50:25 blur
+//#define VIDEO_FILTER_BLURDATA vxh,vxl,vyh,vyl,vzh,vzl
+//#define VIDEO_FILTER_BLUR0(z) vxh=vyh=z&0XFF00FF,vxl=vyl=z&0XFF00
+//#define VIDEO_FILTER_BLUR(r,z) r=((((vzh=z&0XFF00FF)+vyh*2+vxh+0X20002)&0X3FC03FC)+(((vzl=z&0XFF00)+vyl*2+vxl+0X200)&0X3FC00))>>2,vxh=vyh,vyh=vzh,vxl=vyl,vyl=vzl // 25:50:25 blur
+#define VIDEO_FILTER_BLURDATA vzz
+#define VIDEO_FILTER_BLUR0(z) vzz=z
+#define VIDEO_FILTER_BLUR(r,z) r=VIDEO_FILTER_HALF(vzz,z),vzz=z
 //#define VIDEO_FILTER_X1(x) (((x>>1)&0X7F7F7F)+0X2B2B2B) // average
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)+0X404040) // heavier
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)*3+0X161616) // lighter
@@ -94,7 +95,8 @@ INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 	#define AUDIO_BITDEPTH 16
 	#define AUDIO_ZERO 0
 #endif // bitsize
-#define AUDIO_CHANNELS 2 // 1 mono, 2 stereo
+#define AUDIO_CHANNELS 2 // 1 for mono, 2 for stereo
+#define AUDIO_N_FRAMES 16 // safe on all machines, but slow; must be even!
 
 VIDEO_UNIT *video_frame,*video_blend; // video frame, allocated on runtime
 AUDIO_UNIT *audio_frame,audio_buffer[AUDIO_LENGTH_Z*AUDIO_CHANNELS],audio_memory[AUDIO_N_FRAMES*AUDIO_LENGTH_Z*AUDIO_CHANNELS]; // audio frame, cycles during playback
@@ -107,8 +109,8 @@ BYTE audio_disabled=0,audio_session=0; // audio status and counter
 unsigned char session_path[STRMAX],session_parmtr[STRMAX],session_tmpstr[STRMAX],session_substr[STRMAX],session_info[STRMAX]="";
 
 int session_timer,session_event=0; // timing synchronisation and user command
-BYTE session_fast=0,session_wait=0,session_audio=1,session_softblit=1,session_hardblit; // timing and devices ; software blitting is enabled by default because it's safer
-BYTE session_stick=1,session_shift=0,session_key2joy=0; // keyboard, joystick
+BYTE session_fast=0,session_wait=0,session_softblit=1,session_hardblit,session_softplay=0,session_hardplay; // software blitting enabled by default
+BYTE session_audio=1,session_stick=1,session_shift=0,session_key2joy=0; // keyboard, joystick
 #ifdef MAUS_EMULATION
 int session_maus_z=0,session_maus_x=0,session_maus_y=0; // optional mouse
 #endif
@@ -121,7 +123,7 @@ RECT session_ideal; // ideal rectangle where the window fits perfectly
 JOYINFOEX session_joy; // joystick+mouse buffers
 HWND session_hwnd; // window handle
 HMENU session_menu=NULL; // menu handle
-int session_hidemenu=0; // normal or pop-up
+BYTE session_hidemenu=0; // normal or pop-up menu
 HDC session_dc1,session_dc2=NULL; HGDIOBJ session_dib=NULL; // video structs
 HWAVEOUT session_wo; WAVEHDR session_wh; MMTIME session_mmtime; // audio structs
 
@@ -293,7 +295,6 @@ void session_debug_show(void); // redraw the debugger text; must be defined late
 int session_debug_user(int k); // debug logic is a bit different: 0 UNKNOWN COMMAND, !0 OK
 int debug_xlat(int k); // translate debug keys into codes. Must be defined later on!
 INLINE void audio_playframe(int q,AUDIO_UNIT *ao); // handle the sound filtering; is defined in CPCEC-RT.H!
-#define session_audioqueue audio_session // the audio device is the timer
 
 void session_please(void) // stop activity for a short while
 {
@@ -346,8 +347,8 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 		if (session_r_h>session_r_w*VIDEO_PIXELS_Y/VIDEO_PIXELS_X) // window area is too tall?
 			session_r_h=session_r_w*VIDEO_PIXELS_Y/VIDEO_PIXELS_X;
 		if (session_intzoom) // integer zoom? (100%, 150%, 200%, 250%, 300%...)
-			session_r_w=((session_r_w*17)/VIDEO_PIXELS_X/8)*VIDEO_PIXELS_X/2,
-			session_r_h=((session_r_h*17)/VIDEO_PIXELS_Y/8)*VIDEO_PIXELS_Y/2;
+			session_r_w=((session_r_w*17)/VIDEO_PIXELS_X/8)*VIDEO_PIXELS_X/2, // "*9../8../1"
+			session_r_h=((session_r_h*17)/VIDEO_PIXELS_Y/8)*VIDEO_PIXELS_Y/2; // forbids +50%
 		if (session_r_w<VIDEO_PIXELS_X||session_r_h<VIDEO_PIXELS_Y)
 			session_r_w=VIDEO_PIXELS_X,session_r_h=VIDEO_PIXELS_Y; // window area is too small!
 		session_r_x=(r.right-session_r_w)/2,session_r_y=(r.bottom-session_r_h)/2; // locate bitmap on window center
@@ -693,7 +694,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 		cprintf(session_stick?"Joystick enabled!\n":"No joystick!\n");
 	}
 	session_wo=0; // no audio unless device is detected
-	if (session_audio)
+	if (session_hardplay=!session_softplay,session_audio)
 	{
 		memset(&session_mmtime,0,sizeof(session_mmtime));
 		session_mmtime.wType=TIME_SAMPLES; // Windows doesn't always provide TIME_MS!
@@ -821,7 +822,7 @@ INLINE void session_render(void) // update video, audio and timers
 		}
 		waveOutGetPosition(session_wo,&session_mmtime,sizeof(MMTIME));
 		//if (!=MMSYSERR_NOERROR) session_audio=0,audio_disabled=-1; // audio device is lost! // can this really happen!?
-		static int u=0; if (!u) u=session_mmtime.u.sample; // reference
+		static int u=0; if (!u) u=session_mmtime.u.sample+(session_hardplay?AUDIO_LENGTH_Z*AUDIO_N_FRAMES/2:0); // reference
 		i=session_mmtime.u.sample-u,j=AUDIO_PLAYBACK; // questionable -- this will break the timing every 13 hours of emulation at 44100 Hz :-(
 	}
 	else // use internal tick count as clock

@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20211111"//"2555"
+#define MY_VERSION "20211119"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -379,7 +379,6 @@ BYTE gate_status; // low 2 bits are the current screen mode; next bits render ei
 int video_threshold=VIDEO_LENGTH_X; // self-adjusting horizontal threshold, to gain speed when possible
 int hsync_limit=VIDEO_LENGTH_X,hsync_count=0,hsync_match=0; // LA-7800: self-adjusting HSYNC timings
 int vsync_limit=VIDEO_LENGTH_Y,vsync_count=0,vsync_match=0; // LA-7800: self-adjusting VSYNC timings
-//int hsync_threshold,hsync_character; // configurable HSYNC thresholds
 
 // 0xBC00-0xBF00: CRTC 6845 ----------------------------------------- //
 
@@ -792,6 +791,11 @@ int crtc_screen,crtc_raster,crtc_backup,crtc_double; // CRTC's internal video ad
 int gate_count_r3x,gate_count_r3y,irq_steps; // Gate Array's horizontal and vertical timers filtering the CRTC's own
 VIDEO_UNIT plus_sprite_border,*plus_sprite_target=NULL,plus_backup_pixels[3];
 int plus_sprite_offset,plus_sprite_latest,plus_sprite_adjust;
+#if DEBUG
+#else
+const
+#endif
+int plus_dma_delay1=8,plus_dma_delay0=8; // configurable thresholds
 
 void video_main_sprites(void)
 {
@@ -1037,21 +1041,21 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 							--plus_dma_regs[plus_dma_index][3]; // handle multiplier
 						else
 						{
-							plus_dma_regs[plus_dma_index][3]=plus_dmas[4*plus_dma_index+2]; // reload multiplier
+							plus_dma_regs[plus_dma_index][3]=plus_dmas[plus_dma_index*4+2];
 							--plus_dma_regs[plus_dma_index][2]; // handle pause
 						}
 					}
 					if (!plus_dma_regs[plus_dma_index][2]) // no pause?
 					{
-						i=mgetii(&plus_dmas[4*plus_dma_index])&-2; // get pointer
+						i=mgetii(&plus_dmas[plus_dma_index*4])&-2; // get pointer
 						plus_dma_cache[plus_dma_index]=mgetii(&mem_ram[i]); // fetch command
-						mputii(&plus_dmas[4*plus_dma_index],i+2); // inc pointer!
-						++plus_dma_index; plus_dma_delay=1; break; // channel is done, wait one cycle
+						mputii(&plus_dmas[plus_dma_index*4],i+2); // inc pointer!
+						plus_dma_delay=1; ++plus_dma_index; break; // channel is done, reading phase is over
 					}
 				}
 				++plus_dma_index; // try next channel
 			}
-			if (plus_dma_index>=3) while (plus_dma_index<6) // parsing phase?
+			while (plus_dma_index>=3&&plus_dma_index<6) // parsing phase?
 			{
 				if ((i=plus_dma_cache[plus_dma_index-3])>=0) // do we have to do something?
 				{
@@ -1059,6 +1063,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 					{
 						if (i<0x0F00||psg_port_b_lock()) // filter dummy writes
 							psg_table_sendto(i>>8,i); // load register
+						plus_dma_delay=(0xC0&~pio_port_c)?plus_dma_delay0:plus_dma_delay1;
 					}
 					else // warning! functions can build up! "CRTC3" relies on it!
 					{
@@ -1066,20 +1071,22 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 							plus_dma_regs[plus_dma_index-3][2]=i&4095; // reload pause
 						if (i&0x2000) // 2NNN = REPEAT NNN (0=no repeat)
 							plus_dma_regs[plus_dma_index-3][0]=i&4095, // repeat times
-							plus_dma_regs[plus_dma_index-3][1]=mgetii(&plus_dmas[4*plus_dma_index-4*3]); // repeat addr.
+							plus_dma_regs[plus_dma_index-3][1]=mgetii(&plus_dmas[plus_dma_index*4-4*3]); // repeat addr.
 						if (i&0x4000) // 40NN = CONTROL BIT MASK: +01 = LOOP, +10 = INT, +20 = STOP
 						{
 							if (i&1)
 								if (plus_dma_regs[plus_dma_index-3][0])
 									--plus_dma_regs[plus_dma_index-3][0],
-									mputii(&plus_dmas[4*plus_dma_index-4*3],plus_dma_regs[plus_dma_index-3][1]);
+									mputii(&plus_dmas[plus_dma_index*4-4*3],plus_dma_regs[plus_dma_index-3][1]);
 							if (i&16)
 								z80_irq|=8*64>>plus_dma_index; // n*8 == n>>-3
 							if (i&32)
 								plus_dcsr-=1<<(plus_dma_index-3);
 						}
+						plus_dma_delay=1;
+
 					}
-					++plus_dma_index; plus_dma_delay=1; break; // channel is done, wait one cycle
+					++plus_dma_index; break; // channel is done, parsing phase is over
 				}
 				++plus_dma_index; // try next channel
 			}
@@ -1218,7 +1225,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 			{
 				// HSYNC_SET calculates the PLUS ASIC horizontal skew and the DMA at once
 				plus_dma_index=0; hsync_match=hsync_count; // the LA-7800 will need this later
-				if (plus_sprite_adjust>=8)
+				if (plus_sprite_adjust>=8) // implies !!plus_enabled
 					plus_dma_delay=2,gate_count_r3x=1-256;
 				else if (plus_enabled)
 					plus_dma_delay=3,gate_count_r3x=2-256;
@@ -1257,6 +1264,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 			plus_sprite_target=NULL;
 			if (gate_count_r3y>0?vsync_match>=video_vsync_min:vsync_match>video_vsync_max) // VBLANK?
 			{
+				if (!((BYTE)video_pos_z)&&crtc_type==1) crtc_syncs_update(); // "PHEELONE" watchdog
 				// all calculations are ready: feed everything to the video engine
 				if (!video_framecount) video_endscanlines(); // frame is complete!
 				video_newscanlines(video_pos_x,(((VIDEO_LENGTH_Y-vsync_limit)/2)&-2)+((crtc_status&CRTC_STATUS_REG_8)?2:0)); // vertical reset
@@ -1378,12 +1386,12 @@ INLINE void autorun_next(void)
 #define Z80_NMI_ACK (z80_irq&=~256) // allow throwing NMIs
 //int z80_doze=0; // slow I/O operations introduce extra delays, f.e. operating the PIO when the PLUS DMA is busy updating the PSG
 // the CPC hands the Z80 a data bus value that is NOT constant on the PLUS ASIC
-#define z80_irq_bus (plus_enabled?(plus_ivr&-8)+(z80_irq&128? ((z80_pc.w&0x2000)?6:plus_8k_bug) :z80_irq&16?0:z80_irq&32?2:4):255) // 6 = PRI, 0 = DMA2, 2 = DMA1, 4 = DMA0.
+#define z80_irq_bus (plus_enabled?(plus_ivr&-8)+((z80_irq&128)?((z80_pc.w&0x2000)?6:plus_8k_bug):(z80_irq&16)?0:(z80_irq&32)?2:4):255) // 6 = PRI, 0 = DMA2, 2 = DMA1, 4 = DMA0.
 // the CPC obeys the Z80 IRQ ACK signal unless the PLUS ASIC IVR bit 0 is off (?)
 void z80_irq_ack(void)
 {
 	if (z80_irq&128) // OLD IRQ + PLUS PRI
-		/*irq_delay=0,*/plus_dcsr|=128,z80_irq&=64+32+16,irq_timer&=~32,plus_8k_bug=6; // reset the ASIC IRQ bug
+		plus_dcsr|=128,z80_irq&=64+32+16,irq_timer&=~32,/*irq_delay=0,*/plus_8k_bug=6; // reset the ASIC IRQ bug
 	else
 	{
 		plus_dcsr&=~128;
@@ -1507,8 +1515,7 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 	}
 	if (!(p&0x0800)) // 0xF400-0xF700, PIO 8255
 	{
-		while (plus_dma_delay>0)
-			z80_sync(plus_dma_delay); // the PLUS DMA hogs the PIO 8255!
+		if (plus_dma_index>=3&&plus_dma_delay>1) z80_sync(plus_dma_delay-1); // the PLUS DMA hogs the PIO 8255!
 		if (!(p&0x0200))
 		{
 			if (!(p&0x0100)) // 0xF400, PIO PORT A
@@ -2177,6 +2184,12 @@ void z80_trap(WORD p,BYTE b) // catch Z80 write operations
 						z80_irq&=~64;
 					b=((plus_dcsr&128)+(b&7))|z80_irq;
 				}
+				/*else if (p<0x006C0C&&p%4==2) // DMA PAUSE MULTIPLIER?
+				{
+					int i=(p-0x006C00)/4;
+					//if (plus_dma_regs[i][3]!=plus_dmas[4*i+2]) putchar('A'+i);
+					plus_dma_regs[i][3]=plus_dmas[4*i+2];
+				}*/ // seemingly useless: `putchar` never happens even in weird cases like "SHMUP POC" :-(
 				plus_bank[p-0x4000]=b;
 			}
 			break;
@@ -2869,9 +2882,9 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 	SNAP_SAVE_Z80W(0x1D,z80_ix);
 	SNAP_SAVE_Z80W(0x1F,z80_iy);
 	SNAP_SAVE_Z80W(0x21,z80_sp);
-	if (z80_active>1) --z80_pc.w; // hide HALT
+	Z80_PEEK_HALTED_PC;
 	SNAP_SAVE_Z80W(0x23,z80_pc);
-	if (z80_active>1) ++z80_pc.w; // show HALT
+	Z80_POKE_HALTED_PC;
 	header[0x25]=z80_imd&3;
 	SNAP_SAVE_Z80W(0x26,z80_af2);
 	SNAP_SAVE_Z80W(0x28,z80_bc2);
@@ -3466,6 +3479,7 @@ char session_menudata[]=
 	"0x8C02 High framerate\n"
 	"Audio\n"
 	"0x8400 Sound playback\tF4\n"
+	"0x8A04 Audio acceleration*\n"
 	#if AUDIO_CHANNELS > 1
 	"0xC401 0% stereo\n"
 	"0xC404 25% stereo\n"
@@ -3530,6 +3544,7 @@ void session_clean(void) // refresh options
 	session_menucheck(0x8A00,session_fullscreen);
 	session_menucheck(0x8A01,session_intzoom);
 	session_menucheck(0x8A02,!session_softblit);
+	session_menucheck(0x8A04,!session_softplay);
 	session_menuradio(0x8B01+video_type,0x8B01,0x8B05);
 	session_menuradio(0x0B01+video_scanline,0x0B01,0x0B04);
 	session_menucheck(0x0B08,video_scanblend);
@@ -3567,66 +3582,71 @@ void session_user(int k) // handle the user's commands
 		case 0x8100: // F1: HELP..
 			session_message(
 				"F1\tHelp..\t" MESSAGEBOX_WIDETAB
-				"^F1\tAbout..\t" // "\t"
+				"^F1\tAbout..\t"
 				"\n"
 				"F2\tSave snapshot.." MESSAGEBOX_WIDETAB
-				"^F2\tSave last snapshot" // "\t"
+				"^F2\tSave last snapshot"
 				"\n"
 				"F3\tLoad any file.." MESSAGEBOX_WIDETAB
-				"^F3\tLoad last snapshot" // "\t"
+				"^F3\tLoad last snapshot"
 				"\n"
 				"F4\tToggle sound" MESSAGEBOX_WIDETAB
-				"^F4\tToggle joystick" // "\t"
+				"^F4\tToggle joystick"
+				"\n"
+				"\t(shift: ..stereo)"
 				"\n"
 				"F5\tLoad firmware.." MESSAGEBOX_WIDETAB
-				"^F5\tReset emulation" // "\t"
+				"^F5\tReset emulation"
 				"\n"
 				#ifdef Z80_CPC_DANDANATOR
-				/*"\t(shift: insert Dntr...)" MESSAGEBOX_WIDETAB
-				"(shift: remove Dntr.)" // "\t"
-				"\n"*/
+				"\t(shift: load Dntr..)" "\t"
+				"\t(shift: eject Dntr)"
+				"\n"
 				#endif
 				"F6\tToggle realtime" MESSAGEBOX_WIDETAB
-				"^F6\tToggle turbo Z80" // "\t"
+				"^F6\tNext CPU speed"
+				"\n"
+				"\t(shift: ..CRTC)" MESSAGEBOX_WIDETAB
+				"\t(shift: previous..)"
 				"\n"
 				"F7\tInsert disc into A:..\t"
-				"^F7\tEject disc from A:" // "\t"
+				"^F7\tEject disc from A:"
 				"\n"
 				"\t(shift: ..into B:)\t"
-				"\t(shift: ..from B:)" // "\t"
+				"\t(shift: ..from B:)"
 				"\n"
 				"F8\tInsert tape.." MESSAGEBOX_WIDETAB
-				"^F8\tRemove tape" // "\t"
+				"^F8\tRemove tape"
 				"\n"
 				"\t(shift: record..)\t"
-				"\t-\t\t" //"\t(shift: play/stop)" // "\t"
+				//"\t(shift: play/stop)"
 				"\n"
 				"F9\tDebug\t" MESSAGEBOX_WIDETAB
-				"^F9\tToggle fast tape" // "\t"
+				"^F9\tToggle fast tape"
 				"\n"
 				"\t(shift: view status)\t"
-				"\t(shift: ..fast load)" // "\t"
+				"\t(shift: ..fast load)"
 				"\n"
 				"F10\tMenu"
 				"\n"
 				"F11\tNext palette" MESSAGEBOX_WIDETAB
-				"^F11\tNext scanlines" // "\t"
+				"^F11\tNext scanlines"
 				"\n"
 				"\t(shift: previous..)\t"
-				"\t(shift: ..filter)" // "\t"
+				"\t(shift: ..filter)"
 				"\n"
 				"F12\tSave screenshot" MESSAGEBOX_WIDETAB
-				"^F12\tRecord wavefile" // "\t"
+				"^F12\tRecord wavefile"
 				"\n"
 				"\t(shift: record film)\t"
-				"\t(shift: ..YM file)" // "\t"
+				"\t(shift: ..YM file)"
 				"\n"
 				"\n"
 				"Num.+\tRaise frameskip" MESSAGEBOX_WIDETAB
-				"Num.*\tFull frameskip" // "\t"
+				"Num.*\tFull frameskip"
 				"\n"
 				"Num.-\tLower frameskip" MESSAGEBOX_WIDETAB
-				"Num./\tNo frameskip" // "\t"
+				"Num./\tNo frameskip"
 				"\n"
 				"Pause\tPause/continue" MESSAGEBOX_WIDETAB
 				"*Return\tMaximize/restore" "\t"
@@ -3904,6 +3924,9 @@ void session_user(int k) // handle the user's commands
 		case 0x8A02: // VIDEO ACCELERATION / SOFTWARE RENDER (*needs restart)
 			session_softblit=!session_softblit;
 			break;
+		case 0x8A04: // AUDIO ACCELERATION / LONG LOOP SPACE (*needs restart)
+			session_softplay=!session_softplay;
+			break;
 		case 0x8B01: // MONOCHROME
 		case 0x8B02: // DARK PALETTE
 		case 0x8B03: // NORMAL PALETTE
@@ -3980,16 +4003,16 @@ void session_user(int k) // handle the user's commands
 			break;
 		#ifdef DEBUG
 		case 0x9500: // PRIOR
-			//++hsync_threshold;
+			++plus_dma_delay1;
 			break;
 		case 0x9600: // NEXT
-			//--hsync_threshold;
+			--plus_dma_delay1;
 			break;
 		case 0x9700: // HOME
-			//++hsync_character;
+			++plus_dma_delay0;
 			break;
 		case 0x9800: // END
-			//--hsync_character;
+			--plus_dma_delay0;
 			break;
 		#endif
 	}
@@ -4153,7 +4176,7 @@ int main(int argc,char *argv[])
 						session_hidemenu=1;
 						break;
 					case '!':
-						session_softblit=1;
+						session_softblit=session_softplay=1;
 						break;
 					default:
 						i=argc; // help!
@@ -4212,12 +4235,10 @@ int main(int argc,char *argv[])
 	while (!session_listen())
 	{
 		while (!session_signal)
-			z80_main(
-				multi_t*( // clump Z80 instructions together to gain speed...
+			z80_main(( // clump Z80 instructions together to gain speed...
 				((session_fast&-2)|tape_skipping)?VIDEO_LENGTH_X>>4: // tape loading allows simple timings, but some sync is still needed
-					(video_pos_x<video_threshold?1:(VIDEO_LENGTH_X-1-video_pos_x)>>4) // catch VRAM effects such as "CHAPELLE SIXTEEN"
-				) // ...without missing any IRQ and CRTC deadlines!
-			);
+					video_pos_x<video_threshold?1:(VIDEO_LENGTH_X-1-video_pos_x)>>4 // catch VRAM effects such as "CHAPELLE SIXTEEN"
+				)*multi_t); // ...without missing any IRQ and CRTC deadlines!
 		if (session_signal&SESSION_SIGNAL_FRAME) // end of frame?
 		{
 			if (!video_framecount&&onscreen_flag)
@@ -4254,13 +4275,11 @@ int main(int argc,char *argv[])
 						onscreen_bool(-4,-6,1,1,0);
 				}
 				#ifdef DEBUG
-				//onscreen_byte(+1,+1,hsync_threshold,0);
-				//onscreen_byte(+4,+1,hsync_character,0);
-				#endif
-				#if defined(SDL2) && defined(DEBUG)
-				if (session_audio) // SDL2 audio queue
+				onscreen_byte(+1,+1,plus_dma_delay1,0);
+				onscreen_byte(+4,+1,plus_dma_delay0,0);
+				if (session_audio) // Win32 audio cycle / SDL2 audio queue
 				{
-					if ((j=session_audioqueue)<0) j=0; else if (j>AUDIO_N_FRAMES) j=AUDIO_N_FRAMES;
+					if ((j=audio_session)>AUDIO_N_FRAMES) j=AUDIO_N_FRAMES;
 					onscreen_bool(+11,-2,j,1,1); onscreen_bool(j+11,-2,AUDIO_N_FRAMES-j,1,0);
 				}
 				#endif

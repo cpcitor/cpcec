@@ -120,7 +120,9 @@ differ in the amount of RAM, the disc controller and the keyboard);
 * -X : disable emulation of disc drives (by default enabled);
 * -Y : disable tape analysis (by default enabled; see below);
 * -Z : disable tape acceleration (by default enabled);
-* -! : disable video hardware acceleration.
+* -! : disable video and audio hardware acceleration;
+* -$ : turn the normal menu (always visible) into a pop-up (right-click) on
+Win32; turn the black-on-white user interface into white-on-black on SDL2.
 
 It's also possible to add file names to the command line: the emulator will try
 opening and running the specified files. Thanks to it CPCEC can be linked to the
@@ -959,3 +961,11 @@ and reading Kansas City blocks from CDT and TZX files.
 the first one lose the first item in the first block, adding basic DMA-PIO
 contention to the CPC Plus ASIC and improving the Spectrum floating bus: the
 tests HALT2INT (48K) and FLOATSPY (48K and 128K) work properly now.
+- 20211119 -- minor patch adding a new entry in the Audio menu ("Audio
+acceleration") to set whether the audio buffer length is short (lower latency)
+or long (more compatible). The Plus ASIC DMA-PIO contention is a little more
+precise. Tapes for Spectrum avoid several unwanted coincidences ("Advanced
+Soccer Simulator" and "Banger Racer", found by Raúl). The help screens are a
+little more explicit, the WAVE file output is always lil-endian even if the
+system is big-endian, the pixel filter and the scanline blend are faster, and
+the SDL2 user interface becomes white-on-black with the parameter `-$`.

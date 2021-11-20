@@ -47,8 +47,8 @@ void mputiiii(unsigned char *x,int y) { x[3]=y>>24; x[2]=y>>16; x[1]=y>>8; *x=y;
 
 #define equalsmm(x,i) (*(WORD*)(x)==(i))
 #define equalsmmmm(x,i) (*(DWORD*)(x)==(i))
-#define equalsii(x,i) (*(WORD*)(x)==(WORD)(((i>>8))+((i&255)<<8)))
-#define equalsiiii(x,i) (*(DWORD*)(x)==(DWORD)(((i>>24))+((i&(255<<16))>>8)+((i&(255<<8))<<8)+(i<<24)))
+#define equalsii(x,i) (*(WORD*)(x)==(WORD)(((i>>8)&255)+((i&255)<<8)))
+#define equalsiiii(x,i) (*(DWORD*)(x)==(DWORD)(((i>>24)&255)+((i&(255<<16))>>8)+((i&(255<<8))<<8)+((i&255)<<24)))
 
 int fgetii(FILE *f) { int i=fgetc(f); return i|(fgetc(f)<<8); } // common lil-endian 16-bit fgetc()
 int fputii(int i,FILE *f) { fputc(i,f); return fputc(i>>8,f); } // common lil-endian 16-bit fputc()
@@ -74,8 +74,8 @@ void mputmmmm(unsigned char *x,int y) { *x=y>>24; x[1]=y>>16; x[2]=y>>8; x[3]=y;
 
 #define equalsii(x,i) (*(WORD*)(x)==(i))
 #define equalsiiii(x,i) (*(DWORD*)(x)==(i))
-#define equalsmm(x,i) (*(WORD*)(x)==(WORD)(((i>>8))+((i&255)<<8)))
-#define equalsmmmm(x,i) (*(DWORD*)(x)==(DWORD)(((i>>24))+((i&(255<<16))>>8)+((i&(255<<8))<<8)+(i<<24)))
+#define equalsmm(x,i) (*(WORD*)(x)==(WORD)(((i>>8)&255)+((i&255)<<8)))
+#define equalsmmmm(x,i) (*(DWORD*)(x)==(DWORD)(((i>>24)&255)+((i&(255<<16))>>8)+((i&(255<<8))<<8)+((i&255)<<24)))
 
 int fgetii(FILE *f) { int i=0; return (fread(&i,1,2,f)!=2)?EOF:i; } // native lil-endian 16-bit fgetc()
 int fputii(int i,FILE *f) { return (fwrite(&i,1,2,f)!=2)?EOF:i; } // native lil-endian 16-bit fputc()
@@ -1150,7 +1150,16 @@ int session_createwave(void) // create a wave file; !0 ERROR
 	fwrite(waveheader,1,sizeof(waveheader),session_wavefile);
 	return session_wavesize=0;
 }
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN && AUDIO_BITDEPTH > 8
+void session_writewave(AUDIO_UNIT *t) // swap HI-LO bytes, WAVE files follow the INTEL lil endian style
+{
+	AUDIO_UNIT s[sizeof(audio_buffer)];
+	for (int i=0;i<sizeof(s);++i) s[i]=((t[i]>>8)&255)+(t[i]<<8);
+	session_wavesize+=fwrite(s,1,sizeof(s),session_wavefile);
+}
+#else
 void session_writewave(AUDIO_UNIT *t) { session_wavesize+=fwrite(t,1,sizeof(audio_buffer),session_wavefile); }
+#endif
 int session_closewave(void) // close a wave file; !0 ERROR
 {
 	if (session_wavefile)
@@ -1165,6 +1174,7 @@ int session_closewave(void) // close a wave file; !0 ERROR
 }
 
 // multimedia: extremely primitive video+audio output! -------------- //
+// warning: the following code assumes that VIDEO_UNIT is DWORD 0X00RRGGBB!
 
 unsigned int session_nextfilm=1,session_filmfreq,session_filmcount;
 BYTE session_filmflag,session_filmscale=1,session_filmtimer=1,session_filmalign; // format options
@@ -1341,6 +1351,7 @@ int session_closefilm(void) // stop recording video and audio; !0 ERROR
 }
 
 // multimedia: screenshot output ------------------------------------ //
+// warning: the following code assumes that VIDEO_UNIT is DWORD 0X00RRGGBB!
 
 unsigned char bitmapheader[54]="BM\000\000\000\000\000\000\000\000\066\000\000\000\050\000\000\000\000\000\000\000\000\000\000\000\001\000\030\000";
 unsigned int session_nextbitmap=1;
@@ -1366,34 +1377,21 @@ INLINE int session_savebitmap(void) // save a RGB888 bitmap file; !0 ERROR
 			for (int j=0;j<VIDEO_PIXELS_X;j+=2) // turn two ARGB into one RGB
 			{
 				VIDEO_UNIT v=VIDEO_FILTER_HALF(s[0],s[1]);
-				#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-				*t++=v>>24, // copy B
-				*t++=v>>16, // copy G
-				*t++=v>>8, // copy R
-				#else
 				*t++=v, // copy B
 				*t++=v>>8, // copy G
-				*t++=v>>16, // copy R
-				#endif
+				*t++=v>>16; // copy R
 				s+=2;
 			}
 		}
 		else
 		{
-			BYTE *t=r,*s=(BYTE*)session_getscanline(i);
+			BYTE *t=r; VIDEO_UNIT *s=session_getscanline(i);
 			for (int j=0;j<VIDEO_PIXELS_X;++j) // turn each ARGB into one RGB
 			{
-				#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-				*t++=s[3], // copy B
-				*t++=s[2], // copy G
-				*t++=s[1], // copy R
-				s+=4; // skip A
-				#else
-				*t++=*s++, // copy B
-				*t++=*s++, // copy G
-				*t++=*s++, // copy R
-				s++; // skip A
-				#endif
+				VIDEO_UNIT v=*s++;
+				*t++=v, // copy B
+				*t++=v>>8, // copy G
+				*t++=v>>16; // copy R
 			}
 		}
 	return fclose(f),0;
@@ -1435,6 +1433,7 @@ char *session_configread(unsigned char *t) // reads configuration file; t points
 		if (!strcasecmp(t,"softvideo")) return video_filter=*s&7,NULL;
 		if (!strcasecmp(t,"zoomvideo")) return session_intzoom=*s&1,NULL;
 		if (!strcasecmp(t,"safevideo")) return session_softblit=*s&1,NULL;
+		if (!strcasecmp(t,"safeaudio")) return session_softplay=*s&1,NULL;
 		if (!strcasecmp(t,"film")) return session_filmscale=*s&1,session_filmtimer=(*s>>1)&1,NULL;
 		if (!strcasecmp(t,"info")) return onscreen_flag=*s&1,NULL;
 	}
@@ -1444,9 +1443,9 @@ void session_configwrite(FILE *f) // save common parameters
 {
 	fprintf(f,
 		"film %d\ninfo %d\n"
-		"polyphony %d\nsoftaudio %d\nscanlines %d\nsoftvideo %d\nzoomvideo %d\nsafevideo %d\n"
+		"polyphony %d\nsoftaudio %d\nscanlines %d\nsoftvideo %d\nzoomvideo %d\nsafevideo %d\nsafeaudio %d\n"
 		,session_filmscale+(session_filmtimer<<1),onscreen_flag
-		,audio_mixmode,audio_filter,(video_scanline&3)+(video_scanblend?4:0),video_filter,session_intzoom,session_softblit
+		,audio_mixmode,audio_filter,(video_scanline&3)+(video_scanblend?4:0),video_filter,session_intzoom,session_softblit,session_softplay
 		);
 }
 

@@ -80,7 +80,7 @@ archivo ZIP pueden necesitar extraerse con "unzip -LL cpcec-20XXXXXX.zip".
 ## Configuración y ficheros ##
 
 El funcionamiento de CPCEC se configura especificando parámetros opcionales en
-la línea de comandos. Para que los parámetros preferidos por el usuario sean
+la línea de comando. Para que los parámetros preferidos por el usuario sean
 estables se recomienda crear en el menú del sistema un enlace al emulador que
 contenga dichos parámetros. Las opciones pueden ser abreviadas al estilo Unix:
 por ejemplo `-C -d -J` se abrevia `-CdJ`. En caso de duda, el parámetro `-h`
@@ -127,9 +127,12 @@ sonido);
 * -Y : deshabilitar el análisis de cinta (por defecto habilitado; ver más
 adelante);
 * -Z : deshabilitar la aceleración de cinta (por defecto habilitada);
-* -! : deshabilitar la aceleración por hardware de vídeo.
+* -! : deshabilitar la aceleración por hardware de vídeo y audio.
+* -$ : cambiar el menú de normal (siempre visible) a contextual (botón derecho)
+en Win32; cambiar el interfaz de usuario negro de sobre blanco a blanco sobre
+negro en SDL2.
 
-También es posible añadir nombres de fichero a la línea de comandos: el emulador
+También es posible añadir nombres de fichero a la línea de comando: el emulador
 intentará cargar y ejecutar los ficheros especificados. Gracias a ello CPCEC
 puede ser vinculado a las extensiones de fichero CDT, CPR, CSW, DSK y SNA para
 cargar dichos ficheros automáticamente.
@@ -250,7 +253,7 @@ superponer al firmware actual. Internamente son simples ficheros de texto donde
 cada línea define un atributo o una ROM:
 
 * type = 0..3 : elige el tipo de firmware (por ejemplo 0 significa CPC464) de
-igual forma que los parámetros de línea de comandos -m0..3;
+igual forma que los parámetros de línea de comando -m0..3;
 * bank = 0..4 : elige el tamaño de RAM (por ejemplo 0 significa 64k) de igual
 forma que los parámetros -k0..4;
 * crtc = 0..4 : elige el tipo de CRTC de igual forma que los parámetros -g0..4;
@@ -298,14 +301,14 @@ los teclados modernos ya no ubican estas teclas dentro de la tabla alfanumérica
 ## Debugger ##
 
 El depurador o "debugger" sirve para detener la emulación y examinar su estado
-interno. Al principio empleaba un interfaz de línea de comandos; ahora se basa
-en un interfaz de usuario controlado mediante cursores dividido en cuatro
-paneles: desensamblado (arriba izquierda), registros (arriba derecha), volcado
-de memoria (abajo izquierda) y pila (abajo derecha). La mitad izquierda del
-panel de registros (sólo lectura) muestra los registros del hardware (Gate
-Array, CRTC, etc.) mientras que la mitad derecha (lectura y escritura) muestra
-los registros propiamente dichos del Z80. Los valores mostrados en la pantalla y
-los parámetros de las órdenes emplean notación hexadecimal.
+interno. Al principio empleaba un interfaz de línea de comando; ahora se basa en
+un interfaz de usuario controlado mediante cursores dividido en cuatro paneles:
+desensamblado (arriba izquierda), registros (arriba derecha), volcado de memoria
+(abajo izquierda) y pila (abajo derecha). La mitad izquierda del panel de
+registros (sólo lectura) muestra los registros del hardware (Gate Array, CRTC,
+etc.) mientras que la mitad derecha (lectura y escritura) muestra los registros
+propiamente dichos del Z80. Los valores mostrados en la pantalla y los
+parámetros de las órdenes emplean notación hexadecimal.
 
 * Los cursors, Re.Pág. y Av.Pág. mueven el cursor dentro del panel actual;
 * Tab (o Mays+Tab) mueve el cursor al panel siguiente (o anterior);
@@ -667,7 +670,7 @@ caras con la opción FLIP SIDE habilitada, grabar "snapshots" o cintas después 
 extraer un snapshot o cinta de un archivo ZIP), mejorar varios detalles (cargar
 snapshots con compresión de memoria, emular hasta 576 kB de RAM) y redefinir los
 menús (Edit se divide en Edit y Settings, Image y Sound se convierten en Video y
-Audio, opciones nuevas de filtrado de vídeo...) y la línea de comandos: "-+"
+Audio, opciones nuevas de filtrado de vídeo...) y la línea de comando: "-+"
 ahora limita el zoom a valores enteros; "-!" hereda la opción de no mostrar el
 menú.
 - 20191003 -- duodécima versión pública. Contención de memoria y ruido de ULA
@@ -835,7 +838,7 @@ en sistemas distintos de Windows de CPCEC.INI y ZXSEC.INI a .cpcecrc y .zxsecrc
 como es costumbre en Unix. Retoques de compatibilidad para CLANG.
 - 20201012 -- parche menor que añade uso del ratón al interfaz de usuario de
 SDL2.
-- 20201015 -- parche menor que corrige un error en el soporte de Dandanator (las
+- 20201020 -- parche menor que corrige un error en el soporte de Dandanator (las
 operaciones "LD (IY+n),A/B/C" deben funcionar con cualquier valor de "n", en
 lugar de solamente 0: gracias a Spirax por informarme) y otro en el CRTC (el
 contador HCC es de 8 bits: "Camembert Meeting 4 Demo" deja de mostrar una línea
@@ -1025,3 +1028,12 @@ TZX que hacía que todas las cintas tras la primera perdiesen el primer elemento
 del primer bloque, añade contención básica DMA-PIO al ASIC de CPC Plus y mejora
 el bus flotante de Spectrum: las pruebas HALT2INT (48K) y FLOATSPY (48K y 128K)
 ahora van bien.
+- 20211119 -- parche menor que añade una entrada del menú Audio ("Audio
+acceleration") para establecer si el buffer de audio es corto (menor latencia) o
+largo (más compatible). La contención DMA-PIO en el ASIC de Plus es un poco más
+precisa. Las cintas para Spectrum evitan coincidencias indeseadas ("Advanced
+Soccer Simulator" y "Banger Racer", hallados por Raúl). Las pantallas de ayuda
+son algo más explícitas, la grabación de ficheros WAVE es siempre `lil-endian"
+aunque el sistema sea "big-endian", el filtro de píxeles y la mezcla de
+scanlines son más veloces, y el interfaz de usuario de SDL2 se vuelve blanco
+sobre negro con el parámetro "-$`.

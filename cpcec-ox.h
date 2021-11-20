@@ -40,7 +40,7 @@
 	#define BYTE Uint8 // can this be safely reduced to "unsigned char"?
 	#define WORD Uint16 // can this be safely reduced to "unsigned short"?
 	#define DWORD Uint32 // this CANNOT be safely reduced to "unsigned int"!
-	#define SDL2_UTF8 // is there any POSIX system that does NOT rely on UTF8?
+	#define SDL2_UTF8 // is there any *NIX system that does NOT rely on UTF-8?
 #endif
 
 #define MESSAGEBOX_WIDETAB "\t\t" // rely on monospace font
@@ -49,13 +49,16 @@
 
 #define VIDEO_UNIT DWORD // 0x00RRGGBB style
 
-#define VIDEO_FILTER_HALF(x,y) ((x<y?(((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00):(((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1) // 50:50
+#define VIDEO_FILTER_HALF(x,y) (x!=y?(x<y?(((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00):(((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1:x) // 50:50
 //#define VIDEO_FILTER_BLURDATA vxh,vxl,vzh,vzl
 //#define VIDEO_FILTER_BLUR0(z) vxh=z&0XFF00FF,vxl=z&0XFF00
 //#define VIDEO_FILTER_BLUR(r,z) r=((((vzh=z&0XFF00FF)+vxh+0X10001)&0X1FE01FE)+(((vzl=z&0XFF00)+vxl+0X100)&0X1FE00))>>1,vxh=vzh,vxl=vzl // 50:50 blur
-#define VIDEO_FILTER_BLURDATA vxh,vxl,vyh,vyl,vzh,vzl
-#define VIDEO_FILTER_BLUR0(z) vxh=vyh=z&0XFF00FF,vxl=vyl=z&0XFF00
-#define VIDEO_FILTER_BLUR(r,z) r=((((vzh=z&0XFF00FF)+vyh*2+vxh+0X20002)&0X3FC03FC)+(((vzl=z&0XFF00)+vyl*2+vxl+0X200)&0X3FC00))>>2,vxh=vyh,vyh=vzh,vxl=vyl,vyl=vzl // 25:50:25 blur
+//#define VIDEO_FILTER_BLURDATA vxh,vxl,vyh,vyl,vzh,vzl
+//#define VIDEO_FILTER_BLUR0(z) vxh=vyh=z&0XFF00FF,vxl=vyl=z&0XFF00
+//#define VIDEO_FILTER_BLUR(r,z) r=((((vzh=z&0XFF00FF)+vyh*2+vxh+0X20002)&0X3FC03FC)+(((vzl=z&0XFF00)+vyl*2+vxl+0X200)&0X3FC00))>>2,vxh=vyh,vyh=vzh,vxl=vyl,vyl=vzl // 25:50:25 blur
+#define VIDEO_FILTER_BLURDATA vzz
+#define VIDEO_FILTER_BLUR0(z) vzz=z
+#define VIDEO_FILTER_BLUR(r,z) r=VIDEO_FILTER_HALF(vzz,z),vzz=z
 //#define VIDEO_FILTER_X1(x) (((x>>1)&0X7F7F7F)+0X2B2B2B) // average
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)+0X404040) // heavier
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)*3+0X161616) // lighter
@@ -71,7 +74,8 @@
 	#define AUDIO_BITDEPTH 16
 	#define AUDIO_ZERO 0
 #endif // bitsize
-#define AUDIO_CHANNELS 2 // 1 mono, 2 stereo
+#define AUDIO_CHANNELS 2 // 1 for mono, 2 for stereo
+#define AUDIO_N_FRAMES 16 // safe on all machines, but slow; must be even!
 
 VIDEO_UNIT *video_frame,*menus_frame,*video_blend; // video and UI frames, allocated on runtime
 AUDIO_UNIT *audio_frame,audio_buffer[AUDIO_LENGTH_Z*AUDIO_CHANNELS]; // audio frame
@@ -84,8 +88,8 @@ BYTE audio_disabled=0,audio_session=0; // audio status and counter
 unsigned char session_path[STRMAX],session_parmtr[STRMAX],session_tmpstr[STRMAX],session_substr[STRMAX],session_info[STRMAX]="";
 
 int session_timer,session_event=0; // timing synchronisation and user command
-BYTE session_fast=0,session_wait=0,session_audio=1,session_softblit=1,session_hardblit; // timing and devices ; software blitting is enabled by default because it's safer
-BYTE session_stick=1,session_shift=0,session_key2joy=0; // keyboard and joystick
+BYTE session_fast=0,session_wait=0,session_softblit=1,session_hardblit,session_softplay=0,session_hardplay; // software blitting enabled by default
+BYTE session_audio=1,session_stick=1,session_shift=0,session_key2joy=0; // keyboard and joystick
 #ifdef MAUS_EMULATION
 int session_maus_z=0,session_maus_x=0,session_maus_y=0; // optional mouse
 #endif
@@ -233,7 +237,6 @@ void session_debug_show(void); // redraw the debugger text; must be defined late
 int session_debug_user(int k); // debug logic is a bit different: 0 UNKNOWN COMMAND, !0 OK
 int debug_xlat(int k); // translate debug keys into codes. Must be defined later on!
 INLINE void audio_playframe(int q,AUDIO_UNIT *ao); // handle the sound filtering; is defined in CPCEC-RT.H!
-int session_audioqueue; // unlike in Windows, we cannot use the audio device as the timer in SDL2 :-(
 
 void session_please(void) // stop activity for a short while
 {
@@ -283,7 +286,7 @@ SDL_Window *session_hwnd=NULL;
 VIDEO_UNIT *debug_frame;
 BYTE debug_buffer[DEBUG_LENGTH_X*DEBUG_LENGTH_Y]; // [0] can be a valid character, 128 (new redraw required) or 0 (redraw not required)
 SDL_Texture *session_dbg=NULL;
-#define session_hidemenu *debug_buffer // dummy, useless on SDL2
+BYTE session_hidemenu=0; // positive or negative UI
 SDL_Texture *session_dib=NULL,*session_gui_dib=NULL; SDL_Renderer *session_blitter=NULL;
 SDL_Rect session_ideal; // used for calculations, see below
 
@@ -299,8 +302,8 @@ void session_redraw(int q) // redraw main canvas (!0) or user interface (0)
 		if (session_r_h>session_r_w*VIDEO_PIXELS_Y/VIDEO_PIXELS_X) // window area is too tall?
 			session_r_h=session_r_w*VIDEO_PIXELS_Y/VIDEO_PIXELS_X;
 		if (session_intzoom) // integer zoom? (100%, 150%, 200%, 250%, 300%...)
-			session_r_w=((session_r_w*17)/VIDEO_PIXELS_X/8)*VIDEO_PIXELS_X/2,
-			session_r_h=((session_r_h*17)/VIDEO_PIXELS_Y/8)*VIDEO_PIXELS_Y/2;
+			session_r_w=((session_r_w*17)/VIDEO_PIXELS_X/8)*VIDEO_PIXELS_X/2, // "*9../8../1"
+			session_r_h=((session_r_h*17)/VIDEO_PIXELS_Y/8)*VIDEO_PIXELS_Y/2; // forbids +50%
 		if (session_r_w<VIDEO_PIXELS_X||session_r_h<VIDEO_PIXELS_Y)
 			session_r_w=VIDEO_PIXELS_X,session_r_h=VIDEO_PIXELS_Y; // window area is too small!
 		session_ideal.x=session_r_x=(session_ideal.w-session_r_w)/2; session_ideal.w=session_r_w;
@@ -376,9 +379,9 @@ int utf8add(char *s,int i) // get offset `i` within a valid UTF-8 pointer `s`
 	char *r=s; if (i>0) { do { if (*s) while (*++s<-64) ; } while (--i); }
 	else if (i<0) { do { while (*--s<-64) ; } while (++i); } return s-r;
 }
-#else
+#else // simple chars without UTF-8
 #define utf8put(s,i) (*((*(s))++)=i)
-#define utf8get(s) (*((*(s))++))
+#define utf8get(s) ((unsigned char)*((*(s))++))
 #define utf8len(s) strlen((s))
 #define utf8chk(i) (1)
 #define utf8add(s,i) (i)
@@ -432,6 +435,7 @@ void session_fillrect(int rx,int ry,int rw,int rh,VIDEO_UNIT a) // n.b.: coords 
 			*p++=a;
 }
 #define session_ui_fillrect(x,y,w,h,a) session_fillrect((x)*8,(y)*SESSION_UI_HEIGHT,(w)*8,(h)*SESSION_UI_HEIGHT,(a)) // coords in characters
+int SESSION_UI_000=0X000000,SESSION_UI_025=0X404040,SESSION_UI_050=0X808080,SESSION_UI_075=0XC0C0C0,SESSION_UI_100=0XFFFFFF; // former constants
 
 int session_ui_skew=0; // vertical skew for frames and glyphs
 void session_ui_drawframes(int x,int y,int w,int h) // coords in characters
@@ -440,14 +444,14 @@ void session_ui_drawframes(int x,int y,int w,int h) // coords in characters
 	int rx,ry,rw,rh;
 	// top border
 	rx=x-2; ry=y-2;
-	rw=w+4; rh=2; session_fillrect(rx,ry,rw,rh,0x00C0C0C0);
+	rw=w+4; rh=2; session_fillrect(rx,ry,rw,rh,SESSION_UI_075);
 	// bottom border
-	ry=y+h; session_fillrect(rx,ry,rw,rh,0x00404040);
+	ry=y+h; session_fillrect(rx,ry,rw,rh,SESSION_UI_025);
 	// left border
 	ry=y-1;
-	rw=2; rh=h+2; session_fillrect(rx,ry,rw,rh,0x00808080);
+	rw=2; rh=h+2; session_fillrect(rx,ry,rw,rh,SESSION_UI_050);
 	// right border
-	rx=x+w; session_fillrect(rx,ry,rw,rh,0x00808080);
+	rx=x+w; session_fillrect(rx,ry,rw,rh,SESSION_UI_050);
 }
 int session_ui_printglyph(VIDEO_UNIT *p,int z,int q)
 {
@@ -460,7 +464,7 @@ int session_ui_printglyph(VIDEO_UNIT *p,int z,int q)
 		{
 			int rr=q^*r++;
 			for (int xx=0;xx<w;++xx)
-				*p++=(rr&(128>>xx))?0:0xFFFFFF;
+				*p++=(rr&(128>>xx))?SESSION_UI_000:SESSION_UI_100;
 			p+=VIDEO_PIXELS_X-w;
 		}
 	}
@@ -480,7 +484,7 @@ int session_ui_printasciz(unsigned char *s,int x,int y,int prae,int w,int post,i
 		do
 		{
 			if (s-r==q1) q=1; if (s-r==q2) q=0;
-			if (i=(utf8get(&s))) t+=session_ui_printglyph(t,i,q);
+			if (i=(utf8get((char**)&s))) t+=session_ui_printglyph(t,i,q);
 		}
 		while (i);
 	}
@@ -490,7 +494,7 @@ int session_ui_printasciz(unsigned char *s,int x,int y,int prae,int w,int post,i
 		while (w-->0)
 		{
 			if (s-r==q1) q=1; if (s-r==q2) q=0;
-			t+=session_ui_printglyph(t,utf8get(&s),q);
+			t+=session_ui_printglyph(t,utf8get((char**)&s),q);
 		}
 		t+=session_ui_printglyph(t,127,q); // ellipsis,
 		t+=session_ui_printglyph(t,'.',q); // see above
@@ -772,7 +776,7 @@ int session_ui_text(char *s,char *t,char q) // see session_message
 	session_ui_printasciz("",textx+q,texty+(++i),1,textw-q,1,0,+0); // blank
 	if (q) // draw icon?
 	{
-		session_ui_fillrect(textx,texty+1,q,texth-1,0x00C0C0C0);
+		session_ui_fillrect(textx,texty+1,q,texth-1,SESSION_UI_075);
 		//for (int z=0;z<q;++z) session_ui_fillrect(textx+z,texty+1,1,texth-1,0x00010101*((0xFF*z+0xC0*(q-z)+q/2)/q)); // gradient!
 		VIDEO_UNIT *tgt=&menus_frame[(texty+2)*SESSION_UI_HEIGHT*VIDEO_PIXELS_X+(textx+1)*8];
 		for (int z=0,y=0;y<32;++y,tgt+=VIDEO_PIXELS_X-32)
@@ -871,7 +875,7 @@ int session_ui_input(char *s,char *t) // see session_input
 				else if (dirty==KBCODE_BKSPACE?i>0:i<j)
 				{
 					int o; if (dirty==KBCODE_BKSPACE) { o=i; i+=utf8add(&session_substr[i],-1); }
-					else { unsigned char *z=&session_substr[i]; utf8get(&z); o=z-session_substr; }
+					else { unsigned char *z=&session_substr[i]; utf8get((char**)&z); o=z-session_substr; }
 					memmove(&session_substr[i],&session_substr[o],j-i+1); j+=i-o;
 				}
 				break;
@@ -1299,6 +1303,11 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	SDL_SetTextureBlendMode(session_dbg,SDL_BLENDMODE_NONE);
 	SDL_LockTexture(session_dbg,NULL,(void*)&debug_frame,&dummy);
 
+	if (session_hidemenu) // user interface style
+	{
+		int i=SESSION_UI_000; SESSION_UI_000=SESSION_UI_100; SESSION_UI_100=i;
+		i=SESSION_UI_025; SESSION_UI_025=SESSION_UI_075; SESSION_UI_075=i;
+	}
 	if (session_stick)
 	{
 		int i=SDL_NumJoysticks();
@@ -1309,7 +1318,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 		session_stick=i>=0;
 		cprintf(session_stick?"Joystick enabled!\n":"No joystick!\n");
 	}
-	if (session_audio)
+	if (session_hardplay=!session_softplay,session_audio)
 	{
 		SDL_AudioSpec spec;
 		SDL_zero(spec);
@@ -1629,13 +1638,9 @@ INLINE void session_render(void) // update video, audio and timers
 		if (s!=audio_disabled)
 			if (s=audio_disabled) // silent mode needs cleanup
 				memset(audio_buffer,AUDIO_ZERO,sizeof(audio_buffer));
-		#ifdef SDL2_DOUBLE_QUEUE // audio buffer workaround (f.e. SliTaz v5)
-			#define AUDIO_N_FRAMES 16
-		#else
-			#define AUDIO_N_FRAMES 8
-		#endif
-		session_audioqueue=SDL_GetQueuedAudioSize(session_audio)/sizeof(audio_buffer);
-		for (j=session_audioqueue?session_audioqueue>AUDIO_N_FRAMES?0:1:AUDIO_N_FRAMES;j>0;--j) // pump audio
+		audio_session=SDL_GetQueuedAudioSize(session_audio)/sizeof(audio_buffer);
+		int n=AUDIO_N_FRAMES>>session_hardplay;
+		for (j=audio_session>0?audio_session>n?0:1:n;j>0;--j) // pump audio
 			SDL_QueueAudio(session_audio,audio_buffer,sizeof(audio_buffer));
 	}
 

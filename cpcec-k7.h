@@ -368,7 +368,7 @@ int tape_tonecodes,tape_toneitems,tape_datacodes,tape_dataitems;
 short tape_codeitem[256][32]; // are there tapes THIS complex!?
 short *tape_code; int tape_item,tape_mask,tape_bits,tape_byte;
 
-short tape_tzxpilot,tape_tzxpilots,tape_tzxsync1,tape_tzxsync2,
+int tape_tzxpilot,tape_tzxpilots,tape_tzxsync1,tape_tzxsync2,
 	tape_tzxbit0,tape_tzxbit1,tape_tzxfinal,tape_tzxhold; // TZX config values
 void tape_tzx20(void) // TZX BLOCK $20 et al. sets the "tails"
 	{ tape_tail=0; tape_tails=3500*tape_tzxhold; } // 1 ms = 3500 T
