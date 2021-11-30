@@ -57,11 +57,10 @@ void z80_debug_close(void)
 		z80_debug_logfile=NULL;
 	}
 }
-#define z80_reset_breakpoints() MEMZERO(z80_breakpoints)
 
 void z80_setup(void) // setup the Z80
 {
-	z80_reset_breakpoints();
+	MEMZERO(z80_breakpoints);
 	// flag bit reference:
 	// - 7, 0x80: S, Sign
 	// - 6, 0x40: Z, Zero
@@ -1689,7 +1688,7 @@ void z80_reset(void) // reset the Z80
 #define Z80_INC_R ++r7
 #define Z80_DEC_R --r7
 #define Z80_GET_R8 ((z80_ir.b.l&0x80)+(r7&0x7F)) // rebuild R from R7
-#define Z80_FETCH Z80_PEEKPC(z80_pc.w)
+#define Z80_FETCH Z80_PEEKZ(z80_pc.w)
 #define Z80_RD_PC Z80_PEEK(z80_pc.w)
 #define Z80_WZ_PC z80_wz=Z80_RD_PC; ++z80_pc.w; z80_wz+=Z80_RD_PC<<8 // read WZ from WORD[PC++]
 #define Z80_RD_HL BYTE b=Z80_PEEK(z80_hl.w)
@@ -2807,10 +2806,10 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 				case 0xE3: // EX HL,(SP)
 					z80_wz=Z80_PEEK(z80_sp.w);
 					++z80_sp.w;
-					z80_wz+=Z80_PEEKPC(z80_sp.w)<<8;
-					Z80_POKE3(z80_sp.w,z80_hl.b.h);
+					z80_wz+=Z80_PEEKZ(z80_sp.w)<<8;
+					Z80_POKE5(z80_sp.w,z80_hl.b.h);
 					--z80_sp.w;
-					Z80_POKE4(z80_sp.w,z80_hl.b.l);
+					Z80_POKE6(z80_sp.w,z80_hl.b.l);
 					z80_hl.w=z80_wz;
 					Z80_IORQ_1X_NEXT(2);
 					Z80_STRIDE_1;
@@ -3275,10 +3274,10 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							case 0xE3: // EX IX,(SP)
 								z80_wz=Z80_PEEK(z80_sp.w);
 								++z80_sp.w;
-								z80_wz+=Z80_PEEKPC(z80_sp.w)<<8;
-								Z80_POKE3(z80_sp.w,xy->b.h);
+								z80_wz+=Z80_PEEKZ(z80_sp.w)<<8;
+								Z80_POKE5(z80_sp.w,xy->b.h);
 								--z80_sp.w;
-								Z80_POKE4(z80_sp.w,xy->b.l);
+								Z80_POKE6(z80_sp.w,xy->b.l);
 								xy->w=z80_wz;
 								Z80_IORQ_1X_NEXT(2);
 								Z80_STRIDE_1;
@@ -4073,6 +4072,12 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 		case 'W': // TOGGLE GRAPHICS/HEXDUMPS
 			z80_debug_grfx=!z80_debug_grfx;
 			break;
+		case 'K': // CLOSE LOG
+			z80_debug_close();
+			// no `break`!
+		case 'Z': // RESET BREAKPOINTS
+			MEMZERO(z80_breakpoints);
+			break;
 		case 'H': // HELP
 			session_message(
 				"Cursors\tNavigate panel\n"
@@ -4159,9 +4164,6 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 					case '.': // TOGGLE BREAKPOINT
 						z80_breakpoints[z80_debug_pnl0_w]=!z80_breakpoints[z80_debug_pnl0_w];
 						break;
-					case 'Z': // RESET BREAKPOINTS
-						z80_reset_breakpoints();
-						break;
 					case 'J': // JUMP TO
 						z80_pc.w=z80_debug_pnl0_w;
 						break;
@@ -4210,9 +4212,6 @@ int z80_debug_user(int k) // returns 0 if NOTHING, !0 if SOMETHING
 									}
 						}
 						break;
-					case 'K': // CLOSE LOG
-						z80_debug_close();
-						// no `break`!
 					default: k=0; break;
 				}
 				if (i&&k>0&&k<32) // cursors may need to move up or down

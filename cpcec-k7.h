@@ -32,7 +32,7 @@ int tape_t,tape_n,tape_heads,tape_tones,tape_datas,tape_waves,tape_tails,tape_lo
 int tape_kansas,tape_kansas0n,tape_kansas1n,tape_kansasin,tape_kansasi,tape_kansason,tape_kansaso,tape_kansasrl;
 #endif
 
-#define tape_safetydelay() (tape_status=0,tape_t=tape_playback*-TAPE_MAIN_TZX_STEP*2)
+#define tape_safetydelay() ((tape_type>=2)&&(tape_step=2000)) // safety delay in milliseconds
 
 // tape file handling operations ------------------------------------ //
 
@@ -143,7 +143,7 @@ int tape_open(char *s) // opens a tape file `s` for input; 0 OK, !0 ERROR
 	else
 		return tape_close(),1; // unknown file!
 	if (tape_path!=s) strcpy(tape_path,s); // valid format
-	return tape_filebase=tape_filetell,(tape_type>=2)&&tape_safetydelay(),0;
+	return tape_filebase=tape_filetell,tape_safetydelay(),0;
 }
 int tape_create(char *s) // creates a tape file `s` for output; 0 OK, !0 ERROR
 {
@@ -429,9 +429,9 @@ void tape_select(int i) // seeks the position `i` in the tape input
 
 void tape_main(int t) // plays tape back for `t` ticks; t must be >0!
 {
+	// *!* work around overflows without `long long`
 	int p=(tape_t+=(t*tape_playback))/TICKS_PER_SECOND;
-	tape_t%=TICKS_PER_SECOND; // *!* a possible solution without `long long`
-	if (p>0) switch (tape_type)
+	if (p>0) switch (tape_t%=TICKS_PER_SECOND,tape_type)
 	{
 		case -1: // RECORD to CSW
 			if (tape_n+=p,tape_record!=tape_output) tape_flush();
@@ -558,13 +558,15 @@ void tape_main(int t) // plays tape back for `t` ticks; t must be >0!
 				{
 					if (tape_tails>3500) tape_n+=3500,tape_tails-=3500; // 3500 T = 1 ms
 						else tape_n+=tape_tails,tape_tails=0;
-					if (tape_tail++) tape_status=0; else tape_status^=1; // quiet after 1 ms
+					if (tape_tail) tape_status=0; else tape_status^=tape_tail=1; // quiet after 1 ms
 				}
 				else do
 				{
 					if (!--watchdog) { tape_close(); tape_signal=-1; return; } // it's a corrupted tape!!
+					if (tape_step) // safety delay when opening, rewinding or browsing tapes
+						tape_tzxhold=tape_step,tape_tzx20(),tape_step=0,cprintf("TAPE:ZZZ... ");
 					#ifdef TAPE_SPECTRUM_FORMATS
-					if (tape_type==3) // TAP
+					else if (tape_type==3) // TAP
 					{
 						if ((p=tape_getcc())<=0)
 							{ tape_eofmet(); return; }
@@ -610,8 +612,8 @@ void tape_main(int t) // plays tape back for `t` ticks; t must be >0!
 						else // unknown, ignore
 							tape_skip(t);
 					}
-					else // TZX
 					#endif
+					else // TZX
 					{
 						if ((p=tape_getc())<=0)
 							{ tape_eofmet(); return; }

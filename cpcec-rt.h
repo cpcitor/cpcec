@@ -389,11 +389,10 @@ INLINE void audio_playframe(int q,AUDIO_UNIT *ao) // call between frames by the 
 	#endif
 }
 
-int session_signal_frames=0,session_signal_scanlines=0; //,session_rhythm=1
+int session_signal_frames=0,session_signal_scanlines=0;
 INLINE void session_update(void) // render video+audio thru OS and handle realtime logic (self-adjusting delays, automatic frameskip, etc.)
 {
 	session_signal&=~SESSION_SIGNAL_FRAME; // new frame!
-	//static int i=0; if (++i<session_rhythm) break; i=0; // speed-up all emulation
 	session_render();
 	audio_target=audio_frame; audio_pos_z=0;
 	if (video_scanline==3)

@@ -388,7 +388,7 @@ SPEC-P-3.ROM, and otherwise runs the same as CPCEC, with several differences:
 
 * option -mX chooses one out of four possible models: -m0 (48k), -m1 (128k), -m2
 (+2) or -m3 (+3).
-* option -K disables the PSG AY-3-8912 sound chip (enabled by default) if the
+* option -K enables the Spectrum 16K memory mode (disabled by default) if the
 chosen model is Spectrum 48k;
 * option -X disables the disc drives if the chosen model is Spectrum +3, that
 thus becomes a +2A instead; same outcome can happen on runtime by disabling
@@ -831,7 +831,7 @@ fit within the dialogs.
 sources and making the Playcity option stick between sessions. "Software render"
 is now "Acceleration", as the former was counterintuitive.
 - 20210105 -- minor patch fixing a bug in video recording (it turned 44KHz
-stereo into 88KHz mono) and tape playback (16 and 24 bit WAVE files were
+stereo into 88KHz mono) and tape playback (16 and 24 bit WAV files were
 improperly supported), extending the joystick support to handle directional
 controls (thanks to Pelrun for the Win32 and SDL2 code) and letting the
 Dandanator emulation modify the cartridge (configuration, savestates...) if the
@@ -966,6 +966,16 @@ acceleration") to set whether the audio buffer length is short (lower latency)
 or long (more compatible). The Plus ASIC DMA-PIO contention is a little more
 precise. Tapes for Spectrum avoid several unwanted coincidences ("Advanced
 Soccer Simulator" and "Banger Racer", found by Raúl). The help screens are a
-little more explicit, the WAVE file output is always lil-endian even if the
+little more explicit, the WAV file output is always lil-endian even if the
 system is big-endian, the pixel filter and the scanline blend are faster, and
 the SDL2 user interface becomes white-on-black with the parameter `-$`.
+- 20211130 -- minor patch adding a global speed option (for example "Settings:
+2x realtime speed" makes the emulation run at twice the base speed) and
+relocating the Z80 speed option ("CPU clock") to the "Machine" submenu; it also
+fixes bugs in tapes (the starting pause in CDT/TZX files no longer worked) and
+the user interface (drag-and-drop had stopped handling ZIP archives: reported by
+Raúl). New Spectrum 16K option, both in the command line (`-K`, no longer used
+to disable the AY chip) and the menu. Experimental support for BRKS blocks
+(breakpoint tables) when saving and loading CPC snapshot files; to ease deleting
+the breakpoints they they're no longer required, key Z can delete them all at
+once from any panel in the debugger, instead of only from the disassembly panel.

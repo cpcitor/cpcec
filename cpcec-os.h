@@ -70,16 +70,16 @@ INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 
 #define VIDEO_UNIT DWORD // 0x00RRGGBB style
 
-#define VIDEO_FILTER_HALF(x,y) (x!=y?(x<y?(((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00):(((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1:x) // 50:50
-//#define VIDEO_FILTER_BLURDATA vxh,vxl,vzh,vzl
-//#define VIDEO_FILTER_BLUR0(z) vxh=z&0XFF00FF,vxl=z&0XFF00
-//#define VIDEO_FILTER_BLUR(r,z) r=((((vzh=z&0XFF00FF)+vxh+0X10001)&0X1FE01FE)+(((vzl=z&0XFF00)+vxl+0X100)&0X1FE00))>>1,vxh=vzh,vxl=vzl // 50:50 blur
-//#define VIDEO_FILTER_BLURDATA vxh,vxl,vyh,vyl,vzh,vzl
-//#define VIDEO_FILTER_BLUR0(z) vxh=vyh=z&0XFF00FF,vxl=vyl=z&0XFF00
-//#define VIDEO_FILTER_BLUR(r,z) r=((((vzh=z&0XFF00FF)+vyh*2+vxh+0X20002)&0X3FC03FC)+(((vzl=z&0XFF00)+vyl*2+vxl+0X200)&0X3FC00))>>2,vxh=vyh,vyh=vzh,vxl=vyl,vyl=vzl // 25:50:25 blur
+#define VIDEO_FILTER_HALF(x,y) (x==y?x:(x<y?(((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00):(((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1) // 50:50
 #define VIDEO_FILTER_BLURDATA vzz
 #define VIDEO_FILTER_BLUR0(z) vzz=z
-#define VIDEO_FILTER_BLUR(r,z) r=VIDEO_FILTER_HALF(vzz,z),vzz=z
+#define VIDEO_FILTER_BLUR(r,z) r=VIDEO_FILTER_HALF(vzz,z),vzz=z // the fastest method according to GCC
+//#define VIDEO_FILTER_BLURDATA vxh,vxl,vzh,vzl
+//#define VIDEO_FILTER_BLUR0(z) vxh=z&0XFF00FF,vxl=z&0XFF00
+//#define VIDEO_FILTER_BLUR(r,z) r=((((vzh=z&0XFF00FF)+vxh+0X10001)&0X1FE01FE)+(((vzl=z&0XFF00)+vxl+0X100)&0X1FE00))>>1,vxh=vzh,vxl=vzl // 50:50 blur, but slower; the "x==y?x:..." part sets the difference
+//#define VIDEO_FILTER_BLURDATA vxh,vxl,vyh,vyl,vzh,vzl
+//#define VIDEO_FILTER_BLUR0(z) vxh=vyh=z&0XFF00FF,vxl=vyl=z&0XFF00
+//#define VIDEO_FILTER_BLUR(r,z) r=((((vzh=z&0XFF00FF)+vyh*2+vxh+0X20002)&0X3FC03FC)+(((vzl=z&0XFF00)+vyl*2+vxl+0X200)&0X3FC00))>>2,vxh=vyh,vyh=vzh,vxl=vyl,vyl=vzl // 25:50:25 blur, softer but slower
 //#define VIDEO_FILTER_X1(x) (((x>>1)&0X7F7F7F)+0X2B2B2B) // average
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)+0X404040) // heavier
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)*3+0X161616) // lighter
@@ -109,7 +109,7 @@ BYTE audio_disabled=0,audio_session=0; // audio status and counter
 unsigned char session_path[STRMAX],session_parmtr[STRMAX],session_tmpstr[STRMAX],session_substr[STRMAX],session_info[STRMAX]="";
 
 int session_timer,session_event=0; // timing synchronisation and user command
-BYTE session_fast=0,session_wait=0,session_softblit=1,session_hardblit,session_softplay=0,session_hardplay; // software blitting enabled by default
+BYTE session_fast=0,session_rhythm=0,session_wait=0,session_softblit=1,session_hardblit,session_softplay=0,session_hardplay; // software blitting enabled by default
 BYTE session_audio=1,session_stick=1,session_shift=0,session_key2joy=0; // keyboard, joystick
 #ifdef MAUS_EMULATION
 int session_maus_z=0,session_maus_x=0,session_maus_y=0; // optional mouse
@@ -347,8 +347,8 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 		if (session_r_h>session_r_w*VIDEO_PIXELS_Y/VIDEO_PIXELS_X) // window area is too tall?
 			session_r_h=session_r_w*VIDEO_PIXELS_Y/VIDEO_PIXELS_X;
 		if (session_intzoom) // integer zoom? (100%, 150%, 200%, 250%, 300%...)
-			session_r_w=((session_r_w*17)/VIDEO_PIXELS_X/8)*VIDEO_PIXELS_X/2, // "*9../8../1"
-			session_r_h=((session_r_h*17)/VIDEO_PIXELS_Y/8)*VIDEO_PIXELS_Y/2; // forbids +50%
+			session_r_w=((session_r_w*17)/VIDEO_PIXELS_X/8)*VIDEO_PIXELS_X/2, // "*17../16../1"
+			session_r_h=((session_r_h*17)/VIDEO_PIXELS_Y/8)*VIDEO_PIXELS_Y/2; // forbids N+50%
 		if (session_r_w<VIDEO_PIXELS_X||session_r_h<VIDEO_PIXELS_Y)
 			session_r_w=VIDEO_PIXELS_X,session_r_h=VIDEO_PIXELS_Y; // window area is too small!
 		session_r_x=(r.right-session_r_w)/2,session_r_y=(r.bottom-session_r_h)/2; // locate bitmap on window center
@@ -765,10 +765,13 @@ FILE *session_filmfile=NULL; void session_writefilm(void); // must be defined la
 INLINE void session_render(void) // update video, audio and timers
 {
 	int i,j; static int performance_t=-9999,performance_f=0,performance_b=0; ++performance_f;
+	static BYTE r=0,q=0; if (++r>session_rhythm||session_wait) r=0; // force update after wait
 	if (!video_framecount) // do we need to hurry up?
 	{
 		if ((video_interlaces=!video_interlaces)||!video_interlaced)
-			++performance_b,session_redraw(session_hwnd,session_dc1);
+		{
+			++performance_b; if (q) session_redraw(session_hwnd,session_dc1),q=0; // redraw once between two pauses
+		}
 		if (session_stick&&!session_key2joy) // do we need to check the joystick?
 		{
 			session_joy.dwSize=sizeof(session_joy);
@@ -808,40 +811,41 @@ INLINE void session_render(void) // update video, audio and timers
 		audio_frame=audio_target; // primary buffer
 	session_writefilm(); // record film frame
 
-	if (session_audio) // use audio as clock
+	if (!r) // check timers and pauses
 	{
-		static BYTE s=1;
-		if (s!=audio_disabled)
-			if (s=audio_disabled) // silent mode needs cleanup
-				memset(audio_memory,AUDIO_ZERO,sizeof(audio_memory));
-		static BYTE o=1;
-		if (o!=(session_fast|audio_disabled)) // sound needs higher priority, but only on realtime
+		if (session_audio) // use audio as clock
 		{
-			SetPriorityClass(GetCurrentProcess(),(o=session_fast|audio_disabled)?BELOW_NORMAL_PRIORITY_CLASS:ABOVE_NORMAL_PRIORITY_CLASS);
-			//SetThreadPriority(GetCurrentThread(),(o=session_fast|audio_disabled)?THREAD_PRIORITY_NORMAL:THREAD_PRIORITY_ABOVE_NORMAL);
+			static BYTE s=1; if (s!=audio_disabled)
+				if (s=audio_disabled) // silent mode needs cleanup
+					memset(audio_memory,AUDIO_ZERO,sizeof(audio_memory));
+			static BYTE o=1; if (o!=(session_fast|audio_disabled)) // sound needs higher priority, but only on realtime
+			{
+				SetPriorityClass(GetCurrentProcess(),(o=session_fast|audio_disabled)?BELOW_NORMAL_PRIORITY_CLASS:ABOVE_NORMAL_PRIORITY_CLASS);
+				//SetThreadPriority(GetCurrentThread(),(o=session_fast|audio_disabled)?THREAD_PRIORITY_NORMAL:THREAD_PRIORITY_ABOVE_NORMAL);
+			}
+			waveOutGetPosition(session_wo,&session_mmtime,sizeof(MMTIME));
+			//if (!=MMSYSERR_NOERROR) session_audio=0,audio_disabled=-1; // audio device is lost! // can this really happen!?
+			static int u=0; if (!u) u=session_mmtime.u.sample+(session_hardplay?AUDIO_LENGTH_Z*AUDIO_N_FRAMES/2:0); // reference
+			i=session_mmtime.u.sample-u,j=AUDIO_PLAYBACK; // questionable -- this will break the timing every 13 hours of emulation at 44100 Hz :-(
 		}
-		waveOutGetPosition(session_wo,&session_mmtime,sizeof(MMTIME));
-		//if (!=MMSYSERR_NOERROR) session_audio=0,audio_disabled=-1; // audio device is lost! // can this really happen!?
-		static int u=0; if (!u) u=session_mmtime.u.sample+(session_hardplay?AUDIO_LENGTH_Z*AUDIO_N_FRAMES/2:0); // reference
-		i=session_mmtime.u.sample-u,j=AUDIO_PLAYBACK; // questionable -- this will break the timing every 13 hours of emulation at 44100 Hz :-(
-	}
-	else // use internal tick count as clock
-		i=GetTickCount(),j=1000; // questionable for similar reasons, albeit every 23 days :-(
-	if (session_wait||session_fast)
-	{
-		audio_session=((i/(AUDIO_LENGTH_Z))+AUDIO_N_FRAMES-1)%AUDIO_N_FRAMES;
-		session_timer=i; // ensure that the next frame can be valid!
-	}
-	else
-	{
-		if ((i=((session_timer+=(j/VIDEO_PLAYBACK))-i))>0)
+		else // use internal tick count as clock
+			i=GetTickCount(),j=1000; // questionable for similar reasons, albeit every 23 days :-(
+		q=1; if (session_wait||session_fast)
 		{
-			if (i=(1000*i/j)) // avoid zero, it has a special value in Windows!
-				Sleep(i>1000/VIDEO_PLAYBACK?1+1000/VIDEO_PLAYBACK:i);
+			audio_session=((i/(AUDIO_LENGTH_Z))+AUDIO_N_FRAMES-1)%AUDIO_N_FRAMES;
+			session_timer=i; // ensure that the next frame can be valid!
 		}
-		else if (i<0&&!session_filmfile)
-			video_framecount=-2; // automatic frameskip if timing ever breaks!
-		audio_session=(audio_session+1)%AUDIO_N_FRAMES;
+		else
+		{
+			if ((i=((session_timer+=(j/VIDEO_PLAYBACK))-i))>0)
+			{
+				if (i=(1000*i/j)) // avoid zero, it has a special value in Windows!
+					Sleep(i>1000/VIDEO_PLAYBACK?1+1000/VIDEO_PLAYBACK:i);
+			}
+			else if (i<0&&!session_filmfile)
+				video_framecount=-2; // automatic frameskip if timing ever breaks!
+			audio_session=(audio_session+1)%AUDIO_N_FRAMES;
+		}
 	}
 	if (session_wait) // resume activity after a pause
 	{

@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20211119"//"2555"
+#define MY_VERSION "20211130"//"2225"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -118,6 +118,8 @@ unsigned char kbd_joy[]= // ATARI norm: up, down, left, right, fire1-fire4
 	{ 0X48,0X49,0X4A,0X4B,0X4C,0X4D,0X4C,0X4D }; // constant, joystick bits are hard-wired; last two fires are repeated
 #define MAUS_EMULATION // emulation can examine the mouse
 #define MAUS_LIGHTGUNS // lightguns are emulated with the mouse
+//#define INFLATE_RFC1950 // no file needs inflating RFC1950 data
+//#define DEFLATE_RFC1950 // no file needs deflating RFC1950 data
 //#define DEFLATE_LEVEL 6 // no file needs DEFLATE
 #include "cpcec-os.h" // OS-specific code!
 #include "cpcec-rt.h" // OS-independent code!
@@ -449,7 +451,7 @@ INLINE void crtc_table_send(BYTE i)
 				if (!(crtc_type|i))
 					crtc_table[0]=i=1; // CRTC0: R0 CANNOT BE ZERO!
 				if (i==(crtc_table[7]?7:39)) // detect "CHANY DREAM END" and "CHAPELLE SIXTEEN" (but not "ONESCREEN COLONIES"); some of their effects are particularly time-critical
-					video_threshold=(VIDEO_LENGTH_X*5)>>3; // hard horizontal threshold
+					video_threshold=VIDEO_LENGTH_X*5/8; // hard horizontal threshold
 				if (crtc_type<3?crtc_count_r0==i:crtc_count_r0>=i) // "S&KOH" intro needs the first check; "PHX" outro for CRTC3 and CRTC4 needs the second check
 					crtc_status|=CRTC_STATUS_R0_OK;
 				else
@@ -1127,7 +1129,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 				else if ((crtc_count_r4=(crtc_count_r4+1)&127)==crtc_table[4])
 					crtc_status|=CRTC_STATUS_R4_OK;
 			}
-			else if ((crtc_count_r9=(crtc_count_r9+1)&31)==crtc_table[9])
+			else if (/*(crtc_type|crtc_table[0])&&*/(crtc_count_r9=(crtc_count_r9+1)&31)==crtc_table[9])
 				crtc_status|=CRTC_STATUS_R9_OK;
 
 			if (crtc_status&CRTC_STATUS_V_T_A)
@@ -1785,12 +1787,12 @@ void z80_tape_trap(void)
 						k=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--POKE(z80_sp.w+2),--POKE(z80_sp.w+3);
 						if (j==0) z80_tape_fastload_ccitt((k<<8)+1); // handle all 8 bits in a single step
 					}
-				k=fasttape_feed(!(z80_hl.b.l>>7),16),z80_de.b.h=k>>1,tape_skipping=z80_de.b.l=1,z80_bc.b.l=-(k&1);
+				k=fasttape_feed(~(z80_hl.b.l>>7),16),z80_de.b.h=k>>1,tape_skipping=z80_de.b.l=1,z80_bc.b.l=-(k&1);
 				if (j==0) z80_tape_fastload_ccitt((k<<8)+2); // handle 7 bits, leave the last one to the firmware!
 			}
 			else
 			{
-				z80_r7+=fasttape_add8(!(z80_hl.b.l>>7),16,&z80_bc.b.l,2)*10;
+				z80_r7+=fasttape_add8(!(z80_hl.b.l>>7),16,&z80_bc.b.l,2)*9;
 				if (!(gate_mcr&4)&&z80_tape_spystack(0)<=(type_id?0x2AA0:0x2930))
 					fasttape_gotonext(); // if the ROM is expecting the PILOT, throw BYTES and PAUSE away!
 			}
@@ -1924,13 +1926,13 @@ void z80_tape_trap(void)
 				z80_r7+=fasttape_add8(z80_bc.b.l>>7,14,&z80_bc.b.h,1)*7;
 			break;
 		case 19: // GREMLIN 1/2 ("BASIL THE GREAT MOUSE DETECTIVE", "SAMURAI TRILOGY"...)
-			fasttape_add8(1,8,&z80_bc.b.l,1);
+			z80_r7+=fasttape_add8(1,8,&z80_bc.b.l,1)*4;
 			break;
 		case 20: // GREMLIN 2/2
 			if (z80_de.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==20)
 				k=fasttape_feed(0,8),tape_skipping=z80_de.b.l=128+(k>>1),z80_bc.b.l=-(k&1);
 			else
-				fasttape_add8(0,8,&z80_bc.b.l,1);
+				z80_r7+=fasttape_add8(0,8,&z80_bc.b.l,1)*4;
 			break;
 		case 21: // BINARY DESIGN ("DEFCOM"...), CODEMASTERS ("MAGICLAND DIZZY"...)
 			if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==5)
@@ -2582,13 +2584,15 @@ int z80_ack_delay=0; // unlike Z80_AUXILIARY it cannot be local, it must stick :
 #define Z80_PEEK PEEK
 #define Z80_PEEK1 Z80_PEEK
 #define Z80_PEEK2 Z80_PEEK
-#define Z80_PEEKPC Z80_PEEK // read opcode
-#define Z80_POKE(w,b) do{ int z80_aux=(w)>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO,z80_trap(w,b),z80_t=0; else mmu_ram[z80_aux][w]=(b); }while(0) // a single write
+#define Z80_PEEKZ Z80_PEEK // slow PEEK
+#define Z80_POKE(w,b) do{ int z80_aux=(w)>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO,z80_t=0,z80_trap(w,b); else mmu_ram[z80_aux][w]=(b); }while(0) // a single write
 #define Z80_POKE0(w,b) POKE(w)=(b) // identical twin writes, use with care
-#define Z80_POKE1(w,b) do{ --z80_t; int z80_aux=(w)>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO,z80_trap(w,b),z80_t=0; else mmu_ram[z80_aux][w]=(b); }while(0) // 1st twin write
-#define Z80_POKE2(w,b) do{ ++z80_t; int z80_aux=(w)>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO,z80_trap(w,b),z80_t=0; else mmu_ram[z80_aux][w]=(b); }while(0) // 2nd twin write
-#define Z80_POKE3 Z80_POKE1 // like Z80_POKE1, but backwards, f.e. PUSH rr
-#define Z80_POKE4 Z80_POKE2 // like Z80_POKE2, ditto
+#define Z80_POKE1(w,b) do{ --z80_t; int z80_aux=(w)>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO,z80_t=0,z80_trap(w,b); else mmu_ram[z80_aux][w]=(b); }while(0) // 1st twin write; see SPLIT.CPR
+#define Z80_POKE2(w,b) do{ ++z80_t; int z80_aux=(w)>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO,z80_t=0,z80_trap(w,b); else mmu_ram[z80_aux][w]=(b); }while(0) // 2nd twin write; see SPLIT.CPR
+#define Z80_POKE3 Z80_POKE1 // 1st twin write from PUSH rr
+#define Z80_POKE4 Z80_POKE2 // 2nd twin write from PUSH rr
+#define Z80_POKE5 Z80_POKE1 // 1st twin write from EX rr,(SP)
+#define Z80_POKE6 Z80_POKE2 // 2nd twin write from EX rr,(SP)
 #define Z80_BEWARE
 #define Z80_REWIND
 // coarse timings
@@ -2816,28 +2820,21 @@ int bios_load(char *s) // load a cartridge file or a firmware ROM file. 0 OK, !0
 	return old_type_id=type_id,mmu_update(),0;
 }
 int bios_path_load(char *s) // ditto, but from the base path
-{
-	return bios_load(strcat(strcpy(session_substr,session_path),s));
-}
+	{ return bios_load(strcat(strcpy(session_substr,session_path),s)); }
 int bios_reload(void) // ditto, but from the current type_id
-{
-	return type_id>3?1:old_type_id==type_id?0:bios_load(strcat(strcpy(session_substr,session_path),bios_system[type_id]));
-}
+	{ return old_type_id==type_id?0:type_id>3?1:bios_load(strcat(strcpy(session_substr,session_path),bios_system[type_id])); }
 
-int bdos_path_load(char *s) // load AMSDOS ROM. `s` path; 0 OK, !0 ERROR
+int amsdos_load(char *s) // load AMSDOS ROM. `s` path; 0 OK, !0 ERROR
 {
-	FILE *f=fopen(strcat(strcpy(session_substr,session_path),s),"rb");
-	if (!f) return 1;
-	int i=fread1(bdos_rom,1<<14,f);
-	i+=fread1(bdos_rom,1<<14,f);
-	return fclose(f),i!=(1<<14)||!equalsmmmm(&bdos_rom[0x3C],0XC366C6C3); // AMSDOS fingerprint
+	FILE *f=fopen(strcat(strcpy(session_substr,session_path),s),"rb"); if (!f) return 1; // fail!
+	int i=fread1(bdos_rom,1<<14,f); i+=fread1(bdos_rom,1<<14,f);
+	return fclose(f),i!=(1<<14); //||!equalsmmmm(&bdos_rom[0x3C],0XC366C6C3); // AMSDOS fingerprint
 }
 
 #ifdef Z80_CPC_DANDANATOR
 int dandanator_load(char *s) // inserts Dandanator cartridge, performs several tests, removes cartridge if they fail
 {
-	FILE *f=puff_fopen(s,"rb");
-	if (!f) return 1;
+	FILE *f=puff_fopen(s,"rb"); if (!f) return 1; // fail!
 	BYTE t[0x1000]; fread1(t,sizeof(t),f); fseek(f,0,SEEK_END);
 	int i=ftell(f); puff_fclose(f);
 	if (i<0X4000||i>(8<<16)||i&0x3FFF||bios_wrong_dword(mgetmmmm(t))||equalsmmmm(t,0X52494646)||equalsmmmm(t,0X01897FED)) // + "RIFF" + CPC Firmware
@@ -3007,13 +3004,12 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 		fwrite1(dandanator_cfg,sizeof(dandanator_cfg),f);
 	}
 	#endif
-	#if 0 // unsupported
-	if (snap_extended) // save the currently defined breakpoints, if any
+	#if 1 // experimental
 	{
 		int j=0; for (i=0;i<length(z80_breakpoints);++i)
 			if (z80_breakpoints[i])
 				++j;
-		//if (j) // allow BRKS chunks with zero contents!?
+		if (j) // save the currently defined breakpoints, if any
 		{
 			fputmmmm(0x42524B53,f); // breakpoint table "BRKS"
 			fputiiii(j*5,f);
@@ -3204,8 +3200,8 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 			fseek(f,l-sizeof(dandanator_cfg),SEEK_CUR);
 		}
 		#endif
-		#if 0 // unsupported
-		else if (k==0x42524B53&&!(l%5)&&snap_extended) // breakpoint table "BRKS"
+		#if 1 // experimental
+		else if (k==0x42524B53&&!(l%5)) // breakpoint table "BRKS"
 		{
 			MEMZERO(z80_breakpoints);
 			for (;l;l-=5)
@@ -3408,6 +3404,12 @@ char session_menudata[]=
 	"0x8514 320k RAM\n"
 	"0x8515 576k RAM\n"
 	"=\n"
+	//"0x0600 Raise Z80 speed\tCtrl+F6\n"
+	//"0x4600 Lower Z80 speed\tCtrl+Shift+F6\n"
+	"0x0601 1x CPU clock\n"
+	"0x0602 2x CPU clock\n"
+	"0x0603 3x CPU clock\n"
+	"0x0604 4x CPU clock\n"
 	#ifdef PSG_PLAYCITY
 	"0x8518 PlayCity audio\n"
 	"0x8519 Digiblaster audio\n"
@@ -3418,13 +3420,11 @@ char session_menudata[]=
 	"0x0510 Writeable Dandanator\n"
 	#endif
 	"Settings\n"
-	"0x8600 Realtime\tF6\n"
-	"0x0601 1x CPU speed\n"
-	"0x0602 2x CPU speed\n"
-	"0x0603 3x CPU speed\n"
-	"0x0604 4x CPU speed\n"
-	//"0x0600 Raise Z80 speed\tCtrl+F6\n"
-	//"0x4600 Lower Z80 speed\tCtrl+Shift+F6\n"
+	"0x8601 1x realtime speed\n"
+	"0x8602 2x realtime speed\n"
+	"0x8603 3x realtime speed\n"
+	"0x8604 4x realtime speed\n"
+	"0x8600 Run at full throttle\tF6\n"
 	"=\n"
 	"0x0400 Virtual joystick\tCtrl+F4\n"
 	"0x0401 Flip joystick buttons\n"
@@ -3436,7 +3436,7 @@ char session_menudata[]=
 	"0x851F Strict SNA files\n"
 	"0x8510 Disc controller\n"
 	"0x8590 Strict disc writes\n"
-	"0x8591 Read-only as default\n"
+	"0x8591 Read-only disc by default\n"
 	//"=\n"
 	"0x0900 Tape speed-up\tCtrl+F9\n"
 	"0x4900 Tape analysis\tCtrl+Shift+F9\n"
@@ -3505,7 +3505,7 @@ void session_clean(void) // refresh options
 	session_menucheck(0x8900,session_signal&SESSION_SIGNAL_DEBUG);
 	session_menucheck(0x8400,!(audio_disabled&1));
 	session_menuradio(0x8401+audio_filter,0x8401,0x8404);
-	session_menucheck(0x8600,!(session_fast&1));
+	session_menuradio((session_fast&1)?0x8600:0x8601+session_rhythm,0x8600,0x8604);
 	session_menucheck(0x8C01,!session_filmscale);
 	session_menucheck(0x8C02,!session_filmtimer);
 	session_menucheck(0xCC00,(size_t)session_filmfile);
@@ -3592,8 +3592,8 @@ void session_user(int k) // handle the user's commands
 				"\n"
 				"F4\tToggle sound" MESSAGEBOX_WIDETAB
 				"^F4\tToggle joystick"
-				"\n"
-				"\t(shift: ..stereo)"
+				//"\n"
+				//"\t(shift: ..stereo)"
 				"\n"
 				"F5\tLoad firmware.." MESSAGEBOX_WIDETAB
 				"^F5\tReset emulation"
@@ -3678,7 +3678,7 @@ void session_user(int k) // handle the user's commands
 			if (puff_session_getfile(session_shift?snap_path:autorun_path,session_shift?snap_pattern:file_pattern,session_shift?"Load snapshot":"Load file"))
 		case 0x8000: // DRAG AND DROP
 			{
-				if (globbing(puff_pattern,session_parmtr,1))
+				if (multiglobbing(puff_pattern,session_parmtr,1))
 					if (!puff_session_zipdialog(session_parmtr,file_pattern,"Load file"))
 						break;
 				if (any_load(session_parmtr,!session_shift))
@@ -3694,11 +3694,13 @@ void session_user(int k) // handle the user's commands
 		case 0x8400: // F4: TOGGLE SOUND
 			if (session_audio)
 			{
+				/*
 				#if AUDIO_CHANNELS > 1
 				if (session_shift) // TOGGLE STEREO
 					audio_mixmode=(audio_mixmode+1)&3;
 				else
 				#endif
+				*/
 					audio_disabled^=1;
 			}
 			break;
@@ -3749,7 +3751,7 @@ void session_user(int k) // handle the user's commands
 		case 0x8513: // 192K RAM
 		case 0x8514: // 320K RAM
 		case 0x8515: // 576K RAM
-			gate_ram_depth=k-0x8511;
+			gate_ram_depth=k-0x8511; mmu_update();
 			break;
 		#ifdef PSG_PLAYCITY
 		case 0x8518: // PLAYCITY
@@ -3813,27 +3815,30 @@ void session_user(int k) // handle the user's commands
 			break;
 		#endif
 		case 0x8600: // F6: TOGGLE REALTIME
-			if (session_shift)
+			if (!session_shift)
+				session_fast^=1;
+			else //case 0xC600: // NEXT CRTC TYPE
 			{
-				if (plus_enabled)
-					crtc_type=3;
-				else
-				{
-					if (++crtc_type==3) crtc_type=4; else if (crtc_type>4) crtc_type=0;
-				}
+				if (plus_enabled) crtc_type=3;
+				else if (++crtc_type==3) crtc_type=4;
+				else if (crtc_type>4) crtc_type=0;
 				crtc_syncs_update(),crtc_invis_update();
 			}
-			else
-				session_fast^=1;
 			break;
-		case 0x0601:
-		case 0x0602:
-		case 0x0603:
-		case 0x0604:
-			multi_t=k-0x0600;
+		case 0x8601: // REALTIME x1
+		case 0x8602: // REALTIME x2
+		case 0x8603: // REALTIME x3
+		case 0x8604: // REALTIME x4
+			session_rhythm=k-0x8600-1; session_fast&=~1;
 			break;
 		case 0x0600: // ^F6: TOGGLE TURBO Z80
 			multi_t=(((multi_t+(session_shift?-1:1))-1)&3)+1;
+			break;
+		case 0x0601: // CPU x1
+		case 0x0602: // CPU x2
+		case 0x0603: // CPU x3
+		case 0x0604: // CPU x4
+			multi_t=k-0x0600;
 			break;
 		case 0x8701: // CREATE DISC..
 			if (!disc_disabled)
@@ -4203,7 +4208,7 @@ int main(int argc,char *argv[])
 			"\t-k2\t192k RAM\n"
 			"\t-k3\t320k RAM\n"
 			"\t-k4\t576k RAM\n"
-			"\t-K\tno extended RAM\n" // = "-k0"
+			"\t-K\t(-k0) 64k RAM\n"
 			"\t-m0\tload 464 firmware\n"
 			"\t-m1\tload 664 firmware\n"
 			"\t-m2\tload 6128 firmware\n"
@@ -4221,7 +4226,7 @@ int main(int argc,char *argv[])
 			"\t-Z\tdisable tape speed-up\n"
 			"\t-!\tforce software render\n"
 			),1;
-	if (bios_reload()||bdos_path_load("cpcados.rom"))
+	if (bios_reload()||amsdos_load("cpcados.rom"))
 		return printferror(txt_error_bios),1;
 	char *s=session_create(session_menudata); if (s)
 		return sprintf(session_scratch,"Cannot create session: %s!",s),printferror(session_scratch),1;
@@ -4237,8 +4242,8 @@ int main(int argc,char *argv[])
 		while (!session_signal)
 			z80_main(( // clump Z80 instructions together to gain speed...
 				((session_fast&-2)|tape_skipping)?VIDEO_LENGTH_X>>4: // tape loading allows simple timings, but some sync is still needed
-					video_pos_x<video_threshold?1:(VIDEO_LENGTH_X-1-video_pos_x)>>4 // catch VRAM effects such as "CHAPELLE SIXTEEN"
-				)*multi_t); // ...without missing any IRQ and CRTC deadlines!
+				video_pos_x<video_threshold?1:(VIDEO_LENGTH_X+15-video_pos_x)>>4 // VRAM effects' threshold ("Chapelle Sixteen")
+			)*multi_t); // ...without missing any IRQ and CRTC deadlines!
 		if (session_signal&SESSION_SIGNAL_FRAME) // end of frame?
 		{
 			if (!video_framecount&&onscreen_flag)

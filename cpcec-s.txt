@@ -414,7 +414,7 @@ SPEC-P-3.ROM, y por lo demás funciona igual que CPCEC, con varias salvedades:
 
 * la opción -mX elige uno de cuatro modelos posibles: -m0 (48k), -m1 (128k), -m2
 (+2) ó -m3 (+3);
-* la opción -K deshabilita el chip de sonido PSG AY-3-8912 (habilitado por
+* la opción -K habilita el modo de memoria Spectrum 16K (deshabilitado por
 defecto) si el modelo elegido es Spectrum 48k;
 * la opción -X deshabilita la unidad de disco si el modelo elegido es Spectrum
 +3, que así se convierte en un +2A; se puede conseguir lo mismo en tiempo de
@@ -1033,7 +1033,19 @@ acceleration") para establecer si el buffer de audio es corto (menor latencia) o
 largo (más compatible). La contención DMA-PIO en el ASIC de Plus es un poco más
 precisa. Las cintas para Spectrum evitan coincidencias indeseadas ("Advanced
 Soccer Simulator" y "Banger Racer", hallados por Raúl). Las pantallas de ayuda
-son algo más explícitas, la grabación de ficheros WAVE es siempre `lil-endian"
+son algo más explícitas, la grabación de ficheros WAV es siempre `lil-endian"
 aunque el sistema sea "big-endian", el filtro de píxeles y la mezcla de
 scanlines son más veloces, y el interfaz de usuario de SDL2 se vuelve blanco
 sobre negro con el parámetro "-$`.
+- 20211130 -- parche menor que añade una opción para la velocidad global (por
+ejemplo "Settings: 2x realtime speed" hace que la emulación corra al doble de la
+velocidad habitual) y traslada el reloj del procesador ("CPU clock") a la
+sección "Machine"; también corrige errores de cinta (la pausa inicial de los
+ficheros CDT/TZX ya no funcionaba) y del interfaz de usuario (arrastrar y soltar
+había dejado de reconocer archivos ZIP: hallado por Raúl). Nueva opción de
+Spectrum 16K, tanto en la línea de comando (`-K`, que ya no sirve para
+deshabilitar el chip AY) y el menu. Soporte experimental para bloques BRKS
+(tablas de breakpoints) al grabar y cargar instantáneas de CPC; para facilitar
+eliminar los breakpoints cuando ya no hacen falta la tecla Z puede borrarlos
+todos a la vez desde cualquier panel del depurador, en lugar de sólo desde el
+panel de desensamblado.
