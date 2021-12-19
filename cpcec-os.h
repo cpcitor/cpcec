@@ -71,19 +71,23 @@ INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 #define VIDEO_UNIT DWORD // 0x00RRGGBB style
 
 #define VIDEO_FILTER_HALF(x,y) (x==y?x:(x<y?(((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00):(((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1) // 50:50
+//#define VIDEO_FILTER_HALF(x,y) (x==y?x:((((x&0XFF00FF)+(y&0XFF00FF)+(y&0X10001))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+(y&0X100))&0X1FE00))>>1) // 50:50; slightly more precise, but slower with GCC
 #define VIDEO_FILTER_BLURDATA vzz
 #define VIDEO_FILTER_BLUR0(z) vzz=z
-#define VIDEO_FILTER_BLUR(r,z) r=VIDEO_FILTER_HALF(vzz,z),vzz=z // the fastest method according to GCC
+#define VIDEO_FILTER_BLUR(r,z) r=VIDEO_FILTER_HALF(vzz,z),vzz=z // the fastest 50:50 blur according to GCC
 //#define VIDEO_FILTER_BLURDATA vxh,vxl,vzh,vzl
 //#define VIDEO_FILTER_BLUR0(z) vxh=z&0XFF00FF,vxl=z&0XFF00
 //#define VIDEO_FILTER_BLUR(r,z) r=((((vzh=z&0XFF00FF)+vxh+0X10001)&0X1FE01FE)+(((vzl=z&0XFF00)+vxl+0X100)&0X1FE00))>>1,vxh=vzh,vxl=vzl // 50:50 blur, but slower; the "x==y?x:..." part sets the difference
 //#define VIDEO_FILTER_BLURDATA vxh,vxl,vyh,vyl,vzh,vzl
 //#define VIDEO_FILTER_BLUR0(z) vxh=vyh=z&0XFF00FF,vxl=vyl=z&0XFF00
 //#define VIDEO_FILTER_BLUR(r,z) r=((((vzh=z&0XFF00FF)+vyh*2+vxh+0X20002)&0X3FC03FC)+(((vzl=z&0XFF00)+vyl*2+vxl+0X200)&0X3FC00))>>2,vxh=vyh,vyh=vzh,vxl=vyl,vyl=vzl // 25:50:25 blur, softer but slower
+//#define VIDEO_FILTER_BLURDATA vxx,vyy
+//#define VIDEO_FILTER_BLUR0(z) vxx=vyy=z
+//#define VIDEO_FILTER_BLUR(r,z) r=(z&0XFF0000)+(vyy&0XFF00)+(vxx&0XFF),vxx=vyy,vyy=z // chromatic aberration
 //#define VIDEO_FILTER_X1(x) (((x>>1)&0X7F7F7F)+0X2B2B2B) // average
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)+0X404040) // heavier
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)*3+0X161616) // lighter
-#define VIDEO_FILTER_X1(x) ((((x&0XFF0000)*76+(x&0XFF00)*(150<<8)+(x&0XFF)*(30<<16)+128)>>24)*0X10101) // greyscale
+#define VIDEO_FILTER_X1(x) ((((x&0XFF0000)*76+(x&0XFF00)*(150<<8)+(x&0XFF)*(30<<16)+(1<<23))>>24)*0X10101) // greyscale
 #define VIDEO_FILTER_SCAN(w,b) (((((w&0xFF00FF)+(b&0xFF00FF)*7)&0x7F807F8)+(((w&0xFF00)+(b&0xFF00)*7)&0x7F800))>>3) // white:black 1:7
 
 #if 0 // 8 bits
@@ -144,7 +148,7 @@ BYTE session_paused=0,session_signal=0,session_version[8];
 #define SESSION_SIGNAL_FRAME 1
 #define SESSION_SIGNAL_DEBUG 2
 #define SESSION_SIGNAL_PAUSE 4
-BYTE session_dirty=1; // to force new status text
+BYTE session_dirty=0; // cfr session_clean()
 
 #define kbd_bit_set(k) (kbd_bit[k>>3]|=1<<(k&7))
 #define kbd_bit_res(k) (kbd_bit[k>>3]&=~(1<<(k&7)))
@@ -290,6 +294,7 @@ unsigned char kbd_map[256]; // key-to-key translation map
 
 // general engine functions and procedures -------------------------- //
 
+void session_clean(void); // "clean" dirty settings. Must be defined later on!
 void session_user(int k); // handle the user's commands; must be defined later on!
 void session_debug_show(void); // redraw the debugger text; must be defined later on, too!
 int session_debug_user(int k); // debug logic is a bit different: 0 UNKNOWN COMMAND, !0 OK
@@ -302,8 +307,7 @@ void session_please(void) // stop activity for a short while
 	{
 		if (session_audio)
 			waveOutPause(session_wo);
-		//video_framecount=-1;
-		session_wait=1;
+		session_wait=1; //video_framecount=1;
 	}
 }
 
@@ -714,11 +718,10 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 			session_timer=waveOutWrite(session_wo,&session_wh,sizeof(WAVEHDR)); // should be zero!
 		}
 	}
-	session_please();
+	session_clean(); session_please();
 	return NULL;
 }
 
-void session_clean(void); // "clean" dirty settings. Must be defined later on!
 INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 {
 	static int s=0; if (s!=session_signal) // catch DEBUG and PAUSE
@@ -734,10 +737,9 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 		}
 		if (!session_paused) // set the caption just once
 		{
-			session_please();
 			sprintf(session_tmpstr,"%s | %s | PAUSED",session_caption,session_info);
 			SetWindowText(session_hwnd,session_tmpstr);
-			session_paused=1;
+			session_please(),session_paused=1;
 		}
 		WaitMessage();
 	}
@@ -839,11 +841,11 @@ INLINE void session_render(void) // update video, audio and timers
 		{
 			if ((i=((session_timer+=(j/VIDEO_PLAYBACK))-i))>0)
 			{
-				if (i=(1000*i/j)) // avoid zero, it has a special value in Windows!
+				if ((i=(1000*i/j))>0) // avoid zero and negative values!
 					Sleep(i>1000/VIDEO_PLAYBACK?1+1000/VIDEO_PLAYBACK:i);
 			}
-			else if (i<0&&!session_filmfile)
-				video_framecount=-2; // automatic frameskip if timing ever breaks!
+			else if (i<0&&!session_filmfile)//&&!video_framecount)
+				video_framecount=video_framelimit+2; // frameskip on timeout!
 			audio_session=(audio_session+1)%AUDIO_N_FRAMES;
 		}
 	}
@@ -897,15 +899,9 @@ INLINE void session_byebye(void) // delete video+audio devices
 // menu item functions ---------------------------------------------- //
 
 void session_menucheck(int id,int q) // set the state of option `id` as `q`
-{
-	if (session_menu)
-		CheckMenuItem(session_menu,id,MF_BYCOMMAND+(q?MF_CHECKED:MF_UNCHECKED));
-}
+	{ if (session_menu) CheckMenuItem(session_menu,id,MF_BYCOMMAND+(q?MF_CHECKED:MF_UNCHECKED)); }
 void session_menuradio(int id,int a,int z) // set the option `id` in the range `a-z`
-{
-	if (session_menu)
-		CheckMenuRadioItem(session_menu,a,z,id,MF_BYCOMMAND);
-}
+	{ if (session_menu) CheckMenuRadioItem(session_menu,a,z,id,MF_BYCOMMAND); }
 
 // message box ------------------------------------------------------ //
 
@@ -922,15 +918,16 @@ void session_aboutme(char *s,char *t) // special case: "About.."
 	mbp.lpszCaption=t;
 	mbp.dwStyle=MB_OK|MB_USERICON;
 	mbp.lpszIcon=MAKEINTRESOURCE(34002);
-	mbp.dwContextHelpId=0;
+	mbp.dwContextHelpId=mbp.dwLanguageId=0;
 	mbp.lpfnMsgBoxCallback=NULL;
-	mbp.dwLanguageId=0;
 	MessageBoxIndirect(&mbp);
 }
 
-HWND session_dialog_item;
-char *session_dialog_text;
-int session_dialog_return;
+// shared dialog data ----------------------------------------------- //
+
+HWND session_dialog_item; // active dialog element handle
+int session_dialog_return; // dialog outcome: integer
+char *session_dialog_text; // dialog outcome: string
 
 // input dialog ----------------------------------------------------- //
 
@@ -968,11 +965,11 @@ LRESULT CALLBACK inputproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // di
 	}
 	return 1;
 }
-int session_input(char *s,char *t) // `s` is the target string (empty or not), `t` is the caption; returns -1 on error or LENGTH on success
+int session_input(char *s,char *t) // `s` is the target string (empty or not), `t` is the caption; returns <0 on error or LENGTH on success
 {
-	session_dialog_return=-1;
-	session_dialog_text=t;
 	session_please();
+	session_dialog_text=t;
+	session_dialog_return=-1;
 	DialogBoxParam(GetModuleHandle(0),(LPCSTR)34004,session_hwnd,(DLGPROC)inputproc,(LPARAM)s);
 	return session_dialog_return; // the string is in `session_parmtr`
 }
@@ -1021,13 +1018,13 @@ LRESULT CALLBACK listproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // dia
 	}
 	return 1;
 }
-int session_list(int i,char *s,char *t) // `s` is a list of ASCIZ entries, `i` is the default chosen item, `t` is the caption; returns -1 on error or 0..n-1 on success
+int session_list(int i,char *s,char *t) // `s` is a list of ASCIZ entries, `i` is the default chosen item, `t` is the caption; returns <0 on error or 0..n-1 on success
 {
 	if (!*s) // empty?
 		return -1;
-	session_dialog_return=i;
-	session_dialog_text=t;
 	session_please();
+	session_dialog_text=t;
+	session_dialog_return=i;
 	DialogBoxParam(GetModuleHandle(0),(LPCSTR)34003,session_hwnd,(DLGPROC)listproc,(LPARAM)s);
 	return session_dialog_return; // the string is in `session_parmtr`
 }
@@ -1042,6 +1039,7 @@ int getftype(char *s) // <0 = not exist, 0 = file, >0 = directory
 }
 int session_filedialog(char *r,char *s,char *t,int q,int f) // auxiliar function, see below
 {
+	session_please();
 	memset(&session_ofn,0,sizeof(session_ofn));
 	session_ofn.lStructSize=sizeof(OPENFILENAME);
 	session_ofn.hwndOwner=session_hwnd;
@@ -1072,7 +1070,6 @@ int session_filedialog(char *r,char *s,char *t,int q,int f) // auxiliar function
 	session_ofn.lpstrTitle=t;
 	session_ofn.lpstrDefExt=((t=strrchr(s,'.'))&&(*++t!='*'))?t:NULL;
 	session_ofn.Flags=OFN_PATHMUSTEXIST|OFN_NONETWORKBUTTON|OFN_NOCHANGEDIR|(q?OFN_OVERWRITEPROMPT:(OFN_FILEMUSTEXIST|f));
-	session_please();
 	return q?GetSaveFileName(&session_ofn):GetOpenFileName(&session_ofn);
 }
 #define session_filedialog_get_readonly() (session_ofn.Flags&OFN_READONLY)
@@ -1094,7 +1091,7 @@ char *session_getfilereadonly(char *r,char *s,char *t,int q) // "Open a File" wi
 
 // main-WinMain bootstrap
 #ifdef DEBUG
-#define BOOTSTRAP
+#define BOOTSTRAP // the debug version is terminal-driven
 #else
 #ifndef __argc
 	extern int __argc; extern char **__argv; // GCC5's -std=gnu99 does NOT define them by default, despite being part of STDLIB.H and MSVCRT!

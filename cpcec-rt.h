@@ -399,8 +399,8 @@ INLINE void session_update(void) // render video+audio thru OS and handle realti
 		video_interlaced|=1;
 	else
 		video_interlaced&=~1;
-	if (++video_framecount>video_framelimit)
-		video_framecount=0;
+	if (((unsigned char)--video_framecount)>video_framelimit) // catch both <0 and >N
+		video_framecount=video_framelimit;
 }
 
 // elementary ZIP archive support ----------------------------------- //
@@ -864,7 +864,8 @@ char *puff_session_subdialog(char *r,char *s,char *t,char *zz,int qq) // let the
 		return NULL;
 	while (!puff_head())
 	{
-		if (puff_name[strlen(puff_name)-1]!='/') // file or folder?
+		static char x[]={'*',PATHCHAR,'.','*',0}; // exclude hidden folders and files
+		if (*puff_name!='.'&&puff_name[strlen(puff_name)-1]!=PATHCHAR&&!globbing(x,puff_name,0)) // visible/hidden? file/folder?
 			if (multiglobbing(s,puff_name,1))
 				++l,z=&session_scratch[sortedinsert(session_scratch,z-session_scratch,puff_name)];
 		puff_body(0);
@@ -1088,10 +1089,10 @@ void onscreen_debug(int q) // rewrite debug texts or redraw graphics
 			case 2:
 				memcpy(onscreen_debug_chrs,onscreen_chrs,sizeof(onscreen_chrs)); // thin
 				break;
-			case 4:
+			/*case 4:
 				for (int i=0,j;i<sizeof(onscreen_debug_chrs);++i)
 					j=onscreen_chrs[i],onscreen_debug_chrs[i]=j|((2*i/ONSCREEN_SIZE)&1?(j<<1):(j>>1)); // italic
-				break;
+				break;*/
 			case 6:
 				for (int i=0,j;i<sizeof(onscreen_debug_chrs);++i)
 					j=onscreen_chrs[i],onscreen_debug_chrs[i]=j|(j>>1)|(j<<1); // bold
@@ -1163,6 +1164,9 @@ int session_closewave(void) // close a wave file; !0 ERROR
 {
 	if (session_wavefile)
 	{
+		#if (AUDIO_CHANNELS*AUDIO_BITDEPTH<=8)&&(AUDIO_LENGTH_Z&1)
+		if (session_wavesize&1) fputc(0,session_wavefile); // RIFF even-padding
+		#endif
 		fseek(session_wavefile,0x28,SEEK_SET);
 		fputiiii(session_wavesize,session_wavefile);
 		fseek(session_wavefile,0x04,SEEK_SET);

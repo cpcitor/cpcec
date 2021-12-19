@@ -117,12 +117,12 @@ int tape_open(char *s) // opens a tape file `s` for input; 0 OK, !0 ERROR
 				tape_step=tape_getcccc();
 				tape_step/=((tape_playback=tape_getcccc())+1);
 				tape_call0=(tape_getcccc()&0X100000)?128:0; // signed 16-bit versus unsigned 8-bit
-				tape_skip(l-16);
+				tape_skip(((l+1)&~1)-16); // RIFF even-padding
 			}
 			else if (k==0X61746164) // "data" ID; audio starts here
 				break;
 			else
-				tape_skip(l);
+				tape_skip((l+1)&~1); // RIFF even-padding
 		}
 		if (tape_playback<1)
 			return tape_close(),1; // improper WAVE!
@@ -788,9 +788,9 @@ int fasttape_test(const BYTE *s,WORD p) // compares a chunk of memory against a 
 		}
 }
 
-void fasttape_skip(int q,int x) // reads the tape at steps of `x` until the state isn't `q` or the tape is over
-	{ q&=1; while (tape_status==q&&!tape_signal) tape_main(x); }
-int fasttape_add8(int q,int x,BYTE *u8,int d) // adds `d` to `u8` until the state isn't `q` or the addition overflows; returns the amount of iterations
+int fasttape_skip(int q,int x) // reads the tape at steps of `x` until the state isn't `q` or the tape is over; returns the amount of iterations
+	{ int n=0; q&=1; while (tape_status==q&&!tape_signal) tape_main(x),++n; return n; }
+int fasttape_add8(int q,int x,BYTE *u8,int d) // adds `d` to `u8` until the state isn't `q` or the addition overflows
 	{ int n=0; q&=1; while (tape_status==q&&*u8+d<256) tape_main(x),*u8+=d,++n; return n; }
 int fasttape_sub8(int q,int x,BYTE *u8,int d) // ditto, but substracting
 	{ int n=0; q&=1; while (tape_status==q&&*u8>d) tape_main(x),*u8-=d,++n; return n; }

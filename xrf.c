@@ -7,7 +7,7 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "XRF"
-#define MY_VERSION "20210831"//"2555"
+#define MY_VERSION "20211217"//"1555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 #define GPL_3_INFO \
@@ -372,7 +372,8 @@ int avi_create(char *s)
 		avi_mputcccc(&avi_header[0x013C],sizeof(avi_header)-0x0140); // "JUNK" size
 		// Notice that some fields need to know in advance the sizes;
 		// fortunately we know the number of frames and the size of each.
-		i=count_z*(8+video_x*video_y*3+8+audio_z*flags_audio[flags_z&3]); // movie data
+		i=audio_z*flags_audio[flags_z&3]; if (i&1) ++i; // RIFF even-padding
+		i=count_z*(8+video_x*video_y*3+8+i); // movie data
 		avi_mputcccc(&avi_header[0x0004],sizeof(avi_header)+4+i+8+count_z*32); // "RIFF:AVI " size
 		avi_mputcccc(&avi_header[0x0030],count_z); // avi_videos
 		avi_mputcccc(&avi_header[0x008C],count_z); // avi_videos
@@ -440,6 +441,7 @@ int avi_write(void)
 	{
 		avi_fputcccc(0x62773130); // "01wb"
 		avi_fputcccc(l=audio_z*flags_audio[flags_z&3]);
+		if (l&1) wave32[l++]=0; // RIFF even-padding
 		if (l!=fwrite1(wave32,l,avi_file)) return 1;
 		avi_length+=8+l;
 	}
@@ -462,7 +464,7 @@ int avi_finish(void)
 		avi_fputcccc(count_z*16);
 
 	int z=4,j=video_x*video_y*3;
-	int k=audio_z*flags_audio[flags_z&3];
+	int k=audio_z*flags_audio[flags_z&3],l=k; if (l&1) ++l; // RIFF even-padding
 
 	for (int i=0;i<count_z;++i)
 	{
@@ -477,7 +479,7 @@ int avi_finish(void)
 			avi_fputcccc(0x10);
 			avi_fputcccc(z); // offset
 			avi_fputcccc(k); // audio size
-			z+=k+8; avi_length+=16;
+			z+=l+8; avi_length+=16;
 		}
 	}
 

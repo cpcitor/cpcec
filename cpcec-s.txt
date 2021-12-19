@@ -1049,3 +1049,24 @@ deshabilitar el chip AY) y el menu. Soporte experimental para bloques BRKS
 eliminar los breakpoints cuando ya no hacen falta la tecla Z puede borrarlos
 todos a la vez desde cualquier panel del depurador, en lugar de sólo desde el
 panel de desensamblado.
+- 20211217 -- vigésima primera versión pública. Cambios importantes en la
+emulación de vídeo: todas las partes de la reedición de 2021 de "Amazing
+Megademo" funcionan en todos los CRTCs de CPCE, gracias al monumental nuevo
+manual de Longshot "Amstrad CPC CRTC Compendium", y los títulos que examinan el
+bus flotante a través de puertos en contención con la ULA (como por ejemplo "A
+Yankee in Iraq") funcionan correctamente en ZXSEC, incluso en Plus3. Se ha
+reescrito el chip AY para asegurar que Playcity (CPC) y Turbosound (Spectrum)
+comparten el reloj exacto con los chips principales de audipo (la música de 6
+canales para Pentagon ya no desafina), y los canales de estéreoson ahora más
+flexibles, cambiando entre la configuración estéreo normal ABC y la
+configuracióon ACB de AY-Melodik; el "oversampling" ahora se basa en los toques
+del reloj de sistema en lugar de los "samples" de salida. Correcciones menores
+en la lógica del FDC (las reediciones protegidas de "Arkanoid 2" y "Renegade"
+esperan que el disco siga moviéndose mientras dura el comando SENSE INTERRUPT
+STATUS), el lector de archivos ZIP (los ficheros ocultos deben permanecer
+invisibles) y el manejo de ficheros WAV y AVI (la alineación a dos bytes debe
+realizarse en los casos extremadamente raros en que la longitud de un bloque es
+impar). Las opciones "V-hold" de CPCEC se han unido en una sola (deshabilitar
+"Standard V-hold" alarga la sincro vertical en ambos sentidos) y las opciones
+emparejadas PlayCity/Digiblaster (CPCEC) y Turbosound/Covox $FD (ZXSEC) son
+mutuamente exclusivas.

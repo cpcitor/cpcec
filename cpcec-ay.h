@@ -27,6 +27,9 @@ int psg_tone_count[3]={0,0,0},psg_tone_state[3]={0,0,0};
 int psg_tone_limit[3],psg_tone_power[3],psg_tone_mixer[3];
 int psg_noise_limit,psg_noise_count=0,psg_noise_state=0,psg_noise_trash=1;
 int psg_hard_limit,psg_hard_count,psg_hard_style,psg_hard_level,psg_hard_flag0,psg_hard_flag2;
+#if AUDIO_CHANNELS > 1
+int psg_stereo[3][2]; // the three channels' LEFT and RIGHT weights
+#endif
 void psg_reg_update(int c)
 {
 	switch (c)
@@ -77,7 +80,7 @@ INLINE void psg_table_sendto(BYTE x,BYTE i)
 	if (x<16) // reject invalid index! the limit isn't 14, tho': the CPC+ demo "PHAT" relies on writing and reading R15!
 	{
 		if (x==7&&((psg_table[7]^i)&7))
-			psg_r7_filter=PSG_TICK_STEP<<7; // below <<3 or above <<11 "Terminus" is dirty; below <<7 "Stormbringer" is wrong; above <<11 "SOUND 1,1,100" is hearable
+			psg_r7_filter=PSG_TICK_STEP<<(7+PSG_MAIN_EXTRABITS); // below <<3 or above <<11 "Terminus" is dirty; below <<7 "Stormbringer" is wrong; above <<11 "SOUND 1,1,100" is hearable
 		psg_table[x]=(i&=psg_valid[x]);
 		psg_reg_update(x);
 	}
@@ -97,13 +100,13 @@ INLINE void psg_table_sendto(BYTE x,BYTE i)
 BYTE playcity_table[1][16],playcity_index[1],playcity_hard_new[1];
 int playcity_hard_style[1],playcity_hard_count[1],playcity_hard_level[1],playcity_hard_flag0[1],playcity_hard_flag2[1];
 #if AUDIO_CHANNELS > 1
-int playcity_stereo[1][2];
+int playcity_stereo[1][3][2];
 #endif
 #else
 int playcity_clock=0; BYTE playcity_table[2][16],playcity_index[2],playcity_hard_new[2];
 int playcity_hard_style[2],playcity_hard_count[2],playcity_hard_level[2],playcity_hard_flag0[2],playcity_hard_flag2[2];
 #if AUDIO_CHANNELS > 1
-int playcity_stereo[2][2];
+int playcity_stereo[2][3][2];
 #endif
 #endif
 #ifdef PSG_PLAYCITY_HALF
@@ -247,95 +250,83 @@ void psg_writelog(void)
 void psg_main(int t,int d) // render audio output for `t` clock ticks, with `d` as a 16-bit base signal
 {
 	static int r=0; // audio clock is slower, so remainder is kept here
-	if (audio_pos_z>=AUDIO_LENGTH_Z||((r+=t)<=0))
-		return; // don't do any calculations if there's nothing to do
-	if ((psg_r7_filter-=r)<0)
-		psg_r7_filter=0;
-	int psg_tone_catch[3];
-	for (int c=0;c<3;++c) // catch ultrasounds, but keep any noise channels
-		psg_tone_catch[c]=psg_tone_mixer[c]|((psg_tone_limit[c]<=((PSG_KHZ_CLOCK<<(8-PSG_MAIN_EXTRABITS))/AUDIO_PLAYBACK)&&!psg_r7_filter)?7*1:0); // safe margin? (200-250)
+	if (audio_pos_z>=AUDIO_LENGTH_Z||(r+=t<<PSG_MAIN_EXTRABITS)<0) return; // nothing to do!
+	#if AUDIO_CHANNELS > 1
+	d=-d<<8;
+	#else
+	d=-d;
+	#endif
+	if ((psg_r7_filter-=r)<0) psg_r7_filter=0; // ultrasound filter
+	int psg_tone_catch[3]; for (int c=0;c<3;++c) // catch ultrasounds, but keep any noise channels
+		psg_tone_catch[c]=psg_tone_mixer[c]|((psg_tone_limit[c]<=((PSG_KHZ_CLOCK<<8)/AUDIO_PLAYBACK)&&!psg_r7_filter)?7*1:0); // safe margin? (200-250)
 	do
 	{
-		if (--psg_noise_count<=0) // update noise
-		{
-			psg_noise_count=psg_noise_limit;
-			if (psg_noise_trash&1) psg_noise_trash+=0x48000; // LFSR x2
-			psg_noise_state=(psg_noise_state+(psg_noise_trash>>=1))&1;
-		}
-		audio_table[16]=audio_table[psg_hard_level^psg_hard_flag2^((psg_hard_style&2)?psg_hard_flag0:0)]; // update hard envelope
-		if (--psg_hard_count<=0) // update hard envelope
-		{
-			psg_hard_count=psg_hard_limit;
-			if (++psg_hard_level>15) // end of hard envelope?
-			{
-				if (psg_hard_style&1)
-					psg_hard_level=15,psg_hard_flag0=15; // stop!
-				else
-					psg_hard_level=0,psg_hard_flag0^=15; // loop!
-			}
-		}
-		for (int c=0;c<3;++c)
-			if (--psg_tone_count[c]<=0) // update channel
-				psg_tone_count[c]=psg_tone_limit[c],psg_tone_state[c]=~psg_tone_state[c];
 		#if AUDIO_CHANNELS > 1
-		static int o0=0,o1=0,p=0; // output averaging variables
+		static int n=0,o0=0,o1=0; // output averaging variables
 		#else
-		static int o=0,p=0; // output averaging variables
+		static int n=0,o=0; // output averaging variables
 		#endif
 		#if PSG_MAIN_EXTRABITS
-		static int n=0; // oversampling loops
+		static int a=1; if (!--a)
 		#endif
-		p+=AUDIO_PLAYBACK<<PSG_MAIN_EXTRABITS;
-		while (p>0)
 		{
-			//static int dd=0; dd=(d+dd+(d>dd))/2;
-			#if AUDIO_CHANNELS > 1
-			o0-=d<<8,
-			o1-=d<<8;
-			#else
-			o-=d;
-			#endif
-			p-=TICKS_PER_SECOND/PSG_TICK_STEP;
 			#if PSG_MAIN_EXTRABITS
-			if (++n>>PSG_MAIN_EXTRABITS) // enough data to write a sample? `n` will never be >1 on CPC at 44100 Hz, but can be on ZX!
-			#else
+			a=1<<PSG_MAIN_EXTRABITS;
 			#endif
+			if (--psg_noise_count<=0) // update noise
 			{
-				for (int c=0;c<3;++c) // the base signal can carry ultrasounds, but the PSG filtered them out earlier
-					if (psg_tone_state[c]|(psg_tone_catch[c]&(7*1))) // is the channel active?
-						if (psg_noise_state|(psg_tone_catch[c]&(7*8))) // is the channel noisy?
-							#if AUDIO_CHANNELS > 1
-							o0+=audio_table[psg_tone_power[c]]*psg_stereo[c][0]<<PSG_MAIN_EXTRABITS,
-							o1+=audio_table[psg_tone_power[c]]*psg_stereo[c][1]<<PSG_MAIN_EXTRABITS;
-							#else
-							o+=audio_table[psg_tone_power[c]]<<PSG_MAIN_EXTRABITS;
-							#endif
-				#if PSG_MAIN_EXTRABITS
-				#if AUDIO_CHANNELS > 1
-				*audio_target++=(o0+n/2)/(n<<(24-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average (left)
-				*audio_target++=(o1+n/2)/(n<<(24-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average (right)
-				o0=o1=n=0; // reset output averaging variables
-				#else
-				*audio_target++=(o+n/2)/(n<<(16-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average
-				o=n=0; // reset output averaging variables
-				#endif
-				#else
-				#if AUDIO_CHANNELS > 1
-				*audio_target++=(o0>>(24-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average (left)
-				*audio_target++=(o1>>(24-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average (right)
-				o0=o1=0; // reset output averaging variables
-				#else
-				*audio_target++=(o>>(16-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average
-				o=0; // reset output averaging variables
-				#endif
-				#endif
-				if (++audio_pos_z>=AUDIO_LENGTH_Z)
-					r%=PSG_TICK_STEP; // throw ticks away!
-				break; // exit `while (p>0) ...`
+				psg_noise_count=psg_noise_limit;
+				if (psg_noise_trash&1) psg_noise_trash+=0x48000; // LFSR x2
+				psg_noise_state=(psg_noise_state+(psg_noise_trash>>=1))&1;
 			}
+			audio_table[16]=audio_table[psg_hard_level^psg_hard_flag2^((psg_hard_style&2)?psg_hard_flag0:0)]; // update hard envelope
+			if (--psg_hard_count<=0) // update hard envelope
+			{
+				psg_hard_count=psg_hard_limit;
+				if (++psg_hard_level>15) // end of hard envelope?
+				{
+					if (psg_hard_style&1)
+						psg_hard_level=15,psg_hard_flag0=15; // stop!
+					else
+						psg_hard_level=0,psg_hard_flag0^=15; // loop!
+				}
+			}
+			for (int c=0;c<3;++c)
+				if (--psg_tone_count[c]<=0) // update channel
+					psg_tone_count[c]=psg_tone_limit[c],
+					psg_tone_state[c]=~psg_tone_state[c];
+		}
+		for (int c=0;c<3;++c)
+			if (psg_tone_state[c]|(psg_tone_catch[c]&(7*1))) // is the channel active?
+				if (psg_noise_state|(psg_tone_catch[c]&(7*8))) // is the channel noisy?
+					#if AUDIO_CHANNELS > 1
+					o0+=audio_table[psg_tone_power[c]]*psg_stereo[c][0],
+					o1+=audio_table[psg_tone_power[c]]*psg_stereo[c][1];
+					#else
+					o+=audio_table[psg_tone_power[c]];
+					#endif
+		#if AUDIO_CHANNELS > 1
+		o0+=d,
+		o1+=d;
+		#else
+		o+=d;
+		#endif
+		++n;
+		static int b=0; if ((b-=AUDIO_PLAYBACK*PSG_TICK_STEP>>PSG_MAIN_EXTRABITS)<=0)
+		{
+			b+=TICKS_PER_SECOND;
+			#if AUDIO_CHANNELS > 1
+			*audio_target++=(o0+n/2)/(n<<(24-AUDIO_BITDEPTH))+AUDIO_ZERO, // rounded average (left)
+			*audio_target++=(o1+n/2)/(n<<(24-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average (right)
+			n=o0=o1=0; // reset output averaging variables
+			#else
+			*audio_target++=(o+n/2)/(n<<(16-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average
+			n=o=0; // reset output averaging variables
+			#endif
+			if (++audio_pos_z>=AUDIO_LENGTH_Z) r%=PSG_TICK_STEP; // end of buffer!
 		}
 	}
-	while ((r-=PSG_TICK_STEP)>0);
+	while ((r-=PSG_TICK_STEP)>=0);
 }
 
 // Again, the PlayCity extension requires its own logic, as it "piggybacks" on top of the central AY chip;
@@ -345,10 +336,10 @@ void psg_main(int t,int d) // render audio output for `t` clock ticks, with `d` 
 void playcity_main(AUDIO_UNIT *t,int l)
 {
 	#ifdef PSG_PLAYCITY_HALF
-	if (playcity_table[0][7]==0x3F||!l) return;
+	if (playcity_table[0][7]==0x3F||l<=0) return;
 	#else
 	int dirty_l=playcity_table[0][7]==0x3F,dirty_h=playcity_table[1][7]!=0x3F;
-	if (dirty_l>dirty_h||!l) return; // disabled chips? no buffer? quit!
+	if (dirty_l>dirty_h||l<=0) return; // disabled chips? no buffer? quit!
 	#endif
 	#ifdef PSG_PLAYCITY_HALF
 	const int x=0,playcity_clock=0;
@@ -364,7 +355,7 @@ void playcity_main(AUDIO_UNIT *t,int l)
 		{
 			playcity_tone_power[x][c]=playcity_table[x][c*1+8];
 			playcity_tone_mixer[x][c]=playcity_table[x][7]>>c;
-			if ((playcity_tone_limit[x][c]=playcity_table[x][c*2+0]+playcity_table[x][c*2+1]*256)<=(PSG_PLAYCITY*256/AUDIO_PLAYBACK))
+			if ((playcity_tone_limit[x][c]=playcity_table[x][c*2+0]+playcity_table[x][c*2+1]*256)<=(PSG_PLAYCITY*PSG_KHZ_CLOCK*256/AUDIO_PLAYBACK))
 				playcity_tone_mixer[x][c]|=1; // catch ultrasounds!
 		}
 		if (!(playcity_noise_limit[x]=playcity_table[x][6]*2)) // noise limits
@@ -377,7 +368,7 @@ void playcity_main(AUDIO_UNIT *t,int l)
 	#else
 	static int n=0,o=0,p=0;
 	#endif
-	int playcity_clock_hi=(playcity_clock?playcity_clock*2-1:2)*PSG_PLAYCITY*125,playcity_clock_lo=(playcity_clock?playcity_clock:1)*AUDIO_PLAYBACK*2; // where 125/2 = 1000/16
+	int playcity_clock_hi=(playcity_clock?playcity_clock*2-1:2)*(PSG_PLAYCITY*TICKS_PER_SECOND),playcity_clock_lo=(playcity_clock?playcity_clock:1)*2*AUDIO_PLAYBACK*PSG_TICK_STEP;
 	for (;;)
 	{
 		p+=playcity_clock_hi; while (p>=0)
@@ -418,8 +409,8 @@ void playcity_main(AUDIO_UNIT *t,int l)
 								z=playcity_hard_power[x];
 							if ((z-=2)>0) // each channel in Playcity plays at half the normal intensity
 								#if AUDIO_CHANNELS > 1
-								o0+=audio_table[z]*playcity_stereo[x][0],
-								o1+=audio_table[z]*playcity_stereo[x][1];
+								o0+=audio_table[z]*playcity_stereo[x][c][0],
+								o1+=audio_table[z]*playcity_stereo[x][c][1];
 								#else
 								o+=audio_table[z];
 								#endif

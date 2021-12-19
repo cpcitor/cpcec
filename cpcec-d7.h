@@ -527,6 +527,7 @@ void disc_data_send(BYTE b) // DATA I/O
 				disc_length=2;
 				break;
 			case 0x08: // SENSE INTERRUPT STATUS
+				++disc_sector_last; // the protected versions of "RENEGADE" and "ARKANOID 2" lose time between SEEK and READ ID
 				disc_result[0]&=~7;
 				disc_length=2;
 				int i;

@@ -50,19 +50,23 @@
 #define VIDEO_UNIT DWORD // 0x00RRGGBB style
 
 #define VIDEO_FILTER_HALF(x,y) (x==y?x:(x<y?(((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00):(((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1) // 50:50
+//#define VIDEO_FILTER_HALF(x,y) (x==y?x:((((x&0XFF00FF)+(y&0XFF00FF)+(y&0X10001))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+(y&0X100))&0X1FE00))>>1) // 50:50; slightly more precise, but slower with GCC
 #define VIDEO_FILTER_BLURDATA vzz
 #define VIDEO_FILTER_BLUR0(z) vzz=z
-#define VIDEO_FILTER_BLUR(r,z) r=VIDEO_FILTER_HALF(vzz,z),vzz=z // the fastest method according to GCC
+#define VIDEO_FILTER_BLUR(r,z) r=VIDEO_FILTER_HALF(vzz,z),vzz=z // the fastest 50:50 blur according to GCC
 //#define VIDEO_FILTER_BLURDATA vxh,vxl,vzh,vzl
 //#define VIDEO_FILTER_BLUR0(z) vxh=z&0XFF00FF,vxl=z&0XFF00
 //#define VIDEO_FILTER_BLUR(r,z) r=((((vzh=z&0XFF00FF)+vxh+0X10001)&0X1FE01FE)+(((vzl=z&0XFF00)+vxl+0X100)&0X1FE00))>>1,vxh=vzh,vxl=vzl // 50:50 blur, but slower; the "x==y?x:..." part sets the difference
 //#define VIDEO_FILTER_BLURDATA vxh,vxl,vyh,vyl,vzh,vzl
 //#define VIDEO_FILTER_BLUR0(z) vxh=vyh=z&0XFF00FF,vxl=vyl=z&0XFF00
 //#define VIDEO_FILTER_BLUR(r,z) r=((((vzh=z&0XFF00FF)+vyh*2+vxh+0X20002)&0X3FC03FC)+(((vzl=z&0XFF00)+vyl*2+vxl+0X200)&0X3FC00))>>2,vxh=vyh,vyh=vzh,vxl=vyl,vyl=vzl // 25:50:25 blur, softer but slower
+//#define VIDEO_FILTER_BLURDATA vxx,vyy
+//#define VIDEO_FILTER_BLUR0(z) vxx=vyy=z
+//#define VIDEO_FILTER_BLUR(r,z) r=(z&0XFF0000)+(vyy&0XFF00)+(vxx&0XFF),vxx=vyy,vyy=z // chromatic aberration
 //#define VIDEO_FILTER_X1(x) (((x>>1)&0X7F7F7F)+0X2B2B2B) // average
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)+0X404040) // heavier
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)*3+0X161616) // lighter
-#define VIDEO_FILTER_X1(x) ((((x&0XFF0000)*76+(x&0XFF00)*(150<<8)+(x&0XFF)*(30<<16)+128)>>24)*0X10101) // greyscale
+#define VIDEO_FILTER_X1(x) ((((x&0XFF0000)*76+(x&0XFF00)*(150<<8)+(x&0XFF)*(30<<16)+(1<<23))>>24)*0X10101) // greyscale
 #define VIDEO_FILTER_SCAN(w,b) (((((w&0xFF00FF)+(b&0xFF00FF)*7)&0x7F807F8)+(((w&0xFF00)+(b&0xFF00)*7)&0x7F800))>>3) // white:black 1:7
 
 #if 0 // 8 bits
@@ -102,7 +106,7 @@ BYTE session_paused=0,session_signal=0,session_version[8];
 #define SESSION_SIGNAL_FRAME 1
 #define SESSION_SIGNAL_DEBUG 2
 #define SESSION_SIGNAL_PAUSE 4
-BYTE session_dirty=1; // to force new status text
+BYTE session_dirty=0; // cfr session_clean()
 
 #define kbd_bit_set(k) (kbd_bit[k>>3]|=1<<(k&7))
 #define kbd_bit_res(k) (kbd_bit[k>>3]&=~(1<<(k&7)))
@@ -232,6 +236,7 @@ unsigned char kbd_map[256]; // key-to-key translation map
 
 // general engine functions and procedures -------------------------- //
 
+void session_clean(void); // clean "dirty" settings. Must be defined later on!
 void session_user(int k); // handle the user's commands; must be defined later on!
 void session_debug_show(void); // redraw the debugger text; must be defined later on, too!
 int session_debug_user(int k); // debug logic is a bit different: 0 UNKNOWN COMMAND, !0 OK
@@ -244,8 +249,7 @@ void session_please(void) // stop activity for a short while
 	{
 		if (session_audio)
 			SDL_PauseAudioDevice(session_audio,1);
-		//video_framecount=-1;
-		session_wait=1;
+		session_wait=1; //video_framecount=1;
 	}
 }
 
@@ -1407,7 +1411,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	}
 	*t=0;
 	SDL_StartTextInput();
-	session_please();
+	session_clean(); session_please();
 	return NULL;
 }
 
@@ -1439,7 +1443,6 @@ int session_pad2bit(int i) // translate motions and buttons into codes
 			return 0;
 	}
 }
-void session_clean(void); // clean "dirty" settings. Must be defined later on!
 INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 {
 	static int s=0;	if (s!=session_signal) // catch DEBUG and PAUSE
@@ -1455,10 +1458,9 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 		}
 		if (!session_paused) // set the caption just once
 		{
-			session_please();
 			sprintf(session_tmpstr,"%s | %s | PAUSED",session_caption,session_info);
 			SDL_SetWindowTitle(session_hwnd,session_tmpstr);
-			session_paused=1;
+			session_please(),session_paused=1;
 			session_redraw(1); // enabling pause or debug taints the screen!
 		}
 		SDL_WaitEvent(NULL);
@@ -1629,11 +1631,10 @@ INLINE void session_render(void) // update video, audio and timers
 			session_timer=i; // ensure that the next frame can be valid!
 		else
 		{
-			j=1000/VIDEO_PLAYBACK-(i-session_timer);
-			if (j>0)
+			if ((j=1000/VIDEO_PLAYBACK-(i-session_timer))>0) // avoid zero!
 				SDL_Delay(j>1000/VIDEO_PLAYBACK?1+1000/VIDEO_PLAYBACK:j);
-			else if (j<0&&!session_filmfile)
-				video_framecount=-2; // automatic frameskip!
+			else if (j<0&&!session_filmfile)//&&!video_framecount)
+				video_framecount=video_framelimit+2; // frameskip on timeout!
 			session_timer+=1000/VIDEO_PLAYBACK;
 		}
 	}

@@ -736,7 +736,7 @@ the error rates of ZXSEC in the 2012 RAXOFT tests are Z80FULL 10/152, Z80CCF
 70/152 and Z80MEMPTR 4/152.
 - 20200430 -- sixteenth public release. Now you can compile CPCEC and ZXSEC with
 SDL2 (featuring its own graphical user interface) for multiple operating systems
-thru the option -DSDL_MAIN_HANDLED; the precompiled files CPCEC.ELF and
+through the option -DSDL_MAIN_HANDLED; the precompiled files CPCEC.ELF and
 ZXSEC.ELF for 32bit GNU/Linux are included, too. New support for extended ROM
 profiles through INI files enumerating up to 257 16K ROM blocks. Further Z80
 tweaks: the new error rates of ZXSEC in the 2012 RAXOFT tests are 8/152 Z80FULL,
@@ -979,3 +979,21 @@ to disable the AY chip) and the menu. Experimental support for BRKS blocks
 (breakpoint tables) when saving and loading CPC snapshot files; to ease deleting
 the breakpoints they they're no longer required, key Z can delete them all at
 once from any panel in the debugger, instead of only from the disassembly panel.
+- 20211217 -- twenty-first public release. Important changes in video emulation:
+all parts of the 2021 rerelease of "Amazing Megademo" work on all CRTCs in
+CPCEC, thanks to Longshot's new monumental handbook "Amstrad CPC CRTC
+Compendium", and titles that check the floating bus through ULA-contended ports
+such as "A Yankee in Iraq" run properly in ZXSEC, even on Plus3. The AY chip has
+been rewritten to ensure that Playcity (CPC) and Turbosound (Spectrum) share the
+exact clock with the main audio chips (6-channel music on Pentagon is no longer
+off-key), and stereo channels are more flexible now, switching between the
+default ABC stereo setup and the ACB setup of AY-Melodik; audio oversampling now
+relies on system clock ticks instead of output samples. Minor fixes in the FDC
+logic (protected rereleases of "Arkanoid 2" and "Renegade" expect the disc to
+keep moving while the SENSE INTERRUPT STATUS command takes place), the ZIP
+archive reader (hidden files must stay invisible) and the WAV and AVI file
+handling (proper 2-byte alignment must be performed in the extremely rare cases
+where the length of a block is odd). V-hold options in CPCEC have been merged
+into one (disabling "Standard V-hold" extends the vertical sync both up and
+down), and the paired options PlayCity/Digiblaster (CPCEC) and Turbosound/Covox
+$FD (ZXSEC) are mutually exclusive.
