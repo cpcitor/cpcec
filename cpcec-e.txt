@@ -110,15 +110,19 @@ plus blending;
 * -m2 : start emulation as an Amstrad CPC 6128, by default;
 * -m3 : start emulation as an Amstrad Plus (Plus 464, Plus 6128 and GX4000 only
 differ in the amount of RAM, the disc controller and the keyboard);
+* -o : show onscreen indicators;
 * -O : hide onscreen indicators (by default shown);
 * -p : enable Playcity audio (by default disabled);
 * -P : disable Playcity audio;
 * -R : disable real time emulation (by default enabled);
 * -S : disable sound (by default enabled if there's a sound card);
+* -t : enable stereophony;
 * -T : disable stereophony (by default enabled);
 * -W : use the full screen rather than a window;
 * -X : disable emulation of disc drives (by default enabled);
+* -y : enable tape analysis;
 * -Y : disable tape analysis (by default enabled; see below);
+* -z : enable tape acceleration;
 * -Z : disable tape acceleration (by default enabled);
 * -! : disable video and audio hardware acceleration;
 * -$ : turn the normal menu (always visible) into a pop-up (right-click) on
@@ -397,11 +401,11 @@ thus becomes a +2A instead; same outcome can happen on runtime by disabling
 within the emulator with Shift+F6, too;
 * Control+Shift+F8 starts (or stops) the cassette motor, because the CPC
 hardware includes a built-in tape control, while the Spectrum hardware lacks it;
-* SHIFT emulates the CAPS key, CONTROL emulates SYMBOL, BLOQ MAYUS emulates
-CAPS+2 (CAPS LOCK), cursors emulate CAPS+5/6/7/8, TAB emulates CAPS+1 (EDIT) and
-ESCAPE emulates CAPS+SPACE (BREAK);
-* joystick options apply to the Sinclair 2 interface by default; the menu allows
-choosing the type of joystick.
+* SHIFT emulates the CAPS key, CONTROL emulates SYMBOL, cursors emulate
+CAPS+5/6/7/8, SHIFT LOCK emulates CAPS+2 (CAPS LOCK), TAB emulates CAPS+1 (EDIT)
+and ESCAPE emulates CAPS+SPACE (BREAK);
+* joystick options apply to the Sinclair 2 interface by default; the menu and
+the options -g0, -g1, -g2, g3 and -g4 allow choosing the type of joystick.
 
 ZXSEC can show Gigascreen effects (for example the demo "Mescaline Synesthesia"
 2009 DeMarche) through the interlace options in the Video menu.
@@ -997,3 +1001,14 @@ where the length of a block is odd). V-hold options in CPCEC have been merged
 into one (disabling "Standard V-hold" extends the vertical sync both up and
 down), and the paired options PlayCity/Digiblaster (CPCEC) and Turbosound/Covox
 $FD (ZXSEC) are mutually exclusive.
+- 20211231 -- minor patch adding printer emulation: the user selects a file that
+will store the data sent to the CPC's 7-bit line printer and the Spectrum's ZX
+Printer (48K), the serial 8-bit line printer (128K and Plus2), and the parallel
+8-bit line printer (Plus3). The printer port of the Plus3 happens to be the
+floating bus too, leading to changes in the video and floating bus logic. ZXSEC
+can save uncompressed SZX snapshots now, although SNA stays the default format.
+Following research by Hoglet67 and tests by Ped7g, the Z80 block operations
+LDIR, LDDR, CPIR, CPDR, INIR, INDR, OTIR and OTDR show special temporary flags
+if an interruption arises before the end of the block. New commandline options
+`-o`, `-t`, `-y` and `-z` that provide the opposite behaviors of `-O`, `-T`,
+`-Y` and `-Z`. Happy new year 2022!

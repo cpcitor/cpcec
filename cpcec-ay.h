@@ -19,7 +19,8 @@
 const BYTE psg_valid[16]={255,15,255,15,255,15,31,255,31,31,31,255,255,15,255,255}; // bit masks
 BYTE psg_index,psg_table[16]; // index and table
 BYTE psg_hard_log=0xFF; // default mode: drop and stay
-int psg_r7_filter; // safety delay to filter ultrasounds away, cfr. "Terminus" and "Robocop"
+#define PSG_ULTRASOUND (PSG_KHZ_CLOCK*256/AUDIO_PLAYBACK)
+int psg_ultra_beep,psg_ultra_hits; // ultrasound/beeper filter
 
 // frequencies (or more properly, wave lengths) are handled as counters
 // that toggle the channels' output status when they reach their current limits.
@@ -36,26 +37,26 @@ void psg_reg_update(int c)
 	{
 		case 0: case 2: case 4: // LO wavelengths
 		case 1: case 3: case 5: // HI wavelengths
-			// catch overflows, either bad (buggy music in "Thing on a Spring")
-			// or good (pipe sound effect in its sequel "Thing Bounces Back")
-			if (psg_tone_count[c/2]>(psg_tone_limit[c/2]=psg_table[c&~1]+(psg_table[c|1]<<8)))
-				psg_tone_count[c/2]=psg_tone_limit[c/2]; // harsh, but ensures count<=i
+			// catch overflows, either bad (buggy music in "Thing on a Spring" for CPC)
+			// or good (pipe sound effect in its sequel "Thing Bounces Back" for CPC)
+			c>>=1; if (psg_tone_count[c]>(psg_tone_limit[c]=psg_table[c*2]+psg_table[c*2+1]*256))
+				psg_tone_count[c]=psg_tone_limit[c]; // ensure count<=limit
 			break;
 		case 6: // noise wavelength
-			if (!(psg_noise_limit=(psg_table[6]&31)*2))
-				psg_noise_limit=1*2; // noise runs at half the rate
+			if (!(psg_noise_limit=psg_table[6]&31))
+				psg_noise_limit=1;
 			break;
 		case 7: // mixer bits
 			for (c=0;c<3;++c)
-				psg_tone_mixer[c]=psg_table[7]&((1+8)<<c); // 8+1, 16+2, 32+4
+				psg_tone_mixer[c]=psg_table[7]>>c; // 8+1, 16+2, 32+4
 			break;
 		case 8: case 9: case 10: // amplitudes
 			if ((psg_tone_power[c-8]=psg_table[c])&16) // hard envelope?
 				psg_tone_power[c-8]=16;
 			break;
 		case 11: case 12: // envelope wavelength
-			if (!(psg_hard_limit=(psg_table[11]+(psg_table[12]<<8))*2))
-				psg_hard_limit=1*2; // hard envelope, half the rate
+			if (!(psg_hard_limit=psg_table[11]+psg_table[12]*256))
+				psg_hard_limit=1;
 			if (psg_hard_count>psg_hard_limit)
 				psg_hard_count=psg_hard_limit; // cifra nota supra
 			break;
@@ -79,13 +80,15 @@ INLINE void psg_table_sendto(BYTE x,BYTE i)
 {
 	if (x<16) // reject invalid index! the limit isn't 14, tho': the CPC+ demo "PHAT" relies on writing and reading R15!
 	{
-		if (x==7&&((psg_table[7]^i)&7))
-			psg_r7_filter=PSG_TICK_STEP<<(7+PSG_MAIN_EXTRABITS); // below <<3 or above <<11 "Terminus" is dirty; below <<7 "Stormbringer" is wrong; above <<11 "SOUND 1,1,100" is hearable
+		if (x==7) // detect Spectrum-like CPC beepers such as "Stormbringer" and "Terminus":
+			psg_ultra_hits?(psg_ultra_hits=0):(psg_ultra_beep=0); // PSG-based beepers repeatedly hit the mixer!
+		else
+			psg_ultra_hits=psg_ultra_beep=-1; // normal audio playback pokes more registers than just the mixer!
 		psg_table[x]=(i&=psg_valid[x]);
 		psg_reg_update(x);
 	}
 }
-#define psg_table_select(i) psg_index=(i) // "NODES OF YESOD" needs all bits because of a programming error!
+#define psg_table_select(i) (psg_index=(i)) // "NODES OF YESOD" for CPC needs all bits because of a programming error!
 #define psg_table_send(i) psg_table_sendto(psg_index,(i))
 #define psg_table_recv() (psg_index<16?psg_table[psg_index]:0xFF)
 #define psg_port_a_lock() (psg_table[7]&64) // useless on Spectrum, used by the CPC for the keyboard bits
@@ -93,7 +96,7 @@ INLINE void psg_table_sendto(BYTE x,BYTE i)
 
 #define psg_setup()
 
-// The PlayCity extension requires its own logic as it isn't just an extra pair of AY chips!
+// The CPC PlayCity and Spectrum Turbosound require their own logic, as they're more than an extra set of AY chips!
 
 #ifdef PSG_PLAYCITY
 #ifdef PSG_PLAYCITY_HALF
@@ -112,11 +115,7 @@ int playcity_stereo[2][3][2];
 #ifdef PSG_PLAYCITY_HALF
 #else
 void playcity_set_config(BYTE b)
-{
-	if (b<16)
-		//cprintf("playcity:%i\n",b),
-		playcity_clock=b;
-}
+	{ if (b<16) playcity_clock=b; }
 #define playcity_get_config() (playcity_clock)
 #endif
 void playcity_select(BYTE x,BYTE b)
@@ -126,8 +125,7 @@ void playcity_select(BYTE x,BYTE b)
 	#else
 	if (x<2)
 	#endif
-		if (b<16)
-			playcity_index[x]=b;
+		if (b<16) playcity_index[x]=b;
 }
 void playcity_send(BYTE x,BYTE b)
 {
@@ -256,9 +254,6 @@ void psg_main(int t,int d) // render audio output for `t` clock ticks, with `d` 
 	#else
 	d=-d;
 	#endif
-	if ((psg_r7_filter-=r)<0) psg_r7_filter=0; // ultrasound filter
-	int psg_tone_catch[3]; for (int c=0;c<3;++c) // catch ultrasounds, but keep any noise channels
-		psg_tone_catch[c]=psg_tone_mixer[c]|((psg_tone_limit[c]<=((PSG_KHZ_CLOCK<<8)/AUDIO_PLAYBACK)&&!psg_r7_filter)?7*1:0); // safe margin? (200-250)
 	do
 	{
 		#if AUDIO_CHANNELS > 1
@@ -273,32 +268,37 @@ void psg_main(int t,int d) // render audio output for `t` clock ticks, with `d` 
 			#if PSG_MAIN_EXTRABITS
 			a=1<<PSG_MAIN_EXTRABITS;
 			#endif
-			if (--psg_noise_count<=0) // update noise
+			static char q=0; if (q=~q) // update noise, at half the rate
 			{
-				psg_noise_count=psg_noise_limit;
-				if (psg_noise_trash&1) psg_noise_trash+=0x48000; // LFSR x2
-				psg_noise_state=(psg_noise_state+(psg_noise_trash>>=1))&1;
-			}
-			audio_table[16]=audio_table[psg_hard_level^psg_hard_flag2^((psg_hard_style&2)?psg_hard_flag0:0)]; // update hard envelope
-			if (--psg_hard_count<=0) // update hard envelope
-			{
-				psg_hard_count=psg_hard_limit;
-				if (++psg_hard_level>15) // end of hard envelope?
+				if (--psg_noise_count<=0)
 				{
-					if (psg_hard_style&1)
-						psg_hard_level=15,psg_hard_flag0=15; // stop!
-					else
-						psg_hard_level=0,psg_hard_flag0^=15; // loop!
+					psg_noise_count=psg_noise_limit;
+					if (psg_noise_trash&1) psg_noise_trash+=0x48000; // LFSR x2
+					psg_noise_state=(psg_noise_state+(psg_noise_trash>>=1))&1;
+				}
+			}
+			else // update hard envelope, at half the rate
+			{
+				audio_table[16]=audio_table[psg_hard_level^psg_hard_flag2^((psg_hard_style&2)?psg_hard_flag0:0)]; // update hard envelope
+				if (--psg_hard_count<=0)
+				{
+					psg_hard_count=psg_hard_limit;
+					if (++psg_hard_level>15) // end of hard envelope?
+					{
+						if (psg_hard_style&1)
+							psg_hard_level=15,psg_hard_flag0=15; // stop!
+						else
+							psg_hard_level=0,psg_hard_flag0^=15; // loop!
+					}
 				}
 			}
 			for (int c=0;c<3;++c)
-				if (--psg_tone_count[c]<=0) // update channel
-					psg_tone_count[c]=psg_tone_limit[c],
-					psg_tone_state[c]=~psg_tone_state[c];
+				if (--psg_tone_count[c]<=0) // update channel; ultrasound/beeper filter
+					psg_tone_state[c]=(psg_tone_count[c]=psg_tone_limit[c])<=PSG_ULTRASOUND?psg_ultra_beep:~psg_tone_state[c];
 		}
 		for (int c=0;c<3;++c)
-			if (psg_tone_state[c]|(psg_tone_catch[c]&(7*1))) // is the channel active?
-				if (psg_noise_state|(psg_tone_catch[c]&(7*8))) // is the channel noisy?
+			if (psg_tone_state[c]|(psg_tone_mixer[c]&1)) // is the channel active?
+				if (psg_noise_state|(psg_tone_mixer[c]&8)) // is the channel noisy?
 					#if AUDIO_CHANNELS > 1
 					o0+=audio_table[psg_tone_power[c]]*psg_stereo[c][0],
 					o1+=audio_table[psg_tone_power[c]]*psg_stereo[c][1];
@@ -355,13 +355,13 @@ void playcity_main(AUDIO_UNIT *t,int l)
 		{
 			playcity_tone_power[x][c]=playcity_table[x][c*1+8];
 			playcity_tone_mixer[x][c]=playcity_table[x][7]>>c;
-			if ((playcity_tone_limit[x][c]=playcity_table[x][c*2+0]+playcity_table[x][c*2+1]*256)<=(PSG_PLAYCITY*PSG_KHZ_CLOCK*256/AUDIO_PLAYBACK))
+			if ((playcity_tone_limit[x][c]=playcity_table[x][c*2+0]+playcity_table[x][c*2+1]*256)<=PSG_PLAYCITY*PSG_ULTRASOUND)
 				playcity_tone_mixer[x][c]|=1; // catch ultrasounds!
 		}
-		if (!(playcity_noise_limit[x]=playcity_table[x][6]*2)) // noise limits
-			playcity_noise_limit[x]=2; // half the rate
-		if (!(playcity_hard_limit[x]=(playcity_table[x][11]+playcity_table[x][12]*256)*2)) // hard envelope limits
-			playcity_hard_limit[x]=2; // half, ditto
+		if (!(playcity_noise_limit[x]=playcity_table[x][6])) // noise limits
+			playcity_noise_limit[x]=1;
+		if (!(playcity_hard_limit[x]=playcity_table[x][11]+playcity_table[x][12]*256)) // hard envelope limits
+			playcity_hard_limit[x]=1;
 	}
 	#if AUDIO_CHANNELS > 1
 	static int n=0,o0=0,o1=0,p=0;
@@ -374,26 +374,38 @@ void playcity_main(AUDIO_UNIT *t,int l)
 		p+=playcity_clock_hi; while (p>=0)
 		{
 			#ifdef PSG_PLAYCITY_HALF
+			static char q=0; // see below
 			#else
+			static char q=0; q=~q; // toggle once for ALL chips!
 			for (int x=dirty_l;x<=dirty_h;++x) // update all chips
 			#endif
 			{
-				if (--playcity_noise_count[x]<=0) // update noises
+				#ifdef PSG_PLAYCITY_HALF
+				if (q=~q) // update noises, half the rate
+				#else
+				if (q) // see above
+				#endif
 				{
-					playcity_noise_count[x]=playcity_noise_limit[x];
-					if (playcity_noise_trash[x]&1) playcity_noise_trash[x]+=0x48000; // LFSR x2
-					playcity_noise_state[x]=(playcity_noise_state[x]+(playcity_noise_trash[x]>>=1))&1;
-				}
-				playcity_hard_power[x]=playcity_hard_level[x]^playcity_hard_flag2[x]^((playcity_hard_style[x]&2)?playcity_hard_flag0[x]:0); // update hard envelopes
-				if (--playcity_hard_count[x]<=0)
-				{
-					playcity_hard_count[x]=playcity_hard_limit[x];
-					if (++playcity_hard_level[x]>15) // end of hard envelope?
+					if (--playcity_noise_count[x]<=0)
 					{
-						if (playcity_hard_style[x]&1)
-							playcity_hard_level[x]=15,playcity_hard_flag0[x]=15; // stop!
-						else
-							playcity_hard_level[x]=0,playcity_hard_flag0[x]^=15; // loop!
+						playcity_noise_count[x]=playcity_noise_limit[x];
+						if (playcity_noise_trash[x]&1) playcity_noise_trash[x]+=0x48000; // LFSR x2
+						playcity_noise_state[x]=(playcity_noise_state[x]+(playcity_noise_trash[x]>>=1))&1;
+					}
+				}
+				else // update hard envelopes, half the rate
+				{
+					playcity_hard_power[x]=playcity_hard_level[x]^playcity_hard_flag2[x]^((playcity_hard_style[x]&2)?playcity_hard_flag0[x]:0);
+					if (--playcity_hard_count[x]<=0)
+					{
+						playcity_hard_count[x]=playcity_hard_limit[x];
+						if (++playcity_hard_level[x]>15) // end of hard envelope?
+						{
+							if (playcity_hard_style[x]&1)
+								playcity_hard_level[x]=15,playcity_hard_flag0[x]=15; // stop!
+							else
+								playcity_hard_level[x]=0,playcity_hard_flag0[x]^=15; // loop!
+						}
 					}
 				}
 				for (int c=0;c<3;++c) // update channels and render output

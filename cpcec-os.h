@@ -70,7 +70,8 @@ INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 
 #define VIDEO_UNIT DWORD // 0x00RRGGBB style
 
-#define VIDEO_FILTER_HALF(x,y) (x==y?x:(x<y?(((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00):(((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1) // 50:50
+#define VIDEO_FILTER_HALF(x,y) (x==y?x:((((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00))>>1) // 50:50; the fastest algorithm, albeit with a precision loss; is it negligible or not?
+//#define VIDEO_FILTER_HALF(x,y) (x==y?x:(x<y?(((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00):(((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1) // 50:50
 //#define VIDEO_FILTER_HALF(x,y) (x==y?x:((((x&0XFF00FF)+(y&0XFF00FF)+(y&0X10001))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+(y&0X100))&0X1FE00))>>1) // 50:50; slightly more precise, but slower with GCC
 #define VIDEO_FILTER_BLURDATA vzz
 #define VIDEO_FILTER_BLUR0(z) vzz=z
@@ -144,7 +145,7 @@ HGDIOBJ session_dbg=NULL;
 	LPDIRECTDRAWSURFACE lpdd_dbg=NULL;
 #endif
 
-BYTE session_paused=0,session_signal=0,session_version[8];
+BYTE session_paused=0,session_signal=0,session_signal_frames=0,session_signal_scanlines=0,session_version[8];
 #define SESSION_SIGNAL_FRAME 1
 #define SESSION_SIGNAL_DEBUG 2
 #define SESSION_SIGNAL_PAUSE 4
@@ -338,8 +339,7 @@ int session_key_n_joy(int k) // handle some keys as joystick motions
 int session_r_x,session_r_y,session_r_w,session_r_h; // actual location and size of the bitmap
 void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 {
-	int ox,oy;
-	if (session_signal&SESSION_SIGNAL_DEBUG)
+	int ox,oy; if (session_signal&SESSION_SIGNAL_DEBUG)
 		ox=0,oy=0;
 	else
 		ox=VIDEO_OFFSET_X,oy=VIDEO_OFFSET_Y;
@@ -356,7 +356,6 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 		if (session_r_w<VIDEO_PIXELS_X||session_r_h<VIDEO_PIXELS_Y)
 			session_r_w=VIDEO_PIXELS_X,session_r_h=VIDEO_PIXELS_Y; // window area is too small!
 		session_r_x=(r.right-session_r_w)/2,session_r_y=(r.bottom-session_r_h)/2; // locate bitmap on window center
-		HGDIOBJ session_oldselect;
 
 		#ifdef DDRAW
 		if (lpddback)
@@ -400,7 +399,7 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 		else
 		#endif
 		{
-			if (session_oldselect=SelectObject(session_dc2,session_signal&SESSION_SIGNAL_DEBUG?session_dbg:session_dib))
+			HGDIOBJ session_oldselect; if (session_oldselect=SelectObject(session_dc2,session_signal&SESSION_SIGNAL_DEBUG?session_dbg:session_dib))
 			{
 				if (session_hardblit=(session_r_w<=VIDEO_PIXELS_X||session_r_h<=VIDEO_PIXELS_Y)) // window area is a perfect fit?
 					BitBlt(h,session_r_x,session_r_y,session_r_w=VIDEO_PIXELS_X,session_r_h=VIDEO_PIXELS_Y,session_dc2,ox,oy,SRCCOPY); // fast :-)
@@ -728,6 +727,8 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 		s=session_signal,session_dirty=1;
 	if (session_signal&(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE))
 	{
+		session_signal_frames&=~(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE);
+		session_signal_scanlines&=~(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE); // reset traps!
 		if (session_signal&SESSION_SIGNAL_DEBUG)
 		{
 			if (*debug_buffer==128)
@@ -936,20 +937,16 @@ LRESULT CALLBACK inputproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // di
 	switch (msg)
 	{
 		case WM_INITDIALOG:
-			{
-				SetWindowText(hwnd,session_dialog_text);
-				session_dialog_item=GetDlgItem(hwnd,12345);
-				SendMessage(session_dialog_item,WM_SETTEXT,0,lparam);
-				SendMessage(session_dialog_item,EM_SETLIMITTEXT,STRMAX-1,0);
-			}
+			SetWindowText(hwnd,session_dialog_text);
+			session_dialog_item=GetDlgItem(hwnd,12345);
+			SendMessage(session_dialog_item,WM_SETTEXT,0,lparam);
+			SendMessage(session_dialog_item,EM_SETLIMITTEXT,STRMAX-1,0);
 			break;
 		/*case WM_SIZE:
-			{
-				RECT r; GetClientRect(hwnd,&r);
-				SetWindowPos(session_dialog_item,NULL,0,0,r.right,r.bottom*1/2,SWP_NOZORDER);
-				SetWindowPos(GetDlgItem(hwnd,IDOK),NULL,0,r.bottom*1/2,r.right/2,r.bottom/2,SWP_NOZORDER);
-				SetWindowPos(GetDlgItem(hwnd,IDCANCEL),NULL,r.right/2,r.bottom*1/2,r.right/2,r.bottom/2,SWP_NOZORDER);
-			}
+			RECT r; GetClientRect(hwnd,&r);
+			SetWindowPos(session_dialog_item,NULL,0,0,r.right,r.bottom*1/2,SWP_NOZORDER);
+			SetWindowPos(GetDlgItem(hwnd,IDOK),NULL,0,r.bottom*1/2,r.right/2,r.bottom/2,SWP_NOZORDER);
+			SetWindowPos(GetDlgItem(hwnd,IDCANCEL),NULL,r.right/2,r.bottom*1/2,r.right/2,r.bottom/2,SWP_NOZORDER);
 			break;*/
 		case WM_COMMAND:
 			if (LOWORD(wparam)==IDCANCEL)
@@ -981,27 +978,23 @@ LRESULT CALLBACK listproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // dia
 	switch (msg)
 	{
 		case WM_INITDIALOG:
+			SetWindowText(hwnd,session_dialog_text);
+			session_dialog_item=GetDlgItem(hwnd,12345);
+			char *l=(char*)lparam;
+			while (*l)
 			{
-				SetWindowText(hwnd,session_dialog_text);
-				session_dialog_item=GetDlgItem(hwnd,12345);
-				char *l=(char*)lparam;
-				while (*l)
-				{
-					SendMessage(session_dialog_item,LB_ADDSTRING,0,(LPARAM)l);
-					while (*l++)
-						;
-				}
-				SendMessage(session_dialog_item,LB_SETCURSEL,session_dialog_return,0); // select item
-				session_dialog_return=-1;
+				SendMessage(session_dialog_item,LB_ADDSTRING,0,(LPARAM)l);
+				while (*l++)
+					;
 			}
+			SendMessage(session_dialog_item,LB_SETCURSEL,session_dialog_return,0); // select item
+			session_dialog_return=-1;
 			break;
 		/*case WM_SIZE:
-			{
-				RECT r; GetClientRect(hwnd,&r);
-				SetWindowPos(session_dialog_item,NULL,0,0,r.right,r.bottom*15/16,SWP_NOZORDER);
-				SetWindowPos(GetDlgItem(hwnd,IDOK),NULL,0,r.bottom*15/16,r.right/2,r.bottom/16,SWP_NOZORDER);
-				SetWindowPos(GetDlgItem(hwnd,IDCANCEL),NULL,r.right/2,r.bottom*15/16,r.right/2,r.bottom/16,SWP_NOZORDER);
-			}
+			RECT r; GetClientRect(hwnd,&r);
+			SetWindowPos(session_dialog_item,NULL,0,0,r.right,r.bottom*15/16,SWP_NOZORDER);
+			SetWindowPos(GetDlgItem(hwnd,IDOK),NULL,0,r.bottom*15/16,r.right/2,r.bottom/16,SWP_NOZORDER);
+			SetWindowPos(GetDlgItem(hwnd,IDCANCEL),NULL,r.right/2,r.bottom*15/16,r.right/2,r.bottom/16,SWP_NOZORDER);
 			break;*/
 		case WM_COMMAND:
 			if (LOWORD(wparam)==IDCANCEL)

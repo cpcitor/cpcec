@@ -571,7 +571,7 @@ void tape_main(int t) // plays tape back for `t` ticks; t must be >0!
 						if ((p=tape_getcc())<=0)
 							{ tape_eofmet(); return; }
 						t=tape_getc()&128; tape_undo();
-						tape_tzxhold=/*t?2400:*/960;
+						tape_tzxhold=960;
 						tape_tzx10(t,p);
 					}
 					else if (tape_type==4) // PZX
@@ -772,19 +772,15 @@ void tape_main(int t) // plays tape back for `t` ticks; t must be >0!
 int fasttape_test(const BYTE *s,WORD p) // compares a chunk of memory against a pattern; see below for pattern format
 {
 	for (WORD a,z;;)
-		if (*s==0x80) // relative word, f.e. the pair "-128,  -2" means its own address
+		if (*s==0x80) // relative word, f.e. the pair "-128,  -2" points at its first byte
 		{
-			z=PEEK(p); ++p; z+=PEEK(p)*256; ++p;
-			a=p+(signed char)(*++s);
-			if (a-z) return 0; // word doesn't match
-			++s;
+			z=PEEK(p); ++p; z+=PEEK(p)*256; ++p; a=p+(signed char)(*++s); // fetch the word
+			if (a!=z) return 0; ++s; // give up if they don't match
 		}
-		else // memory comparison, the two bytes are the offset (signed) and the length
+		else // memory comparison, the two bytes are the offset (signed!) and the length
 		{
-			a=p+(signed char)(*s++); z=a+(*s++);
-			if (a==z) return 1; // any offset, zero length: end of pattern, OK
-			if (z<a||memcmp(&(PEEK(a)),s,z-a)) return 0; // pattern doesn't match
-			p=z; s+=z-a;
+			p+=(signed char)(*s++); if (!(z=*s++)) return 1; // zero length: end of pattern
+			while (z>0) { if (PEEK(p)!=*s) return 0; ++p,++s,--z; }
 		}
 }
 

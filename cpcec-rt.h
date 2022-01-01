@@ -389,7 +389,6 @@ INLINE void audio_playframe(int q,AUDIO_UNIT *ao) // call between frames by the 
 	#endif
 }
 
-int session_signal_frames=0,session_signal_scanlines=0;
 INLINE void session_update(void) // render video+audio thru OS and handle realtime logic (self-adjusting delays, automatic frameskip, etc.)
 {
 	session_signal&=~SESSION_SIGNAL_FRAME; // new frame!
@@ -399,8 +398,8 @@ INLINE void session_update(void) // render video+audio thru OS and handle realti
 		video_interlaced|=1;
 	else
 		video_interlaced&=~1;
-	if (((unsigned char)--video_framecount)>video_framelimit) // catch both <0 and >N
-		video_framecount=video_framelimit;
+	if (--video_framecount<0||video_framecount>video_framelimit)
+		video_framecount=video_framelimit; // catch both <0 and >N
 }
 
 // elementary ZIP archive support ----------------------------------- //
@@ -598,9 +597,9 @@ int huff_stored(BYTE *t,int o,BYTE *s,int i) // the storage part of DEFLATE
 }
 #if DEFLATE_LEVEL > 0 // if you must save DEFLATE data and perform compression on it
 #if DEFLATE_LEVEL >= 9
-	#define DEFLATE_SHL 32768 // strongest compression and slowest performance!!
+#define DEFLATE_SHL 32768 // strongest compression and slowest performance!!
 #else
-	#define DEFLATE_SHL (64<<DEFLATE_LEVEL) // better than 32768*DEFLATE_LEVEL/9
+#define DEFLATE_SHL (64<<DEFLATE_LEVEL) // better than 32768*DEFLATE_LEVEL/9
 #endif
 // Huffman-bitwise operations
 void huff_write(int n,int i) // sends `n`-bit word `i` to bitstream
@@ -748,10 +747,10 @@ int puff_head(void) // reads a ZIP file header, if any; !0 ERROR
 	puff_next+=46+h[28]+mgetii(&h[30])+mgetii(&h[32]); // next ZIP file header
 	puff_name[fread1(puff_name,h[28],puff_file)]=0;
 	#if PATHCHAR != '/' // ZIP archives use the UNIX style
-		char *s=puff_name; // this will never be blank
-		do
-			if (*s=='/') *s=PATHCHAR;
-		while (*++s);
+	char *s=puff_name; // this will never be blank
+	do
+		if (*s=='/') *s=PATHCHAR;
+	while (*++s);
 	#endif
 	return 0;
 }
@@ -1072,7 +1071,6 @@ void onscreen_ascii(int x,int y,int z) // not exactly the same as onscreen_char
 void onscreen_debug(int q) // rewrite debug texts or redraw graphics
 {
 	static int videox,videoy,videoz;
-	session_signal_frames=session_signal_scanlines=0; // reset traps
 	if (videox!=video_pos_x||videoy!=video_pos_y||videoz!=video_pos_z)
 		videox=video_pos_x,videoy=video_pos_y,videoz=video_pos_z,onscreen_clear(); // flush background if required!
 	if (onscreen_debug_mask&1) // normal or inverse?
@@ -1089,10 +1087,10 @@ void onscreen_debug(int q) // rewrite debug texts or redraw graphics
 			case 2:
 				memcpy(onscreen_debug_chrs,onscreen_chrs,sizeof(onscreen_chrs)); // thin
 				break;
-			/*case 4:
+			case 4:
 				for (int i=0,j;i<sizeof(onscreen_debug_chrs);++i)
 					j=onscreen_chrs[i],onscreen_debug_chrs[i]=j|((2*i/ONSCREEN_SIZE)&1?(j<<1):(j>>1)); // italic
-				break;*/
+				break;
 			case 6:
 				for (int i=0,j;i<sizeof(onscreen_debug_chrs);++i)
 					j=onscreen_chrs[i],onscreen_debug_chrs[i]=j|(j>>1)|(j<<1); // bold
@@ -1267,15 +1265,15 @@ void session_writefilm(void) // record one frame of video and audio
 					for (int j=0;j<VIDEO_PIXELS_X;++j)
 						*t++^=*s++; // bitwise delta against last frame
 			#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-				z+=xrf_encode(z,&((BYTE*)session_filmvideo)[3],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // B
-				z+=xrf_encode(z,&((BYTE*)session_filmvideo)[2],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // G
-				z+=xrf_encode(z,&((BYTE*)session_filmvideo)[1],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // R
-				//z+=xrf_encode(z,&((BYTE*)session_filmvideo)[0],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // A!
+			z+=xrf_encode(z,&((BYTE*)session_filmvideo)[3],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // B
+			z+=xrf_encode(z,&((BYTE*)session_filmvideo)[2],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // G
+			z+=xrf_encode(z,&((BYTE*)session_filmvideo)[1],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // R
+			//z+=xrf_encode(z,&((BYTE*)session_filmvideo)[0],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // A!
 			#else
-				z+=xrf_encode(z,&((BYTE*)session_filmvideo)[0],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // B
-				z+=xrf_encode(z,&((BYTE*)session_filmvideo)[1],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // G
-				z+=xrf_encode(z,&((BYTE*)session_filmvideo)[2],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // R
-				//z+=xrf_encode(z,&((BYTE*)session_filmvideo)[3],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // A!
+			z+=xrf_encode(z,&((BYTE*)session_filmvideo)[0],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // B
+			z+=xrf_encode(z,&((BYTE*)session_filmvideo)[1],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // G
+			z+=xrf_encode(z,&((BYTE*)session_filmvideo)[2],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // R
+			//z+=xrf_encode(z,&((BYTE*)session_filmvideo)[3],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // A!
 			#endif
 			t=session_filmvideo;
 			if (session_filmscale)
@@ -1313,8 +1311,8 @@ void session_writefilm(void) // record one frame of video and audio
 					z+=xrf_encode(z,&s[3],l,4); // R
 				#endif
 			#else
-				z+=xrf_encode(z,&s[0],l,2), // L
-				z+=xrf_encode(z,&s[1],l,2); // R
+			z+=xrf_encode(z,&s[0],l,2), // L
+			z+=xrf_encode(z,&s[1],l,2); // R
 			#endif
 			#else
 			#if AUDIO_BITDEPTH > 8
@@ -1332,7 +1330,7 @@ void session_writefilm(void) // record one frame of video and audio
 					z+=xrf_encode(z,&s[1],l,2); // M
 				#endif
 			#else
-				z+=xrf_encode(z,&s[0],l,1); // M
+			z+=xrf_encode(z,&s[0],l,1); // M
 			#endif
 			#endif
 		}

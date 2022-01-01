@@ -425,11 +425,11 @@ tammbién puede conmutarse desde el emulador con Mays+F6;
 * Control+Mays+F8 sirve para poner en marcha (o detener) el motor de cinta, dado
 que el hardware de CPC dispone de control de cinta incorporado, mientras que el
 de Spectrum carece de él;
-* MAYS emula la tecla CAPS, CONTROL emula SYMBOL, BLOQ MAYUS emula CAPS+2 (CAPS
-LOCK), los cursores emulan CAPS+5/6/7/8, TAB emula CAPS+1 (EDIT) y ESCAPE emula
-CAPS+SPACE (BREAK);
+* MAYS emula la tecla CAPS, CONTROL emula SYMBOL, los cursores emulan
+CAPS+5/6/7/8, BLOQ MAYUS emula CAPS+2 (CAPS LOCK), TAB emula CAPS+1 (EDIT) y
+ESCAPE emula CAPS+SPACE (BREAK);
 * las opciones de joystick se refieren al interfaz Sinclair 2 por defecto; el
-menú permite elegir el tipo de joystick.
+menú y las opciones -g0, -g1, -g2, g3 y -g4 permiten elegir el tipo de joystick.
 
 ZXSEC puede mostrar efectos Gigascreen (por ejemplo la demo "Mescaline
 Synesthesia" 2009 DeMarche) mediante las opciones de entrelazado en el menú
@@ -1070,3 +1070,15 @@ impar). Las opciones "V-hold" de CPCEC se han unido en una sola (deshabilitar
 "Standard V-hold" alarga la sincro vertical en ambos sentidos) y las opciones
 emparejadas PlayCity/Digiblaster (CPCEC) y Turbosound/Covox $FD (ZXSEC) son
 mutuamente exclusivas.
+- 20211231 -- parche menor que añade emulación de impresora: el usuario elige un
+fichero para contener los datos enviados a la impresora de 7 bits del CPC y las
+impresora de Spectrum ZX Printer (48K), la impresora en serie de 8 bits (128K
+and Plus2), y la impresora en paralelo de 8 bits (Plus3). El puerto de impresora
+del Plus3 coincide que es el bus flotante, lo que requiere cambios en la lógica
+de vídeo y bus flotante. ZXSEC puede grabar instantáneas SZX sin comprimir,
+aunque SNA sigue siendo el formato por defecto. A raíz de investigaciones de
+Hoglet67 y pruebas de Ped7g, las operaciones de bloque del Z80 LDIR, LDDR, CPIR,
+CPDR, INIR, INDR, OTIR y OTDR exhiben banderas temporales especiales cuando una
+interrupción surge antes del final del bloque. Nuevas opciones de línea de
+comando `-o`, `-t`, `-y` y `-z` con las funciones opuestas de `-O`, `-T`, `-Y` y
+`-Z`. ¡Feliz año nuevo 2022!

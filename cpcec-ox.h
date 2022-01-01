@@ -49,7 +49,8 @@
 
 #define VIDEO_UNIT DWORD // 0x00RRGGBB style
 
-#define VIDEO_FILTER_HALF(x,y) (x==y?x:(x<y?(((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00):(((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1) // 50:50
+#define VIDEO_FILTER_HALF(x,y) (x==y?x:((((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00))>>1) // 50:50; the fastest algorithm, albeit with a precision loss; is it negligible or not?
+//#define VIDEO_FILTER_HALF(x,y) (x==y?x:(x<y?(((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00):(((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1) // 50:50
 //#define VIDEO_FILTER_HALF(x,y) (x==y?x:((((x&0XFF00FF)+(y&0XFF00FF)+(y&0X10001))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+(y&0X100))&0X1FE00))>>1) // 50:50; slightly more precise, but slower with GCC
 #define VIDEO_FILTER_BLURDATA vzz
 #define VIDEO_FILTER_BLUR0(z) vzz=z
@@ -102,7 +103,7 @@ BYTE video_filter=0,audio_filter=0; // filter flags
 BYTE session_intzoom=0; int session_joybits=0;
 FILE *session_wavefile=NULL; // audio recording is done on each session update
 
-BYTE session_paused=0,session_signal=0,session_version[8];
+BYTE session_paused=0,session_signal=0,session_signal_frames=0,session_signal_scanlines=0,session_version[8];
 #define SESSION_SIGNAL_FRAME 1
 #define SESSION_SIGNAL_DEBUG 2
 #define SESSION_SIGNAL_PAUSE 4
@@ -428,9 +429,8 @@ void session_ui_makechrs(void)
 unsigned char session_ui_menudata[1<<12],session_ui_menusize; // encoded menu data
 #ifdef _WIN32
 int session_ui_drives=0; char session_ui_drive[]="::\\";
-#else
-SDL_Surface *session_ui_icon=NULL; // the window icon
 #endif
+SDL_Surface *session_ui_icon=NULL; // the window icon
 
 void session_fillrect(int rx,int ry,int rw,int rh,VIDEO_UNIT a) // n.b.: coords in pixels
 {
@@ -1213,8 +1213,8 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 		{
 			strcat(strcpy(session_scratch,basepath),session_parmtr);
 			#ifdef _WIN32
-			if (session_parmtr[1]==':')
-				*pastname=0,strcpy(basepath,session_parmtr);
+			if (session_parmtr[1]==':') // the user chose a drive root directory
+				strcpy(pastname,strcpy(basepath,session_parmtr));
 			else
 			{
 				if (!strcmp(session_parmtr,strcpy(pastname,"..\\")))
@@ -1248,10 +1248,10 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 		{
 			if (*session_parmtr=='*') // the user wants to create a file
 			{
-				strcpy(session_parmtr,pastfile); //*session_parmtr=0;
+				strcpy(session_parmtr,pastfile); // reuse previous name if possible
 				if (session_ui_input(session_parmtr,t)>0)
 				{
-					if (multiglobbing(s,session_parmtr,1)!=1) // not the first extension?
+					if (!multiglobbing(s,session_parmtr,1)) // unknown extension?
 					{
 						m=session_parmtr; n=s;
 						while (*m) // go to end of target string
@@ -1341,10 +1341,9 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	for (session_ui_drive[0]='A';session_ui_drive[0]<='Z';++session_ui_drive[0]) // scan session_ui_drive just once
 		if (GetDriveType(session_ui_drive)>2&&GetDiskFreeSpace(session_ui_drive,&z,&z,&z,&z))
 			session_ui_drives|=1<<(session_ui_drive[0]-'A');
-	#else
+	#endif
 	session_ui_icon=SDL_CreateRGBSurfaceFrom(session_icon32xx16,32,32,16,32*2,0xF00,0xF0,0xF,0xF000); // ARGB4444
 	SDL_SetWindowIcon(session_hwnd,session_ui_icon); // SDL2 already handles WIN32 icons alone!
-	#endif
 	session_ui_makechrs();
 
 	// translate menu data into custom format
@@ -1449,6 +1448,8 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 		s=session_signal,session_dirty=1;
 	if (session_signal&(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE))
 	{
+		session_signal_frames&=~(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE);
+		session_signal_scanlines&=~(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE); // reset traps!
 		if (session_signal&SESSION_SIGNAL_DEBUG)
 		{
 			if (*debug_buffer==128)
@@ -1687,10 +1688,7 @@ INLINE void session_byebye(void) // delete video+audio devices
 	SDL_DestroyTexture(session_dbg);
 	SDL_DestroyRenderer(session_blitter);
 	SDL_DestroyWindow(session_hwnd);
-	#ifdef _WIN32
-	#else
 	SDL_FreeSurface(session_ui_icon);
-	#endif
 	SDL_Quit();
 	free(video_blend);
 }

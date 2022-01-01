@@ -224,9 +224,9 @@ void disc_sector_seek(int d,int z) // seek sector `z` (usually `disc_sector_last
 	if (disc_length>=disc_lengthfull) // explicit size is smaller than implicit size?
 	{
 		if (disc_length==0x0800&&disc_lengthfull==0x0100)/*&&disc_track_table[d][j*8+0x1C]==0x20*/ // ERE SOFTWARE (is this used elsewhere?)
-			disc_skew_length=32,disc_skew_filler=disc_track_table[d][0x22],cprintf("(ERE!:%02X) ",disc_skew_filler); // this is where the 0x44 comes from; it's part of a complex header but it works
+			disc_skew_length=32,disc_skew_filler=disc_track_table[d][0x22];//,cprintf("(ERE!:%02X) ",disc_skew_filler); // the 0x44 comes from here; it's part of a complex header but it works
 		else if (disc_length==0x2000&&disc_lengthfull<0x0900) // the educational "REUSSIR..." series
-			disc_skew_length=disc_length-disc_lengthfull,disc_skew_filler=disc_buffer[511]/*0xCB*/,cprintf("(REU!:%02X) ",disc_skew_filler); // this is what the strange filler byte is compared against
+			disc_skew_length=disc_length-disc_lengthfull,disc_skew_filler=disc_buffer[511];//,cprintf("(REU!:%02X) ",disc_skew_filler); // the strange filler byte is compared against this value
 		else
 			disc_skew_length=0;
 		disc_length=disc_lengthfull; // clip the size accordingly!
@@ -268,21 +268,21 @@ void disc_exitstate(void) // sets the state bits after the end of a operation
 {
 	#if DISC_WIRED_MODE
 	#else
-		disc_result[0]|=0x40; // 0x40: Abnormal Termination
-		disc_result[1]|=0x80; // 0x80: End of Cylinder
+	disc_result[0]|=0x40; // 0x40: Abnormal Termination
+	disc_result[1]|=0x80; // 0x80: End of Cylinder
 	#endif
 	if ((disc_result[1]|disc_result[2])&0x7F) // did any errors happen?
 	{
 		#if DISC_WIRED_MODE
 		#else
-			disc_result[1]&=~0x80;
+		disc_result[1]&=~0x80;
 		#endif
 		if ((disc_result[1]|disc_result[2])&0x20) // stopped because of errors?
 			disc_result[2]&=~0x40; // remove Deleted Data
 		#if DISC_WIRED_MODE
 		#else
-			else if (disc_result[2]&0x40) // stopped because of the DELETED bits?
-				disc_result[0]&=~0x40,disc_result[1]&=~0x80; // remove Abnormal Termination and End of Cylinder
+		else if (disc_result[2]&0x40) // stopped because of the DELETED bits?
+			disc_result[0]&=~0x40,disc_result[1]&=~0x80; // remove Abnormal Termination and End of Cylinder
 		#endif
 	}
 	DISC_RESULT_LAST_CHRN();
@@ -879,7 +879,7 @@ BYTE disc_data_recv(void) // DATA I/O
 			cprintf("%02X:",i);
 		else
 		{
-			cprintf("%02X\n",i);
+			cprintf("%02X.\n",i);
 			disc_offset=disc_phase=disc_timer=0; // results are over, return to IDLE.
 		}
 	}
