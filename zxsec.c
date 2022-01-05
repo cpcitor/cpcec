@@ -8,8 +8,8 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20211231"//"2345"
-#define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
+#define MY_VERSION "20220104"//"2555"
+#define MY_LICENSE "Copyright (C) 2019-2022 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
 
@@ -270,8 +270,7 @@ VIDEO_UNIT video_clut[65]; // precalculated colour palette, 16 attr + 48-colour 
 Z80W z80_af,z80_bc,z80_de,z80_hl; // Accumulator+Flags, BC, DE, HL
 Z80W z80_af2,z80_bc2,z80_de2,z80_hl2,z80_ix,z80_iy; // AF', BC', DE', HL', IX, IY
 Z80W z80_pc,z80_sp,z80_iff,z80_ir; // Program Counter, Stack Pointer, Interrupt Flip-Flops, IR pair
-BYTE z80_imd; // Interrupt Mode
-BYTE z80_r7; // low 7 bits of R, required by several `IN X,(Y)` operations
+BYTE z80_imd,z80_r7; // Interrupt Mode // low 7 bits of R, required by several `IN X,(Y)` operations
 
 // the Dandanator cartridge system can spy on the Z80 and trap its operations
 
@@ -416,7 +415,7 @@ void ula_setup(void)
 void ula_update(void) // update ULA settings according to model
 {
 	// the Pentagon timings were measured with the beamracing-heavy demos "ACROSS THE EDGE" and "KPACKU DELUXE"
-	ula_fix_out=ula_pentagon?  7:type_id?  2:  0; // ULA contention tests ULA48, ULA128, FPGA48ALL and FPGA128
+	ula_fix_out=ula_pentagon?  7:type_id?  2:  0; // contention tests ULA48, ULA128, ULA128P3, FPGA48ALL and FPGA128
 	ula_fix_chr=ula_pentagon? 42:type_id?  1:  0; // NIRVANA games DREAMWALKER, MULTIDUDE, SUNBUCKET, STORMFINCH...
 	ula_start_x=ula_pentagon? 38:type_id? 39: 38; // HBLANK position
 	ula_limit_x=ula_pentagon? 56:type_id? 57: 56; // characters per scanline
@@ -442,7 +441,7 @@ void mmu_update(void) // update the MMU tables with all the new offsets
 	// - banks 5 and 7 are always contended;
 	// - banks 1 and 3 are contended on V2;
 	// - banks 4 and 6 are contended on V3.
-	if (ula_pentagon) // the Pentagon and Scorpion boards are contention-free
+	if (ula_pentagon||type_id>3) // Inves, Pentagon and Scorpion boards are contention-free
 	{
 		ula_clash_mreq[0]=ula_clash_mreq[1]=ula_clash_mreq[2]=ula_clash_mreq[3]=ula_clash_mreq[4]=
 		ula_clash_iorq[0]=ula_clash_iorq[1]=ula_clash_iorq[2]=ula_clash_iorq[3]=ula_clash_iorq[4]=ula_clash[0];
@@ -456,7 +455,7 @@ void mmu_update(void) // update the MMU tables with all the new offsets
 		if (type_id==3)
 			ula_clash_iorq[0]=ula_clash_iorq[1]=ula_clash_iorq[2]=ula_clash_iorq[3]=ula_clash_iorq[4]=ula_clash[0]; // IORQ doesn't clash at all on PLUS3 and PLUS2A!
 		else
-			ula_clash_iorq[0]=ula_clash_iorq[2]=ula_clash_iorq[3]=ula_clash[0], ula_clash_iorq[1]=ula_clash_iorq[4]=ula_clash_mreq[4]; // clash on 0x4000-0x7FFF only
+			ula_clash_iorq[0]=ula_clash_iorq[2]=ula_clash_iorq[3]=ula_clash[0],ula_clash_iorq[1]=ula_clash_iorq[4]=ula_clash_mreq[4]; // clash on 0x4000-0x7FFF only
 	}
 	if (ula_v3&1) // PLUS3 custom mode?
 	{
@@ -547,6 +546,7 @@ void dandanator_eeprom(void) // modify the cartridge, if allowed
 }
 #define Z80_DNTR_0X10(w) do{ if (!--dandanator_trap) { if (dandanator_temp&1) ++dandanator_temp; \
 	if (w<0x4000) dandanator_trap=1; else if (dandanator_temp>3*2||(dandanator_cfg[0]>0&&dandanator_cfg[0]<40)) dandanator_update(); } }while(0)
+//#define Z80_DNTR_0X02(w,b) do{ if (mem_16k[0x1555]==0xAA) dandanator_base=w,mem_16k[0x1555]=0; }while(0) // no known Dandanator titles need this, but nothing keeps them from needing it!
 #define Z80_DNTR_0X12(w,b) do{ if (mem_16k[0x1555]==0xAA) dandanator_base=w,mem_16k[0x1555]=0; }while(0)
 #define Z80_DNTR_0X32(w,b) do{ if (w<4) { ++dandanator_cfg[(dandanator_temp|=1)/2]; \
 	if (dandanator_temp<=3*2) dandanator_trap=1; else dandanator_update(); } }while(0)
@@ -936,7 +936,7 @@ INLINE void autorun_next(void)
 // the Spectrum hands the Z80 a mainly empty data bus value
 #define z80_irq_bus 255
 // the Spectrum doesn't obey the Z80 IRQ ACK signal
-#define z80_irq_ack() 0
+#define z80_irq_ack() do{ if (ula_pentagon) z80_irq=0; }while(0) // noticed by Azesmbog
 
 void z80_sync(int t) // the Z80 asks the hardware/video/audio to catch up
 {
@@ -1180,7 +1180,7 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 						playcity_send(0,b);
 					else
 					#endif
-					if (psg_index==14&&(b&4)&&printer) // SPECTRUM 128K PRINTER
+					if (psg_index==14&&(b&4)&&printer&&type_id>0&&type_id<3) // SPECTRUM 128K PRINTER
 					{
 						if ((b&8)) printer_8|=printer_1;
 						if ((printer_1<<=1)&512) // a character is 11 bits long: 0 + B0...B7 + 1 + 1
@@ -1539,7 +1539,7 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 				if (playcity_active)
 					return playcity_recv(0); // AYTEST relies on this!
 				#endif
-				if (psg_index==14&&printer)//&&z80_pc.w<0x2000) // debug
+				if (psg_index==14&&printer&&type_id>0&&type_id<3)//&&z80_pc.w<0x2000) // debug
 					return printer_1=1,printer_8=0; // SPECTRUM 128K gets PRINTER BUSY from R14 BIT6!
 				//else
 					return psg_table_recv();
@@ -1652,7 +1652,8 @@ WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 #define Z80_MREQ_PAGE(t,p) ( z80_t+=(z80_aux2=(t+ula_clash_mreq[p][(WORD)ula_clash_z])), ula_clash_z+=z80_aux2 )
 #define Z80_IORQ_PAGE(t,p) ( z80_t+=(z80_aux2=(t+ula_clash_iorq[p][(WORD)ula_clash_z])), ula_clash_z+=z80_aux2 )
 // input/output
-#define Z80_SYNC_IO(t) ( _t_-=z80_t-t, z80_sync(z80_t-t), z80_t=t )
+#define Z80_SYNC() ( _t_-=z80_t, z80_sync(z80_t), z80_t=0 )
+#define Z80_SYNC_IO(t) ( _t_-=z80_t-t, z80_sync(z80_t-t), z80_t=t ) // `t` sets a delay between updates
 #define Z80_PRAE_RECV(w) do{ Z80_IORQ(1,w); Z80_SYNC_IO(ula_fix_out); }while(0)
 #define Z80_RECV z80_recv
 #define Z80_POST_RECV(w) do{ if ((w)&1) Z80_IORQ_1X_NEXT(3); else Z80_IORQ_PAGE(3,4); }while(0)
@@ -1675,8 +1676,8 @@ WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 #define Z80_PEEK1 Z80_PEEK
 #define Z80_PEEK2 Z80_PEEK
 #define Z80_PEEKZ(w) ( Z80_MREQ(4,w), mmu_rom[z80_aux1][w] ) // slow PEEK
-#define Z80_POKE(w,b) ( Z80_MREQ(3,w), mmu_ram[z80_aux1][w]=(b) ) // a single write
-#define Z80_POKE0 Z80_POKE // identical twin writes, use with care
+#define Z80_POKE(w,b) ( Z80_MREQ(3,w), mmu_ram[z80_aux1][w]=(b) ) // trappable single write
+#define Z80_POKE0 Z80_POKE // untrappable single write, use with care
 #define Z80_POKE1(w,b) ( Z80_MREQ(3,w), ((w)>=0X5800&&(w)<=0X5AFF&&(Z80_SYNC_IO(0))), mmu_ram[z80_aux1][w]=(b) ) // 1st twin write; NIRVANA games on PLUS3 require it
 #define Z80_POKE2 Z80_POKE1 // 2nd twin write; NIRVANA games on 48K and 128K require it
 #define Z80_POKE3 Z80_POKE1 // 1st twin write from PUSH rr; NIRVANA games always need it
@@ -1697,7 +1698,7 @@ WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 #define Z80_XCF_BUG 1 // replicate the SCF/CCF quirk
 #define Z80_DEBUG_MMU 0 // forbid ROM/RAM toggling, it's useless on Spectrum
 #define Z80_DEBUG_EXT 0 // forbid EXTRA hardware debugging info pages
-#define Z80_0XED71 0 // whether OUT (C) sends 0 (NMOS) or 255 (CMOS)
+BYTE Z80_0XED71=0; // whether OUT (C) sends 0 (NMOS) or 255 (CMOS)
 #define Z80_TRDOS_CATCH(r) if (trdos_mapped) { if (r.b.h>=0X40) z80_trdos_leave(); } else Z80_TRDOS_ENTER(r) // page TR-DOS in and out
 #define Z80_TRDOS_ENTER(r) if (r.b.h==0X3D) z80_trdos_enter() // optimisation, TR-DOS uses a limited set of opcodes to leave
 #define Z80_TRDOS_LEAVE(r) if (trdos_mapped&&r.b.h>=0X40) z80_trdos_leave() // used only when an IM2 INT takes over
@@ -2412,6 +2413,7 @@ char session_menudata[]=
 	"0x8514 Spectrum 16K mode\n"
 	"0x8512 Issue-2 ULA line\n"
 	"0x8511 ULA video noise\n"
+	"0x8515 NMOS-style Z80\n"
 	"=\n"
 	//"0x0600 Raise Z80 speed\tCtrl+F6\n"
 	//"0x4600 Lower Z80 speed\tCtrl+Shift+F6\n"
@@ -2546,6 +2548,7 @@ void session_clean(void) // refresh options
 	session_menucheck(0x8512,ula_v1_issue!=ULA_V1_ISSUE3);
 	session_menucheck(0x8513,ulaplus_enabled);
 	session_menucheck(0x8514,ula_sixteen);
+	session_menucheck(0x8515,!Z80_0XED71);
 	session_menucheck(0x8517,!psg_disabled);
 	#ifdef Z80_DANDANATOR
 	session_menucheck(0xC500,(size_t)mem_dandanator);
@@ -2773,6 +2776,9 @@ void session_user(int k) // handle the user's commands
 			break;
 		case 0x8514: // 16K MODE
 			ula_sixteen=!ula_sixteen; ula_update(),mmu_update();
+			break;
+		case 0x8515: // NMOS Z80
+			Z80_0XED71=Z80_0XED71?0:255;
 			break;
 		case 0x8517:
 			if ((psg_disabled=!psg_disabled)&&!type_id) // mute on 48K!

@@ -40,7 +40,8 @@ void psg_reg_update(int c)
 			// catch overflows, either bad (buggy music in "Thing on a Spring" for CPC)
 			// or good (pipe sound effect in its sequel "Thing Bounces Back" for CPC)
 			c>>=1; if (psg_tone_count[c]>(psg_tone_limit[c]=psg_table[c*2]+psg_table[c*2+1]*256))
-				psg_tone_count[c]=psg_tone_limit[c]; // ensure count<=limit
+				if ((psg_tone_count[c]=psg_tone_limit[c])<=PSG_ULTRASOUND) // ensure count<=limit
+					psg_tone_state[c]=psg_ultra_beep; // is it an ultrasound? catch it already!
 			break;
 		case 6: // noise wavelength
 			if (!(psg_noise_limit=psg_table[6]&31))
@@ -66,7 +67,7 @@ void psg_reg_update(int c)
 			break;
 	}
 }
-void psg_all_update(void)
+void psg_all_update(void) // recalc everything
 {
 	for (int i=0;i<14;++i)
 	{
@@ -84,15 +85,15 @@ INLINE void psg_table_sendto(BYTE x,BYTE i)
 			psg_ultra_hits?(psg_ultra_hits=0):(psg_ultra_beep=0); // PSG-based beepers repeatedly hit the mixer!
 		else
 			psg_ultra_hits=psg_ultra_beep=-1; // normal audio playback pokes more registers than just the mixer!
-		psg_table[x]=(i&=psg_valid[x]);
-		psg_reg_update(x);
+		if (psg_table[x]!=(i&=psg_valid[x])||x==13) // reduce register clobbering
+			psg_table[x]=i,psg_reg_update(x);
 	}
 }
 #define psg_table_select(i) (psg_index=(i)) // "NODES OF YESOD" for CPC needs all bits because of a programming error!
 #define psg_table_send(i) psg_table_sendto(psg_index,(i))
 #define psg_table_recv() (psg_index<16?psg_table[psg_index]:0xFF)
-#define psg_port_a_lock() (psg_table[7]&64) // useless on Spectrum, used by the CPC for the keyboard bits
-#define psg_port_b_lock() (psg_table[7]&128) // useless on Spectrum, required on CPC by "PHAT", see above
+#define psg_port_a_lock() (psg_table[7]&64) // used on CPC for the keyboard and on Spectrum 128K for the printer
+#define psg_port_b_lock() (psg_table[7]&128) // used on CPC by the PLUS demo "PHAT", unused on Spectrum (AFAIK)
 
 #define psg_setup()
 
@@ -276,9 +277,9 @@ void psg_main(int t,int d) // render audio output for `t` clock ticks, with `d` 
 					if (psg_noise_trash&1) psg_noise_trash+=0x48000; // LFSR x2
 					psg_noise_state=(psg_noise_state+(psg_noise_trash>>=1))&1;
 				}
-			}
-			else // update hard envelope, at half the rate
-			{
+			//}
+			//else // update hard envelope, at half the rate
+			//{
 				audio_table[16]=audio_table[psg_hard_level^psg_hard_flag2^((psg_hard_style&2)?psg_hard_flag0:0)]; // update hard envelope
 				if (--psg_hard_count<=0)
 				{
@@ -392,9 +393,9 @@ void playcity_main(AUDIO_UNIT *t,int l)
 						if (playcity_noise_trash[x]&1) playcity_noise_trash[x]+=0x48000; // LFSR x2
 						playcity_noise_state[x]=(playcity_noise_state[x]+(playcity_noise_trash[x]>>=1))&1;
 					}
-				}
-				else // update hard envelopes, half the rate
-				{
+				//}
+				//else // update hard envelopes, half the rate
+				//{
 					playcity_hard_power[x]=playcity_hard_level[x]^playcity_hard_flag2[x]^((playcity_hard_style[x]&2)?playcity_hard_flag0[x]:0);
 					if (--playcity_hard_count[x]<=0)
 					{

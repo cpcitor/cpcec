@@ -8,8 +8,8 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20211231"//"2345"
-#define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
+#define MY_VERSION "20220104"//"2555"
+#define MY_LICENSE "Copyright (C) 2019-2022 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
 
@@ -325,8 +325,7 @@ VIDEO_UNIT video_clut[32]; // precalculated colour palette, 16 bitmap inks, 1 bo
 Z80W z80_af,z80_bc,z80_de,z80_hl; // Accumulator+Flags, BC, DE, HL
 Z80W z80_af2,z80_bc2,z80_de2,z80_hl2,z80_ix,z80_iy; // AF', BC', DE', HL', IX, IY
 Z80W z80_pc,z80_sp,z80_iff,z80_ir; // Program Counter, Stack Pointer, Interrupt Flip-Flops, IR pair
-BYTE z80_imd; // Interrupt Mode
-BYTE z80_r7; // low 7 bits of R, required by several `IN X,(Y)` operations
+BYTE z80_imd,z80_r7; // Interrupt Mode // low 7 bits of R, required by several `IN X,(Y)` operations
 
 // the Dandanator cartridge system can spy on the Z80 and trap its operations
 
@@ -1151,7 +1150,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 
 			static int crtc_v_off_count;
 			if (!crtc_count_r4)
-				if (!crtc_count_r9||(crtc_type==1&&!crtc_table[5])) // the R5 test fixes "CAMEMBERT MEETING" without breaking the title of "FROM SCRATCH"
+				if (!crtc_count_r9||(crtc_type==1&&(!crtc_table[5]||crtc_table[4]))) // the R5 test fixes "CAMEMBERT MEETING" without breaking the title of "FROM SCRATCH"
 				{
 					crtc_backup=(crtc_table[12]&48)*1024+(crtc_table[12]&3)*512+crtc_table[13]*2;
 					crtc_double=(~crtc_table[12]&12)?0:16384;
@@ -2454,12 +2453,12 @@ WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 
 // CPU: ZILOG Z80 MICROPROCESSOR ==================================== //
 
-const BYTE z80_delays[0x700]= // precalc'd coarse timings
+const BYTE z80_delays[]= // precalc'd coarse timings
 {
 	//1 2 3 4 5 6 7 8 9 A B C D E F	//// +0x000 -
 	1,3,2,2,1,1,2,1,1,3,2,2,1,1,2,1, // base, 1/2
 	3,3,2,2,1,1,2,1,3,3,2,2,1,1,2,1, // 0x10-0x1F
-	2,3,5,2,1,1,2,1,2,3,5,2,1,1,2,1, // 0x20-0x2F
+	2,3,4,2,1,1,2,1,2,3,5,2,1,1,2,1, // 0x20-0x2F
 	2,3,4,2,3,3,3,1,2,3,4,2,1,1,2,1, // 0x30-0x3F
 	1,1,1,1,1,1,2,1,1,1,1,1,1,1,2,1, // 0x40-0x4F
 	1,1,1,1,1,1,2,1,1,1,1,1,1,1,2,1, // 0x50-0x5F
@@ -2469,14 +2468,14 @@ const BYTE z80_delays[0x700]= // precalc'd coarse timings
 	1,1,1,1,1,1,2,1,1,1,1,1,1,1,2,1, // 0x90-0x9F
 	1,1,1,1,1,1,2,1,1,1,1,1,1,1,2,1, // 0xA0-0xAF
 	1,1,1,1,1,1,2,1,1,1,1,1,1,1,2,1, // 0xB0-0xBF
-	2,3,3,3,3,4,2,4,2,3,3,1,3,5,2,4, // 0xC0-0xCF
-	2,3,3,3,3,4,2,4,2,1,3,3,3,1,2,4, // 0xD0-0xDF // "Zap'T'Balls Adv.Edition" shows OUT (NN),A as 3+IORQ+0 rather than 2+IORQ+1
-	2,3,3,6,3,4,2,4,2,1,3,1,3,1,2,4, // 0xE0-0xEF
-	2,3,3,1,3,4,2,4,2,2,3,1,3,1,2,4, // 0xF0-0xFF
+	2,3,3,3,3,3,2,4,2,3,3,1,3,5,2,4, // 0xC0-0xCF
+	2,3,3,3,3,3,2,4,2,1,3,3,3,1,2,4, // 0xD0-0xDF // "Zap'T'Balls Adv.Edition" shows OUT (NN),A as 3+IORQ+0 rather than 2+IORQ+1
+	2,3,3,5,3,3,2,4,2,1,3,1,3,1,2,4, // 0xE0-0xEF
+	2,3,3,1,3,3,2,4,2,2,3,1,3,1,2,4, // 0xF0-0xFF
 	//1 2 3 4 5 6 7 8 9 A B C D E F	//// +0x100 -
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // base, 2/2
 	1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0x10-0x1F
-	1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0, // 0x20-0x2F
+	1,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0, // 0x20-0x2F
 	1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0, // 0x30-0x3F
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0x40-0x4F
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0x50-0x5F
@@ -2486,23 +2485,23 @@ const BYTE z80_delays[0x700]= // precalc'd coarse timings
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0x90-0x9F
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0xA0-0xAF
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0xB0-0xBF
-	2,0,0,0,2,0,0,0,2,0,0,0,2,0,0,0, // 0xC0-0xCF
-	2,0,0,0,2,0,0,0,2,0,0,0,2,0,0,0, // 0xD0-0xDF
-	2,0,0,0,2,0,0,0,2,0,0,0,2,0,0,0, // 0xE0-0xEF
-	2,0,0,0,2,0,0,0,2,0,0,0,2,0,0,0, // 0xF0-0xFF
+	2,0,0,0,2,1,0,0,2,0,0,0,2,0,0,0, // 0xC0-0xCF
+	2,0,0,0,2,1,0,0,2,0,0,0,2,0,0,0, // 0xD0-0xDF
+	2,0,0,1,2,1,0,0,2,0,0,0,2,0,0,0, // 0xE0-0xEF
+	2,0,0,0,2,1,0,0,2,0,0,0,2,0,0,0, // 0xF0-0xFF
 	//1 2 3 4 5 6 7 8 9 A B C D E F	//// +0x200 -
 	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // EDxx, 1/2
 	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x10-0x1F
 	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x20-0x2F
 	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x30-0x3F
-	3,2,3,5,1,3,1,2,3,2,3,5,1,3,1,2, // 0x40-0x4F
-	3,2,3,5,1,3,1,2,3,2,3,5,1,3,1,2, // 0x50-0x5F
-	3,2,3,5,1,3,1,4,3,2,3,5,1,3,1,4, // 0x60-0x6F
-	3,2,3,5,1,3,1,1,3,2,3,5,1,3,1,1, // 0x70-0x7F
+	3,2,3,4,1,3,1,2,3,2,3,5,1,3,1,2, // 0x40-0x4F
+	3,2,3,4,1,3,1,2,3,2,3,5,1,3,1,2, // 0x50-0x5F
+	3,2,3,4,1,3,1,4,3,2,3,5,1,3,1,4, // 0x60-0x6F
+	3,2,3,4,1,3,1,1,3,2,3,5,1,3,1,1, // 0x70-0x7F
 	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x80-0x8F
 	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x90-0x9F
-	4,3,4,4,1,1,1,1,4,3,4,4,1,1,1,1, // 0xA0-0xAF // "KKB First Demo" and "Prehistorik 2" show OUTI as 4+IORQ+0 rather than 3+IORQ+1
-	4,3,4,4,1,1,1,1,4,3,4,4,1,1,1,1, // 0xB0-0xBF
+	3,3,4,4,1,1,1,1,3,3,4,4,1,1,1,1, // 0xA0-0xAF // "KKB First Demo" and "Prehistorik 2" show OUTI as 4+IORQ+0 rather than 3+IORQ+1
+	3,3,4,4,1,1,1,1,3,3,4,4,1,1,1,1, // 0xB0-0xBF
 	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0xC0-0xCF
 	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0xD0-0xDF
 	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0xE0-0xEF
@@ -2512,14 +2511,14 @@ const BYTE z80_delays[0x700]= // precalc'd coarse timings
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0x10-0x1F
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0x20-0x2F
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0x30-0x3F
-	0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0, // 0x40-0x4F
-	0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0, // 0x50-0x5F
-	0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0, // 0x60-0x6F
-	0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0, // 0x70-0x7F
+	0,1,0,1,0,0,0,0,0,1,0,0,0,0,0,0, // 0x40-0x4F
+	0,1,0,1,0,0,0,0,0,1,0,0,0,0,0,0, // 0x50-0x5F
+	0,1,0,1,0,0,0,0,0,1,0,0,0,0,0,0, // 0x60-0x6F
+	0,1,0,1,0,0,0,0,0,1,0,0,0,0,0,0, // 0x70-0x7F
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0x80-0x8F
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0x90-0x9F
-	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0xA0-0xAF
-	1,2,1,1,0,0,0,0,1,2,1,1,0,0,0,0, // 0xB0-0xBF
+	1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0, // 0xA0-0xAF
+	2,2,1,1,0,0,0,0,2,2,1,1,0,0,0,0, // 0xB0-0xBF
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0xC0-0xCF
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0xD0-0xDF
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0xE0-0xEF
@@ -2561,7 +2560,7 @@ const BYTE z80_delays[0x700]= // precalc'd coarse timings
 	//1 2 3 4 5 6 7 8 9 A B C D E F	//// +0x600 -
 	0,0,0,2,0,0,0,0,0,3,0,2,0,0,0,0, // XY prefix
 	0,0,0,2,0,0,0,0,0,3,0,2,0,0,0,0, // 0x10-0x1F
-	0,3,5,2,1,1,2,0,0,3,5,2,1,1,2,0, // 0x20-0x2F
+	0,3,4,2,1,1,2,0,0,3,5,2,1,1,2,0, // 0x20-0x2F
 	0,0,0,2,5,5,5,0,0,3,0,2,0,0,0,0, // 0x30-0x3F
 	0,0,0,0,1,1,4,0,0,0,0,0,1,1,4,0, // 0x40-0x4F
 	0,0,0,0,1,1,4,0,0,0,0,0,1,1,4,0, // 0x50-0x5F
@@ -2573,13 +2572,14 @@ const BYTE z80_delays[0x700]= // precalc'd coarse timings
 	0,0,0,0,1,1,4,0,0,0,0,0,1,1,4,0, // 0xB0-0xBF
 	2,0,0,0,0,0,0,0,2,0,0,1,0,0,0,0, // 0xC0-0xCF
 	2,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0, // 0xD0-0xDF
-	2,3,0,6,0,4,0,0,2,1,0,0,0,0,0,0, // 0xE0-0xEF
+	2,3,0,5,0,3,0,0,2,1,0,0,0,0,0,0, // 0xE0-0xEF
 	2,0,0,0,0,0,0,0,2,2,0,0,0,0,0,0, // 0xF0-0xFF
 };
 
 int z80_ack_delay=0; // unlike Z80_AUXILIARY it cannot be local, it must stick :-(
 // input/output
-#define Z80_SYNC_IO ( _t_-=z80_t,z80_sync(z80_t) )
+#define Z80_SYNC() ( _t_-=z80_t, z80_sync(z80_t), z80_t=0 )
+#define Z80_SYNC_IO ( _t_-=z80_t, z80_sync(z80_t) ) // see Z80_STRIDE_IO for the missing "z80_t=0"
 #define Z80_PRAE_RECV(w) Z80_SYNC_IO
 #define Z80_RECV z80_recv
 #define Z80_POST_RECV(w)
@@ -2602,14 +2602,14 @@ int z80_ack_delay=0; // unlike Z80_AUXILIARY it cannot be local, it must stick :
 #define Z80_PEEK1 Z80_PEEK
 #define Z80_PEEK2 Z80_PEEK
 #define Z80_PEEKZ Z80_PEEK // slow PEEK
-#define Z80_POKE(w,b) do{ int z80_aux=(w)>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO,z80_t=0,z80_trap(w,b); else mmu_ram[z80_aux][w]=(b); }while(0) // a single write
-#define Z80_POKE0(w,b) POKE(w)=(b) // identical twin writes, use with care
-#define Z80_POKE1(w,b) do{ --z80_t; int z80_aux=(w)>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO,z80_t=0,z80_trap(w,b); else mmu_ram[z80_aux][w]=(b); }while(0) // 1st twin write; see SPLIT.CPR
-#define Z80_POKE2(w,b) do{ ++z80_t; int z80_aux=(w)>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO,z80_t=0,z80_trap(w,b); else mmu_ram[z80_aux][w]=(b); }while(0) // 2nd twin write; see SPLIT.CPR
-#define Z80_POKE3 Z80_POKE1 // 1st twin write from PUSH rr
-#define Z80_POKE4 Z80_POKE2 // 2nd twin write from PUSH rr
-#define Z80_POKE5 Z80_POKE1 // 1st twin write from EX rr,(SP)
-#define Z80_POKE6 Z80_POKE2 // 2nd twin write from EX rr,(SP)
+#define Z80_POKE(w,b) do{ int z80_aux=(w)>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO, z80_t=0, z80_trap(w,b); else mmu_ram[z80_aux][w]=(b); }while(0) // trappable single write
+#define Z80_POKE0(w,b) (POKE(w)=(b)) // untrappable single write, use with care
+#define Z80_POKE1 Z80_POKE // 1st twin write; see SPLIT.CPR
+#define Z80_POKE2 Z80_POKE // 2nd twin write; see SPLIT.CPR
+#define Z80_POKE3 Z80_POKE // 1st twin write from PUSH rr
+#define Z80_POKE4 Z80_POKE // 2nd twin write from PUSH rr
+#define Z80_POKE5 Z80_POKE // 1st twin write from EX rr,(SP)
+#define Z80_POKE6 Z80_POKE // 2nd twin write from EX rr,(SP)
 #define Z80_BEWARE
 #define Z80_REWIND
 // coarse timings

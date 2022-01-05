@@ -1012,3 +1012,10 @@ LDIR, LDDR, CPIR, CPDR, INIR, INDR, OTIR and OTDR show special temporary flags
 if an interruption arises before the end of the block. New commandline options
 `-o`, `-t`, `-y` and `-z` that provide the opposite behaviors of `-O`, `-T`,
 `-Y` and `-Z`. Happy new year 2022!
+- 20220104 -- minor patch improving the interruption flags of
+INIR/INDR/OTIR/OTDR (following new tests from Ped7g) and the timings of
+LDI/LDD/LDIR/LDDR on CPC (the eighth and ninth tests of Roudoudou's SPLIT.CPR
+pass at last) and fixing a bug in the CRTC1 logic (nonzero R5 in Chany and
+Grees' NPS cracktros: reported by Norecess464) and another one in the Spectrum
+interrupt counters (accepting an IRQ stops its counter on Pentagon: reported by
+Azesmbog). Configurable CMOS/NMOS Z80 style in ZXSEC.

@@ -1082,3 +1082,10 @@ CPDR, INIR, INDR, OTIR y OTDR exhiben banderas temporales especiales cuando una
 interrupción surge antes del final del bloque. Nuevas opciones de línea de
 comando `-o`, `-t`, `-y` y `-z` con las funciones opuestas de `-O`, `-T`, `-Y` y
 `-Z`. ¡Feliz año nuevo 2022!
+- 20220104 -- parche menor que mejora las banderas de interrupción de
+INIR/INDR/OTIR/OTDR (segñun pruebas nuevas de Ped7g) y los tiempos de
+LDI/LDD/LDIR/LDDR en CPC (las pruebas octava y novena de SPLIT.CPR de Roudoudou
+por fin funcionan) y que corrige un error en la lógica de CRTC1 (R5 no es cero
+en las cracktros NPS de Chany y Grees: avisado por Norecess464) y otro en los
+contadores de interrupción de Spectrum (aceptar una IRQ detiene su contador en
+Pentagon: avisado por Azesmbog). Estilo de Z80 CMOS/NMOS configurable en ZXSEC.

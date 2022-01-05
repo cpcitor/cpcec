@@ -55,6 +55,7 @@
 #define VIDEO_FILTER_BLURDATA vzz
 #define VIDEO_FILTER_BLUR0(z) vzz=z
 #define VIDEO_FILTER_BLUR(r,z) r=VIDEO_FILTER_HALF(vzz,z),vzz=z // the fastest 50:50 blur according to GCC
+//#define VIDEO_FILTER_BLUR(r,z) r=VIDEO_FILTER_HALF(vzz,z),vzz=r // accumulative 50:50 blur (not pretty)
 //#define VIDEO_FILTER_BLURDATA vxh,vxl,vzh,vzl
 //#define VIDEO_FILTER_BLUR0(z) vxh=z&0XFF00FF,vxl=z&0XFF00
 //#define VIDEO_FILTER_BLUR(r,z) r=((((vzh=z&0XFF00FF)+vxh+0X10001)&0X1FE01FE)+(((vzl=z&0XFF00)+vxl+0X100)&0X1FE00))>>1,vxh=vzh,vxl=vzl // 50:50 blur, but slower; the "x==y?x:..." part sets the difference
