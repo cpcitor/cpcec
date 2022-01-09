@@ -1019,3 +1019,8 @@ pass at last) and fixing a bug in the CRTC1 logic (nonzero R5 in Chany and
 Grees' NPS cracktros: reported by Norecess464) and another one in the Spectrum
 interrupt counters (accepting an IRQ stops its counter on Pentagon: reported by
 Azesmbog). Configurable CMOS/NMOS Z80 style in ZXSEC.
+- 20220108 -- minor patch fixing bugs in the ZX Dandanator (the demo "Possible"
+accidentally triggers the RESET command even without cartridges) and the
+Pentagon IRQ (it's short yet continuous rather than long and stoppable,
+following new tests from Azesmbog). Video filters are more CRT-like (suggested
+by Md0) and lightgun logic is linked to their triggers to avoid false positives.

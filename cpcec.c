@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20220104"//"2555"
+#define MY_VERSION "20220108"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2022 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -1319,23 +1319,28 @@ int autorun_kbd_bit(int k)
 		return autorun_kbd[k];
 	if (k==9&&litegun) // catch special case: lightgun models
 	{
-		k=kbd_bit[9]; switch (litegun)
+		k=kbd_bit[9]&128; switch (litegun) // all lightguns do nothing if the trigger is up
 		{
-			case 1: // TROJAN LIGHT PHASER updates the CRTC light pen registers
-				k|=session_maus_z?16:0; // BIT4 = trigger
-				int t=crtc_table[12]*256+crtc_table[13] // is [14]:[15] involved in this calculation too???
-					+(session_maus_x-VIDEO_PIXELS_X/2+8)/16-crtc_table[2]+65 // an extremely crude approximation,
-					+((session_maus_y-VIDEO_PIXELS_Y/2+8)/16-crtc_table[7]+40)*crtc_table[1]; // but it just works!
-				crtc_table[17]=t; crtc_table[16]=((t>>8)&3)+(crtc_table[12]&0x30);
+			case 1: // TROJAN LIGHT PHASER updates the CRTC light pen registers when FIRE is down
+				if (session_maus_z)
+				{
+					k|=16; // BIT4 = trigger
+					int t=crtc_table[12]*256+crtc_table[13] // is [14]:[15] involved in this calculation too???
+						+(session_maus_x-VIDEO_PIXELS_X/2+8)/16-crtc_table[2]+65 // an extremely crude approximation,
+						+((session_maus_y-VIDEO_PIXELS_Y/2+8)/16-crtc_table[7]+40)*crtc_table[1]; // but it just works!
+					crtc_table[17]=t; crtc_table[16]=((t>>8)&3)+(crtc_table[12]&0x30);
+				}
 				break;
-			case 2: // GUNSTICK detects bright pixels
-				k|=session_maus_z?16:0; // BIT4 = trigger
-				static BYTE g; if (++g) // work around the buggy "TARGET PLUS", that always does 256 reads and must miss at least one
-					k|=(video_litegun&0x00C000)?2:0;
+			case 2: // GUNSTICK detects bright pixels when FIRE is down
+				if (session_maus_z)
+				{
+					k|=16; // BIT4 = trigger
+					static BYTE g; if (++g) // work around the buggy "TARGET PLUS", that always does 256 reads and must miss at least one
+						k|=(video_litegun&0x00C000)?2:0;
+				}
 				break;
-			case 3: // WESTPHASER catches the electron beam
-				k|=(session_maus_z?32:0) // BIT5 = trigger
-					+(video_pos_y>session_maus_y+VIDEO_OFFSET_Y&&video_pos_x>session_maus_x+VIDEO_OFFSET_X?1:0);
+			case 3: // WESTPHASER catches the electron beam even when FIRE is up!
+				k|=(session_maus_z?32:0)+(video_pos_y>session_maus_y+VIDEO_OFFSET_Y&&video_pos_x>session_maus_x+VIDEO_OFFSET_X?1:0); // BIT5 = trigger
 				break;
 		}
 		return k;
@@ -1385,7 +1390,7 @@ INLINE void autorun_next(void)
 
 #define Z80_NMI_ACK (z80_irq&=~256) // allow throwing NMIs
 // the CPC hands the Z80 a data bus value that is NOT constant on the PLUS ASIC
-#define z80_irq_bus (plus_enabled?(plus_ivr&-8)+((z80_irq&128)?((z80_pc.w&0x2000)?6:plus_8k_bug):(z80_irq&16)?0:(z80_irq&32)?2:4):255) // 6 = PRI, 0 = DMA2, 2 = DMA1, 4 = DMA0.
+#define z80_irq_bus (plus_enabled?(plus_ivr&-8)+((z80_irq&128)?((z80_pc.b.h&0x20)?6:plus_8k_bug):(z80_irq&16)?0:(z80_irq&32)?2:4):255) // 6 = PRI, 0 = DMA2, 2 = DMA1, 4 = DMA0.
 // the CPC obeys the Z80 IRQ ACK signal unless the PLUS ASIC IVR bit 0 is off (?)
 void z80_irq_ack(void)
 {
@@ -1720,6 +1725,7 @@ BYTE z80_tape_fastfeed[][32] = { // codes that build bytes
 	/* 20 */ {  -0,   1,0XFE,  +1,   4,0X3F,0XCB,0X13,0XD2,-128, -11 }, // GREMLIN
 	/* 21 */ {  -0,   1,0X30,  +1,   1,0X3E,  +1,   4,0XB8,0XCB,0X15,0X06,  +1,   2,0X30,0XF2 }, // MULTILOAD V2
 	/* 22 */ {  -5,   1,0X3E,  +4,   2,0XD0,0X3E,  +1,   4,0XBA,0XCB,0X13,0X16,  +1,   2,0X30,0XF1 }, // CODEMASTERS 2/3
+	/* 23 */ {  -0,   3,0X0E,0X01,0X18 }, // UNILODE
 };
 BYTE z80_tape_fastdump[][32] = { // codes that fill blocks
 	/*  0 */ {  -0,  10,0XD0,0XDD,0X77,0X00,0XDD,0X23,0X15,0X1D,0X20,0XF3 }, // AMSTRAD CPC FIRMWARE
@@ -1869,7 +1875,10 @@ void z80_tape_trap(void)
 				fasttape_add8(0,8,&z80_hl.b.l,1); // z80_r7+=...*4;
 			break;
 		case 10: // UNILODE ("TRIVIAL PURSUIT")
-			fasttape_add8(z80_bc.b.l>>7,13,&z80_hl.b.h,1); // z80_r7+=...*7;
+			if ((z80_af.b.l&1)&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==23) // we must force a RET in this loader :-(
+				k=fasttape_feed(z80_bc.b.l>>7,13),tape_skipping=z80_bc.b.l=128+(k>>1),z80_hl.b.h=-(k&1),k=z80_tape_spystack(0)+2,z80_pc.w=z80_tape_spystack(0)+2,z80_sp.w+=2;
+			else
+				fasttape_add8(z80_bc.b.l>>7,13,&z80_hl.b.h,1); // z80_r7+=...*7;
 			break;
 		case 11: // SPEEDLOCK (V1+V1.5+V2+V3: "DONKEY KONG", "ARKANOID", "WIZBALL", "THE ADDAMS FAMILY"), RICOCHET ("RICK DANGEROUS 2")
 			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&((j=z80_tape_testfeed(z80_tape_spystack(0)))==7||j==8||j==9||j==12))
@@ -3542,9 +3551,9 @@ void session_clean(void) // refresh options
 	session_menuradio(0x8B01+video_type,0x8B01,0x8B05);
 	session_menuradio(0x0B01+video_scanline,0x0B01,0x0B04);
 	session_menucheck(0x0B08,video_scanblend);
-	session_menucheck(0x8902,video_filter&VIDEO_FILTER_Y_MASK);
-	session_menucheck(0x8903,video_filter&VIDEO_FILTER_X_MASK);
-	session_menucheck(0x8904,video_filter&VIDEO_FILTER_SMUDGE);
+	session_menucheck(0x8902,video_filter&VIDEO_FILTER_MASK_Y);
+	session_menucheck(0x8903,video_filter&VIDEO_FILTER_MASK_X);
+	session_menucheck(0x8904,video_filter&VIDEO_FILTER_MASK_Z);
 	video_vsync_min=crtc_hold?VIDEO_VSYNC_LO*2-VIDEO_LENGTH_Y:VIDEO_VSYNC_LO;
 	video_vsync_max=crtc_hold?VIDEO_VSYNC_HI*2-VIDEO_LENGTH_Y:VIDEO_VSYNC_HI;
 	kbd_joy[4]=kbd_joy[6]=0x4C+key2joy_flag;
@@ -3909,13 +3918,13 @@ void session_user(int k) // handle the user's commands
 			onscreen_flag=!onscreen_flag;
 			break;
 		case 0x8902:
-			video_filter^=VIDEO_FILTER_Y_MASK;
+			video_filter^=VIDEO_FILTER_MASK_Y;
 			break;
 		case 0x8903:
-			video_filter^=VIDEO_FILTER_X_MASK;
+			video_filter^=VIDEO_FILTER_MASK_X;
 			break;
 		case 0x8904:
-			video_filter^=VIDEO_FILTER_SMUDGE;
+			video_filter^=VIDEO_FILTER_MASK_Z;
 			break;
 		/*case 0x8910: // NMI
 			z80_nmi_throw;

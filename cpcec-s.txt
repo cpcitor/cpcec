@@ -1089,3 +1089,9 @@ por fin funcionan) y que corrige un error en la lógica de CRTC1 (R5 no es cero
 en las cracktros NPS de Chany y Grees: avisado por Norecess464) y otro en los
 contadores de interrupción de Spectrum (aceptar una IRQ detiene su contador en
 Pentagon: avisado por Azesmbog). Estilo de Z80 CMOS/NMOS configurable en ZXSEC.
+- 20220108 -- parche menor que corrige errores en el ZX Dandanator (la demo
+"Possible" dispara por accidente el comando RESET aunque no haya cartuchos) y en
+el IRQ del Pentagon (es corto pero continuo en vez de largo y cancelable, según
+pruebas nuevas de Azesmbog). Los filtros de vídeo se parecen más a un CRT
+(sugerido por Md0) y la lógica de las pistolas de luz está ligada a sus gatillos
+para evitar falsos positivos.

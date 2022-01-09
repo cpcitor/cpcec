@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20220104"//"2555"
+#define MY_VERSION "20220108"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2022 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -499,10 +499,12 @@ void dandanator_update(void) // parse and run Dandanator commands, if any
 			else if (dandanator_cfg[1]==31) dandanator_cfg[6]|=8; // sleep till reset
 		}
 	}
-	else if (!dandanator_cfg[6]&&dandanator_cfg[0]) // ignore if asleep or empty
+	else if (!dandanator_cfg[6]&&mem_dandanator) // ignore if asleep or empty
 	{
 		cprintf("DAN! %08X: %03d,%03d,%03d,%03d\n",z80_pc.w,dandanator_cfg[0],dandanator_cfg[1],dandanator_cfg[2],dandanator_cfg[3]);
-		if (dandanator_cfg[0]<34) // immediate bank change
+		if (!dandanator_cfg[0]) // no command, debug only
+			;
+		else if (dandanator_cfg[0]<34) // immediate bank change
 			dandanator_cfg[4]=dandanator_cfg[0]-1;
 		else if (dandanator_cfg[0]==34) // vanish and sleep!
 			dandanator_cfg[4]=32,dandanator_cfg[6]|=4;
@@ -792,10 +794,9 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 			if ((ula_shown_y>=0&&ula_shown_y<192)&&(ula_shown_x>=0&&ula_shown_x<32))
 			{
 				if (ula_shown_x&1)
-					a=ula_screen[ula_attrib],b=ula_screen[ula_bitmap];
+					a=ula_screen[ula_attrib++],b=ula_screen[ula_bitmap++];
 				else
-					a=ula_screen[ula_attrib+ula_snow_z],b=ula_screen[ula_bitmap+ula_snow_z];
-				++ula_attrib; ++ula_bitmap;
+					a=ula_screen[ula_attrib+ula_snow_z],b=ula_screen[ula_snow_z+ula_bitmap++],ula_bus3=ula_screen[++ula_attrib]; // the PLUS3 floating bus is special
 			}
 			else
 				a=-1; // border! (no matter how badly we do, the bitmap is always inside the visible screen)
@@ -860,7 +861,7 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 			// "Abu Simbel Profanation" (menu doesn't obey keys; in-game is stuck jumping to the right) and "Rasputin" (menu fails to play the music) rely on this on 48K.
 			if (++ula_count_y>=ula_limit_y) // end of frame?
 			{
-				z80_irq=(trdos_mapped|ula_pentagon)?48:type_id?33:32; // TR-DOS adds delays ("MANIFESTO" demo); "TIMING TESTS 128K" needs 33..40: 32 fails and 40 hangs!
+				z80_irq=(trdos_mapped|ula_pentagon|type_id)?33:32; // TR-DOS adds delays ("MANIFESTO" demo); Azesmbog's "BORDER8" for Pentagon needs <44 T; "TIMING TESTS 128K" needs 33..40!
 				if (!(video_pos_z&15)) // FLASH update?
 					if (!(ulaplus_table[64]&ulaplus_enabled))
 						ula_clut_flash(); // ULAPLUS lacks FLASH!
@@ -936,7 +937,7 @@ INLINE void autorun_next(void)
 // the Spectrum hands the Z80 a mainly empty data bus value
 #define z80_irq_bus 255
 // the Spectrum doesn't obey the Z80 IRQ ACK signal
-#define z80_irq_ack() do{ if (ula_pentagon) z80_irq=0; }while(0) // noticed by Azesmbog
+#define z80_irq_ack() 0
 
 void z80_sync(int t) // the Z80 asks the hardware/video/audio to catch up
 {
@@ -1243,6 +1244,7 @@ BYTE z80_tape_fastload[][32] = { // codes that read pulses : <offset, length, da
 	/* 19 */ {  -8,   5,0X78,0XC6,0X02,0X47,0X38,  +3,   5,0XAD,0XE6,0X40,0X20,0XF3 }, // AMSTRAD CPC FIRMWARE
 	/* 20 */ {  -6,  13,0X14,0XC8,0X3E,0XFF,0XDB,0XFE,0X1F,0XD0,0XAB,0XE6,0X20,0X28,0XF3 }, // "SIL4.TZX"
 	/* 21 */ {  -4,   7,0X04,0XC8,0XDB,0XFE,0XA9,0XA2,0XCA,-128,  -9 }, // AST A.MOORE
+	/* 22 */ {  -4,   8,0X24,0XC8,0XED,0X78,0XA8,0XE6,0X40,0XCA,-128, -10 }, // UNILODE
 };
 BYTE z80_tape_fastfeed[][32] = { // codes that build bytes
 	/*  0 */ {  -0,   2,0XD0,0X3E,  +1,   4,0XB8,0XCB,0X15,0X06,  +1,   1,0XD2,-128, -14 }, // ZX SPECTRUM FIRMWARE + TOPO
@@ -1261,6 +1263,7 @@ BYTE z80_tape_fastfeed[][32] = { // codes that build bytes
 	/* 13 */ {  -0,   2,0X84,0X21,  +2,   7,0XBE,0X3F,0XD9,0XCB,0X15,0XD9,0X21,  +2,   2,0X30,0XE9 }, // "BC'S QUEST FOR TIRES"
 	/* 14 */ {  -0,   4,0XD2,0X00,0X00,0X3E,  +1,   4,0XB8,0XCB,0X15,0X06,  +1,   1,0XD2,-128, -16 }, // MIKRO-GEN ("AUTOMANIA")
 	/* 15 */ {  -0,   2,0XD0,0X3E,  +1,   4,0XB8,0XCB,0X1D,0X06,  +1,   1,0XD2,-128, -14 }, // SOFTLOCK
+	/* 16 */ {  -0,   3,0X06,0X01,0X18 }, // UNILODE
 };
 BYTE z80_tape_fastdump[][32] = { // codes that fill blocks
 	/*  0 */ { -36,  10,0X08,0X20,0X07,0X30,0X0F,0XDD,0X75,0X00,0X18,0X0F, +15,   3,0XDD,0X23,0X1B, +19,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XCA }, // ZX SPECTRUM FIRMWARE
@@ -1449,6 +1452,12 @@ void z80_tape_trap(void)
 		case 21: // AST A.MOORE ("A YANKEE IN IRAQ")
 			fasttape_add8(z80_bc.b.l>>6,38,&z80_bc.b.h,1); // z80_r7+=...*6;
 			break;
+		case 22: // UNILODE ("TRIVIAL PURSUIT")
+			if ((z80_af.b.l&1)&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==16) // we must force a RET in this loader :-(
+				k=fasttape_feed(z80_bc.b.h>>6,42),tape_skipping=z80_bc.b.h=128+(k>>1),z80_hl.b.h=-(k&1),k=z80_tape_spystack(0)+2,z80_pc.w=z80_tape_spystack(0)+2,z80_sp.w+=2;
+			else
+				fasttape_add8(z80_bc.b.h>>6,42,&z80_hl.b.h,1); // z80_r7+=...*7;
+			break;
 	}
 }
 
@@ -1460,11 +1469,11 @@ int z80_recv_ula(void) // "Cobra" and "Arkanoid" were happy with `ula_bus` but t
 			case 0: return ula_screen[ula_bitmap];
 			case 1: return ula_screen[ula_attrib];
 			case 2: return ula_screen[ula_bitmap+1];
-			case 3: return ula_bus3=ula_screen[ula_attrib+1];
+			case 3: return ula_screen[ula_attrib+1];
 		}
 	return type_id==3?ula_bus3:255;
 }
-#define z80_recv_gunstick(button,sensor) ((session_maus_z?button:0)+((video_litegun&0x00C000)?sensor:0)) // GUNSTICK detects bright pixels
+#define z80_recv_gunstick(button,sensor) (session_maus_z?button+((video_litegun&0x00C000)?sensor:0):0) // GUNSTICK detects bright pixels
 BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 {
 	if ((p&31)==31) // tell apart between KEMPSTON and BETA128 ports
@@ -1490,8 +1499,10 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 		}
 		if ((p&63)==31) // KEMPSTON port
 			return litegun?z80_recv_gunstick(16,4):autorun_kbd_bit(8); // catch special case: lightgun or joystick ("TARGET PLUS", "MIKE GUNNER")
+		if (ula_pentagon)
+			return ula_bus; // http://worldofspectrum.net/rusfaq/ : "*port FF - port of current screen attributes. [...] on border [...] gives FF."
 		if (type_id<3) // non-PLUS3 floating bus?
-			return (p>=0X4000&&p<=0X7FFF)?(ula_shown_x&1)?ula_bus:255:z80_recv_ula(); // kludge: "A Yankee in Iraq" uses a contended address :-/
+			return (p>=0X4000&&p<=0X7FFF)?(ula_shown_x&1)?ula_bus:255:z80_recv_ula(); // kludge: "A Yankee in Iraq" uses a contended floating bus address :-/
 		return 255;
 	}
 	if ((p&7)==6) // 0x??FE, ULA 48K
@@ -1507,8 +1518,8 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 				j|=i?autorun_kbd_bit(8+i):k; // handle composite keys: CAPS SHIFT is row 0, bit 0
 				if (litegun&&!autorun_mode)
 				{
-					if (i==4) j|=z80_recv_gunstick(1,4); // GUNSTICK on SINCLAIR 1 ("SOLO")
-					//else if (i==3) //j|=z80_recv_gunstick(16,4); // GUNSTICK on SINCLAIR 2
+					if (i==4) j=z80_recv_gunstick(1,4); // GUNSTICK on SINCLAIR 1 ("SOLO")
+					//else if (i==3) //j=z80_recv_gunstick(16,4); // GUNSTICK on SINCLAIR 2
 				}
 			}
 		if (tape)//&&!z80_iff.b.l) // at least one tape loader enables interrupts: the musical demo "SIL4.TZX"
@@ -2568,9 +2579,9 @@ void session_clean(void) // refresh options
 	session_menuradio(0x8B01+video_type,0x8B01,0x8B05);
 	session_menuradio(0x0B01+video_scanline,0x0B01,0x0B04);
 	session_menucheck(0x0B08,video_scanblend);
-	session_menucheck(0x8902,video_filter&VIDEO_FILTER_Y_MASK);
-	session_menucheck(0x8903,video_filter&VIDEO_FILTER_X_MASK);
-	session_menucheck(0x8904,video_filter&VIDEO_FILTER_SMUDGE);
+	session_menucheck(0x8902,video_filter&VIDEO_FILTER_MASK_Y);
+	session_menucheck(0x8903,video_filter&VIDEO_FILTER_MASK_X);
+	session_menucheck(0x8904,video_filter&VIDEO_FILTER_MASK_Z);
 	MEMLOAD(kbd_joy,joy1_types[joy1_type]);
 	#if AUDIO_CHANNELS > 1
 	session_menuradio(0xC401+audio_mixmode,0xC401,0xC404);
@@ -2937,13 +2948,13 @@ void session_user(int k) // handle the user's commands
 			onscreen_flag=!onscreen_flag;
 			break;
 		case 0x8902:
-			video_filter^=VIDEO_FILTER_Y_MASK;
+			video_filter^=VIDEO_FILTER_MASK_Y;
 			break;
 		case 0x8903:
-			video_filter^=VIDEO_FILTER_X_MASK;
+			video_filter^=VIDEO_FILTER_MASK_X;
 			break;
 		case 0x8904:
-			video_filter^=VIDEO_FILTER_SMUDGE;
+			video_filter^=VIDEO_FILTER_MASK_Z;
 			break;
 		/*case 0x8910: // NMI
 			z80_nmi_throw;

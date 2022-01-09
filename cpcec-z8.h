@@ -1719,7 +1719,7 @@ void z80_reset(void) // reset the Z80
 #define Z80_RET2 z80_wz=Z80_PEEK(z80_sp.w); ++z80_sp.w; z80_pc.w=z80_wz+=Z80_PEEK(z80_sp.w)<<8; if (++z80_sp.w>z80_debug_stack) { z80_debug_stack=0xFFFF; session_signal|=SESSION_SIGNAL_DEBUG,_t_=0; } // throw!
 #define Z80_POP2(x) x.l=Z80_PEEK(z80_sp.w); ++z80_sp.w; x.h=Z80_PEEK(z80_sp.w); ++z80_sp.w
 #define Z80_PUSH2(x,y) --z80_sp.w; Z80_POKE3(z80_sp.w,x.h); Z80_STRIDE(y); --z80_sp.w; Z80_POKE4(z80_sp.w,x.l)
-#define Z80_CALL2 --z80_sp.w; Z80_POKE0(z80_sp.w,z80_pc.w>>8); --z80_sp.w; Z80_POKE0(z80_sp.w,z80_pc.w); z80_pc.w=z80_wz
+#define Z80_CALL2 --z80_sp.w; Z80_POKE0(z80_sp.w,z80_pc.b.h); --z80_sp.w; Z80_POKE0(z80_sp.w,z80_pc.b.l); z80_pc.w=z80_wz
 #define Z80_RLC1(x) x=(x<<1)+(x>>7); Z80_Q_SET(z80_flags_xor[x]+(x&1))
 #define Z80_RRC1(x) x=(x>>1)+(x<<7); Z80_Q_SET(z80_flags_xor[x]+((x>>7)&1))
 #define Z80_RL1(x) do{ BYTE z=x>>7; Z80_Q_SET(z80_flags_xor[x=(x<<1)+(z80_af.b.l&1)]+z); }while(0)
@@ -3581,13 +3581,13 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							break;
 						// 0xED80-0xEDBF
 						case 0xB0: // LDIR
-							if (z80_bc.w!=1) // loop?
+							if (z80_bc.w!=1) // cfr. Hoglet67's article "LDxR/CPxR interrupted"
 							{
 								BYTE b=Z80_PEEK(z80_hl.w); Z80_POKE(z80_de.w,b);
 								++z80_hl.w,++z80_de.w;
 								Z80_IORQ_1X_NEXT(2);
 								z80_wz=--z80_pc.w; --z80_pc.w; --z80_bc.w;
-								Z80_Q_SET((z80_af.b.l&0XC1)+((z80_pc.w>>8)&0X28)+4); // cfr. Hoglet67's article "LDxR/CPxR interrupted"
+								Z80_Q_SET((z80_af.b.l&0XC1)+(z80_pc.b.h&0X28)+4);
 								Z80_IORQ_1X_NEXT(5);
 								Z80_STRIDE(0x3B0);
 								Z80_STRIDE_1;
@@ -3605,13 +3605,13 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							}
 							break;
 						case 0xB8: // LDDR
-							if (z80_bc.w!=1) // loop?
+							if (z80_bc.w!=1) // cfr. Hoglet67's article "LDxR/CPxR interrupted"
 							{
 								BYTE b=Z80_PEEK(z80_hl.w); Z80_POKE(z80_de.w,b);
 								--z80_hl.w,--z80_de.w;
 								Z80_IORQ_1X_NEXT(2);
 								z80_wz=--z80_pc.w; --z80_pc.w; --z80_bc.w;
-								Z80_Q_SET((z80_af.b.l&0XC1)+((z80_pc.w>>8)&0X28)+4); // cfr. Hoglet67's article "LDxR/CPxR interrupted"
+								Z80_Q_SET((z80_af.b.l&0XC1)+(z80_pc.b.h&0X28)+4);
 								Z80_IORQ_1X_NEXT(5);
 								Z80_STRIDE(0x3B8);
 								Z80_STRIDE_1;
@@ -3641,10 +3641,10 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 									--z80_hl.w,--z80_wz;
 								else
 									++z80_hl.w,++z80_wz;
-								if ((op&16)&&((z80_af.b.l&0x44)==0X04)) // loop?
+								if ((op&16)&&((z80_af.b.l&0x44)==0X04)) // cfr. Hoglet67's article "LDxR/CPxR interrupted"
 								{
 									z80_wz=--z80_pc.w; --z80_pc.w;
-									Z80_Q_SET(z80_af.b.l+((z80_pc.w>>8)&0X28)); // cfr. Hoglet67's article "LDxR/CPxR interrupted"
+									Z80_Q_SET(z80_af.b.l+(z80_pc.b.h&0X28));
 									Z80_STRIDE(0x3B1); // ==0X3B9
 									Z80_IORQ_1X_NEXT(5);
 									Z80_STRIDE_1;
@@ -3685,27 +3685,23 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 										z=b+z80_bc.b.l+1,++z80_hl.w,++z80_wz;
 								}
 								z80_af.b.l=(z80_flags_xor[z80_bc.b.h]&0xE8)+(z<b?1:0)+(b&0x80?2:0); // ZS5-3-NC
-								if ((op&16)&&z80_bc.b.h) // loop?
+								if ((op&16)&&z80_bc.b.h) // cfr. Hoglet67's article "INxR/OTxR interrupted"
 								{
 									Z80_STRIDE(0x3B2); // ==0X3B3 ==0X3BA ==0X3BB
 									Z80_IORQ_1X_NEXT(5);
 									if (z80_af.b.l&1)
 										if (z80_af.b.l&2)
-										{
-											z80_af.b.l+=~(z80_flags_xor[(z&7)^z80_bc.b.h]^z80_flags_xor[((z80_bc.b.h-1)&7)])&4;
-											if (!(z80_bc.b.h&0X0F)) z80_af.b.l+=16;
-										}
+											z80_af.b.l+=(~(z80_flags_xor[(z&7)^z80_bc.b.h]^z80_flags_xor[((z80_bc.b.h-1)&7)])&4)
+												+((z80_bc.b.h&0X0F)?0:16);
 										else
-										{
-											z80_af.b.l+=~(z80_flags_xor[(z&7)^z80_bc.b.h]^z80_flags_xor[((z80_bc.b.h+1)&7)])&4;
-											if (!(~z80_bc.b.h&0X0F)) z80_af.b.l+=16;
-										}
+											z80_af.b.l+=(~(z80_flags_xor[(z&7)^z80_bc.b.h]^z80_flags_xor[((z80_bc.b.h+1)&7)])&4)
+												+((~z80_bc.b.h&0X0F)?0:16);
 									else
 										z80_af.b.l+=~(z80_flags_xor[(z&7)^z80_bc.b.h]^z80_flags_xor[(z80_bc.b.h&7)])&4;
-									Z80_Q_SET((z80_af.b.l&0XD7)+(((z80_pc.w-=2)>>8)&0X28)); // cfr. Hoglet67's article "INxR/OTxR interrupted"
+									Z80_Q_SET((z80_af.b.l&0XD7)+(((z80_pc.w-=2)>>8)&0X28)); // --5-3--- from PC
 								}
 								else
-									Z80_Q_SET(z80_af.b.l+(z80_flags_xor[(z&7)^z80_bc.b.h]&4)+((z80_af.b.l&1)<<4)); // ZS5H3VNC
+									Z80_Q_SET(z80_af.b.l+(z80_flags_xor[(z&7)^z80_bc.b.h]&4)+((z80_af.b.l&1)<<4));
 							}
 							break;
 						// 0xEDC0-0xEDFF

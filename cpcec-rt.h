@@ -184,9 +184,9 @@ int sortedsearch(char *t,int z,char *s) // look for string 's' in an alphabetica
 
 // interframe functions --------------------------------------------- //
 
-#define VIDEO_FILTER_X_MASK 1
-#define VIDEO_FILTER_Y_MASK 2
-#define VIDEO_FILTER_SMUDGE 4
+#define VIDEO_FILTER_MASK_X 1
+#define VIDEO_FILTER_MASK_Y 2
+#define VIDEO_FILTER_MASK_Z 4
 int video_pos_z=0; // for timekeeping, statistics and debugging
 int video_scanblend=0,audio_mixmode=1; // 0 = pure mono, 1 = pure stereo, 2 = 50%, 3 = 25%
 VIDEO_UNIT video_lastscanline,video_halfscanline; // the fillers used in video_endscanlines() and the lightgun buffer
@@ -221,7 +221,7 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 	{
 		VIDEO_UNIT *vp=&video_blend[(video_pos_y-VIDEO_OFFSET_Y)/2*VIDEO_PIXELS_X];
 		for (int x=VIDEO_PIXELS_X;x>0;--x)
-			vt=*vp,vs=*vp++=*vi,*vi++=VIDEO_FILTER_HALF(vt,vs); // non-accumulative (gigascreen)
+			vt=*vp,vs=*vp++=*vi,*vi++=VIDEO_FILTER_HALF(vt,vs); // non-accumulative gigascreen
 		vi-=VIDEO_PIXELS_X;
 	}
 	switch ((video_filter&7)+(video_scanlinez?0:8))
@@ -231,44 +231,44 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 			// no `break` here!
 		case 0: // nothing (half)
 			break;
-		case 0+VIDEO_FILTER_Y_MASK:
+		case 0+VIDEO_FILTER_MASK_Y:
 			if (video_pos_y&1)
 				do
 					vt=*vi,*vi++=VIDEO_FILTER_X1(vt);
 				while (vi<vl);
 			break;
-		case 8+VIDEO_FILTER_Y_MASK:
+		case 8+VIDEO_FILTER_MASK_Y:
 			do
 				vt=*vi++,*vo++=VIDEO_FILTER_X1(vt);
 			while (vi<vl);
 			break;
-		case 8+VIDEO_FILTER_X_MASK:
+		case 8+VIDEO_FILTER_MASK_X:
 			do
 				*vo++=*vi++,
 				vt=*vi,*vo++=*vi++=VIDEO_FILTER_X1(vt);
 			while (vi<vl);
 			break;
-		case 0+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK:
+		case 0+VIDEO_FILTER_MASK_Y+VIDEO_FILTER_MASK_X:
 			if (video_pos_y&1)
 			// no `break` here!
-		case 0+VIDEO_FILTER_X_MASK:
+		case 0+VIDEO_FILTER_MASK_X:
 			do
 				vt=*++vi,*vi++=VIDEO_FILTER_X1(vt);
 			while (vi<vl);
 			break;
-		case 8+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK:
+		case 8+VIDEO_FILTER_MASK_Y+VIDEO_FILTER_MASK_X:
 			do
 				*vo++=*vi++,
 				vt=*vi++,*vo++=VIDEO_FILTER_X1(vt);
 			while (vi<vl);
 			break;
-		case 8+VIDEO_FILTER_SMUDGE:
+		case 8+VIDEO_FILTER_MASK_Z:
 			vt=*vo++=*vi++,VIDEO_FILTER_BLUR0(vt);
 			do
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vo++=*vi++=vt;
 			while (vi<vl);
 			break;
-		case 0+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_SMUDGE:
+		case 0+VIDEO_FILTER_MASK_Y+VIDEO_FILTER_MASK_Z:
 			if (video_pos_y&1)
 			{
 				vt=*vi,*vi++=VIDEO_FILTER_X1(vt),VIDEO_FILTER_BLUR0(vt);
@@ -278,26 +278,26 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 				break;
 			}
 			// no `break` here!
-		case 0+VIDEO_FILTER_SMUDGE:
+		case 0+VIDEO_FILTER_MASK_Z:
 			vt=*vi++,VIDEO_FILTER_BLUR0(vt);
 			do
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt;
 			while (vi<vl);
 			break;
-		case 8+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_SMUDGE:
+		case 8+VIDEO_FILTER_MASK_Y+VIDEO_FILTER_MASK_Z:
 			vt=*vi++,*vo++=VIDEO_FILTER_X1(vt),VIDEO_FILTER_BLUR0(vt);
 			do
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt,*vo++=VIDEO_FILTER_X1(vt);
 			while (vi<vl);
 			break;
-		case 8+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
+		case 8+VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Z:
 			vt=*vi,VIDEO_FILTER_BLUR0(vt);
 			do
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vo++=*vi++=vt,
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vo++=*vi++=VIDEO_FILTER_X1(vt);
 			while (vi<vl);
 			break;
-		case 0+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
+		case 0+VIDEO_FILTER_MASK_Y+VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Z:
 			vt=*vi,VIDEO_FILTER_BLUR0(vt);
 			if (video_pos_y&1)
 			{
@@ -311,14 +311,14 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt;
 			while (vi<vl);
 			break;
-		case 0+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
+		case 0+VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Z:
 			vt=*vi,VIDEO_FILTER_BLUR0(vt);
 			do
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt,
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=VIDEO_FILTER_X1(vt);
 			while (vi<vl);
 			break;
-		case 8+VIDEO_FILTER_Y_MASK+VIDEO_FILTER_X_MASK+VIDEO_FILTER_SMUDGE:
+		case 8+VIDEO_FILTER_MASK_Y+VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Z:
 			vt=*vi,VIDEO_FILTER_BLUR0(vt);
 			do
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vo++=*vi++=vt,
@@ -337,8 +337,8 @@ INLINE void video_endscanlines(void) // end the current frame and clean up
 		if ((video_scanlinez=video_scanline)==1) // do we have to redo the secondary scanlines?
 		{
 			z=video_halfscanline; f=video_filter;
-			VIDEO_UNIT v0=f&VIDEO_FILTER_Y_MASK?VIDEO_FILTER_X1(z):z,
-				v1=f&VIDEO_FILTER_X_MASK?z:v0;
+			VIDEO_UNIT v0=f&VIDEO_FILTER_MASK_Y?VIDEO_FILTER_X1(z):z,
+				v1=f&VIDEO_FILTER_MASK_X?z:v0;
 			VIDEO_UNIT *p=video_frame+VIDEO_OFFSET_X+(VIDEO_OFFSET_Y+1)*VIDEO_LENGTH_X;
 			for (int y=0;y<VIDEO_PIXELS_Y;y+=2,p+=VIDEO_LENGTH_X*2-VIDEO_PIXELS_X)
 				for (int x=0;x<VIDEO_PIXELS_X;x+=2)
@@ -446,7 +446,7 @@ int puff_decode(struct puff_huff *h) // decodes Huffman code from source; <0 ERR
 		if (bits>8) bits=8; // flush source bits
 	}
 }
-int puff_tables(struct puff_huff *h,short *l,int n) // generates Huffman tables from canonical table; !0 ERROR
+int puff_tables(struct puff_huff *h,short *l,int n) // generates Huffman input tables from canonical length table; !0 ERROR
 {
 	short o[15+1]; int i,a;
 	for (i=0;i<=15;++i) h->cnt[i]=0; // reset all bit counts
@@ -609,7 +609,7 @@ void huff_write(int n,int i) // sends `n`-bit word `i` to bitstream
 }
 struct puff_huff huff_lcode={ &puff_tablez[  0],puff_lensym };
 struct puff_huff huff_ocode={ &puff_tablez[288],puff_offsym };
-void huff_tables(struct puff_huff *h,short *l,int n) // generates Huffman output tables from canonical table
+void huff_tables(struct puff_huff *h,short *l,int n) // generates Huffman output tables from canonical length table
 {
 	for (int j=1,k=0;j<16;++j,k<<=1) for (int i=0;i<n;++i)
 		if (l[i]==j) // do the bit counts match?

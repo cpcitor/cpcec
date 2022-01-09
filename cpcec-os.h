@@ -75,8 +75,8 @@ INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 //#define VIDEO_FILTER_HALF(x,y) (x==y?x:((((x&0XFF00FF)+(y&0XFF00FF)+(y&0X10001))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+(y&0X100))&0X1FE00))>>1) // 50:50; slightly more precise, but slower with GCC
 #define VIDEO_FILTER_BLURDATA vzz
 #define VIDEO_FILTER_BLUR0(z) vzz=z
-#define VIDEO_FILTER_BLUR(r,z) r=VIDEO_FILTER_HALF(vzz,z),vzz=z // the fastest 50:50 blur according to GCC
-//#define VIDEO_FILTER_BLUR(r,z) r=VIDEO_FILTER_HALF(vzz,z),vzz=r // accumulative 50:50 blur (not pretty)
+#define VIDEO_FILTER_BLUR(r,z) r=VIDEO_FILTER_HALF(vzz,z),vzz=r // accumulative 50:50 blur (not pretty)
+//#define VIDEO_FILTER_BLUR(r,z) r=VIDEO_FILTER_HALF(vzz,z),vzz=z // the fastest 50:50 blur according to GCC
 //#define VIDEO_FILTER_BLURDATA vxh,vxl,vzh,vzl
 //#define VIDEO_FILTER_BLUR0(z) vxh=z&0XFF00FF,vxl=z&0XFF00
 //#define VIDEO_FILTER_BLUR(r,z) r=((((vzh=z&0XFF00FF)+vxh+0X10001)&0X1FE01FE)+(((vzl=z&0XFF00)+vxl+0X100)&0X1FE00))>>1,vxh=vzh,vxl=vzl // 50:50 blur, but slower; the "x==y?x:..." part sets the difference
@@ -89,7 +89,8 @@ INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 //#define VIDEO_FILTER_X1(x) (((x>>1)&0X7F7F7F)+0X2B2B2B) // average
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)+0X404040) // heavier
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)*3+0X161616) // lighter
-#define VIDEO_FILTER_X1(x) ((((x&0XFF0000)*76+(x&0XFF00)*(150<<8)+(x&0XFF)*(30<<16)+(1<<23))>>24)*0X10101) // greyscale
+#define VIDEO_FILTER_X1(x) (((x>>3)&0X1F1F1F)*5+0X222222) // average-to-lighter
+//#define VIDEO_FILTER_X1(x) ((((x&0XFF0000)*76+(x&0XFF00)*(150<<8)+(x&0XFF)*(30<<16)+(1<<23))>>24)*0X10101) // greyscale (natural)
 #define VIDEO_FILTER_SCAN(w,b) (((((w&0xFF00FF)+(b&0xFF00FF)*7)&0x7F807F8)+(((w&0xFF00)+(b&0xFF00)*7)&0x7F800))>>3) // white:black 1:7
 
 #if 0 // 8 bits
