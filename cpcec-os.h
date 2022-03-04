@@ -1,10 +1,10 @@
- //  ####  ######    ####  #######   ####    ----------------------- //
+ //  ####  ######    ####  #######   ####  ------------------------- //
 //  ##  ##  ##  ##  ##  ##  ##   #  ##  ##  CPCEC, plain text Amstrad //
 // ##       ##  ## ##       ## #   ##       CPC emulator written in C //
 // ##       #####  ##       ####   ##       as a postgraduate project //
 // ##       ##     ##       ## #   ##       by Cesar Nicolas-Gonzalez //
 //  ##  ##  ##      ##  ##  ##   #  ##  ##  since 2018-12-01 till now //
- //  ####  ####      ####  #######   ####    ----------------------- //
+ //  ####  ####      ####  #######   ####  ------------------------- //
 
 // Because the goal of the emulation itself is to be OS-independent,
 // the interactions between the emulator and the OS are kept behind an
@@ -70,28 +70,24 @@ INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 
 #define VIDEO_UNIT DWORD // 0x00RRGGBB style
 
-#define VIDEO_FILTER_HALF(x,y) (x==y?x:((((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00))>>1) // 50:50; the fastest algorithm, albeit with a precision loss; is it negligible or not?
-//#define VIDEO_FILTER_HALF(x,y) (x==y?x:(x<y?(((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00):(((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1) // 50:50
-//#define VIDEO_FILTER_HALF(x,y) (x==y?x:((((x&0XFF00FF)+(y&0XFF00FF)+(y&0X10001))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+(y&0X100))&0X1FE00))>>1) // 50:50; slightly more precise, but slower with GCC
-#define VIDEO_FILTER_BLURDATA vzz
-#define VIDEO_FILTER_BLUR0(z) vzz=z
-#define VIDEO_FILTER_BLUR(r,z) r=VIDEO_FILTER_HALF(vzz,z),vzz=r // accumulative 50:50 blur (not pretty)
-//#define VIDEO_FILTER_BLUR(r,z) r=VIDEO_FILTER_HALF(vzz,z),vzz=z // the fastest 50:50 blur according to GCC
-//#define VIDEO_FILTER_BLURDATA vxh,vxl,vzh,vzl
-//#define VIDEO_FILTER_BLUR0(z) vxh=z&0XFF00FF,vxl=z&0XFF00
-//#define VIDEO_FILTER_BLUR(r,z) r=((((vzh=z&0XFF00FF)+vxh+0X10001)&0X1FE01FE)+(((vzl=z&0XFF00)+vxl+0X100)&0X1FE00))>>1,vxh=vzh,vxl=vzl // 50:50 blur, but slower; the "x==y?x:..." part sets the difference
-//#define VIDEO_FILTER_BLURDATA vxh,vxl,vyh,vyl,vzh,vzl
-//#define VIDEO_FILTER_BLUR0(z) vxh=vyh=z&0XFF00FF,vxl=vyl=z&0XFF00
-//#define VIDEO_FILTER_BLUR(r,z) r=((((vzh=z&0XFF00FF)+vyh*2+vxh+0X20002)&0X3FC03FC)+(((vzl=z&0XFF00)+vyl*2+vxl+0X200)&0X3FC00))>>2,vxh=vyh,vyh=vzh,vxl=vyl,vyl=vzl // 25:50:25 blur, softer but slower
-//#define VIDEO_FILTER_BLURDATA vxx,vyy
-//#define VIDEO_FILTER_BLUR0(z) vxx=vyy=z
-//#define VIDEO_FILTER_BLUR(r,z) r=(z&0XFF0000)+(vyy&0XFF00)+(vxx&0XFF),vxx=vyy,vyy=z // chromatic aberration
+//#define VIDEO_FILTER_HALF(x,y) (x==y?x:((((x&0XFF00FF)+(y&0XFF00FF)+(y&0X10001))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+(y&0X100))&0X1FE00))>>1) // 50:50, better
+#define VIDEO_FILTER_HALF(x,y) (x==y?x:((((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00))>>1) // 50:50, faster
+//#define VIDEO_FILTER_BLURDATA vzz
+//#define VIDEO_FILTER_BLUR0(z) vzz=z
+//#define VIDEO_FILTER_BLUR(r,z) (r=VIDEO_FILTER_HALF(vzz,z),vzz=z) // 50:50 particular
+//#define VIDEO_FILTER_BLUR(r,z) (r=VIDEO_FILTER_HALF(vzz,z),vzz=r) // 50:50 widespread
+//#define VIDEO_FILTER_BLURDATA v0h,v0l,vzh,vzl
+//#define VIDEO_FILTER_BLUR0(z) v0h=z&0XFF00FF,v0l=z&0XFF00
+//#define VIDEO_FILTER_BLUR(r,z) r=(((v0h+(vzh=z&0XFF00FF)+0X10001)&0X1FE01FE)+((v0l+(vzl=z&0XFF00)+0X100)&0x1FE00))>>1,v0h=vzh,v0l=vzl // 50:50
+#define VIDEO_FILTER_BLURDATA v2h,v2l,v1h,v1l,v0h,v0l,vzh,vzl
+#define VIDEO_FILTER_BLUR0(z) v2h=v1h=v0h=z&0XFF00FF,v2l=v1l=v0l=z&0XFF00
+#define VIDEO_FILTER_BLUR(r,z) r=(((v2h+v1h+v0h+(vzh=z&0XFF00FF)+0X20002)&0X3FC03FC)+((v2l+v1l+v0l+(vzl=z&0XFF00)+0X200)&0x3FC00))>>2,v2h=v1h,v2l=v1l,v1h=v0h,v1l=v0l,v0h=vzh,v0l=vzl // 25:25:25:25
 //#define VIDEO_FILTER_X1(x) (((x>>1)&0X7F7F7F)+0X2B2B2B) // average
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)+0X404040) // heavier
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)*3+0X161616) // lighter
-#define VIDEO_FILTER_X1(x) (((x>>3)&0X1F1F1F)*5+0X222222) // average-to-lighter
-//#define VIDEO_FILTER_X1(x) ((((x&0XFF0000)*76+(x&0XFF00)*(150<<8)+(x&0XFF)*(30<<16)+(1<<23))>>24)*0X10101) // greyscale (natural)
-#define VIDEO_FILTER_SCAN(w,b) (((((w&0xFF00FF)+(b&0xFF00FF)*7)&0x7F807F8)+(((w&0xFF00)+(b&0xFF00)*7)&0x7F800))>>3) // white:black 1:7
+#define VIDEO_FILTER_X1(x) (((x>>3)&0X1F1F1F)*5+0X323232) // practical
+//#define VIDEO_FILTER_SCAN(w,b) ((((w>>1)&0X7F7F7F)+(b>>1)&0X7F7F7F)+0X010101) // 50:50
+#define VIDEO_FILTER_SCAN(w,b) ((((w>>2)&0X3F3F3F)+(b>>2)&0X3F3F3F)*3+0X020202) // 25:75
 
 #if 0 // 8 bits
 	#define AUDIO_UNIT unsigned char
@@ -109,7 +105,7 @@ VIDEO_UNIT *video_frame,*video_blend; // video frame, allocated on runtime
 AUDIO_UNIT *audio_frame,audio_buffer[AUDIO_LENGTH_Z*AUDIO_CHANNELS],audio_memory[AUDIO_N_FRAMES*AUDIO_LENGTH_Z*AUDIO_CHANNELS]; // audio frame, cycles during playback
 VIDEO_UNIT *video_target; // pointer to current video pixel
 AUDIO_UNIT *audio_target; // pointer to current audio sample
-int video_pos_x,video_pos_y,audio_pos_z; // counters to keep pointers within range
+int video_pos_x,video_pos_y,frame_pos_y,audio_pos_z; // counters to keep pointers within range
 BYTE video_interlaced=0,video_interlaces=0; // video scanline status
 char video_framelimit=0,video_framecount=0; // video frameskip counters; must be signed!
 BYTE audio_disabled=0,audio_session=0; // audio status and counter
@@ -118,8 +114,9 @@ unsigned char session_path[STRMAX],session_parmtr[STRMAX],session_tmpstr[STRMAX]
 int session_timer,session_event=0; // timing synchronisation and user command
 BYTE session_fast=0,session_rhythm=0,session_wait=0,session_softblit=1,session_hardblit,session_softplay=0,session_hardplay; // software blitting enabled by default
 BYTE session_audio=1,session_stick=1,session_shift=0,session_key2joy=0; // keyboard, joystick
+int session_maus_x=0,session_maus_y=0; // mouse coordinates (UI + optional emulation)
 #ifdef MAUS_EMULATION
-int session_maus_z=0,session_maus_x=0,session_maus_y=0; // optional mouse
+int session_maus_z=0; // optional mouse
 #endif
 BYTE video_scanline=0,video_scanlinez=8; // 0 = solid, 1 = scanlines, 2 = full interlace, 3 = half interlace
 BYTE video_filter=0,audio_filter=0; // filter flags
@@ -134,8 +131,7 @@ BYTE session_hidemenu=0; // normal or pop-up menu
 HDC session_dc1,session_dc2=NULL; HGDIOBJ session_dib=NULL; // video structs
 HWAVEOUT session_wo; WAVEHDR session_wh; MMTIME session_mmtime; // audio structs
 
-VIDEO_UNIT *debug_frame;
-BYTE debug_buffer[DEBUG_LENGTH_X*DEBUG_LENGTH_Y]; // [0] can be a valid character, 128 (new redraw required) or 0 (redraw not required)
+VIDEO_UNIT *debug_frame; BYTE debug_dirty; // !0 (new redraw required) or 0 (redraw not required)
 HGDIOBJ session_dbg=NULL;
 
 #ifdef DDRAW
@@ -298,11 +294,11 @@ unsigned char kbd_map[256]; // key-to-key translation map
 // general engine functions and procedures -------------------------- //
 
 void session_clean(void); // "clean" dirty settings. Must be defined later on!
-void session_user(int k); // handle the user's commands; must be defined later on!
-void session_debug_show(void); // redraw the debugger text; must be defined later on, too!
-int session_debug_user(int k); // debug logic is a bit different: 0 UNKNOWN COMMAND, !0 OK
-int debug_xlat(int k); // translate debug keys into codes. Must be defined later on!
-INLINE void audio_playframe(int q,AUDIO_UNIT *ao); // handle the sound filtering; is defined in CPCEC-RT.H!
+void session_user(int); // handle the user's commands; must be defined later on!
+void session_debug_show(int); // redraw the debugger text; must be defined later on, too!
+int session_debug_user(int); // debug logic is a bit different: 0 UNKNOWN COMMAND, !0 OK
+int debug_xlat(int); // translate debug keys into codes. Must be defined later on!
+INLINE void audio_playframe(int,AUDIO_UNIT*); // handle the sound filtering; is defined in CPCEC-RT.H!
 
 void session_please(void) // stop activity for a short while
 {
@@ -507,9 +503,9 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 		case WM_MOUSEMOVE: // no `break`!
 			#ifdef MAUS_EMULATION
 			session_maus_z=wparam&MK_LBUTTON;
+			#endif
 			session_maus_y=session_r_h>0?((HIWORD(lparam)-session_r_y)*VIDEO_PIXELS_Y+session_r_h/2)/session_r_h:-1;
 			session_maus_x=session_r_w>0?((LOWORD(lparam)-session_r_x)*VIDEO_PIXELS_X+session_r_w/2)/session_r_w:-1;
-			#endif
 			break;
 		case WM_RBUTTONUP:
 			session_contextmenu();
@@ -726,18 +722,17 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 {
 	static int s=0; if (s!=session_signal) // catch DEBUG and PAUSE
-		s=session_signal,session_dirty=1;
+		s=session_signal,session_dirty=debug_dirty=2;
 	if (session_signal&(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE))
 	{
 		session_signal_frames&=~(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE);
 		session_signal_scanlines&=~(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE); // reset traps!
 		if (session_signal&SESSION_SIGNAL_DEBUG)
-		{
-			if (*debug_buffer==128)
-				session_please(),session_debug_show();
-			if (*debug_buffer)//!=0
-				session_redraw(session_hwnd,session_dc1),*debug_buffer=0;
-		}
+			if (debug_dirty)
+			{
+				session_please(),session_debug_show(debug_dirty!=1),
+				session_redraw(session_hwnd,session_dc1),debug_dirty=0;
+			}
 		if (!session_paused) // set the caption just once
 		{
 			sprintf(session_tmpstr,"%s | %s | PAUSED",session_caption,session_info);
@@ -941,7 +936,7 @@ LRESULT CALLBACK inputproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // di
 		case WM_INITDIALOG:
 			SetWindowText(hwnd,session_dialog_text);
 			session_dialog_item=GetDlgItem(hwnd,12345);
-			SendMessage(session_dialog_item,WM_SETTEXT,0,lparam);
+			SendMessage(session_dialog_item,WM_SETTEXT,0,(LPARAM)session_parmtr);
 			SendMessage(session_dialog_item,EM_SETLIMITTEXT,STRMAX-1,0);
 			break;
 		/*case WM_SIZE:
@@ -964,13 +959,13 @@ LRESULT CALLBACK inputproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // di
 	}
 	return 1;
 }
-int session_input(char *s,char *t) // `s` is the target string (empty or not), `t` is the caption; returns <0 on error or LENGTH on success
+int session_input(char *t) // `t` is the caption; returns <0 on error or LENGTH on success
 {
 	session_please();
 	session_dialog_text=t;
 	session_dialog_return=-1;
-	DialogBoxParam(GetModuleHandle(0),(LPCSTR)34004,session_hwnd,(DLGPROC)inputproc,(LPARAM)s);
-	return session_dialog_return; // the string is in `session_parmtr`
+	DialogBoxParam(GetModuleHandle(0),(LPCSTR)34004,session_hwnd,(DLGPROC)inputproc,0);
+	return session_dialog_return; // both the source and target strings are in `session_parmtr`
 }
 
 // list dialog ------------------------------------------------------ //
@@ -1069,7 +1064,7 @@ int session_filedialog(char *r,char *s,char *t,int q,int f) // auxiliar function
 }
 #define session_filedialog_get_readonly() (session_ofn.Flags&OFN_READONLY)
 #define session_filedialog_set_readonly(q) (q?(session_ofn.Flags|=OFN_READONLY):(session_ofn.Flags&=~OFN_READONLY))
-char *session_newfile(char *r,char *s,char *t) // "Create File" | ...and returns NULL on failure, or a string on success.
+char *session_newfile(char *r,char *s,char *t) // "Create File" | ...and returns NULL on failure, or `session_parmtr` (with a file path) on success.
 	{ return session_filedialog(r,s,t,1,0)?session_parmtr:NULL; }
 char *session_getfile(char *r,char *s,char *t) // "Open a File" | lists files in path `r` matching pattern `s` under caption `t`, etc.
 	{ return session_filedialog(r,s,t,0,OFN_HIDEREADONLY)?session_parmtr:NULL; }

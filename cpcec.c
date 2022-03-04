@@ -1,14 +1,14 @@
- //  ####  ######    ####  #######   ####    ----------------------- //
+ //  ####  ######    ####  #######   ####  ------------------------- //
 //  ##  ##  ##  ##  ##  ##  ##   #  ##  ##  CPCEC, plain text Amstrad //
 // ##       ##  ## ##       ## #   ##       CPC emulator written in C //
 // ##       #####  ##       ####   ##       as a postgraduate project //
 // ##       ##     ##       ## #   ##       by Cesar Nicolas-Gonzalez //
 //  ##  ##  ##      ##  ##  ##   #  ##  ##  since 2018-12-01 till now //
- //  ####  ####      ####  #######   ####    ----------------------- //
+ //  ####  ####      ####  #######   ####  ------------------------- //
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20220108"//"2555"
+#define MY_VERSION "20220303"//"1335"
 #define MY_LICENSE "Copyright (C) 2019-2022 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -56,11 +56,6 @@ Contact information: <mailto:cngsoft@gmail.com> */
 #define VIDEO_VSYNC_HI (44<<4)
 #define AUDIO_PLAYBACK 44100 // 22050, 24000, 44100, 48000
 #define AUDIO_LENGTH_Z (AUDIO_PLAYBACK/VIDEO_PLAYBACK) // division must be exact!
-
-#define DEBUG_LENGTH_X 64
-#define DEBUG_LENGTH_Y 32
-#define session_debug_show z80_debug_show
-#define session_debug_user z80_debug_user
 
 #if defined(SDL2)||!defined(_WIN32)
 unsigned short session_icon32xx16[32*32] = {
@@ -299,7 +294,6 @@ const VIDEO_UNIT video_table[][80]= // colour table, 0xRRGGBB style: the 32 orig
 // mainly defined by the simultaneous operation of the video output
 // (32 horizontal thin pixels) and the Z80 behavior (4 cycles)
 // (the clock is technically 16 MHz but we mean atomic steps here)
-DWORD main_t=0; // the global tick counter, used by the debugger
 int multi_t=1; // overclocking factor
 
 // HARDWARE DEFINITIONS ============================================= //
@@ -308,7 +302,7 @@ BYTE mem_ram[9<<16],mem_rom[33<<14]; // RAM (BASE 64K BANK + 8x 64K BANKS) and R
 BYTE *mem_xtr=NULL; // external 257x 16K EXTENDED ROMS
 #define plus_enabled (type_id>2) // the PLUS ASIC hardware MUST BE tied to the model!
 #define bdos_rom (&mem_rom[32<<14])
-BYTE *mmu_ram[4],*mmu_rom[4]; // memory is divided in 14 6k R+W areas
+BYTE *mmu_ram[4],*mmu_rom[4]; // memory is divided in 4x 16k R+W areas
 
 BYTE mmu_bit[4]={0,0,0,0}; // RAM bit masks: nonzero raises a write event
 BYTE mmu_xtr[257]; // ROM bit masks: nonzero reads from EXTENDED rather than from DEFAULT/CARTRIDGE
@@ -340,7 +334,7 @@ int dandanator_canwrite=0,dandanator_dirty; // R/W status
 BYTE plus_gate_lock[]={0000,0x00,0xFF,0x77,0xB3,0x51,0xA8,0xD4,0x62,0x39,0x9C,0x46,0x2B,0x15,0x8A}; // dummy first byte
 BYTE plus_gate_counter; // step in the plus lock sequence, starting from 0 (waiting for 0x00) until its length
 BYTE plus_gate_enabled; // locked/unlocked state: UNLOCKED if byte after SEQUENCE is $CD, LOCKED otherwise!
-BYTE plus_gate_mcr; // RMR2 register, that modifies the behavior of the original MRER (gate_mcr)
+BYTE plus_gate_mcr; // RMR2 register: it modifies the behavior of the original MRER (gate_mcr)
 WORD plus_dma_regs[3][4]; // loop counter,loop address,pause counter,pause scaler
 int plus_dma_index,plus_dma_delay,plus_dma_cache[3]; // DMA channel counters and timings
 //BYTE plus_dirtysprite; // tag sprite as "dirty"
@@ -508,7 +502,7 @@ INLINE void crtc_table_send(BYTE i)
 				{
 					if (crtc_count_r9==i)
 						crtc_status|=CRTC_STATUS_R9_OK; // if we check this later, "XMAS 2019 DEMO" fails!
-					else if (crtc_status&CRTC_STATUS_R4_OK)
+					else if ((crtc_status&CRTC_STATUS_R4_OK)&&crtc_count_r0>1) // "&&crtc_count_r0" fixes "OCTOPUS POCUS" (tunnel)
 						; // skipping R4_OK is required by "PRODATRON MEGADEMO" (part 4), "PINBALL DREAMS" (ingame), "ONESCREEN COLONIES" (both)...
 					else
 						crtc_status&=~CRTC_STATUS_R9_OK; // TODO: "DEMOIZART part 1" and "OVERFLOW PREVIEW part 2"
@@ -743,6 +737,7 @@ const int psg_stereos[][3]={{0,0,0},{+256,0,-256},{+128,0,-128},{+64,0,-64}}; //
 #endif
 #define PSG_PLAYCITY 2 // base clock in comparison to the main PSG
 //#define PSG_PLAYCITY_HALF // the PLAYCITY card contains two chips
+#define playcity_mono 1/2 // each PLAYCITY chip plays at half the PSG's intensity
 int playcity_disabled=0,playcity_dirty,playcity_ctc_state[4]={0,0,0,0},playcity_ctc_flags[4]={0,0,0,0},playcity_ctc_count[4]={0,0,0,0},playcity_ctc_limit[4]={0,0,0,0};
 int dac_disabled=1; // Digiblaster DAC, disabled by default to avoid trouble with the printer
 
@@ -853,11 +848,10 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 	do {
 		// GATE ARRAY pixel rendering
 
-		if (!video_framecount&&video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y)
+		if (frame_pos_y>=VIDEO_OFFSET_Y&&frame_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y)
 		{
 			if (video_pos_x>VIDEO_OFFSET_X-16&&video_pos_x<VIDEO_OFFSET_X+VIDEO_PIXELS_X)
 			{
-				#define VIDEO_NEXT *video_target++ // "VIDEO_NEXT = VIDEO_NEXT = ..." generates invalid code on VS13 and slower code on TCC
 				switch (gate_status)
 				{
 					VIDEO_UNIT p; BYTE b;
@@ -1253,7 +1247,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 
 		if (hsync_count>=VIDEO_HSYNC_HI) // HBLANK?
 		{
-			if (!video_framecount&&video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y)
+			if (frame_pos_y>=VIDEO_OFFSET_Y&&frame_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y)
 			{
 				if (plus_sprite_target) // just in case they weren't drawn yet!
 					if (video_pos_x>plus_sprite_latest) video_main_sprites();
@@ -1270,7 +1264,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 				vsync_match=0;
 			}
 			vsync_count+=2; vsync_match+=2;
-			video_pos_y+=2,video_target+=VIDEO_LENGTH_X*2-video_pos_x; session_signal|=session_signal_scanlines; // scanline event!
+			frame_pos_y+=2,video_pos_y+=2,video_target+=VIDEO_LENGTH_X*2-video_pos_x; session_signal|=session_signal_scanlines; // scanline event!
 			// the LA-7800 aligns the image in two ways: the second one is based on keeping the HSYNC_SET period steady.
 			static int x0; int x;
 			if (!(x=hsync_match-VIDEO_HSYNC_HI)) // exact match!
@@ -1299,7 +1293,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 
 int dac_level=0;
 #define dac_level_byte(x) dac_level=(x)<<7
-#define dac_level_zero() (dac_level=(dac_level*3)/4) // soften signal as time passes
+#define dac_level_zero() (dac_level=dac_level*3/4) // soften signal as time passes
 void audio_main(int t) // render audio output for `t` clock ticks; t is always nonzero!
 {
 	psg_main(t,((tape_status^tape_output)<<12)+dac_level); // merge tape signals
@@ -1425,13 +1419,13 @@ void z80_sync(int t) // the Z80 asks the hardware/video/audio to catch up
 	static int r=0; main_t+=t;
 	int tt=(r+=t)/multi_t; // calculate base value of `t`
 	r-=(t=tt*multi_t); // adjust `t` and keep remainder
-	if (t)
+	if (t>0)
 	{
 		//if (!disc_disabled)
 			disc_main(t);
 		if (tape_enabled&&tape)
 			audio_dirty=1,tape_main(t); // echo the tape signal thru sound!
-		if (tt)
+		if (tt>0)
 		{
 			audio_queue+=tt;
 			if (audio_dirty&&!audio_disabled)
@@ -1512,7 +1506,7 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 	if (!(p&0x1000)) // 0xEF00, PRINTER PORT
 	{
 		#ifdef PSG_PLAYCITY
-		if (!dac_disabled)
+		if (!printer&&!dac_disabled)
 			audio_dirty=1,dac_level_byte(b^128); // Digiblaster DAC, signed 8-bit audio
 		else
 		#endif
@@ -1646,8 +1640,8 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 			//else if (p==0xF882) cprintf("F882:%02X ",b); // *!* todo *!*
 			//else if (p==0xF883) cprintf("F883:%02X ",b); // *!* todo *!*
 			//#endif
-			else if (p==0xF884) playcity_dirty|=2,playcity_send(0,b); // YMZ RIGHT CHANNEL WRITE
-			else if (p==0xF888) playcity_dirty|=1,playcity_send(1,b); // YMZ LEFT CHANNEL WRITE
+			else if (p==0xF884) dac_level=0,playcity_dirty|=2,playcity_send(0,b); // YMZ RIGHT CHANNEL WRITE
+			else if (p==0xF888) dac_level=0,playcity_dirty|=1,playcity_send(1,b); // YMZ LEFT CHANNEL WRITE
 			else if (p==0xF984) playcity_select(0,b); // YMZ RIGHT CHANNEL SELECT
 			else if (p==0xF988) playcity_select(1,b); // YMZ LEFT CHANNEL SELECT
 			#endif
@@ -2223,243 +2217,6 @@ void z80_trap(WORD p,BYTE b) // catch Z80 write operations
 	}
 }
 
-int z80_debug_hard_tab(char *t) { return sprintf(t,"    "); }
-#ifdef Z80_DANDANATOR
-int z80_debug_hard_dntr8(char *t,int i)
-{
-	*t++=' ';
-	for (int n=256;n>>=1;)
-		*t++=i&n?'1':'0';
-	*t++=' ';
-	return 10;
-}
-int z80_debug_hard_dntrmap(char *t,BYTE *m,int o)
-{
-	int i; m=&m[o];
-	if (m>=mem_ram&&m<&mem_ram[length(mem_ram)])
-		return i=(m-mem_ram)>>14,sprintf(t,"ram%02X",i);
-	if (m>=mem_rom&&m<&mem_rom[length(mem_rom)])
-		return i=(m-mem_rom)>>14,sprintf(t,"rom%02X",i);
-	if (m>=mem_dandanator&&m<&mem_dandanator[32<<14])
-		return i=(m-mem_dandanator)>>14,sprintf(t,"dan%02X",i);
-	return sprintf(t,"?????");
-}
-#endif
-void z80_debug_flash(char *t) { *t+=-128,t[1]+=-128; }
-void z80_debug_hard(int q,int x,int y)
-{
-	int i; char s[16*20],*t;
-	if (q&1)
-	{
-		#ifdef Z80_DANDANATOR
-		if (mem_dandanator)
-		{
-			t=s+sprintf(s,"DANDANATOR:         "
-				"      PENDING:      "
-				" ZONE 0/B  ZONE 1/C ");
-			t+=z80_debug_hard_dntr8(t,dandanator_cfg[2]); t[-9]='-'; t[-8]='-';
-			t+=z80_debug_hard_dntr8(t,dandanator_cfg[3]); t[-9]='-'; t[-8]='-';
-			t+=sprintf(t,
-				" CONFIG.1  CONFIG.0 ");
-			t+=z80_debug_hard_dntr8(t,dandanator_cfg[1]); t[-9]='-';
-			t+=z80_debug_hard_dntr8(t,dandanator_cfg[0]); t[-9]='-'; t[-8]='-'; t[-7]='-';
-			t+=sprintf(t,
-				"      CURRENT:      "
-				" ZONE 0/B  ZONE 1/C ");
-			t+=z80_debug_hard_dntr8(t,dandanator_cfg[6]); t[-9]='-'; t[-8]='-';
-			t+=z80_debug_hard_dntr8(t,dandanator_cfg[7]); t[-9]='-'; t[-8]='-';
-			t+=sprintf(t,
-				" CONFIG.1  CONFIG.0 ");
-			t+=z80_debug_hard_dntr8(t,dandanator_cfg[5]); t[-9]='-';
-			t+=z80_debug_hard_dntr8(t,dandanator_cfg[4]); t[-9]='-'; t[-8]='-'; t[-7]='-';
-			t+=z80_debug_hard_dntrmap(t,mmu_rom[0],0x0000);
-			t+=z80_debug_hard_dntrmap(t,mmu_rom[1],0x4000);
-			t+=z80_debug_hard_dntrmap(t,mmu_rom[2],0x8000);
-			t+=z80_debug_hard_dntrmap(t,mmu_rom[3],0xC000);
-			t+=z80_debug_hard_dntrmap(t,mmu_ram[0],0x0000);
-			t+=z80_debug_hard_dntrmap(t,mmu_ram[1],0x4000);
-			t+=z80_debug_hard_dntrmap(t,mmu_ram[2],0x8000);
-			t+=z80_debug_hard_dntrmap(t,mmu_ram[3],0xC000);
-			*t=0;
-		}
-		else
-		#endif
-		if (plus_enabled)
-		{
-			t=s+sprintf(s,"PLUS: M:%02X D:%02X I:%02X",plus_gate_mcr,plus_dcsr,z80_irq);
-			t+=sprintf(t,"    SSSL:%02X SCAN:%03X",plus_sssl,crtc_line);
-			t+=sprintf(t,"    SSSS:%04X PRI:%02X",mgetmm(plus_ssss),plus_pri);
-			t+=sprintf(t,"    SSCR:%02X IVR:%02X %c",plus_sscr,plus_ivr,plus_gate_enabled?'+':'@'+plus_gate_counter);
-			//t+=sprintf(t,"DMAS:               ");
-			for (i=0;i<3;++i)
-				t+=sprintf(t," DMA%c %04X:%03X.%02X/%02X",
-					48+i,
-					mgetii(&plus_dmas[i*4+0]),
-					plus_dma_regs[i][2],
-					plus_dma_regs[i][3],
-					plus_dmas[i*4+2]
-				);
-			for (i=0;i<8;++i)
-				t+=sprintf(t," %03X,%03X:%1X %03X,%03X:%1X"
-				,(mgetii(&plus_sprite_xyz[i*16+ 0]))&0xFFF
-				,(mgetii(&plus_sprite_xyz[i*16+ 2]))&0xFFF
-				,plus_sprite_xyz[i*16+ 4]&15
-				,(mgetii(&plus_sprite_xyz[i*16+ 8]))&0xFFF
-				,(mgetii(&plus_sprite_xyz[i*16+10]))&0xFFF
-				,plus_sprite_xyz[i*16+12]&15
-				);
-		}
-		else q=0; // fallback
-	}
-	if (!(q&1))
-	{
-		t=s+sprintf(s,"GATE:    [%04dx%04d]" "%02X: ",hsync_limit,vsync_limit,gate_index);
-		for (i=0;i<8;++i)
-			t+=sprintf(t,"%02X",gate_table[i]);
-		t+=z80_debug_hard_tab(t);
-		for (;i<16;++i)
-			t+=sprintf(t,"%02X",gate_table[i]);
-		t+=sprintf(t,"    %02X %cBPP %02X:%02X:%02X",gate_table[16],"4212"[gate_status&3],0x80+gate_mcr,0xC0+gate_ram,gate_rom);
-		if (gate_index>=0&&gate_index<17)
-			z80_debug_flash(t+4-20*3+(gate_index/8)*20+(gate_index%8)*2);
-		t+=sprintf(t,"CRTC:               " "%02X: ",crtc_index);
-		for (i=0;i<8;++i)
-			t+=sprintf(t,"%02X",crtc_table[i]);
-		t+=z80_debug_hard_tab(t);
-		for (;i<16;++i)
-			t+=sprintf(t,"%02X",crtc_table[i]);
-		if (crtc_index>=0&&crtc_index<16)
-			z80_debug_flash(t+4-20*2+(crtc_index/8)*20+(crtc_index%8)*2);
-		t+=sprintf(t,
-		"    %02X:%02X:%02X:%02X %04X" // Winape: *-VCC, R52, HDC, *-HCC, VMA
-		"    %02X:%02X:%02X:%02X %04X" // *-VLC, *-VSC, *-VTAC, *-HSC, VDUR
-		,crtc_count_r4,irq_timer,((video_pos_x-VIDEO_OFFSET_X)/16+!!(plus_enabled))&0xFF,crtc_count_r0,(WORD)(crtc_screen+crtc_raster)
-		,crtc_count_r9,crtc_count_r3y,crtc_count_r5,crtc_count_r3x,(WORD)((video_pos_y-VIDEO_OFFSET_Y)/2+3)
-		);
-		if (crtc_status&CRTC_STATUS_R4_OK) z80_debug_flash(t-20*2+4+0*3);
-		if (crtc_status&CRTC_STATUS_R0_OK) z80_debug_flash(t-20*2+4+3*3);
-		if (crtc_status&CRTC_STATUS_R9_OK) z80_debug_flash(t-20*1+4+0*3);
-		if (crtc_status&CRTC_STATUS_VSYNC) z80_debug_flash(t-20*1+4+1*3);
-		if (crtc_status&CRTC_STATUS_V_T_A) z80_debug_flash(t-20*1+4+2*3);
-		if (crtc_status&CRTC_STATUS_HSYNC) z80_debug_flash(t-20*1+4+3*3);
-		t+=sprintf(t,"PSG:                " "%02X: ",psg_index);
-		for (i=0;i<8;++i)
-			t+=sprintf(t,"%02X",psg_table[i]);
-		t+=z80_debug_hard_tab(t);
-		for (;i<16;++i)
-			t+=sprintf(t,"%02X",psg_table[i]);
-		if (psg_index>=0&&psg_index<16)
-			z80_debug_flash(t+4-20*2+(psg_index/8)*20+(psg_index%8)*2);
-		t+=sprintf(t,"    PIO: %02X:%02X:%02X:%02X",pio_port_a,pio_port_b,pio_port_c,pio_control);
-		t+=sprintf(t,"FDC:  %02X - %04X:%04X" "    %c ",disc_parmtr[0],(WORD)disc_offset,(WORD)disc_length,48+disc_phase);
-		for (i=0;i<7;++i)
-			t+=sprintf(t,"%02X",disc_result[i]);
-	}
-	char *r=t; t=s; do
-	{
-		debug_locate(x,y); ++y;
-		MEMNCPY(debug_output,t,20); t+=20;
-	}
-	while (t<r);
-}
-#define ONSCREEN_GRAFX_RATIO 4
-void onscreen_grafx_step0(VIDEO_UNIT *t,BYTE b)
-{
-	t[0]=t[1]=video_clut[gate_mode0[0][b]]; // avoid "*t++=*t++=..." bug in GCC 4.6
-	t[2]=t[3]=video_clut[gate_mode0[1][b]];
-}
-void onscreen_grafx_step1(VIDEO_UNIT *t,BYTE b)
-{
-	t[0]=video_clut[gate_mode1[0][b]];
-	t[1]=video_clut[gate_mode1[1][b]];
-	t[2]=video_clut[gate_mode1[2][b]];
-	t[3]=video_clut[gate_mode1[3][b]];
-}
-VIDEO_UNIT onscreen_grafx_mode2[4];
-void onscreen_grafx_step2(VIDEO_UNIT *t,BYTE b)
-{
-	t[0]=onscreen_grafx_mode2[b>>6];
-	t[1]=onscreen_grafx_mode2[(b>>4)&3];
-	t[2]=onscreen_grafx_mode2[(b>>2)&3];
-	t[3]=onscreen_grafx_mode2[b&3];
-}
-WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
-{
-	onscreen_grafx_mode2[0]=video_clut[0];
-	onscreen_grafx_mode2[1]=VIDEO_FILTER_HALF(video_clut[0],video_clut[1]);
-	onscreen_grafx_mode2[2]=VIDEO_FILTER_HALF(video_clut[1],video_clut[0]);
-	onscreen_grafx_mode2[3]=video_clut[1];
-	VIDEO_UNIT *vv=v;
-	WORD s=onscreen_grafx_addr; if (!(q&1))
-	{
-		int xx=0,lx=onscreen_grafx_size;
-		if (lx*=4)
-			do
-				for (int y=0;y<my;++y)
-					for (int x=0;x<lx;x+=4,++s)
-						switch (gate_status&3)
-						{
-							case 1:
-								onscreen_grafx_step1(&v[xx+x+y*ww],POKE(s));
-								break;
-							case 2:
-								onscreen_grafx_step2(&v[xx+x+y*ww],POKE(s));
-								break;
-							default:
-								onscreen_grafx_step0(&v[xx+x+y*ww],POKE(s));
-						}
-			while ((xx+=lx)+lx<=mx);
-		for (int y=0;v+=xx,y<my;v+=ww-mx,++y) // fill remainders
-			for (int x=xx;x<mx;++x)
-				*v++=0x808080;
-	}
-	else
-	{
-		int yy=0,ly=onscreen_grafx_size;
-		if (ly)
-			do
-				for (int x=0;x<mx;x+=4)
-					for (int y=0;y<ly;++y,++s)
-						switch (gate_status&3)
-						{
-							case 1:
-								onscreen_grafx_step1(&v[x+(yy+y)*ww],POKE(s));
-								break;
-							case 2:
-								onscreen_grafx_step2(&v[x+(yy+y)*ww],POKE(s));
-								break;
-							default:
-								onscreen_grafx_step0(&v[x+(yy+y)*ww],POKE(s));
-						}
-			while ((yy+=ly)+ly<=my);
-		v+=yy*ww;
-		for (int y=yy;y<my;v+=ww-mx,++y) // fill remainders
-			for (int x=0;x<mx;++x)
-				*v++=0x808080;
-	}
-	for (int yy=0;yy<(plus_enabled?2:1);++yy) // colour swatches
-		for (int xx=0;xx<16;++xx)
-		{
-			VIDEO_UNIT z=video_clut[yy*16+xx],*zz=&vv[mx-16*8+xx*8+yy*ww*ONSCREEN_SIZE];
-			for (int y=0;y<ONSCREEN_SIZE;++y)
-				for (int x=0;x<8;++x)
-					zz[x+y*ww]=z;
-		}
-	if (plus_enabled) // hardware sprites
-	{
-		BYTE *p=plus_sprite_bmp;
-		for (int yy=0;yy<2;++yy)
-			for (int xx=0;xx<8;++xx)
-			{
-				v=&vv[(2*ONSCREEN_SIZE+yy*16)*ww+mx-8*16+xx*16];
-				for (int y=0;y<16;++y,v+=ww-16)
-					for (int x=0;x<16;++x)
-						*v++=video_clut[16+*p++];
-			}
-	}
-	return s;
-}
-
 // CPU: ZILOG Z80 MICROPROCESSOR ==================================== //
 
 const BYTE z80_delays[]= // precalc'd coarse timings
@@ -2585,7 +2342,7 @@ const BYTE z80_delays[]= // precalc'd coarse timings
 	2,0,0,0,0,0,0,0,2,2,0,0,0,0,0,0, // 0xF0-0xFF
 };
 
-int z80_ack_delay=0; // unlike Z80_AUXILIARY it cannot be local, it must stick :-(
+BYTE z80_ack_delay=0; // unlike Z80_LOCAL it cannot be local, it must stick :-(
 // input/output
 #define Z80_SYNC() ( _t_-=z80_t, z80_sync(z80_t), z80_t=0 )
 #define Z80_SYNC_IO ( _t_-=z80_t, z80_sync(z80_t) ) // see Z80_STRIDE_IO for the missing "z80_t=0"
@@ -2596,7 +2353,7 @@ int z80_ack_delay=0; // unlike Z80_AUXILIARY it cannot be local, it must stick :
 #define Z80_SEND z80_send
 #define Z80_POST_SEND(w)
 // fine timings
-#define Z80_AUXILIARY
+#define Z80_LOCAL
 #define Z80_MREQ(t,w)
 #define Z80_MREQ_1X(t,w)
 #define Z80_MREQ_NEXT(t)
@@ -2611,13 +2368,14 @@ int z80_ack_delay=0; // unlike Z80_AUXILIARY it cannot be local, it must stick :
 #define Z80_PEEK1 Z80_PEEK
 #define Z80_PEEK2 Z80_PEEK
 #define Z80_PEEKZ Z80_PEEK // slow PEEK
-#define Z80_POKE(w,b) do{ int z80_aux=(w)>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO, z80_t=0, z80_trap(w,b); else mmu_ram[z80_aux][w]=(b); }while(0) // trappable single write
+#define Z80_POKE(w,b) do{ BYTE z80_aux=(w)>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO, z80_t=0, z80_trap(w,b); else mmu_ram[z80_aux][w]=(b); }while(0) // trappable single write
+#define Z80_PEEKPOKE Z80_POKE // a POKE that follows a same-address PEEK, f.e. INC (HL)
 #define Z80_POKE0(w,b) (POKE(w)=(b)) // untrappable single write, use with care
 #define Z80_POKE1 Z80_POKE // 1st twin write; see SPLIT.CPR
 #define Z80_POKE2 Z80_POKE // 2nd twin write; see SPLIT.CPR
 #define Z80_POKE3 Z80_POKE // 1st twin write from PUSH rr
 #define Z80_POKE4 Z80_POKE // 2nd twin write from PUSH rr
-#define Z80_POKE5 Z80_POKE // 1st twin write from EX rr,(SP)
+#define Z80_POKE5 Z80_PEEKPOKE // 1st twin write from EX rr,(SP)
 #define Z80_POKE6 Z80_POKE // 2nd twin write from EX rr,(SP)
 #define Z80_BEWARE
 #define Z80_REWIND
@@ -2630,15 +2388,117 @@ int z80_ack_delay=0; // unlike Z80_AUXILIARY it cannot be local, it must stick :
 
 #define Z80_SLEEP(t) z80_t+=(t)
 #define Z80_HALT_STRIDE 1 // i.e. optimal HALT, can be handled a single go
-#define Z80_XCF_BUG 1 // replicate the SCF/CCF quirk
-#define Z80_DEBUG_MMU 1 // allow ROM/RAM toggling, it's useful on CPC!
-#define Z80_DEBUG_EXT 1 // allow EXTRA hardware debugging info pages
+#define Z80_XCF_BUG 1 // replicate the SCF/CCF quirk -- seen on Spectrum, but on CPC!?
 #define Z80_0XED71 0 // whether OUT (C) sends 0 (NMOS) or 255 (CMOS)
 #define Z80_TRDOS_CATCH(r) // TR-DOS only, useless
 #define Z80_TRDOS_ENTER(r) // ditto
 #define Z80_TRDOS_LEAVE(r) // ditto
 
+#define DEBUG_HERE
+#define DEBUG_INFOX 20 // panel width
+void debug_info(int q)
+{
+	if (!(q&1))
+	{
+		sprintf(DEBUG_INFOZ(0),"GATE:               ");
+		sprintf(DEBUG_INFOZ(1),"%02X: ",gate_index);
+		debug_hexadump(DEBUG_INFOZ(1)+4,&gate_table[0],8);
+		debug_hexadump(DEBUG_INFOZ(2)+4,&gate_table[8],8);
+		sprintf(DEBUG_INFOZ(3)+4,"%02X %1XBPP %02X:%02X:%02X",gate_table[16],(gate_mcr&1)?2:(gate_mcr&2)?1:4,gate_mcr,gate_ram,gate_rom);
+		debug_hilight2(DEBUG_INFOZ(1+gate_index/8)+4+(gate_index&7)*2);
+		sprintf(DEBUG_INFOZ(4),"CRTC:      (%03dx%03d)",hsync_limit/2,vsync_limit/2);
+		sprintf(DEBUG_INFOZ(5),"%02X: ",crtc_index);
+		debug_hexadump(DEBUG_INFOZ(5)+4,&crtc_table[0],8);
+		debug_hexadump(DEBUG_INFOZ(6)+4,&crtc_table[8],8);
+		debug_hilight2(DEBUG_INFOZ(5+crtc_index/8)+4+(crtc_index&7)*2);
+		sprintf(DEBUG_INFOZ(7)+4,"%02X:%02X:%02X:%02X %04X",crtc_count_r4,irq_timer,(BYTE)((video_pos_x-VIDEO_OFFSET_X)/16),crtc_count_r0,(WORD)(crtc_screen+crtc_raster));
+		sprintf(DEBUG_INFOZ(8)+4,"%02X:%02X:%02X:%02X %04X",crtc_count_r9,crtc_count_r3y,crtc_count_r5,crtc_count_r3x,(WORD)((video_pos_y-VIDEO_OFFSET_Y)/2+3));
+		if (crtc_status&CRTC_STATUS_R4_OK) debug_hilight2(DEBUG_INFOZ(7)+ 4);
+		if (irq_delay) debug_hilight2(DEBUG_INFOZ(7)+ 7);
+		if (crtc_status&CRTC_STATUS_R0_OK) debug_hilight2(DEBUG_INFOZ(7)+13);
+		if (crtc_status&CRTC_STATUS_R9_OK) debug_hilight2(DEBUG_INFOZ(8)+ 4);
+		if (crtc_status&CRTC_STATUS_VSYNC) debug_hilight2(DEBUG_INFOZ(8)+ 7);
+		if (crtc_status&CRTC_STATUS_HSYNC) debug_hilight2(DEBUG_INFOZ(8)+13);
+		sprintf(DEBUG_INFOZ(9),"PSG:");
+		sprintf(DEBUG_INFOZ(10),"%02X: ",psg_index);
+		debug_hexadump(DEBUG_INFOZ(10)+4,&psg_table[0],8);
+		debug_hexadump(DEBUG_INFOZ(11)+4,&psg_table[8],8);
+		debug_hilight2(DEBUG_INFOZ(10+(psg_index&15)/8)+4+(psg_index&7)*2);
+		sprintf(DEBUG_INFOZ(12)+4,"PIO: %02X:%02X:%02X:%02X",pio_port_a,pio_port_b,pio_port_c,pio_control);
+	}
+	else
+	{
+		sprintf(DEBUG_INFOZ(0),"PLUS: M:%02X D:%02X I:%02X",plus_gate_mcr,plus_dcsr,z80_irq);
+		sprintf(DEBUG_INFOZ(1),"    SSSL:%02X SCAN:%03X",plus_sssl,crtc_line);
+		sprintf(DEBUG_INFOZ(2),"    SSSS:%04X PRI:%02X",mgetmm(plus_ssss),plus_pri);
+		sprintf(DEBUG_INFOZ(3),"    SSCR:%02X IVR:%02X %c",plus_sscr,plus_ivr,plus_gate_enabled?'*':plus_gate_counter?'@'+plus_gate_counter:'-');
+		for (q=0;q<3;++q)
+			sprintf(DEBUG_INFOZ(4+q),"DMA%c: %04X:%03X.%02X/%02X",
+					'0'+q,mgetii(&plus_dmas[q*4+0]),
+					plus_dma_regs[q][2],
+					plus_dma_regs[q][3],
+					plus_dmas[q*4+2]);
+		for (q=0;q<8;++q)
+			sprintf(DEBUG_INFOZ(7+q)," %03X,%03X:%1X %03X,%03X:%1X"
+				,(mgetii(&plus_sprite_xyz[q*16+ 0]))&0xFFF
+				,(mgetii(&plus_sprite_xyz[q*16+ 2]))&0xFFF
+				,plus_sprite_xyz[q*16+ 4]&15
+				,(mgetii(&plus_sprite_xyz[q*16+ 8]))&0xFFF
+				,(mgetii(&plus_sprite_xyz[q*16+10]))&0xFFF
+				,plus_sprite_xyz[q*16+12]&15);
+	}
+}
+int grafx_size(int i) { return i*4; }
+WORD grafx_show(VIDEO_UNIT *t,int g,int n,BYTE m,WORD w,int o)
+{
+	while (n-->0)
+	{
+		BYTE b=mem_ram[w++]; if (gate_mcr&1) // MODE 1
+		{
+			*t++=video_clut[gate_mode1[0][b]];
+			*t++=video_clut[gate_mode1[1][b]];
+			*t++=video_clut[gate_mode1[2][b]];
+			*t++=video_clut[gate_mode1[3][b]];
+		}
+		else if (gate_mcr&2) // MODE 2, dithered
+		{
+			VIDEO_UNIT p[4]={video_clut[0],VIDEO_FILTER_HALF(video_clut[0],video_clut[1]),VIDEO_FILTER_HALF(video_clut[1],video_clut[0]),video_clut[1]};
+			*t++=p[(b>>6)&3];
+			*t++=p[(b>>4)&3];
+			*t++=p[(b>>2)&3];
+			*t++=p[ b    &3];
+		}
+		else // MODE 0
+		{
+			VIDEO_UNIT p;
+			p=*t++=video_clut[gate_mode0[0][b]];
+			*t++=p;
+			p=*t++=video_clut[gate_mode0[1][b]];
+			*t++=p;
+		}
+		t+=g-4;
+	}
+	return w;
+}
+void grafx_info(VIDEO_UNIT *t,int g,int o) // draw the palette and the PLUS sprites
+{
+	t-=16*8;
+	if (plus_enabled)
+	{
+		for (int y=0;y<2*12;++y)
+			for (int x=0;x<16*8;++x)
+				t[y*g+x]=video_clut[(x/8)+(y/12)*16];
+		for (int y=0;y<2*16;++y)
+			for (int x=0;x<8*16;++x)
+				t[(y+2*12)*g+x]=video_clut[16+plus_sprite_bmp[(x%16)+((y&16)/2+x/16)*256+(y%16)*16]];
+	}
+	else
+		for (int y=0;y<1*12;++y)
+			for (int x=0;x<16*8;++x)
+				t[y*g+x]=video_clut[(x/8)+(y/12)*16];
+}
 #include "cpcec-z8.h"
+#undef DEBUG_HERE
 
 // EMULATION CONTROL ================================================ //
 
@@ -2674,10 +2534,9 @@ void all_reset(void) // reset everything!
 	playcity_reset(); MEMZERO(playcity_ctc_count); playcity_dirty=dac_level=0;
 	#endif
 	z80_reset();
-	z80_debug_reset();
-	MEMFULL(z80_tape_index); snap_done=0; // avoid accidents!
 	z80_sp.w=0xC000; // implicit in "No Exit" PLUS!
 	z80_imd=1; // implicit in "Pro Tennis Tour" PLUS!
+	z80_irq=0; debug_reset(); MEMFULL(z80_tape_index); snap_done=0; // avoid accidents!
 }
 
 // firmware/cartridge ROM file handling operations ------------------ //
@@ -2718,7 +2577,7 @@ int bios_load(char *s) // load a cartridge file or a firmware ROM file. 0 OK, !0
 		{
 			while (fgets(t,STRMAX,f))
 			{
-				ss=tt=t; ss=UTF8_BOM(ss);
+				ss=tt=UTF8_BOM(t);
 				while (*ss&&*ss<=' ') ++ss; // trim left
 				while ((*tt=*ss)>=' ') ++tt,++ss; *tt=0; // trim right
 				if (*t>' '&&(tt=strchr(t,'='))&&tt[1]) // "name[blank]=[blank]value"?
@@ -2849,8 +2708,7 @@ int dandanator_load(char *s) // inserts Dandanator cartridge, performs several t
 // snapshot file handling operations -------------------------------- //
 
 char snap_pattern[]="*.sna"; char snap_magic8[]="MV - SNA";
-char snap_path[STRMAX]="";
-int snap_extended=1; // compress memory dumps and save extra blocks
+char snap_path[STRMAX]="",snap_extended=1; // compress memory dumps and save extra blocks
 
 void snap_save_rle8(int k,int l,BYTE **t)
 {
@@ -3009,15 +2867,15 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 	#endif
 	#if 1 // experimental
 	{
-		int j=0; for (i=0;i<length(z80_breakpoints);++i)
-			if (z80_breakpoints[i])
+		int j=0; for (i=0;i<length(debug_point);++i)
+			if (debug_point[i])
 				++j;
 		if (j) // save the currently defined breakpoints, if any
 		{
 			fputmmmm(0x42524B53,f); // breakpoint table "BRKS"
 			fputiiii(j*5,f);
-			for (i=0;j&&i<length(z80_breakpoints);++i)
-				if (z80_breakpoints[i])
+			for (i=0;j&&i<length(debug_point);++i)
+				if (debug_point[i]==1) // stick to breakpoints without flags
 					fputiiii(i,f),fputc(0,f),--j;
 		}
 	}
@@ -3115,7 +2973,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 	MEMLOAD(psg_table,&header[0x5B]);
 	#ifdef PSG_PLAYCITY
 	if (psg_table[14]>=240)
-		playcity_disabled=0,dac_disabled=1,playcity_set_config(psg_table[14]-240); // Playcity kludge, see snap_save()
+		playcity_disabled=0,playcity_set_config(psg_table[14]-240); // Playcity kludge, see snap_save()
 	#endif
 	if (header[0x10]>1) // V2?
 	{
@@ -3206,11 +3064,11 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 		#if 1 // experimental
 		else if (k==0x42524B53&&!(l%5)) // breakpoint table "BRKS"
 		{
-			MEMZERO(z80_breakpoints);
+			MEMZERO(debug_point);
 			for (;l;l-=5)
 			{
-				k=fgetiiii(f); if (!fgetc(f)&&k>=0&&k<length(z80_breakpoints))
-					z80_breakpoints[k]=1; // stick to breakpoints without flags
+				k=fgetiiii(f); if (!fgetc(f)&&k>=0&&k<length(debug_point))
+					debug_point[k]=1; // stick to breakpoints without flags
 			}
 		}
 		#endif
@@ -3248,7 +3106,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 	disc_track_update();
 	psg_all_update();
 	mmu_update();
-	z80_debug_reset();
+	debug_reset();
 	MEMFULL(z80_tape_index); // clean tape trap cache to avoid false positives
 	autorun_mode=0,disc_disabled&=~2; // autorun is now irrelevant
 	if (snap_path!=s) strcpy(snap_path,s);
@@ -3356,8 +3214,7 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 
 // auxiliary user interface operations ------------------------------ //
 
-#define MAIN_FRAMESKIP_MASK ((1<<MAIN_FRAMESKIP_BITS)-1)
-BYTE key2joy_flag=0;
+BYTE key2joy_flag=0; // alternate joystick buttons
 char txt_error_snap_save[]="Cannot save snapshot!";
 char file_pattern[]="*.sna;*.rom;*.crt;*.cpr;*.ini;*.mld;*.dsk;*.cdt;*.csw;*.wav";
 
@@ -3428,14 +3285,14 @@ char session_menudata[]=
 	"0x8600 Run at full throttle\tF6\n"
 	"=\n"
 	"0x0400 Virtual joystick\tCtrl+F4\n"
-	"0x0401 Flip joystick buttons\n"
+	"0x4400 Flip joystick buttons\tCtrl+Shift+F4\n"
 	"0x8521 No lightgun\n"
 	"0x8522 Trojan Light Phaser\n"
 	"0x8523 Gunstick (MHT)\n"
 	"0x8524 Westphaser (Loriciel)\n"
 	"=\n"
 	"0x852F Printer output..\n"
-	"0x851F Strict SNA files\n"
+	"0x851F Strict snapshots\n"
 	"0x8510 Disc controller\n"
 	"0x8590 Strict disc writes\n"
 	"0x8591 Read-only disc by default\n"
@@ -3522,9 +3379,8 @@ void session_clean(void) // refresh options
 	session_menucheck(0x0900,tape_skipload);
 	session_menucheck(0x0901,tape_rewind);
 	session_menucheck(0x4900,tape_fastload);
-	//session_menucheck(0x4901,tape_fastfeed);
 	session_menucheck(0x0400,session_key2joy);
-	session_menucheck(0x0401,key2joy_flag);
+	session_menucheck(0x4400,key2joy_flag);
 	session_menuradio(0x0601+multi_t-1,0x0601,0x0604);
 	session_menuradio(0x8501+crtc_type,0x8501,0x8505);
 	session_menucheck(0x8508,!crtc_hold);
@@ -3577,21 +3433,13 @@ void session_clean(void) // refresh options
 		,gate_ram_dirty,gate_ram_kbyte[gate_ram_depth],plus_enabled?"ASIC":"CRTC",48+crtc_type,4.0*multi_t);
 	video_lastscanline=video_table[video_type][20]; // BLACK in the CLUT
 	video_halfscanline=VIDEO_FILTER_SCAN(video_table[video_type][11],video_lastscanline); // WHITE in the CLUT
-	*debug_buffer=128; // force debug redraw! (somewhat overkill)
+	debug_dirty=1; // force debug redraw! (somewhat overkill)
 }
 void session_user(int k) // handle the user's commands
 {
 	char *s; switch (k)
 	{
 		case 0x8100: // F1: HELP..
-			/*if (session_shift)
-			{
-				if (playcity_disabled=!playcity_disabled)
-					dac_disabled=0,playcity_reset();
-				else
-					dac_disabled=1,dac_level=0;
-			}
-			else*/
 			session_message(
 				"F1\tHelp..\t" MESSAGEBOX_WIDETAB
 				"^F1\tAbout..\t"
@@ -3630,8 +3478,8 @@ void session_user(int k) // handle the user's commands
 				"F8\tInsert tape.." MESSAGEBOX_WIDETAB
 				"^F8\tRemove tape"
 				"\n"
-				"\t(shift: record..)\t"
-				//"\t(shift: play/stop)"
+				"\t(shift: record..)"
+				//"\t\t(shift: play/stop)"
 				"\n"
 				"F9\tDebug\t" MESSAGEBOX_WIDETAB
 				"^F9\tToggle fast tape"
@@ -3728,10 +3576,10 @@ void session_user(int k) // handle the user's commands
 			audio_filter=k-0x8401;
 			break;
 		case 0x0400: // ^F4: TOGGLE JOYSTICK
-			session_key2joy=!session_key2joy;
-			break;
-		case 0x0401: // FLIP JOYSTICK BUTTONS
-			key2joy_flag=!key2joy_flag;
+			if (session_shift)
+				key2joy_flag=!key2joy_flag; // FLIP JOYSTICK BUTTONS
+			else
+				session_key2joy=!session_key2joy;
 			break;
 		case 0x8501: // CRTC0
 		case 0x8502: // CRTC1
@@ -3768,14 +3616,10 @@ void session_user(int k) // handle the user's commands
 		case 0x8518: // PLAYCITY
 			if (playcity_disabled=!playcity_disabled)
 				playcity_reset();
-			else
-				dac_disabled=1,dac_level=0; // forbid both PLAYCITY and DAC at once
 			break;
 		case 0x8519: // DIGIBLASTER
 			if (dac_disabled=!dac_disabled)
 				dac_level=0;
-			else
-				playcity_disabled=1,playcity_reset(); // forbid both DAC and PLAYCITY at once
 			break;
 		#endif
 		case 0x8521: // JOYSTICK, NO LIGHTGUN
@@ -3910,8 +3754,7 @@ void session_user(int k) // handle the user's commands
 		case 0x8900: // F9: DEBUG
 			if (!session_shift)
 			{
-				if (session_signal=SESSION_SIGNAL_DEBUG^(session_signal&~SESSION_SIGNAL_PAUSE))
-					z80_debug_reset();
+				session_signal=SESSION_SIGNAL_DEBUG^(session_signal&~SESSION_SIGNAL_PAUSE);
 				break;
 			}
 		case 0x8901:
@@ -3936,8 +3779,7 @@ void session_user(int k) // handle the user's commands
 				tape_skipload=!tape_skipload;
 			break;
 		case 0x0901:
-			//if (session_shift) tape_fastfeed=!tape_fastfeed; else
-				tape_rewind=!tape_rewind;
+			tape_rewind=!tape_rewind;
 			break;
 		case 0x8A00: // FULL SCREEN
 			session_togglefullscreen();
@@ -4063,7 +3905,7 @@ void session_configreadmore(char *s)
 	#endif
 	else if (!strcasecmp(session_parmtr,"palette")) { if ((i=*s&15)<length(video_table)) video_type=i; }
 	else if (!strcasecmp(session_parmtr,"casette")) tape_rewind=*s&1,tape_skipload=!!(*s&2),tape_fastload=!!(*s&4);
-	else if (!strcasecmp(session_parmtr,"debug")) z80_debug_configread(strtol(s,NULL,10));
+	else if (!strcasecmp(session_parmtr,"debug")) debug_configread(strtol(s,NULL,10));
 }
 void session_configwritemore(FILE *f)
 {
@@ -4084,7 +3926,7 @@ void session_configwritemore(FILE *f)
 		#ifdef Z80_DANDANATOR
 		dandanator_path,
 		#endif
-		video_type,(tape_rewind?1:0)+(tape_skipload?2:0)+(tape_fastload?4:0),z80_debug_configwrite());
+		video_type,(tape_rewind?1:0)+(tape_skipload?2:0)+(tape_fastload?4:0),debug_configwrite());
 }
 
 #if defined(DEBUG) || defined(SDL_MAIN_HANDLED)
@@ -4110,7 +3952,7 @@ int main(int argc,char *argv[])
 	MEMZERO(mem_ram);
 	all_setup();
 	all_reset();
-	video_pos_x=video_pos_y=audio_pos_z=0;
+	video_pos_x=video_pos_y=frame_pos_y=audio_pos_z=0;
 	i=0; while (++i<argc)
 	{
 		if (argv[i][0]=='-')
@@ -4266,7 +4108,7 @@ int main(int argc,char *argv[])
 		return printferror(txt_error_bios),1;
 	char *s=session_create(session_menudata); if (s)
 		return sprintf(session_scratch,"Cannot create session: %s!",s),printferror(session_scratch),1;
-	session_kbdreset();
+	debug_setup(); session_kbdreset();
 	session_kbdsetup(kbd_map_xlt,length(kbd_map_xlt)/2);
 	video_target=&video_frame[video_pos_y*VIDEO_LENGTH_X+video_pos_y]; audio_target=audio_frame;
 	audio_disabled=!session_audio;
@@ -4377,7 +4219,7 @@ int main(int argc,char *argv[])
 		}
 	}
 	// it's over, "acta est fabula"
-	z80_close(); if (mem_xtr) free(mem_xtr);
+	debug_close(); z80_close(); if (mem_xtr) free(mem_xtr);
 	tape_close();
 	disc_closeall();
 	psg_closelog(); if (printer) printer_close();

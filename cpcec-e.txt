@@ -300,6 +300,9 @@ notation.
 * Digits from 0 to 9 and letters from A to F modify the value under the cursor;
 * Stop (".") creates or deletes a breakpoint in the current cursor location in
 the disassembly;
+* Comma (",") toggles the behavior of illegal opcode $EDFF, either as in normal
+mode ("BREAK-") where it does nothing special or in development mode ("BREAK+")
+where its a breakpoint;
 * G ("go to") requests an address (in hexadecimal by default, in decimal if
 preceded by ".") and moves the cursor to its location in the disassembly or the
 memory dump;
@@ -320,9 +323,7 @@ with a memory dump starting from the current location of the cursor;
 * P ("print") requests a length in bytes and a filename, and creates a file with
 a disassembly (disassembly panel) or a hex dump (memory dump panel) starting
 from the current location of the cursor;
-* Q toggles the behavior of illegal opcode $EDFF, either as in normal mode
-("EDFF-") where it does nothing special or in development mode ("EDFF+") where
-its a breakpoint;
+* Q ("IRQ") runs the emulation until reaching an interruption;
 * R ("run to") runs the emulation until reaching the operation under the cursor
 in the disassembly;
 * S ("search") requests either an ASCII string (case insensitive) or a
@@ -1024,3 +1025,17 @@ accidentally triggers the RESET command even without cartridges) and the
 Pentagon IRQ (it's short yet continuous rather than long and stoppable,
 following new tests from Azesmbog). Video filters are more CRT-like (suggested
 by Md0) and lightgun logic is linked to their triggers to avoid false positives.
+- 20220303 -- twenty-second public release. Major internal changes in the
+debugger: most of it is now part of the general library, only the Z80-specific
+features stay in the Z80 module. Toggling the debugger's illegal opcode behavior
+is now done with the key "," (comma); its old key "Q" now runs until the next
+interruption. The debugger styles (keys "V" and "Shift+V") now include a
+translucent mode where the emulated screen is visible through the debugger text.
+Minor optimisations in the video renderer (merge vertical position and frameskip
+tests), the AY chip (fewer calculations) and the Z80 emulation (reduced banking
+in operations that read and write the same address). Small tweaks in CPCEC
+("Octopus Pocus" for CRTC0 works well at last), ZXSEC (SZX snapshots are now the
+default choice, SNA format is now secondary), the FDC ("READ ID" must fail when
+using the wrong density: noticed by Roudoudou), the audio extensions (now
+Playcity and Digiblaster can be enabled at once, as well as Turbosound and Covox
+$FB) and the video filters (weakening image contrast rather than saturation).

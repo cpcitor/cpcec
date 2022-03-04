@@ -1,10 +1,10 @@
- //  ####  ######    ####  #######   ####    ----------------------- //
+ //  ####  ######    ####  #######   ####  ------------------------- //
 //  ##  ##  ##  ##  ##  ##  ##   #  ##  ##  CPCEC, plain text Amstrad //
 // ##       ##  ## ##       ## #   ##       CPC emulator written in C //
 // ##       #####  ##       ####   ##       as a postgraduate project //
 // ##       ##     ##       ## #   ##       by Cesar Nicolas-Gonzalez //
 //  ##  ##  ##      ##  ##  ##   #  ##  ##  since 2018-12-01 till now //
- //  ####  ####      ####  #######   ####    ----------------------- //
+ //  ####  ####      ####  #######   ####  ------------------------- //
 
 // A bunch of routines can be shared across emulators and operating
 // systems because they either operate with standard data types or
@@ -22,6 +22,8 @@
 #define MEMSAVE(x,y) memcpy((x),(y),sizeof(y))
 #define MEMLOAD(x,y) memcpy((x),(y),sizeof(x))
 #define MEMNCPY(x,y,z) memcpy((x),(y),sizeof(*(x))*(z))
+#define MINNY(x,y) ((x)<(y)?(x):(y))
+#define MAXXY(x,y) ((x)>(y)?(x):(y))
 
 int fread1(void *t,int l,FILE *f) { int k=0,i; while (l&&(i=fread(t,1,l,f))) { t=(void*)((char*)t+i); k+=i; l-=i; } return k; } // safe fread(t,1,l,f)
 int fwrite1(void *t,int l,FILE *f) { int k=0,i; while (l&&(i=fwrite(t,1,l,f))) { t=(void*)((char*)t+i); k+=i; l-=i; } return k; } // safe fwrite(t,1,l,f)
@@ -34,7 +36,7 @@ int fwrite1(void *t,int l,FILE *f) { int k=0,i; while (l&&(i=fwrite(t,1,l,f))) {
 
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
 
-typedef union { unsigned short w; struct { unsigned char h,l; } b; } Z80W; // big-endian: PPC, ARM...
+typedef union { WORD w; struct { unsigned char h,l; } b; } Z80W; // big-endian: PPC, ARM...
 
 int  mgetii(unsigned char *x) { return (x[1]<<8)+*x; }
 void mputii(unsigned char *x,int y) { x[1]=y>>8; *x=y; }
@@ -61,7 +63,7 @@ int fputmmmm(int i,FILE *f) { return (fwrite(&i,1,4,f)!=4)?EOF:i; } // native li
 
 #else
 
-typedef union { unsigned short w; struct { unsigned char l,h; } b; } Z80W; // lil-endian: i86, x64...
+typedef union { WORD w; struct { unsigned char l,h; } b; } Z80W; // lil-endian: i86, x64...
 
 #define mgetii(x) (*(WORD*)(x))
 #define mgetiiii(x) (*(DWORD*)(x))
@@ -194,6 +196,7 @@ VIDEO_UNIT video_lastscanline,video_halfscanline; // the fillers used in video_e
 VIDEO_UNIT video_litegun; // lightgun data
 #endif
 
+#define MAIN_FRAMESKIP_MASK ((1<<MAIN_FRAMESKIP_BITS)-1)
 void video_resetscanline(void) // reset scanline filler values on new video options
 {
 	static int b=-1; if (b!=video_scanblend) // do we need to reset the blending buffer?
@@ -202,6 +205,7 @@ void video_resetscanline(void) // reset scanline filler values on new video opti
 				MEMNCPY(&video_blend[y*VIDEO_PIXELS_X],&video_frame[(VIDEO_OFFSET_Y+y*2)*VIDEO_LENGTH_X+VIDEO_OFFSET_X],VIDEO_PIXELS_X);
 }
 
+#define VIDEO_NEXT *video_target++ // "VIDEO_NEXT = VIDEO_NEXT = ..." generates invalid code on VS13 and slower code on TCC
 INLINE void video_newscanlines(int x,int y) // reset `video_target`, `video_pos_x` and `video_pos_y`, and update `video_pos_z`
 {
 	++video_pos_z; video_target=video_frame+(video_pos_y=y)*VIDEO_LENGTH_X+(video_pos_x=x); // new coordinates
@@ -250,16 +254,24 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 			break;
 		case 0+VIDEO_FILTER_MASK_Y+VIDEO_FILTER_MASK_X:
 			if (video_pos_y&1)
-			// no `break` here!
+			{
+				if (video_pos_y&2)
+					++vi;
+				do
+					vt=*vi,*vi++=VIDEO_FILTER_X1(vt),++vi;
+				while (vi<vl);
+			}
+			break;
 		case 0+VIDEO_FILTER_MASK_X:
 			do
 				vt=*++vi,*vi++=VIDEO_FILTER_X1(vt);
 			while (vi<vl);
 			break;
 		case 8+VIDEO_FILTER_MASK_Y+VIDEO_FILTER_MASK_X:
+			if (video_pos_y&2)
+				*vo++=*vi++;
 			do
-				*vo++=*vi++,
-				vt=*vi++,*vo++=VIDEO_FILTER_X1(vt);
+				vt=*vi++,*vo++=VIDEO_FILTER_X1(vt),*vo++=*vi++;
 			while (vi<vl);
 			break;
 		case 8+VIDEO_FILTER_MASK_Z:
@@ -301,9 +313,11 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 			vt=*vi,VIDEO_FILTER_BLUR0(vt);
 			if (video_pos_y&1)
 			{
+				if (video_pos_y&2)
+					vi++;
 				do
-					vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt,
-					vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=VIDEO_FILTER_X1(vt);
+					vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=VIDEO_FILTER_X1(vt),
+					vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt;
 				while (vi<vl);
 				break;
 			}
@@ -320,9 +334,11 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 			break;
 		case 8+VIDEO_FILTER_MASK_Y+VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Z:
 			vt=*vi,VIDEO_FILTER_BLUR0(vt);
+			if (video_pos_y&2)
+				*vo++=*vi++;
 			do
-				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vo++=*vi++=vt,
-				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt,*vo++=VIDEO_FILTER_X1(vt);
+				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt,*vo++=VIDEO_FILTER_X1(vt),
+				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vo++=*vi++=vt;
 			while (vi<vl);
 			break;
 	}
@@ -400,6 +416,8 @@ INLINE void session_update(void) // render video+audio thru OS and handle realti
 		video_interlaced&=~1;
 	if (--video_framecount<0||video_framecount>video_framelimit)
 		video_framecount=video_framelimit; // catch both <0 and >N
+	// simplify several frameskipping operations
+	frame_pos_y=video_framecount?video_pos_y+VIDEO_LENGTH_Y*2:video_pos_y;
 }
 
 // elementary ZIP archive support ----------------------------------- //
@@ -919,13 +937,21 @@ char *puff_session_newfile(char *x,char *y,char *z) // writing within ZIP archiv
 	return session_newfile(xx,y,z);
 }
 
-// on-screen and debug text printing -------------------------------- //
+// on-screen symbols and messages ----------------------------------- //
 
 VIDEO_UNIT onscreen_ink0,onscreen_ink1; BYTE onscreen_flag=1;
 #define onscreen_inks(q0,q1) (onscreen_ink0=q0,onscreen_ink1=q1)
 #define ONSCREEN_XY if ((x*=8)<0) x+=VIDEO_OFFSET_X+VIDEO_PIXELS_X; else x+=VIDEO_OFFSET_X; \
 	if ((y*=ONSCREEN_SIZE)<0) y+=VIDEO_OFFSET_Y+VIDEO_PIXELS_Y; else y+=VIDEO_OFFSET_Y; \
 	VIDEO_UNIT *p=&video_frame[y*VIDEO_LENGTH_X+x],a=video_scanline==1?2:1
+void onscreen_bool(int x,int y,int lx,int ly,int q) // draw a rectangle at `x,y` of size `lx,ly` and boolean value `q`
+{
+	ONSCREEN_XY; q=q?onscreen_ink1:onscreen_ink0;
+	lx*=8; ly*=ONSCREEN_SIZE;
+	for (y=0;y<ly;p+=VIDEO_LENGTH_X*a-lx,y+=a)
+		for (x=0;x<lx;++x)
+			*p++=q;
+}
 void onscreen_char(int x,int y,int z) // draw a 7-bit character; the eighth bit is the INVERSE flag
 {
 	ONSCREEN_XY; int q=z&128?-1:0;
@@ -954,13 +980,13 @@ void onscreen_byte(int x,int y,int a,int q) // write two digits
 	onscreen_char(x,y,(a/10)+q);
 	onscreen_char(x+1,y,(a%10)+q);
 }
-void onscreen_bool(int x,int y,int lx,int ly,int q) // draw dots
+
+// built-in general-purpose debugger -------------------------------- //
+
+void session_backupvideo(VIDEO_UNIT *t) // make a clipped copy of the current screen; used by the debugger and the SDL2 UI
 {
-	ONSCREEN_XY; q=q?onscreen_ink1:onscreen_ink0;
-	lx*=8; ly*=ONSCREEN_SIZE;
-	for (y=0;y<ly;p+=VIDEO_LENGTH_X*a-lx,y+=a)
-		for (x=0;x<lx;++x)
-			*p++=q;
+	for (int y=0;y<VIDEO_PIXELS_Y;++y)
+		MEMNCPY(&t[y*VIDEO_PIXELS_X],&video_frame[(VIDEO_OFFSET_Y+y)*VIDEO_LENGTH_X+VIDEO_OFFSET_X],VIDEO_PIXELS_X);
 }
 
 #define KBDBG_UP	11
@@ -976,7 +1002,7 @@ void onscreen_bool(int x,int y,int lx,int ly,int q) // draw dots
 #define KBDBG_RET	13
 #define KBDBG_RET_S	12
 #define KBDBG_SPC	32
-#define KBDBG_SPC_S	160 // cfr. "non-breaking space"
+#define KBDBG_SPC_S	160 // inspired by the ANSI non-breaking space
 #define KBDBG_ESCAPE	27
 #define KBDBG_CLOSE	128
 #define KBDBG_CLICK	129
@@ -999,118 +1025,630 @@ int debug_xlat(int k) // turns non-alphanumeric keypresses (-1 for mouse click) 
 	default: return 0;
 } }
 
-char *debug_output,debug_search[STRMAX]=""; // output offset, string buffer, search buffer
-void debug_locate(int x,int y) // move debug output to (X,Y)
+BYTE debug_point[1<<16]; // the breakpoint table; 0 = nothing, <8 = stop execution, >=8 = record a byte
+BYTE debug_break,debug_inter=0; // do special opcodes trigger the debugger? (f.e. $EDFF on Z80 and $12 on 6502/6510)
+BYTE debug_config; // store the general debugger options here; the CPU-specific ones go elsewhere
+DWORD main_t=0; // the global tick counter, used by the debugger, and optionally by the emulator
+
+FILE *debug_logfile; int debug_logsize; BYTE debug_logtemp[1<<9]; // the byte recorder datas
+
+#define debug_setup() (MEMZERO(debug_point),debug_logfile=NULL,debug_dirty=session_signal&SESSION_SIGNAL_DEBUG)
+#define debug_configread(i) (debug_config=(i)/4,debug_break=!!((i)&2),debug_mode=(i)&1)
+#define debug_configwrite() (debug_config*4+(debug_break?2:0)+(debug_mode?1:0))
+
+int debug_logbyte(BYTE z) // log a byte, if possible; !0 ERROR, 0 OK
 {
-	if (x<0)
-		x+=DEBUG_LENGTH_X;
-	if (y<0)
-		y+=DEBUG_LENGTH_Y;
-	debug_output=&debug_buffer[DEBUG_LENGTH_X*y+x];
-}
-void debug_prints(char *s) // print string onto debug output
-{
-	char c; while (c=*s++)
-		*debug_output++=c;
-}
-void debug_printi(char *s,int i) // idem, string and integer
-{
-	sprintf(session_tmpstr,s,i);
-	debug_prints(session_tmpstr);
-}
-void debug_dumpxy(int x,int y,char *s) // dump text block
-{
-	char c;
-	do
+	if (!debug_logfile) // try creating a log file?
 	{
-		debug_locate(x,y++);
-		while ((c=*s++)&&c!='\n')
-			*debug_output++=c;
+		char *s; if (s=session_newfile(NULL,"*","Register log file"))
+			debug_logfile=fopen(s,"wb"),debug_logsize=0;
 	}
-	while (c);
+	if (debug_logfile) // do we have a valid file?
+	{
+		debug_logtemp[debug_logsize]=z;
+		if (++debug_logsize>=length(debug_logtemp))
+			fwrite1(debug_logtemp,sizeof(debug_logtemp),debug_logfile),debug_logsize=0;
+		return 0; // OK
+	}
+	return 1; // ERROR!
+}
+void debug_close(void) // debugger cleanup: flush logfile if open
+{
+	if (debug_logfile)
+	{
+		fwrite1(debug_logtemp,debug_logsize,debug_logfile);
+		fclose(debug_logfile); debug_logfile=NULL;
+	}
 }
 
-void session_backupvideo(VIDEO_UNIT *t) // make a clipped copy of the current screen; used by the debugger and the SDL2 UI
-{
-	for (int y=0;y<VIDEO_PIXELS_Y;++y)
-		MEMNCPY(&t[y*VIDEO_PIXELS_X],&video_frame[(VIDEO_OFFSET_Y+y)*VIDEO_LENGTH_X+VIDEO_OFFSET_X],VIDEO_PIXELS_X);
-}
+// the debugger's user interface ------------------------------------ //
 
-char onscreen_debug_mask=0,onscreen_debug_mask_=-1;
-unsigned char onscreen_debug_chrs[sizeof(onscreen_chrs)];
-void onscreen_clear(void) // get a copy of the visible screen
-{
-	session_backupvideo(debug_frame);
-	if (video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-1)
-		for (int x=0,z=((video_pos_y&-2)-VIDEO_OFFSET_Y)*VIDEO_PIXELS_X;x<VIDEO_PIXELS_X;++x,++z)
-			debug_frame[z]=debug_frame[z+VIDEO_PIXELS_X]^=x&16?0x00FFFF:0xFF0000;
-	if (video_pos_x>=VIDEO_OFFSET_X&&video_pos_x<VIDEO_OFFSET_X+VIDEO_PIXELS_X-1)
-		for (int y=0,z=(video_pos_x&-2)-VIDEO_OFFSET_X;y<VIDEO_PIXELS_Y;++y,z+=VIDEO_PIXELS_X)
-			debug_frame[z]=debug_frame[z+1]^=y&2?0x00FFFF:0xFF0000;
-}
-WORD onscreen_grafx_addr=0; BYTE onscreen_grafx_size=1;
-WORD onscreen_grafx(int q,VIDEO_UNIT *v,int w,int x,int y); // defined later!
-VIDEO_UNIT onscreen_ascii0,onscreen_ascii1;
+#define DEBUG_LENGTH_X 64
+#define DEBUG_LENGTH_Y 32
+BYTE debug_buffer[DEBUG_LENGTH_X*DEBUG_LENGTH_Y+1];
+#define DEBUG_LOCATE(x,y) (&debug_buffer[(y)*DEBUG_LENGTH_X+(x)])
 #define debug_posx() ((VIDEO_PIXELS_X-DEBUG_LENGTH_X*8)/2)
 #define debug_posy() ((VIDEO_PIXELS_Y-DEBUG_LENGTH_Y*ONSCREEN_SIZE)/2)
-#define debug_maus_x() (((unsigned)(session_maus_x-debug_posx()))/8)
-#define debug_maus_y() (((unsigned)(session_maus_y-debug_posy()))/ONSCREEN_SIZE)
-void onscreen_ascii(int x,int y,int z) // not exactly the same as onscreen_char
+const char hexa1[16]="0123456789ABCDEF"; // handy for `*t++=` operations
+
+// these functions must be provided by the CPU code
+void debug_reset(void); // do `debug_dirty=1` and set the disassembly and stack coordinates
+char *debug_list(void); // return a string of letters of registers that can be logged
+BYTE debug_peek(BYTE,WORD); // receive a byte from address WORD and R/W flag BYTE
+void debug_poke(WORD,BYTE); // send the byte BYTE to address WORD
+void debug_regs(char*,int); // fill a string with the printable info of register #int
+void debug_regz(BYTE); // send nibble BYTE to the register under the current register table coordinates
+WORD debug_dasm(char*,WORD); // fill a string with the disassembly of address WORD
+WORD debug_pull(WORD); // receive a word from the stack address WORD
+void debug_push(WORD,WORD); // send a word to the the stack address WORD (1st)
+void debug_jump(WORD); // set the current program counter as WORD
+void debug_step(void); // run just one operation (i.e. STEP INTO)
+void debug_fall(void); // set a RETURN trap and exit the debugger
+void debug_drop(WORD); // set a volatile breakpoint in the address WORD and exit the debugger
+void debug_leap(void); // run until the operation after the current one (i.e. STEP OVER)
+WORD debug_this(void); // get the program counter
+WORD debug_that(void); // get the stack pointer
+
+// these functions must be provided by the hardware code
+int grafx_size(int); // how many pixels wide is one byte?
+WORD grafx_show(VIDEO_UNIT*,int,int,BYTE,WORD,int); // blit a set of pixels
+void debug_info(int); // write a page of hardware information between the disassembly and the register table
+void grafx_info(VIDEO_UNIT*,int,int); // draw additional infos on the top right corner
+
+// these functions provide services for the CPU and hardware debugging code
+#define DEBUG_INFOZ(n) (DEBUG_LOCATE(DEBUG_LENGTH_X-DEBUG_INFOX-10,(n))) // shortcut for debug_info to print each text line
+void debug_hilight(char *t,int n) { while (n-->0) *t++|=128; } // set inverse video on a N-character string
+void debug_hilight2(char *t) { *t|=128,t[1]|=128; } // set inverse video on exactly two characters
+void debug_hexadump(char *t,BYTE *s,int n) { while (n-->0) { int z=*s++; *t++=hexa1[z>>4],*t++=hexa1[z&15]; } }
+
+BYTE debug_panel=0,debug_page=0,debug_grafx,debug_mode=0,debug_match,debug_grafx_l=1; // debugger options: visual style, R/W mode, disasm flags...
+WORD debug_panel0_w,debug_panel1_w=1,debug_panel2_w=0,debug_panel3_w,debug_grafx_w=0; // must be unsigned!
+char debug_panel0_x,debug_panel1_x=0,debug_panel2_x=0,debug_panel3_x,debug_grafx_v=0; // must be signed!
+
+void session_debug_print(char *t,int x,int y,int n) // print a line of `n` characters of debug text
 {
-	const unsigned char *zz=&onscreen_debug_chrs[(z&127)*ONSCREEN_SIZE];
-	VIDEO_UNIT q1,q0;
-	if (z&128)
-		q1=onscreen_ascii1,q0=onscreen_ascii0;
-	else
-		q0=onscreen_ascii1,q1=onscreen_ascii0;
-	z=(y*VIDEO_PIXELS_X*ONSCREEN_SIZE)+x*8+debug_posy()*VIDEO_PIXELS_X+debug_posx();
-	for (int yy=0;yy<ONSCREEN_SIZE;++yy,z+=VIDEO_PIXELS_X-8)
-		for (int w=128,bb=*zz++;w;w>>=1)
-			debug_frame[z++]=(w&bb)?q1:q0;
-}
-void onscreen_debug(int q) // rewrite debug texts or redraw graphics
-{
-	static int videox,videoy,videoz;
-	if (videox!=video_pos_x||videoy!=video_pos_y||videoz!=video_pos_z)
-		videox=video_pos_x,videoy=video_pos_y,videoz=video_pos_z,onscreen_clear(); // flush background if required!
-	if (onscreen_debug_mask&1) // normal or inverse?
-		onscreen_ascii1=0xFFFFFF,onscreen_ascii0=0x000000;
-	else
-		onscreen_ascii0=0xFFFFFF,onscreen_ascii1=0x000000;
-	if ((onscreen_debug_mask_^onscreen_debug_mask)&~1)
-		switch ((onscreen_debug_mask_=(onscreen_debug_mask&=7))&6) // font styles
+	static BYTE debug_chrs[128*ONSCREEN_SIZE],config=~0; if (config!=debug_config) // redo font?
+		switch (((config=debug_config&=15)>>2)&3)
 		{
-			default:
-				for (int i=0,j;i<sizeof(onscreen_debug_chrs);++i)
-					j=onscreen_chrs[i],onscreen_debug_chrs[i]=j|(j>>1); // normal
-				break;
-			case 2:
-				memcpy(onscreen_debug_chrs,onscreen_chrs,sizeof(onscreen_chrs)); // thin
-				break;
-			case 4:
-				for (int i=0,j;i<sizeof(onscreen_debug_chrs);++i)
-					j=onscreen_chrs[i],onscreen_debug_chrs[i]=j|((2*i/ONSCREEN_SIZE)&1?(j<<1):(j>>1)); // italic
-				break;
-			case 6:
-				for (int i=0,j;i<sizeof(onscreen_debug_chrs);++i)
-					j=onscreen_chrs[i],onscreen_debug_chrs[i]=j|(j>>1)|(j<<1); // bold
-				break;
+			case 0: for (int i=0,j=0;i<sizeof(debug_chrs);++i) j=onscreen_chrs[i],debug_chrs[i]=j|(j>>1); break; // NORMAL
+			case 1: memcpy(debug_chrs,onscreen_chrs,sizeof(debug_chrs)); break; // THIN
+			case 2: for (int i=0,j=0;i<sizeof(debug_chrs);++i) j=onscreen_chrs[i],debug_chrs[i]=j|(((i/(ONSCREEN_SIZE/2))&1)?j<<1:j>>1); break; // ITALIC
+			case 3: for (int i=0,j=0;i<sizeof(debug_chrs);++i) j=onscreen_chrs[i],debug_chrs[i]=(j<<1)|j|(j>>1); break; // BOLD
 		}
-	unsigned char *t=debug_buffer;
-	if (q>=0)
+	for (;n>0;++x,--n)
 	{
-		int z=onscreen_grafx(q,&debug_frame[VIDEO_PIXELS_X*(VIDEO_PIXELS_Y-DEBUG_LENGTH_Y*ONSCREEN_SIZE)/2+(VIDEO_PIXELS_X-DEBUG_LENGTH_X*8)/2],
-			VIDEO_PIXELS_X,DEBUG_LENGTH_X*8,DEBUG_LENGTH_Y*ONSCREEN_SIZE);
-		sprintf(t,"%04X...%04X %c%03dH: help  W: exit",onscreen_grafx_addr&0xFFFF,z&0xFFFF,(q&1)?'V':'H',onscreen_grafx_size);
-		int w=strlen(t)/2;
-		for (int y=-2;y<0;++y)
-			for (int x=-w;x<0;++x)
-				onscreen_ascii(DEBUG_LENGTH_X+x,DEBUG_LENGTH_Y+y,*t++);
+		BYTE z=*t++,w=(z&128)?-1:0; if (!(z&=127)) z+=32;
+		VIDEO_UNIT p0=(config&2)?0XFFFFFF:0,p1=0XFFFFFF^p0;
+		const unsigned char *zz=&debug_chrs[z*ONSCREEN_SIZE];
+		VIDEO_UNIT *p=&debug_frame[(y*ONSCREEN_SIZE+debug_posy())*VIDEO_PIXELS_X+x*8+debug_posx()];
+		for (int yy=0;yy<ONSCREEN_SIZE;++yy,p+=VIDEO_PIXELS_X-8)
+			if (!debug_grafx&&(config&1))
+			{
+				for (int xx=128,ww=w^*zz++;xx;xx>>=1,++p)
+					if (xx&ww)
+						*p=p1/*,p[1]=p0,p[VIDEO_PIXELS_X]=p0*/,p[VIDEO_PIXELS_X+1]=p0;
+					else
+						*p=VIDEO_FILTER_HALF(*p,p0);
+			}
+			else
+				for (int xx=128,ww=w^*zz++;xx;xx>>=1,++p)
+					*p=(xx&ww)?p1:p0;
+	}
+}
+
+void session_debug_show(int redo) // shows the current debugger
+{
+	static int videox,videoy,videoz; int i; WORD p; BYTE b; char *t;
+	memset(debug_buffer,' ',sizeof(debug_buffer)); // clear buffer
+	if (redo||((videox^video_pos_x)|(videoy^video_pos_y)|(videoz^video_pos_z)))
+		debug_reset(); // reset debugger and background!
+	videoz=video_pos_z; session_backupvideo(debug_frame); // translucent debug text needs this :-/
+	if ((videoy=video_pos_y)>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-1)
+		for (int x=0,z=((video_pos_y&-2)-VIDEO_OFFSET_Y)*VIDEO_PIXELS_X;x<VIDEO_PIXELS_X;++x,++z)
+			debug_frame[z]=debug_frame[z+VIDEO_PIXELS_X]^=x&16?0x00FFFF:0xFF0000;
+	if ((videox=video_pos_x)>=VIDEO_OFFSET_X&&video_pos_x<VIDEO_OFFSET_X+VIDEO_PIXELS_X-1)
+		for (int y=0,z=(video_pos_x&-2)-VIDEO_OFFSET_X;y<VIDEO_PIXELS_Y;++y,z+=VIDEO_PIXELS_X)
+			debug_frame[z]=debug_frame[z+1]^=y&2?0x00FFFF:0xFF0000;
+	if (debug_grafx)
+	{
+		int z=0; p=debug_grafx_w; if (debug_grafx_v&1) // VERTICAL FIRST, HORIZONTAL LAST?
+		{
+			for (;z+debug_grafx_l<=DEBUG_LENGTH_Y*ONSCREEN_SIZE;z+=debug_grafx_l)
+				for (int x=0;x<DEBUG_LENGTH_X*8;x+=grafx_size(1))
+					p=grafx_show(&debug_frame[(debug_posy()+z)*VIDEO_PIXELS_X+debug_posx()+x],VIDEO_PIXELS_X,debug_grafx_l,debug_mode,p,debug_grafx_v>>1);
+			for (;z<DEBUG_LENGTH_Y*ONSCREEN_SIZE;++z)
+			{
+				i=(debug_posy()+z)*VIDEO_PIXELS_X+debug_posx();
+				for (int x=0;x<DEBUG_LENGTH_X*8;++x)
+					debug_frame[i+x]=0X808080;
+			}
+		}
+		else // HORIZONTAL FIRST, VERTICAL LAST!
+		{
+			for (;z+grafx_size(debug_grafx_l)<=DEBUG_LENGTH_X*8;z+=grafx_size(debug_grafx_l))
+				for (int y=0;y<DEBUG_LENGTH_Y*ONSCREEN_SIZE;++y)
+					p=grafx_show(&debug_frame[(debug_posy()+y)*VIDEO_PIXELS_X+debug_posx()+z],grafx_size(1),debug_grafx_l,debug_mode,p,debug_grafx_v>>1);
+			for (int y=0;y<DEBUG_LENGTH_Y*ONSCREEN_SIZE;++y)
+			{
+				i=(debug_posy()+y)*VIDEO_PIXELS_X+debug_posx();
+				for (int x=z;x<DEBUG_LENGTH_X*8;++x)
+					debug_frame[i+x]=0X808080;
+			}
+		}
+		grafx_info(&debug_frame[debug_posy()*VIDEO_PIXELS_X+debug_posx()+DEBUG_LENGTH_X*8],VIDEO_PIXELS_X,debug_grafx_v>>1);
+		sprintf(debug_buffer,"$%04X..$%04X",debug_grafx_w,p-1);
+		session_debug_print(debug_buffer,DEBUG_LENGTH_X-12,DEBUG_LENGTH_Y-2,12);
+		sprintf(debug_buffer,"%03d%c  W:exit",debug_grafx_l,(debug_grafx_v&1)?'Y':'X');
+		session_debug_print(debug_buffer,DEBUG_LENGTH_X-12,DEBUG_LENGTH_Y-1,12);
 	}
 	else
+	{
+		// the order of the printing hinges on sprintf() appending a ZERO to each string :-/
+		debug_info(debug_page); // print the emulators' hardware info
+		// top right panel: the CPU registers
+		for (i=0;i<DEBUG_LENGTH_Y/2;++i)
+			debug_regs(DEBUG_LOCATE(DEBUG_LENGTH_X-9,i),i);
+		// bottom right panel: the stack editor
+		for (i=DEBUG_LENGTH_Y/2,p=debug_panel3_w;i<DEBUG_LENGTH_Y;++i)
+		{
+			sprintf(DEBUG_LOCATE(DEBUG_LENGTH_X-9,i),"%04X:%04X",p,debug_pull(p)); p+=2;
+			if (debug_match) // hilight active stack item
+				debug_hilight(DEBUG_LOCATE(DEBUG_LENGTH_X-9,i),4);
+		}
+		// top left panel: the disassembler
+		for (i=0,p=debug_panel0_w;i<DEBUG_LENGTH_Y/2;++i)
+		{
+			sprintf(DEBUG_LOCATE(0,i),"%04X:%c",p,debug_point[p]?(debug_point[p]&8)?debug_list()[debug_point[p]&7]:'@':' ');
+			WORD q=p; p=debug_dasm(DEBUG_LOCATE(15,i),p);
+			t=DEBUG_LOCATE(6,i); int n=4; while (q!=p&&n-->0)
+				b=debug_peek(0,q),*t++=hexa1[b>>4],*t++=hexa1[b&15],++q;
+			if (q!=p) t[-2]='\177',t[-1]='.'; // long disassemblies are truncated :(
+			if (debug_match) // hilight current opcode
+				debug_hilight(DEBUG_LOCATE(0,i),4);
+		}
+		// bottom left panel: the memory editor
+		for (i=DEBUG_LENGTH_Y/2,p=(debug_panel2_w&-16)-(DEBUG_LENGTH_Y/2-DEBUG_LENGTH_Y/4)*16;i<DEBUG_LENGTH_Y;++i)
+		{
+			sprintf(DEBUG_LOCATE(0,i),"%04X:",p);
+			char *tt=DEBUG_LOCATE(5+32,i); *tt++=debug_mode?'\\':'/';
+			t=DEBUG_LOCATE(5,i); for (int j=0;j<16;++j)
+				b=debug_peek(debug_mode,p),
+				*tt++=(b&96)?b:('.'+(b&128)),
+				*t++=hexa1[b>>4],*t++=hexa1[b&15],++p;
+		}
+		// the status bar (BREAK, timer, X:Y, help) and the cursors
+		sprintf(DEBUG_LOCATE(4,DEBUG_LENGTH_Y/2-1),"\177. BREAK%c  Timer: %010d  (%04d,%03d) -- H:help",debug_break?'*':'-',main_t,video_pos_x,video_pos_y);
+		switch (debug_panel&=3)
+		{
+			case 0: *DEBUG_LOCATE(6+(debug_panel0_x&=1),0)|=128; break;
+			case 1: *DEBUG_LOCATE(DEBUG_LENGTH_X-4+debug_panel1_x,debug_panel1_w)|=128; break;
+			case 2: *DEBUG_LOCATE(5+(debug_panel2_x&=1)+(debug_panel2_w&15)*2,DEBUG_LENGTH_Y/2+DEBUG_LENGTH_Y/4)|=128; break;
+			case 3: *DEBUG_LOCATE(DEBUG_LENGTH_X-4+(debug_panel3_x&=3),DEBUG_LENGTH_Y/2)|=128; break;
+		}
 		for (int y=0;y<DEBUG_LENGTH_Y;++y)
-			for (int x=0;x<DEBUG_LENGTH_X;++x)
-				onscreen_ascii(x,y,*t++);
+			session_debug_print(&debug_buffer[y*DEBUG_LENGTH_X],0,y,DEBUG_LENGTH_X);
+	}
+}
+
+int debug_expr_hex(int c) // 0..15 OK, <0 ERROR!
+	{ return (c>='0'&&c<='9')?c-'0':(c>='A'&&c<='F')?c-'A'+10:(c>='a'&&c<='f')?c-'a'+10:-1; }
+int debug_expr_dec(int c) // 0..9 OK, <0 ERROR!
+	{ return (c>='0'&&c<='9')?c-'0':-1; }
+int debug_expr(char *s) // parse very simple expressions till an unknown character appears
+{
+	int t=0,k='+',c; for (;;)
+	{
+		while (*s==' ') ++s; // trim spaces
+		int i=0; if (*s=='.') // decimal?
+			while ((c=debug_expr_dec(*++s))>=0)
+				i=(i*10)+c;
+		else
+			while ((c=debug_expr_hex(*s))>=0)
+				i=(i<<4)+c,++s;
+		if (k=='+')
+			t+=i;
+		else if (k=='-')
+			t-=i;
+		else if (k=='&')
+			t&=i;
+		else if (k=='|')
+			t|=i;
+		else if (k=='^')
+			t^=i;
+		while (*s==' ') ++s; // trim spaces
+		if (!(k=*s++)||!strchr("+-&|^",k))
+			break;
+	}
+	return t;
+}
+void debug_panel0_rewind(int n)
+{
+	while (n-->0)
+	{
+		WORD p=debug_panel0_w-4;
+		while ((debug_dasm(debug_buffer,p)-debug_panel0_w)&64) ++p; // find the best longest match
+		debug_panel0_w=p;
+	}
+}
+void debug_panel0_fastfw(int n)
+{
+	while (n-->0)
+		debug_panel0_w=debug_dasm(debug_buffer,debug_panel0_w);
+}
+BYTE debug_panel_string[STRMAX]="",debug_panel_pascal[STRMAX]; // looking for things like "$2100C0" must allow zeros!
+void debug_panel_search(void) // look for a Pascal string of bytes on memory; the memory dump search is case-insensitive
+{
+	WORD p=debug_panel?debug_panel2_w:debug_panel0_w,o=p;
+	do
+	{
+		WORD q=++p; int i=1,j=*debug_panel_pascal; if (debug_panel)
+		{
+			while (i<=j&&ucase(debug_panel_pascal[i])==ucase(debug_peek(debug_mode,q))) ++i,++q;
+			if (i>j) { debug_panel2_x=0,debug_panel2_w=p; return; }
+		}
+		else
+		{
+			while (i<=j&&debug_panel_pascal[i]==debug_peek(0,q)) ++i,++q;
+			if (i>j) { debug_panel0_x=0,debug_panel0_w=p; return; }
+		}
+	}
+	while (p!=o);
+}
+#define debug_maus_x() ((session_maus_x-debug_posx())/8)
+#define debug_maus_y() ((session_maus_y-debug_posy())/ONSCREEN_SIZE)
+int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 invalid
+{
+	int i; if (k==KBDBG_ESCAPE) // EXIT
+		session_signal&=~SESSION_SIGNAL_DEBUG;
+	else if (k==KBDBG_SPC) // STEP INTO
+		debug_step();
+	else if (k==KBDBG_SPC_S) // NEXT SCANLINE
+		session_signal_scanlines|=SESSION_SIGNAL_DEBUG,session_signal&=~SESSION_SIGNAL_DEBUG;
+	else if (k==KBDBG_RET) // STEP OVER
+		debug_leap();
+	else if (k==KBDBG_RET_S) // NEXT FRAME
+		session_signal_frames|=SESSION_SIGNAL_DEBUG,session_signal&=~SESSION_SIGNAL_DEBUG;
+	else if ((k=ucase(k))=='H') // HELP
+		session_message(
+			"Cursors\tNavigate panel\n"
+			"Tab\tNext panel (shift: prev. panel)\n"
+			"0-9,A-F\tEdit hexadecimal value\n"
+			"G\tGo to ADDRESS ('.'+number: decimal)\n"
+			"H\tThis help\n"
+			"I\tInput bytes from FILE\n"
+			"J\tJump to cursor\n"
+			"K\tClose log file (see L)\n"
+			"L\tLog 8-bit REGISTER into FILE\n"
+			"M\tToggle memory dump R/W mode\n"
+			"N\tNext search (see S)\n"
+			"O\tOutput LENGTH bytes into FILE\n"
+			"P\tPrint disassembly of LENGTH bytes into FILE\n"
+			"Q\tRun until interrupt\n"
+			"R\tRun to cursor\n"
+			"S\tSearch for STRING ('$'+string: hexadecimal)\n"
+			"T\tReset timer\n"
+			"U\tRun until return\n"
+			"V\tToggle appearance\n"
+			"W\tToggle debug/graphics mode\n"
+			"X\tShow more hardware info\n"
+			"Y\tFill LENGTH bytes with BYTE\n"
+			"Z\tDelete breakpoints\n"
+			".\tToggle breakpoint\n"
+			",\tToggle BREAK opcode\n"
+			"Space\tStep into (shift: skip scanline)\n"
+			"Return\tStep over (shift: skip frame)\n"
+			"Escape\tExit\n","Debugger help");
+	else if (k=='M') // TOGGLE MEMORY DUMP R/W MODE
+		debug_mode=!debug_mode;
+	else if (k=='T') // RESET CLOCK
+		main_t=0;
+	else if (k=='Q') // RUN UNTIL INTERRUPT
+		debug_inter=1,session_signal&=~SESSION_SIGNAL_DEBUG;
+	else if (k=='U') // RUN UNTIL RETURN
+		debug_fall();
+	else if (k=='V') // TOGGLE APPEARANCE
+		debug_config+=session_shift?-1:1;
+	else if (k=='W') // TOGGLE DEBUG/GRAPHICS MODE
+		debug_grafx=!debug_grafx;
+	else if (k==',') // TOGGLE `BRK` BREAKPOINT
+		debug_break=!debug_break;
+	else if (debug_grafx)
+	{
+		if (k==KBDBG_TAB)
+			++debug_grafx_v;
+		else if (k==KBDBG_TAB_S)
+			--debug_grafx_v;
+		else if (k==KBDBG_LEFT)
+			--debug_grafx_w;
+		else if (k==KBDBG_RIGHT)
+			++debug_grafx_w;
+		else if (k==KBDBG_UP)
+			debug_grafx_w-=debug_grafx_l;
+		else if (k==KBDBG_DOWN)
+			debug_grafx_w+=debug_grafx_l;
+		else if (k==KBDBG_HOME)
+			{ if (debug_grafx_l>1) --debug_grafx_l; }
+		else if (k==KBDBG_END)
+			{ if (debug_grafx_l<DEBUG_LENGTH_X*8/grafx_size(1)) ++debug_grafx_l; }
+		else if (k==KBDBG_PRIOR)
+			debug_grafx_w-=debug_grafx_l*16;
+		else if (k==KBDBG_NEXT)
+			debug_grafx_w+=debug_grafx_l*16;
+		else if (k=='G') // GO TO..
+			{
+				sprintf(session_parmtr,"%04X",debug_grafx_w);
+				if (session_input("Go to")>0)
+					debug_grafx_w=debug_expr(session_parmtr);
+			}
+		else
+			k=0; // default!
+	}
+	else if (((k=ucase(k))>='0'&&k<='9')||(k>='A'&&k<='F')) // HEXADECIMAL NIBBLE
+	{
+		if ((k-='0')>=16) k-=7; // get actual nibble
+		switch (debug_panel)
+		{
+			case 0: i=debug_peek(0,debug_panel0_w);
+				debug_poke(debug_panel0_w,debug_panel0_x?(i&240)+k:(i&15)+(k<<4));
+				if (++debug_panel0_x>1) ++debug_panel0_w,debug_panel0_x=0;
+				break;
+			case 1: debug_regz(k);
+				break;
+			case 2: i=debug_peek(debug_mode,debug_panel2_w);
+				debug_poke(debug_panel2_w,debug_panel2_x?(i&240)+k:(i&15)+(k<<4));
+				if (++debug_panel2_x>1) ++debug_panel2_w,debug_panel2_x=0;
+				break;
+			case 3: debug_push(debug_panel3_w,(debug_pull(debug_panel3_w)&(-1^(0XF000>>(debug_panel3_x*4))))+(k<<(12-debug_panel3_x*4)));
+				if (++debug_panel3_x>3) debug_panel3_x=0,debug_panel3_w+=2;
+				break;
+		}
+		k=1; // just in case it's zero
+	}
+	else switch (k)
+	{
+		case KBDBG_CLICK: // CLICK!
+			{
+				int x,y; if ((x=debug_maus_x())>=0&&x<DEBUG_LENGTH_X&&(y=debug_maus_y())>=0&&y<DEBUG_LENGTH_Y)
+				{
+					if (y<DEBUG_LENGTH_Y/2) // top half?
+					{
+						if (x<33) // disassembly?
+							debug_panel0_fastfw(y),debug_panel=0,debug_panel0_x=0;
+						else if (x>=DEBUG_LENGTH_X-9) // registers
+							debug_panel=1,debug_panel1_w=y,debug_panel1_x=x-(DEBUG_LENGTH_X-4);
+						else
+							k=0;
+					}
+					else // bottom half
+					{
+						if (x>=5&&x<37) // memory dump?
+							debug_panel=2,debug_panel2_w=(debug_panel2_w&-16)+(y-DEBUG_LENGTH_Y/4*3)*16+((x-5)/2),debug_panel2_x=x-5;
+						else if (x>=DEBUG_LENGTH_X-9) // stack
+							debug_panel=3,debug_panel3_w+=2*(y-(DEBUG_LENGTH_Y/2)),debug_panel3_x=x-(DEBUG_LENGTH_X-4),x=x<0?0:x;
+						else
+							k=0;
+					}
+				}
+				else
+					k=0;
+			}
+			break;
+		case KBDBG_TAB:
+			++debug_panel; break;
+		case KBDBG_TAB_S:
+			--debug_panel; break;
+		case KBDBG_LEFT:
+			switch (debug_panel)
+			{
+				case 0: if (--debug_panel0_x<0) debug_panel0_x=1,--debug_panel0_w; break;
+				case 1: if (--debug_panel1_x<0) debug_panel1_x=0; break;
+				case 2: if (--debug_panel2_x<0) debug_panel2_x=1,--debug_panel2_w; break;
+				case 3: if (--debug_panel3_x<0) debug_panel3_x=3,debug_panel3_w-=2;
+			}
+			break;
+		case KBDBG_RIGHT:
+			switch (debug_panel)
+			{
+				case 0: if (++debug_panel0_x>1) debug_panel0_x=0,++debug_panel0_w; break;
+				case 1: if (++debug_panel1_x>3) debug_panel1_x=3; break;
+				case 2: if (++debug_panel2_x>1) debug_panel2_x=0,++debug_panel2_w; break;
+				case 3: if (++debug_panel3_x>3) debug_panel3_x=0,debug_panel3_w+=2;
+			}
+			break;
+		case KBDBG_UP:
+			switch (debug_panel)
+			{
+				case 0: debug_panel0_rewind(1); break;
+				case 1: if (debug_panel1_w>1) --debug_panel1_w; break;
+				case 2: debug_panel2_w-=16; break;
+				case 3: debug_panel3_w-=2;
+			}
+			break;
+		case KBDBG_DOWN:
+			switch (debug_panel)
+			{
+				case 0: debug_panel0_fastfw(1); break;
+				case 1: if (debug_panel1_w<DEBUG_LENGTH_Y/2-1) ++debug_panel1_w; break;
+				case 2: debug_panel2_w+=16; break;
+				case 3: debug_panel3_w+=2;
+			}
+			break;
+		case KBDBG_HOME:
+			switch (debug_panel)
+			{
+				case 0: debug_panel0_x=debug_panel0_w=0; break;
+				case 1: debug_panel1_x=0; break;
+				case 2: debug_panel2_x=debug_panel2_w=0; break;
+				case 3: debug_panel3_x=debug_panel3_w=0; break;
+			}
+			break;
+		case KBDBG_END:
+			switch (debug_panel)
+			{
+				case 0: debug_panel0_x=0,debug_panel0_w=debug_this(); break;
+				case 1: debug_panel1_x=3; break;
+				case 2: debug_panel2_x=0,debug_panel2_w=debug_this(); break;
+				case 3: debug_panel3_x=0,debug_panel3_w=debug_that(); break;
+			}
+			break;
+		case KBDBG_PRIOR:
+			switch (debug_panel)
+			{
+				case 0: debug_panel0_rewind(DEBUG_LENGTH_Y/2-1); break;
+				case 1: debug_panel1_w=1; break;
+				case 2: debug_panel2_w-=DEBUG_LENGTH_Y/2*16; break;
+				case 3: debug_panel3_w-=DEBUG_LENGTH_Y/2*2; break;
+			}
+			break;
+		case KBDBG_NEXT:
+			switch (debug_panel)
+			{
+				case 0: debug_panel0_fastfw(DEBUG_LENGTH_Y/2-1); break;
+				case 1: debug_panel1_w=DEBUG_LENGTH_Y/2-1; break;
+				case 2: debug_panel2_w+=DEBUG_LENGTH_Y/2*16; break;
+				case 3: debug_panel3_w+=DEBUG_LENGTH_Y/2*2; break;
+			}
+			break;
+		case 'G': // GO TO...
+			if (debug_panel!=1)
+			{
+				sprintf(session_parmtr,"%04X",debug_panel>2?debug_panel3_w:debug_panel?debug_panel2_w:debug_panel0_w);
+				if (session_input("Go to")>0)
+				{
+					i=debug_expr(session_parmtr);
+					switch (debug_panel)
+					{
+						case 0: debug_panel0_x=0; debug_panel0_w=(WORD)i; break;
+						case 2: debug_panel2_x=0; debug_panel2_w=(WORD)i; break;
+						case 3: debug_panel3_x=0; debug_panel3_w=(WORD)i; break;
+					}
+				}
+			}
+			break;
+		case 'I': // INPUT BYTES FROM FILE
+			if (!(debug_panel&1))
+			{
+				char *s; FILE *f; WORD w=i=debug_panel?debug_panel2_w:debug_panel0_w;
+				if (s=session_getfile(NULL,"*","Input file"))
+					if (f=puff_fopen(s,"rb"))
+					{
+						while (i=fread1(session_substr,256,f)) // better than fgetc()
+							for (int j=0;j<i;++j)
+								debug_poke(w++,session_substr[j]);
+						puff_fclose(f);
+					}
+			}
+			break;
+		case 'J': // JUMP TO...
+			debug_jump(debug_panel0_w); break;
+		case 'K': // CLOSE LOG
+			debug_close(); break;
+		case 'L': // LOG REGISTER
+			if (*session_parmtr=0,sprintf(session_parmtr+1,"Log register (%s)",debug_list()),session_input(session_parmtr+1)==1)
+			{
+				char *t=strchr(debug_list(),ucase(session_parmtr[0])); if (t)
+					debug_point[debug_panel0_w]=8+(t-debug_list());
+			}
+			break;
+		case 'N': // NEXT SEARCH
+			if (!(debug_panel&1)) if (*debug_panel_pascal) debug_panel_search(); break;
+		case 'O': // OUTPUT BYTES INTO FILE
+			if (!(debug_panel&1))
+			{
+				char *s; FILE *f; WORD w=i=debug_panel?debug_panel2_w:debug_panel0_w;
+				if (*session_parmtr=0,session_input("Output length")>=0)
+					if (i=(WORD)debug_expr(session_parmtr))
+						if (s=session_newfile(NULL,"*","Output file"))
+							if (f=fopen(s,"wb"))
+							{
+								while (i)
+								{
+									int j; for (j=0;j<i&&j<256;++j)
+										session_substr[j]=debug_peek(debug_panel&&debug_mode,w++);
+									fwrite1(session_substr,j,f); i-=j;
+								}
+								fclose(f);
+							}
+			}
+			break;
+		case 'P': // PRINT DISASSEMBLY/HEXDUMP INTO FILE
+			if (!(debug_panel&1))
+				if (*session_parmtr=0,session_input(debug_panel?"Hex dump length":"Disassembly length")>=0)
+				{
+					char *s,*t; FILE *f; WORD w=debug_panel?debug_panel2_w:debug_panel0_w,u;
+					if (i=(WORD)debug_expr(session_parmtr))
+						if (s=session_newfile(NULL,"*.TXT",debug_panel?"Print hex dump":"Print disassembly"))
+							if (f=fopen(s,"w"))
+							{
+								if (debug_panel) // HEXDUMP?
+								{
+									k=0; do // WRAP!
+									{
+										if (!k)
+											t=session_substr+sprintf(session_substr,"$%04X: ",w);
+										else
+											*t++=',';//t+=sprintf(t,",");
+										t+=sprintf(t,"$%02X",debug_peek(debug_mode,w++));
+										if (++k>=16)
+											k=0,fprintf(f,"%s\n",session_substr);
+									}
+									while (--i>0);
+									if (k)
+										fprintf(f,"%s\n",session_substr);
+									k=1; // just in case it's zero
+								}
+								else // DISASSEMBLY
+									do // WRAP!
+									{
+										u=debug_dasm(session_substr,w);
+										fprintf(f,"$%04X: %s\n",w,session_substr);
+										i-=(WORD)(u-w); w=u;
+									}
+									while (i>0);
+								fclose(f);
+							}
+				}
+			break;
+		case 'R': // RUN TO...
+			if (debug_panel==0) debug_drop(debug_panel0_w); break;
+		case 'S': // SEARCH FOR STRING
+			if (!(debug_panel&1))
+				if (strcpy(session_parmtr,debug_panel_string),session_input("Search string")>=0)
+				{
+					strcpy(debug_panel_string,session_parmtr);
+					if (*debug_panel_string=='$') // HEXA STRING?
+					{
+						for (i=1;debug_panel_string[i*2-1]*debug_panel_string[i*2];++i)
+							debug_panel_pascal[i]=(debug_expr_hex(debug_panel_string[i*2-1])<<4)+debug_expr_hex(debug_panel_string[i*2]);
+						*debug_panel_pascal=i-1;
+					}
+					else // NORMAL STRING
+						memcpy(debug_panel_pascal+1,debug_panel_string,*debug_panel_pascal=strlen(debug_panel_string));
+					if (*debug_panel_pascal) debug_panel_search();
+				}
+			break;
+		case 'X': // SHOW MORE HARDWARE INFO
+			++debug_page; break;
+		case 'Y': // FILL BYTES WITH BYTE
+			if (!(debug_panel&1))
+			{
+				WORD w=i=debug_panel?debug_panel2_w:debug_panel0_w; BYTE b;
+				if (*session_parmtr=0,session_input("Fill length")>=0)
+					if (i=(WORD)debug_expr(session_parmtr))
+						if (*session_parmtr=0,session_input("Filler byte")>=0)
+						{
+							b=debug_expr(session_parmtr);
+							while (i--) debug_poke(w++,b);
+						}
+			}
+			break;
+		case 'Z': // DELETE BREAKPOINTS
+			MEMZERO(debug_point); break;
+		case '.': // TOGGLE BREAKPOINT
+			if (debug_panel==0) debug_point[debug_panel0_w]=!debug_point[debug_panel0_w]; break;
+		default: k=0;
+	}
+	return k&&(debug_dirty=1);
 }
 
 // multimedia file output ------------------------------------------- //
@@ -1184,10 +1722,10 @@ BYTE session_filmflag,session_filmscale=1,session_filmtimer=1,session_filmalign;
 VIDEO_UNIT *session_filmvideo=NULL; AUDIO_UNIT session_filmaudio[SESSION_FILMAUDIO_LENGTH];
 BYTE *xrf_chunk=NULL; // this buffer contains one video frame and two audio frames AFTER encoding
 
-#define xrf_encode1(n) ((n)&&(*z++=(n),a+=b),!(b>>=1)&&(*y=a,y=z++,a=0,b=128)) // write "0" (zero) or "1nnnnnnnn" (nonzero)
 int xrf_encode(BYTE *t,BYTE *s,int l,int x) // terribly hacky encoder based on an 8-bit RLE and an interleaved pseudo Huffman filter!
 {
 	if (l<=0) return *t++=128,*t++=0,2; // quick EOF!
+	#define xrf_encode1(n) ((n)&&(*z++=(n),a+=b),(b>>=1)||(*y=a,y=z++,a=0,b=128)) // write "0" (zero) or "1nnnnnnnn" (nonzero)
 	BYTE *z=t,*y=z++,a=0,b=128,q=0; if (x<0) x=-x,q=128; // x<0 = perform XOR 128 on bytes, used when turning 16s audio into 8u
 	do
 	{
@@ -1220,18 +1758,17 @@ int session_createfilm(void) // start recording video and audio; !0 ERROR
 		return 1; // cannot allocate buffer!
 	if (!xrf_chunk&&!(xrf_chunk=malloc((sizeof(VIDEO_UNIT)*SESSION_FILMVIDEO_LENGTH+SESSION_FILMAUDIO_LENGTH*AUDIO_BITDEPTH/8)*9/8+4*8))) // maximum pathological length!
 		return 1; // cannot allocate memory!
-
 	if (!(session_nextfilm=session_savenext("%s%08u.xrf",session_nextfilm))) // "Xor-Rle Film"
 		return 1; // too many files!
 	if (!(session_filmfile=fopen(session_parmtr,"wb")))
 		return 1; // cannot create file!
-	fwrite1("XRF1!\015\012\032",8,session_filmfile); // XRF-1 was limited to 8-bit RLE lengths, and XRF+1 didn't store the amount of frames!
+	fwrite1("XRF1!\015\012\032",8,session_filmfile);
 	fputmm(VIDEO_PIXELS_X>>session_filmscale,session_filmfile);
 	fputmm(VIDEO_PIXELS_Y>>session_filmscale,session_filmfile);
 	fputmm(session_filmfreq=audio_disabled?0:AUDIO_LENGTH_Z<<session_filmtimer,session_filmfile);
 	fputc(VIDEO_PLAYBACK>>session_filmtimer,session_filmfile);
 	fputc(session_filmflag=((AUDIO_BITDEPTH>>session_filmscale)>8?1:0)+(AUDIO_CHANNELS>1?2:0),session_filmfile); // +16BITS(1)+STEREO(2)
-	fputmmmm(-1,session_filmfile); // to be filled later
+	fputmmmm(-1,session_filmfile); // frame count, will be filled later
 	session_filmalign=video_pos_y; // catch scanline mode, if any
 	return memset(session_filmvideo,0,sizeof(VIDEO_UNIT)*SESSION_FILMVIDEO_LENGTH),session_filmcount=0;
 }
@@ -1240,7 +1777,6 @@ void session_writefilm(void) // record one frame of video and audio
 	if (!session_filmfile) return; // file not open!
 	// ignore first frame if the video is interleaved and we're on the wrong half frame
 	if (!session_filmcount&&video_interlaced&&!video_interlaces) return;
-
 	BYTE *z=xrf_chunk; static BYTE dirty=0;
 	if (!video_framecount) dirty=1; // frameskipping?
 	if (!(++session_filmcount&session_filmtimer))
@@ -1264,6 +1800,8 @@ void session_writefilm(void) // record one frame of video and audio
 				for (int i=VIDEO_OFFSET_Y;s=session_getscanline(i),i<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;++i)
 					for (int j=0;j<VIDEO_PIXELS_X;++j)
 						*t++^=*s++; // bitwise delta against last frame
+			// the compression relies on perfectly standard arrays, i.e. the stride of an array of DWORDs is always 4 bytes wide;
+			// are there any exotic platforms where the byte length of WORD/Uint16 and DWORD/Uint32 isn't strictly enforced?
 			#if SDL_BYTEORDER == SDL_BIG_ENDIAN
 			z+=xrf_encode(z,&((BYTE*)session_filmvideo)[3],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // B
 			z+=xrf_encode(z,&((BYTE*)session_filmvideo)[2],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // G
@@ -1369,7 +1907,6 @@ INLINE int session_savebitmap(void) // save a RGB888 bitmap file; !0 ERROR
 	mputii(&bitmapheader[0x16],VIDEO_PIXELS_Y>>session_filmscale);
 	mputiiii(&bitmapheader[0x22],i);
 	fwrite(bitmapheader,1,sizeof(bitmapheader),f);
-
 	static BYTE r[VIDEO_PIXELS_X*3]; // target scanline buffer
 	for (i=VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-session_filmscale-1;i>=VIDEO_OFFSET_Y;fwrite(r,1,VIDEO_PIXELS_X*3>>session_filmscale,f),i-=session_filmscale+1)
 		if (session_filmscale)

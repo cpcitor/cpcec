@@ -690,7 +690,7 @@ void disc_data_send(BYTE b) // DATA I/O
 				case 0x0A: // READ ID
 					if (!disc_initstate()) // is the disc ready?
 					{
-						if (disc_track_table[disc_trueunithead][0x15]) // is the track valid?
+						if (disc_track_table[disc_trueunithead][0x15]&&(disc_parmtr[0]&64)) // is the track valid? is the density right? (cfr. Roudoudou)
 						{
 							disc_change[disc_trueunit]=0;
 							if (++disc_sector_last>=disc_track_table[disc_trueunithead][0x15])

@@ -315,6 +315,9 @@ parámetros de las órdenes emplean notación hexadecimal.
 * Dígitos del 0 al 9 y letras de la A a la F modifican el valor bajo el cursor;
 * Punto (".") crea o destruye un punto de ruptura o "breakpoint" en la posición
 actual del cursor en el desensamblado;
+* Coma (",") conmuta el comportamiento del código ilegal $EDFF, bien en modo
+normal ("BREAK-") donde no hace nada especial o en modo de desarrollo ("BREAK+")
+donde es un breakpoint;
 * G ("go to") solicita una dirección (en hexadecimal por defecto, en decimal si
 está precedida por ".") y envía el cursor a su lugar correspondiente en el
 desensamblado o el volcado de memoria;
@@ -337,9 +340,7 @@ cursor;
 * P ("print") solicita una longitud en bytes y un nombre de fichero, y crea un
 fichero con un desensamblado (panel de desensamblado) o un volcado hexadecimal
 (panel de volcado de memoria) que comienza en la dirección actual del cursor;
-* Q conmuta el comportamiento del código ilegal $EDFF, bien en modo normal
-("EDFF-") donde no hace nada especial o en modo de desarrollo ("EDFF+") donde es
-un breakpoint;
+* Q ("IRQ") ejecuta la emulación hasta alcanzar una interrupción;
 * R ("run to") ejecuta la emulación hasta alcanzar la operación actualmente bajo
 el cursor en el desensamblado;
 * S ("search") solicita una cadena bien ASCII (sin importar las mayúsculas),
@@ -1095,3 +1096,19 @@ el IRQ del Pentagon (es corto pero continuo en vez de largo y cancelable, según
 pruebas nuevas de Azesmbog). Los filtros de vídeo se parecen más a un CRT
 (sugerido por Md0) y la lógica de las pistolas de luz está ligada a sus gatillos
 para evitar falsos positivos.
+- 20220303 -- vigésima segunda versión pública. Grandes cambios internos en el
+depurador: casi todo él está ahora dentro de la librería general, sólo las
+características específicas del Z80 permanecen en el módulo de Z80. Conmutar el
+comportamiento del depurador con el código ilegal se hace ahora con la tecla ","
+(coma); la tecla "Q" ahora ejecuta código hasta la siguiente interrupción. Los
+estilos del depurador (teclas "V" y "Mays+V") ahora incluyen un modo translúcido
+que muestra la pantalla emulada tras el texto del depurador. Mejoras menores en
+la lógica de vídeo (combinar las pruebas de posición vertical y "frameskip"), el
+chip AY (menos cálculos) y la emulación de Z80 ("banking" reducido en las
+operaciones que leen y escriben la misma dirección). Retoques menores en CPCEC
+("Octopus Pocus" para CRTC0 por fin funciona bien), ZXSEC (las instantáneas SZX
+son la opción por defecto, el formato SNA ahora es secundario), el FDC ("READ
+ID" debe fallar al usar la densidad errónea: observado por Roudoudou), las
+extensiones de audio (Playcity y Digiblaster pueden coexistir, así como
+Turbosound y Covox $FB) y los filtros de vídeo (que debilitan el contraste de
+imagen en lugar de la saturación).

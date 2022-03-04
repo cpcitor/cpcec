@@ -1,14 +1,14 @@
- // ######  #    #   ####   ######   ####    ----------------------- //
+ // ######  #    #   ####   ######   ####  ------------------------- //
 //  """"#"  "#  #"  #""""   #"""""  #""""#  ZXSEC, barebones Sinclair //
 //     #"    "##"   "####   #####   #    "  Spectrum emulator written //
 //    #"      ##     """"#  #""""   #       on top of CPCEC's modules //
 //   #"      #""#   #    #  #       #    #  by Cesar Nicolas-Gonzalez //
 //  ######  #"  "#  "####"  ######  "####"  since 2019-02-24 till now //
- // """"""  "    "   """"   """"""   """"    ----------------------- //
+ // """"""  "    "   """"   """"""   """"  ------------------------- //
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20220108"//"2555"
+#define MY_VERSION "20220303"//"1335"
 #define MY_LICENSE "Copyright (C) 2019-2022 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -52,11 +52,6 @@ Contact information: <mailto:cngsoft@gmail.com> */
 #define VIDEO_PIXELS_Y (30<<4) // Pentagon: (34<<4)
 #define AUDIO_PLAYBACK 44100 // 22050, 24000, 44100, 48000
 #define AUDIO_LENGTH_Z (AUDIO_PLAYBACK/VIDEO_PLAYBACK) // division must be exact!
-
-#define DEBUG_LENGTH_X 64
-#define DEBUG_LENGTH_Y 32
-#define session_debug_show z80_debug_show
-#define session_debug_user z80_debug_user
 
 #if defined(SDL2)||!defined(_WIN32)
 unsigned short session_icon32xx16[32*32] = {
@@ -249,13 +244,12 @@ int TICKS_PER_SECOND;// (TICKS_PER_FRAME*VIDEO_PLAYBACK);
 // the "3.5 MHz" isn't neither exact or the same on each machine:
 // 50*312*224= 3494400 Hz on 48K, 50*311*228= 3545400 Hz on 128K.
 // (and even the 50Hz screen framerate isn't the exact PAL value!)
-DWORD main_t=0; // the global tick counter, used by the debugger
 int multi_t=1; // overclocking factor
 
 // HARDWARE DEFINITIONS ============================================= //
 
 BYTE mem_ram[10<<14],mem_rom[4<<14]; // memory: 10*16k RAM and 4*16k ROM
-BYTE *mmu_ram[4],*mmu_rom[4]; // memory is divided in 16k banks
+BYTE *mmu_ram[4],*mmu_rom[4]; // memory is divided in 4x 16k banks
 #define mem_16k (&mem_ram[8<<14]) // dummy bank: write-only area for ROM writes
 #define mem_32k (&mem_ram[9<<14]) // dummy bank: read-only area filled with 255
 #define PEEK(x) mmu_rom[(x)>>14][x] // WARNING, x cannot be `x=EXPR`!
@@ -714,6 +708,7 @@ const int psg_stereos[][3]={{0,0,0},{+256,0,-256},{+128,0,-128},{+64,0,-64}}; //
 #endif
 #define PSG_PLAYCITY 1 // base clock in comparison to the main PSG
 #define PSG_PLAYCITY_HALF // the TURBO SOUND chip is emulated as a single-chip PLAYCITY card
+#define playcity_mono 1 // the PLAYCITY single chip plays at the PSG's same intensity
 int playcity_disabled=1,playcity_active=0; // this chip is an extension (disabled by default)
 int dac_disabled=0; // Covox $FB DAC, enabled by default on almost every Pentagon 128 machine
 
@@ -786,8 +781,8 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 		z80_irq=z80_irq<4?0:z80_irq-4;
 		if (ula_shown_x==ula_start_x) // HBLANK? (the Pentagon timings imply this test is done in advance)
 		{
-			if (!video_framecount&&video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y) video_drawscanline();
-			video_pos_y+=2,video_target+=VIDEO_LENGTH_X*2-video_pos_x; video_pos_x=0; session_signal|=session_signal_scanlines; // scanline event!
+			if (frame_pos_y>=VIDEO_OFFSET_Y&&frame_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y) video_drawscanline();
+			frame_pos_y+=2,video_pos_y+=2,video_target+=VIDEO_LENGTH_X*2-video_pos_x; video_pos_x=0; session_signal|=session_signal_scanlines; // scanline event!
 		}
 		if ((video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y)&&(video_pos_x>VIDEO_OFFSET_X-16&&video_pos_x<VIDEO_OFFSET_X+VIDEO_PIXELS_X))
 		{
@@ -803,7 +798,6 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 			if (!video_framecount)
 			{
 				static BYTE a0,b0;
-				#define VIDEO_NEXT *video_target++ // "VIDEO_NEXT = VIDEO_NEXT = ..." generates invalid code on VS13 and slower code on TCC
 				if (a<0) // BORDER
 				{
 					VIDEO_UNIT p=video_clut[64];
@@ -861,7 +855,7 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 			// "Abu Simbel Profanation" (menu doesn't obey keys; in-game is stuck jumping to the right) and "Rasputin" (menu fails to play the music) rely on this on 48K.
 			if (++ula_count_y>=ula_limit_y) // end of frame?
 			{
-				z80_irq=(trdos_mapped|ula_pentagon|type_id)?33:32; // TR-DOS adds delays ("MANIFESTO" demo); Azesmbog's "BORDER8" for Pentagon needs <44 T; "TIMING TESTS 128K" needs 33..40!
+				z80_irq=type_id?33:32; // "TIMING TESTS 128K" needs 33..40; why not 32!?
 				if (!(video_pos_z&15)) // FLASH update?
 					if (!(ulaplus_table[64]&ulaplus_enabled))
 						ula_clut_flash(); // ULAPLUS lacks FLASH!
@@ -879,7 +873,7 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 
 int dac_level=0;
 #define dac_level_byte(x) dac_level=(x)<<7
-#define dac_level_zero() (dac_level=(dac_level*3)>>2) // soften signal as time passes
+#define dac_level_zero() (dac_level=dac_level*3/4) // soften signal as time passes
 void audio_main(int t) // render audio output for `t` clock ticks; t is always nonzero!
 {
 	psg_main(t,(tape_status<<12)+((ula_v1&16)<<10)+((ula_v1&8)<<8)+dac_level); // ULA MIXER: tape input (BIT 2) + beeper (BIT 4) + tape output (BIT 3; "Manic Miner" song, "Cobra's Arc" speech)
@@ -944,13 +938,13 @@ void z80_sync(int t) // the Z80 asks the hardware/video/audio to catch up
 	static int r=0; main_t+=t;
 	int tt=(r+=t)/multi_t; // calculate base value of `t`
 	r-=(t=tt*multi_t); // adjust `t` and keep remainder
-	if (t)
+	if (t>0)
 	{
 		if (type_id==3/*&&!disc_disabled*/)
 			disc_main(t);
 		if (tape_enabled&&tape)
 			audio_dirty=1,tape_main(t); // echo the tape signal thru sound!
-		if (tt)
+		if (tt>0)
 		{
 			audio_queue+=tt;
 			if (audio_dirty&&!audio_disabled)
@@ -1121,7 +1115,7 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 	if (!(p&1)) // 0x??FE, ULA 48K
 	{
 		ula_v1_send(b),tape_output=(b>>3)&1; // tape record signal
-		if (ula_bus*ula_pentagon<0&&!video_framecount&&video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y
+		if (ula_bus*ula_pentagon<0&&frame_pos_y>=VIDEO_OFFSET_Y&&frame_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y
 			&&video_pos_x>VIDEO_OFFSET_X&&video_pos_x<VIDEO_OFFSET_X+VIDEO_PIXELS_X+16) // special case: Pentagon border?
 			switch (ula_clash_a&3) // editing the bitmap from here is a dirty kludge, but the performance hit is lower
 			{
@@ -1178,7 +1172,7 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 				{
 					#ifdef PSG_PLAYCITY
 					if (playcity_active)
-						playcity_send(0,b);
+						dac_level=0,playcity_send(0,b);
 					else
 					#endif
 					if (psg_index==14&&(b&4)&&printer&&type_id>0&&type_id<3) // SPECTRUM 128K PRINTER
@@ -1196,7 +1190,7 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 	if (!(p&4)) // 0x??FB: ZX PRINTER and other extensions
 	{
 		#ifdef PSG_PLAYCITY
-		if (!dac_disabled)
+		if (!printer&&!dac_disabled)
 			dac_level_byte(b); // Covox $FB DAC, unsigned 8-bit audio
 		#endif
 		if (!type_id&&p<0XBF00) // avoid conflicts between ZX PRINTER and ULAPLUS
@@ -1476,7 +1470,7 @@ int z80_recv_ula(void) // "Cobra" and "Arkanoid" were happy with `ula_bus` but t
 #define z80_recv_gunstick(button,sensor) (session_maus_z?button+((video_litegun&0x00C000)?sensor:0):0) // GUNSTICK detects bright pixels
 BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 {
-	if ((p&31)==31) // tell apart between KEMPSTON and BETA128 ports
+	if (!(~p&31)) // tell apart between KEMPSTON and BETA128 ports
 	{
 		if (trdos_mapped) // BETA128 interface
 		{
@@ -1497,7 +1491,7 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 					return trdos_command==0X08?trdos_command=0,0X02:trdos_length?0X02:trdos_status;
 			}
 		}
-		if ((p&63)==31) // KEMPSTON port
+		if (!(p&32)) // KEMPSTON port
 			return litegun?z80_recv_gunstick(16,4):autorun_kbd_bit(8); // catch special case: lightgun or joystick ("TARGET PLUS", "MIKE GUNNER")
 		if (ula_pentagon)
 			return ula_bus; // http://worldofspectrum.net/rusfaq/ : "*port FF - port of current screen attributes. [...] on border [...] gives FF."
@@ -1566,98 +1560,6 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 	return 255;
 }
 
-int z80_debug_hard_tab(char *t) { return sprintf(t,"    "); }
-int z80_debug_hard1(char *t,int q,BYTE i) { return q?sprintf(t,":%02X",i):sprintf(t,":--"); }
-void z80_debug_flash(char *t) { *t+=-128,t[1]+=-128; }
-void z80_debug_hard(int q,int x,int y)
-{
-	char s[16*20],*t;
-	t=s+sprintf(s,"ULA:         %05d:%c" "    %04X:%02X %02X",ula_clash_z%100000,
-		48+ula_clash_mreq[4][(WORD)ula_clash_z],(WORD)(ula_bitmap+0x4000),(BYTE)ula_bus,ula_v1);
-	t+=z80_debug_hard1(t,type_id,ula_v2);
-	t+=z80_debug_hard1(t,type_id==3,ula_v3);
-	#define Z80_DEBUG_HARD_T_F(x) ((x)?'*':'-')
-	#define Z80_DEBUG_HARD_MREQ(x) (Z80_DEBUG_HARD_T_F(ula_clash_mreq[x]!=ula_clash[0]))
-	#define Z80_DEBUG_HARD_IORQ(x) (Z80_DEBUG_HARD_T_F(ula_clash_iorq[x]!=ula_clash[0]))
-	t+=sprintf(t," MREQ:%c%c%c%c IORQ:%c%c%c%c",
-		Z80_DEBUG_HARD_MREQ(0),Z80_DEBUG_HARD_MREQ(1),Z80_DEBUG_HARD_MREQ(2),Z80_DEBUG_HARD_MREQ(3),
-		Z80_DEBUG_HARD_IORQ(0),Z80_DEBUG_HARD_IORQ(1),Z80_DEBUG_HARD_IORQ(2),Z80_DEBUG_HARD_IORQ(3));
-	int i;
-	t+=sprintf(t,"PSG:                " "%02X: ",psg_index);
-	for (i=0;i<8;++i)
-		t+=sprintf(t,"%02X",psg_table[i]);
-	t+=z80_debug_hard_tab(t);
-	for (;i<16;++i)
-		t+=sprintf(t,"%02X",psg_table[i]);
-	if (psg_index>=0&&psg_index<16)
-		z80_debug_flash(t+4-20*2+(psg_index/8)*20+(psg_index%8)*2);
-	#ifdef PSG_PLAYCITY
-	t+=sprintf(t,"%02X: ",playcity_index[0]);
-	for (i=0;i<8;++i)
-		t+=sprintf(t,"%02X",playcity_table[0][i]);
-	t+=z80_debug_hard_tab(t);
-	for (;i<16;++i)
-		t+=sprintf(t,"%02X",playcity_table[0][i]);
-	if (playcity_index[0]>=0&&playcity_index[0]<16)
-		z80_debug_flash(t+4-20*2+(playcity_index[0]/8)*20+(playcity_index[0]%8)*2);
-	#endif
-	t+=sprintf(t,"FDC:  %02X - %04X:%04X" "    %c ",disc_parmtr[0],(WORD)disc_offset,(WORD)disc_length,48+disc_phase);
-	for (i=0;i<7;++i)
-		t+=sprintf(t,"%02X",disc_result[i]);
-	#ifdef Z80_DANDANATOR
-	t+=sprintf(t,"DANDANATOR:         " "%c: %02X:%02X:%02X %02X:%02X:%02X",mem_dandanator?'0'+dandanator_temp:'-',dandanator_cfg[0],dandanator_cfg[1],dandanator_cfg[2],dandanator_cfg[4],dandanator_cfg[5],dandanator_cfg[6]);
-	#endif
-	char *r=t; t=s; do
-	{
-		debug_locate(x,y); ++y;
-		MEMNCPY(debug_output,t,20); t+=20;
-	}
-	while (t<r);
-}
-#define ONSCREEN_GRAFX_RATIO 8
-void onscreen_grafx_step(VIDEO_UNIT *t,BYTE b)
-{
-	t[0]=b&128?0:0xFFFFFF; // avoid "*t++=*t++=..." bug in GCC 4.6
-	t[1]=b& 64?0:0xFFFFFF;
-	t[2]=b& 32?0:0xFFFFFF;
-	t[3]=b& 16?0:0xFFFFFF;
-	t[4]=b&  8?0:0xFFFFFF;
-	t[5]=b&  4?0:0xFFFFFF;
-	t[6]=b&  2?0:0xFFFFFF;
-	t[7]=b&  1?0:0xFFFFFF;
-}
-WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
-{
-	WORD s=onscreen_grafx_addr; if (!(q&1))
-	{
-		int xx=0,lx=onscreen_grafx_size;
-		if (lx*=8)
-			do
-				for (int y=0;y<my;++y)
-					for (int x=0;x<lx;x+=8)
-						onscreen_grafx_step(&v[xx+x+y*ww],PEEK(s)),++s;
-			while ((xx+=lx)+lx<=mx);
-		for (int y=0;v+=xx,y<my;v+=ww-mx,++y) // fill remainders
-			for (int x=xx;x<mx;++x)
-				*v++=0x808080;
-	}
-	else
-	{
-		int yy=0,ly=onscreen_grafx_size;
-		if (ly)
-			do
-				for (int x=0;x<mx;x+=8)
-					for (int y=0;y<ly;++y)
-						onscreen_grafx_step(&v[x+(yy+y)*ww],PEEK(s)),++s;
-			while ((yy+=ly)+ly<=my);
-		v+=yy*ww;
-		for (int y=yy;y<my;v+=ww-mx,++y) // fill remainders
-			for (int x=0;x<mx;++x)
-				*v++=0x808080;
-	}
-	return s;
-}
-
 // CPU: ZILOG Z80 MICROPROCESSOR ==================================== //
 
 #define Z80_MREQ_PAGE(t,p) ( z80_t+=(z80_aux2=(t+ula_clash_mreq[p][(WORD)ula_clash_z])), ula_clash_z+=z80_aux2 )
@@ -1672,28 +1574,29 @@ WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 #define Z80_SEND z80_send
 #define Z80_POST_SEND(w) do{ if ((w)&1) Z80_IORQ_1X_NEXT(3); else Z80_IORQ_PAGE(3,4); }while(0)
 // fine timings
-#define Z80_AUXILIARY int z80_aux1,z80_aux2 // they must stick between macros :-/
+#define Z80_LOCAL BYTE z80_aux1,z80_aux2 // they must stick between macros :-/
 #define Z80_MREQ(t,w) Z80_MREQ_PAGE(t,z80_aux1=((w)>>14)) // these contended memory pauses are common to all official Sinclair/Amstrad ZX Spectrum machines
-#define Z80_MREQ_1X(t,w) do{ if (t>1&&type_id<3) { z80_aux1=(w)>>14; int z80_auxx=t; do Z80_MREQ_PAGE(1,z80_aux1); while (--z80_auxx); } else Z80_MREQ(t,w); }while(0)
+#define Z80_MREQ_1X(t,w) do{ if (t>1&&type_id<3) { z80_aux1=(w)>>14; BYTE z80_auxx=t; do Z80_MREQ_PAGE(1,z80_aux1); while (--z80_auxx); } else Z80_MREQ(t,w); }while(0)
 #define Z80_MREQ_NEXT(t) Z80_MREQ_PAGE(t,z80_aux1) // when the very last z80_aux1 is the same as the current one
-#define Z80_MREQ_1X_NEXT(t) do{ if (t>1&&type_id<3) { int z80_auxx=t; do Z80_MREQ_PAGE(1,z80_aux1); while (--z80_auxx); } else Z80_MREQ_NEXT(t); }while(0)
+#define Z80_MREQ_1X_NEXT(t) do{ if (t>1&&type_id<3) { BYTE z80_auxx=t; do Z80_MREQ_PAGE(1,z80_aux1); while (--z80_auxx); } else Z80_MREQ_NEXT(t); }while(0)
 #define Z80_IORQ(t,w) Z80_IORQ_PAGE(t,z80_aux1=((w)>>14)) // these pauses are different in Spectrum PLUS3 (and PLUS2A) because only MREQ actions are contended:
-#define Z80_IORQ_1X(t,w) do{ if (t>1) { z80_aux1=(w)>>14; int z80_auxx=t; do Z80_IORQ_PAGE(1,z80_aux1); while (--z80_auxx); } else Z80_IORQ(t,w); }while(0) // Z80_IORQ is always ZERO on PLUS3!
+#define Z80_IORQ_1X(t,w) do{ if (t>1) { z80_aux1=(w)>>14; BYTE z80_auxx=t; do Z80_IORQ_PAGE(1,z80_aux1); while (--z80_auxx); } else Z80_IORQ(t,w); }while(0) // Z80_IORQ is always ZERO on PLUS3!
 #define Z80_IORQ_NEXT(t) Z80_IORQ_PAGE(t,z80_aux1) // when the very last z80_aux1 is the same as the current one
-#define Z80_IORQ_1X_NEXT(t) do{ if (t>1) { int z80_auxx=t; do Z80_IORQ_PAGE(1,z80_aux1); while (--z80_auxx); } else Z80_IORQ_NEXT(t); }while(0) // Z80_IORQ is always ZERO on PLUS3
+#define Z80_IORQ_1X_NEXT(t) do{ if (t>1) { BYTE z80_auxx=t; do Z80_IORQ_PAGE(1,z80_aux1); while (--z80_auxx); } else Z80_IORQ_NEXT(t); }while(0) // Z80_IORQ is always ZERO on PLUS3
 #define Z80_WAIT(t) ( z80_t+=t, ula_clash_z+=t )
-#define Z80_WAIT_IR1X(t) do{ if (type_id<3) { if (t>1) { z80_aux1=z80_ir.w>>14; int z80_auxx=t; do Z80_MREQ_PAGE(1,z80_aux1); while (--z80_auxx); } else { Z80_MREQ(t,z80_ir.w); } } else Z80_WAIT(t); }while(0)
+#define Z80_WAIT_IR1X(t) do{ if (type_id<3) { if (t>1) { z80_aux1=z80_ir.w>>14; BYTE z80_auxx=t; do Z80_MREQ_PAGE(1,z80_aux1); while (--z80_auxx); } else { Z80_MREQ(t,z80_ir.w); } } else Z80_WAIT(t); }while(0)
 #define Z80_PEEK(w) ( Z80_MREQ(3,w), mmu_rom[z80_aux1][w] )
 #define Z80_PEEK1 Z80_PEEK
 #define Z80_PEEK2 Z80_PEEK
 #define Z80_PEEKZ(w) ( Z80_MREQ(4,w), mmu_rom[z80_aux1][w] ) // slow PEEK
 #define Z80_POKE(w,b) ( Z80_MREQ(3,w), mmu_ram[z80_aux1][w]=(b) ) // trappable single write
+#define Z80_PEEKPOKE(w,b) ( Z80_MREQ_NEXT(3), mmu_ram[z80_aux1][w]=(b) ) // a POKE that follows a same-address PEEK, f.e. INC (HL)
 #define Z80_POKE0 Z80_POKE // untrappable single write, use with care
 #define Z80_POKE1(w,b) ( Z80_MREQ(3,w), ((w)>=0X5800&&(w)<=0X5AFF&&(Z80_SYNC_IO(0))), mmu_ram[z80_aux1][w]=(b) ) // 1st twin write; NIRVANA games on PLUS3 require it
 #define Z80_POKE2 Z80_POKE1 // 2nd twin write; NIRVANA games on 48K and 128K require it
 #define Z80_POKE3 Z80_POKE1 // 1st twin write from PUSH rr; NIRVANA games always need it
 #define Z80_POKE4 Z80_POKE0 // 2nd twin write from PUSH rr; no ATTRIB effects seem to need it
-#define Z80_POKE5 Z80_POKE0 // 1st twin write from EX rr,(SP)
+#define Z80_POKE5 Z80_PEEKPOKE // 1st twin write from EX rr,(SP)
 #define Z80_POKE6 Z80_POKE0 // 2nd twin write from EX rr,(SP)
 #define Z80_BEWARE int z80_t_=z80_t,ula_clash_z_=ula_clash_z
 #define Z80_REWIND z80_t=z80_t_,ula_clash_z=ula_clash_z_
@@ -1707,8 +1610,7 @@ WORD onscreen_grafx(int q,VIDEO_UNIT *v,int ww,int mx,int my)
 #define Z80_SLEEP(t) Z80_WAIT(t)
 #define Z80_HALT_STRIDE 0 // i.e. careful HALT, requires gradual emulation
 #define Z80_XCF_BUG 1 // replicate the SCF/CCF quirk
-#define Z80_DEBUG_MMU 0 // forbid ROM/RAM toggling, it's useless on Spectrum
-#define Z80_DEBUG_EXT 0 // forbid EXTRA hardware debugging info pages
+//BYTE z80_xcf255=255; // adjust the SCF/CCF quirk in runtime
 BYTE Z80_0XED71=0; // whether OUT (C) sends 0 (NMOS) or 255 (CMOS)
 #define Z80_TRDOS_CATCH(r) if (trdos_mapped) { if (r.b.h>=0X40) z80_trdos_leave(); } else Z80_TRDOS_ENTER(r) // page TR-DOS in and out
 #define Z80_TRDOS_ENTER(r) if (r.b.h==0X3D) z80_trdos_enter() // optimisation, TR-DOS uses a limited set of opcodes to leave
@@ -1717,7 +1619,50 @@ void z80_trdos_enter(void) // allow entering TR-DOS only when it's available and
 	{ if (!(disc_disabled|trdos_mapped)&&type_id!=3&&ula_v2&16) trdos_mapped=1,mmu_update(); }
 void z80_trdos_leave(void) { trdos_mapped=0,mmu_update(); } // always allow exiting TR-DOS!
 
+#define DEBUG_HERE
+#define DEBUG_INFOX 20 // panel width
+#define debug_info_mreq(q) (ula_clash_mreq[q]!=ula_clash[0]?'*':'-')
+#define debug_info_iorq(q) (ula_clash_iorq[q]!=ula_clash[0]?'*':'-')
+void debug_info(int q)
+{
+	sprintf(DEBUG_INFOZ(0),"ULA:       (%05d:%d)",ula_clash_z,ula_clash_mreq[1][(WORD)ula_clash_z]);
+	sprintf(DEBUG_INFOZ(1)+4,"%04X:%02X %02X:%02X:%02X",ula_bitmap,ula_bus&255,ula_v1,ula_v2,ula_v3);
+	sprintf(DEBUG_INFOZ(2)+4,"MEM:%c%c%c%c IO:%c%c%c%c",
+		debug_info_mreq(0),debug_info_mreq(1),debug_info_mreq(2),debug_info_mreq(3),
+		debug_info_iorq(0),debug_info_iorq(1),debug_info_iorq(2),debug_info_iorq(3));
+	sprintf(DEBUG_INFOZ(3),"PSG:");
+	sprintf(DEBUG_INFOZ(4),"%02X: ",psg_index);
+	debug_hexadump(DEBUG_INFOZ(4)+4,&psg_table[0],8);
+	debug_hexadump(DEBUG_INFOZ(5)+4,&psg_table[8],8);
+	debug_hilight2(DEBUG_INFOZ(4+(psg_index&15)/8)+4+(psg_index&7)*2);
+	#ifdef PSG_PLAYCITY
+	sprintf(DEBUG_INFOZ(6),"%02X: ",playcity_index[0]);
+	debug_hexadump(DEBUG_INFOZ(6)+4,&playcity_table[0][0],8);
+	debug_hexadump(DEBUG_INFOZ(7)+4,&playcity_table[0][8],8);
+	debug_hilight2(DEBUG_INFOZ(6+(playcity_index[0]&15)/8)+4+(psg_index&7)*2);
+	#endif
+	#ifdef Z80_DANDANATOR
+	sprintf(DEBUG_INFOZ(8),"DANDANATOR:");
+	sprintf(DEBUG_INFOZ(9)+0,"%c: %02X:%02X:%02X %02X:%02X:%02X",mem_dandanator?'0'+dandanator_temp:'-',dandanator_cfg[0],dandanator_cfg[1],dandanator_cfg[2],dandanator_cfg[4],dandanator_cfg[5],dandanator_cfg[6]);
+	#endif
+}
+int grafx_size(int i) { return i*8; }
+WORD grafx_show(VIDEO_UNIT *t,int g,int n,BYTE m,WORD w,int o)
+{
+	while (n-->0)
+	{
+		VIDEO_UNIT p1=o&1?0XFFFFFF:0,p0=0XFFFFFF^p1; BYTE b=debug_peek(0,w++);
+		*t++=b&128?p1:p0; *t++=b& 64?p1:p0;
+		*t++=b& 32?p1:p0; *t++=b& 16?p1:p0;
+		*t++=b&  8?p1:p0; *t++=b&  4?p1:p0;
+		*t++=b&  2?p1:p0; *t++=b&  1?p1:p0;
+		t+=g-8;
+	}
+	return w;
+}
+void grafx_info(VIDEO_UNIT *t,int g,int o) {} // nothing to do!
 #include "cpcec-z8.h"
+#undef DEBUG_HERE
 
 // EMULATION CONTROL ================================================ //
 
@@ -1753,8 +1698,7 @@ void all_reset(void) // reset everything!
 	playcity_reset(),playcity_active=dac_level=0;
 	#endif
 	z80_reset();
-	z80_debug_reset();
-	MEMFULL(z80_tape_index); snap_done=0; // avoid accidents!
+	z80_irq=0; debug_reset(); MEMFULL(z80_tape_index); snap_done=0; // avoid accidents!
 }
 
 // firmware ROM file handling operations ---------------------------- //
@@ -1824,16 +1768,15 @@ int dandanator_load(char *s) // inserts Dandanator cartridge, performs several t
 
 // snapshot file handling operations -------------------------------- //
 
-char snap_pattern[]="*.sna;*.szx";
-char snap_path[STRMAX]="";
-int snap_extended=1; // flexible behavior (i.e. 128K-format snapshots with 48K-dumps)
+char snap_pattern[]="*.szx;*.sna";
+char snap_path[STRMAX]="",snap_extended=1; // flexible behavior (i.e. 128K-format snapshots with 48K-dumps)
 
 #define SNAP_SAVE_Z80W(x,r) (header[x]=r.b.l,header[x+1]=r.b.h)
 #if 1 // experimental
 void snap_save_zxs_page(int i,FILE *f)
 {
 	#ifdef DEFLATE_LEVEL
-	int j=huff_zlib(session_scratch,sizeof(session_scratch),&mem_ram[i<<14],1<<14);
+	int j=huff_zlib(session_scratch,0X4000,&mem_ram[i<<14],1<<14);
 	if (j>0&&j<0X4000) // is the compression succesful? has it actually shrunk anything?
 	{
 		fputiiii(0X504D4152,f); fputiiii(j+3,f); // "RAMP"
@@ -1991,8 +1934,7 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 	#endif
 	else
 		return 1; // unsupported snapshot type!
-	if (s!=snap_path)
-		strcpy(snap_path,s);
+	if (s!=snap_path) strcpy(snap_path,s);
 	return snap_done=!puff_fclose(f),0;
 }
 
@@ -2100,7 +2042,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 				q-=1+1+64;
 			}
 			else if (i==0X58564F43) // "COVX", the Covox $FB DAC
-				playcity_disabled=1,playcity_reset(),playcity_active=dac_disabled=0;
+				dac_disabled=0;
 			#if 0 // useless?
 			else if (i==0X00594F4A) // "JOY\000", the joysticks
 			{
@@ -2317,7 +2259,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 	z80_irq=z80_active=0; // avoid nasty surprises!
 	ula_update(),mmu_update(); // adjust RAM and ULA models
 	psg_all_update();
-	z80_debug_reset();
+	debug_reset();
 	MEMFULL(z80_tape_index); // clean tape trap cache to avoid false positives
 	if (snap_path!=s) strcpy(snap_path,s);
 	return snap_done=!puff_fclose(f),0;
@@ -2384,7 +2326,6 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 
 // auxiliary user interface operations ------------------------------ //
 
-#define MAIN_FRAMESKIP_MASK ((1<<MAIN_FRAMESKIP_BITS)-1)
 char txt_error_snap_save[]="Cannot save snapshot!";
 char file_pattern[]="*.sna;*.szx;*.z80;*.rom;*.mld;*.dsk;*.trd;*.scl;*.tap;*.tzx;*.pzx;*.csw;*.wav";
 
@@ -2425,6 +2366,7 @@ char session_menudata[]=
 	"0x8512 Issue-2 ULA line\n"
 	"0x8511 ULA video noise\n"
 	"0x8515 NMOS-style Z80\n"
+	//"0x8516 Disable CCF/SCF Z80\n"
 	"=\n"
 	//"0x0600 Raise Z80 speed\tCtrl+F6\n"
 	//"0x4600 Lower Z80 speed\tCtrl+Shift+F6\n"
@@ -2455,10 +2397,10 @@ char session_menudata[]=
 	"0x8523 Sinclair 2 joystick\n"
 	"0x8524 Cursor/AGF joystick\n"
 	"0x8525 QAOP+Space joystick\n"
-	"0x8526 Gunstick (MHT)\n"
+	"0x4400 Gunstick (MHT)\n"
 	"=\n"
 	"0x852F Printer output..\n"
-	"0x851F Strict SNA files\n"
+	"0x851F Strict snapshots\n"
 	"0x8510 Disc controller\n"
 	"0x8590 Strict disc writes\n"
 	"0x8591 Read-only disc by default\n"
@@ -2546,11 +2488,10 @@ void session_clean(void) // refresh options
 	session_menucheck(0x0900,tape_skipload);
 	session_menucheck(0x0901,tape_rewind);
 	session_menucheck(0x4900,tape_fastload);
-	//session_menucheck(0x4901,tape_fastfeed);
 	session_menucheck(0x0400,session_key2joy);
 	session_menuradio(0x0601+multi_t-1,0x0601,0x0604);
 	session_menuradio(0x8521+joy1_type,0x8521,0x8525);
-	session_menucheck(0x8526,litegun);
+	session_menucheck(0x4400,litegun);
 	session_menucheck(0x8590,!(disc_filemode&2));
 	session_menucheck(0x8591,disc_filemode&1);
 	session_menucheck(0x8510,!(disc_disabled&1));
@@ -2590,31 +2531,23 @@ void session_clean(void) // refresh options
 		int j=i?!psg_disabled?3-i:i:0; // i.e. swaps B and C if AY-Melodik is enabled
 		psg_stereo[i][0]=256+psg_stereos[audio_mixmode][j],psg_stereo[i][1]=256-psg_stereos[audio_mixmode][j];
 		#ifdef PSG_PLAYCITY
-		playcity_stereo[0][i][0]=psg_stereo[i][0]<<1,playcity_stereo[0][i][1]=psg_stereo[i][1]<<1; // TURBO SOUND chip shares stereo with the PSG
+		playcity_stereo[0][i][0]=psg_stereo[i][0],playcity_stereo[0][i][1]=psg_stereo[i][1]; // TURBO SOUND chip shares stereo with the PSG
 		#endif
 	}
 	#endif
 	video_resetscanline(); // video scanline cfg
 	sprintf(session_info,"%d:%s %s %0.1fMHz"//" | disc %s | tape %s | %s"
 		,(ula_v2&32)?ula_sixteen&&!type_id?16:48:128,type_id?(type_id!=1?(type_id!=2?(!disc_disabled?"Plus3":"Plus2A"):"Plus2"):"128K"):"48K",
-		ula_pentagon?"Pentagon":type_id?type_id>2?"ULAv3":"ULAv2":"ULAv1",3.5*multi_t);
+		ula_pentagon?"Pentagon":type_id?type_id>2?"ULA v3":"ULA v2":"ULA v1",3.5*multi_t);
 	video_lastscanline=video_table[video_type][0]; // BLACK in the CLUT
 	video_halfscanline=VIDEO_FILTER_SCAN(video_table[video_type][15],video_lastscanline); // WHITE in the CLUT
-	*debug_buffer=128; // force debug redraw! (somewhat overkill)
+	debug_dirty=1; // force debug redraw! (somewhat overkill)
 }
 void session_user(int k) // handle the user's commands
 {
 	char *s; switch (k)
 	{
 		case 0x8100: // F1: HELP..
-			/*if (session_shift)
-			{
-				if (playcity_disabled=!playcity_disabled)
-					dac_disabled=0,playcity_reset(),playcity_active=0;
-				else
-					dac_disabled=1,dac_level=0;
-			}
-			else*/
 			session_message(
 				"F1\tHelp..\t" MESSAGEBOX_WIDETAB
 				"^F1\tAbout..\t"
@@ -2654,7 +2587,7 @@ void session_user(int k) // handle the user's commands
 				"^F8\tRemove tape"
 				"\n"
 				"\t(shift: record..)\t"
-				"\t(shift: play/stop)\t"
+				"\t(shift: play/stop)" // "\t"
 				"\n"
 				"F9\tDebug\t" MESSAGEBOX_WIDETAB
 				"^F9\tToggle fast tape"
@@ -2751,7 +2684,10 @@ void session_user(int k) // handle the user's commands
 			audio_filter=k-0x8401;
 			break;
 		case 0x0400: // ^F4: TOGGLE JOYSTICK
-			session_key2joy=!session_key2joy;
+			if (session_shift)
+				litegun=!litegun; // MHT GUNSTICK
+			else
+				session_key2joy=!session_key2joy;
 			break;
 		case 0x8521: // KEMPSTON JOYSTICK
 		case 0x8522: // SINCLAIR 1 STICK
@@ -2759,9 +2695,6 @@ void session_user(int k) // handle the user's commands
 		case 0x8524: // CURSOR JOYSTICK
 		case 0x8525: // QAOP+M JOYSTICK
 			joy1_type=k-0x8521; // 0,1,2,3,4
-			break;
-		case 0x8526: // MHT GUNSTICK
-			litegun=!litegun;
 			break;
 		case 0x8590: // STRICT DISC WRITES
 			disc_filemode^=2;
@@ -2786,11 +2719,14 @@ void session_user(int k) // handle the user's commands
 			video_clut_update();
 			break;
 		case 0x8514: // 16K MODE
-			ula_sixteen=!ula_sixteen; ula_update(),mmu_update();
+			if (!type_id) { ula_sixteen=!ula_sixteen; ula_update(),mmu_update(); }
 			break;
 		case 0x8515: // NMOS Z80
-			Z80_0XED71=Z80_0XED71?0:255;
+			Z80_0XED71=~Z80_0XED71;
 			break;
+		//case 0x8516: // SCF/CCF
+			//z80_xcf255=~z80_xcf255;
+			//break;
 		case 0x8517:
 			if ((psg_disabled=!psg_disabled)&&!type_id) // mute on 48K!
 				psg_table_sendto(8,0),psg_table_sendto(9,0),psg_table_sendto(10,0);
@@ -2799,14 +2735,10 @@ void session_user(int k) // handle the user's commands
 		case 0x8518: // PLAYCITY
 			if (playcity_disabled=!playcity_disabled)
 				playcity_reset(),playcity_active=0;
-			else
-				dac_disabled=1,dac_level=0; // forbid both PLAYCITY and COVOX at once
 			break;
 		case 0x8519: // COVOX
 			if (dac_disabled=!dac_disabled)
 				dac_level=0;
-			else
-				playcity_disabled=1,playcity_reset(),playcity_active=0; // forbid both COVOX and PLAYCITY at once
 			break;
 		#endif
 		case 0x851F:
@@ -2940,8 +2872,7 @@ void session_user(int k) // handle the user's commands
 		case 0x8900: // F9: DEBUG
 			if (!session_shift)
 			{
-				if (session_signal=SESSION_SIGNAL_DEBUG^(session_signal&~SESSION_SIGNAL_PAUSE))
-					z80_debug_reset();
+				session_signal=SESSION_SIGNAL_DEBUG^(session_signal&~SESSION_SIGNAL_PAUSE);
 				break;
 			}
 		case 0x8901:
@@ -2966,8 +2897,7 @@ void session_user(int k) // handle the user's commands
 				tape_skipload=!tape_skipload;
 			break;
 		case 0x0901:
-			//if (session_shift) tape_fastfeed=!tape_fastfeed; else
-				tape_rewind=!tape_rewind;
+			tape_rewind=!tape_rewind;
 			break;
 		case 0x8A00: // FULL SCREEN
 			session_togglefullscreen();
@@ -3093,7 +3023,7 @@ void session_configreadmore(char *s)
 	#endif
 	else if (!strcasecmp(session_parmtr,"palette")) { if ((i=*s&15)<length(video_table)) video_type=i; }
 	else if (!strcasecmp(session_parmtr,"casette")) tape_rewind=*s&1,tape_skipload=!!(*s&2),tape_fastload=!!(*s&4);
-	else if (!strcasecmp(session_parmtr,"debug")) z80_debug_configread(strtol(s,NULL,10));
+	else if (!strcasecmp(session_parmtr,"debug")) debug_configread(strtol(s,NULL,10));
 }
 void session_configwritemore(FILE *f)
 {
@@ -3114,7 +3044,7 @@ void session_configwritemore(FILE *f)
 		#ifdef Z80_DANDANATOR
 		dandanator_path,
 		#endif
-		video_type,(tape_rewind?1:0)+(tape_skipload?2:0)+(tape_fastload?4:0),z80_debug_configwrite());
+		video_type,(tape_rewind?1:0)+(tape_skipload?2:0)+(tape_fastload?4:0),debug_configwrite());
 }
 
 #if defined(DEBUG) || defined(SDL_MAIN_HANDLED)
@@ -3140,7 +3070,7 @@ int main(int argc,char *argv[])
 	MEMZERO(mem_ram);
 	all_setup();
 	all_reset();
-	video_pos_x=video_pos_y=audio_pos_z=0;
+	video_pos_x=video_pos_y=frame_pos_y=audio_pos_z=0;
 	i=0; while (++i<argc)
 	{
 		if (argv[i][0]=='-')
@@ -3294,7 +3224,7 @@ int main(int argc,char *argv[])
 		return printferror(txt_error_bios),1;
 	char *s=session_create(session_menudata); if (s)
 		return sprintf(session_scratch,"Cannot create session: %s!",s),printferror(session_scratch),1;
-	session_kbdreset();
+	debug_setup(); session_kbdreset();
 	session_kbdsetup(kbd_map_xlt,length(kbd_map_xlt)/2);
 	video_target=&video_frame[video_pos_y*VIDEO_LENGTH_X+video_pos_y]; audio_target=audio_frame;
 	audio_disabled=!session_audio;
@@ -3395,7 +3325,7 @@ int main(int argc,char *argv[])
 		}
 	}
 	// it's over, "acta est fabula"
-	z80_close();
+	debug_close(); z80_close();
 	tape_close();
 	disc_closeall(); trdos_closeall(); if (!*trdos_path) strcpy(trdos_path,disc_path); else if (!*disc_path) strcpy(disc_path,trdos_path); // avoid accidental losses
 	psg_closelog(); if (printer) printer_close();

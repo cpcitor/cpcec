@@ -1,10 +1,10 @@
- //  ####  ######    ####  #######   ####    ----------------------- //
+ //  ####  ######    ####  #######   ####  ------------------------- //
 //  ##	##  ##	##  ##	##  ##	 #  ##	##  CPCEC, plain text Amstrad //
 // ##	    ##	## ##	    ## #   ##	    CPC emulator written in C //
 // ##	    #####  ##	    ####   ##	    as a postgraduate project //
 // ##	    ##	   ##	    ## #   ##	    by Cesar Nicolas-Gonzalez //
 //  ##	##  ##	    ##	##  ##	 #  ##	##  since 2018-12-01 till now //
- //  ####  ####      ####  #######   ####    ----------------------- //
+ //  ####  ####      ####  #######   ####  ------------------------- //
 
 // SDL2 is the second supported platform; to compile the emulator type
 // "$(CC) -DSDL2 -xc cpcec.c -lSDL2" for GCC, TCC, CLANG et al.
@@ -49,28 +49,24 @@
 
 #define VIDEO_UNIT DWORD // 0x00RRGGBB style
 
-#define VIDEO_FILTER_HALF(x,y) (x==y?x:((((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00))>>1) // 50:50; the fastest algorithm, albeit with a precision loss; is it negligible or not?
-//#define VIDEO_FILTER_HALF(x,y) (x==y?x:(x<y?(((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00):(((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1) // 50:50
-//#define VIDEO_FILTER_HALF(x,y) (x==y?x:((((x&0XFF00FF)+(y&0XFF00FF)+(y&0X10001))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+(y&0X100))&0X1FE00))>>1) // 50:50; slightly more precise, but slower with GCC
-#define VIDEO_FILTER_BLURDATA vzz
-#define VIDEO_FILTER_BLUR0(z) vzz=z
-#define VIDEO_FILTER_BLUR(r,z) r=VIDEO_FILTER_HALF(vzz,z),vzz=r // accumulative 50:50 blur (not pretty)
-//#define VIDEO_FILTER_BLUR(r,z) r=VIDEO_FILTER_HALF(vzz,z),vzz=z // the fastest 50:50 blur according to GCC
-//#define VIDEO_FILTER_BLURDATA vxh,vxl,vzh,vzl
-//#define VIDEO_FILTER_BLUR0(z) vxh=z&0XFF00FF,vxl=z&0XFF00
-//#define VIDEO_FILTER_BLUR(r,z) r=((((vzh=z&0XFF00FF)+vxh+0X10001)&0X1FE01FE)+(((vzl=z&0XFF00)+vxl+0X100)&0X1FE00))>>1,vxh=vzh,vxl=vzl // 50:50 blur, but slower; the "x==y?x:..." part sets the difference
-//#define VIDEO_FILTER_BLURDATA vxh,vxl,vyh,vyl,vzh,vzl
-//#define VIDEO_FILTER_BLUR0(z) vxh=vyh=z&0XFF00FF,vxl=vyl=z&0XFF00
-//#define VIDEO_FILTER_BLUR(r,z) r=((((vzh=z&0XFF00FF)+vyh*2+vxh+0X20002)&0X3FC03FC)+(((vzl=z&0XFF00)+vyl*2+vxl+0X200)&0X3FC00))>>2,vxh=vyh,vyh=vzh,vxl=vyl,vyl=vzl // 25:50:25 blur, softer but slower
-//#define VIDEO_FILTER_BLURDATA vxx,vyy
-//#define VIDEO_FILTER_BLUR0(z) vxx=vyy=z
-//#define VIDEO_FILTER_BLUR(r,z) r=(z&0XFF0000)+(vyy&0XFF00)+(vxx&0XFF),vxx=vyy,vyy=z // chromatic aberration
+//#define VIDEO_FILTER_HALF(x,y) (x==y?x:((((x&0XFF00FF)+(y&0XFF00FF)+(y&0X10001))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+(y&0X100))&0X1FE00))>>1) // 50:50, better
+#define VIDEO_FILTER_HALF(x,y) (x==y?x:((((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00))>>1) // 50:50, faster
+//#define VIDEO_FILTER_BLURDATA vzz
+//#define VIDEO_FILTER_BLUR0(z) vzz=z
+//#define VIDEO_FILTER_BLUR(r,z) (r=VIDEO_FILTER_HALF(vzz,z),vzz=z) // 50:50 particular
+//#define VIDEO_FILTER_BLUR(r,z) (r=VIDEO_FILTER_HALF(vzz,z),vzz=r) // 50:50 widespread
+//#define VIDEO_FILTER_BLURDATA v0h,v0l,vzh,vzl
+//#define VIDEO_FILTER_BLUR0(z) v0h=z&0XFF00FF,v0l=z&0XFF00
+//#define VIDEO_FILTER_BLUR(r,z) r=(((v0h+(vzh=z&0XFF00FF)+0X10001)&0X1FE01FE)+((v0l+(vzl=z&0XFF00)+0X100)&0x1FE00))>>1,v0h=vzh,v0l=vzl // 50:50
+#define VIDEO_FILTER_BLURDATA v2h,v2l,v1h,v1l,v0h,v0l,vzh,vzl
+#define VIDEO_FILTER_BLUR0(z) v2h=v1h=v0h=z&0XFF00FF,v2l=v1l=v0l=z&0XFF00
+#define VIDEO_FILTER_BLUR(r,z) r=(((v2h+v1h+v0h+(vzh=z&0XFF00FF)+0X20002)&0X3FC03FC)+((v2l+v1l+v0l+(vzl=z&0XFF00)+0X200)&0x3FC00))>>2,v2h=v1h,v2l=v1l,v1h=v0h,v1l=v0l,v0h=vzh,v0l=vzl // 25:25:25:25
 //#define VIDEO_FILTER_X1(x) (((x>>1)&0X7F7F7F)+0X2B2B2B) // average
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)+0X404040) // heavier
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)*3+0X161616) // lighter
-#define VIDEO_FILTER_X1(x) (((x>>3)&0X1F1F1F)*5+0X222222) // average-to-lighter
-//#define VIDEO_FILTER_X1(x) ((((x&0XFF0000)*76+(x&0XFF00)*(150<<8)+(x&0XFF)*(30<<16)+(1<<23))>>24)*0X10101) // greyscale (natural)
-#define VIDEO_FILTER_SCAN(w,b) (((((w&0xFF00FF)+(b&0xFF00FF)*7)&0x7F807F8)+(((w&0xFF00)+(b&0xFF00)*7)&0x7F800))>>3) // white:black 1:7
+#define VIDEO_FILTER_X1(x) (((x>>3)&0X1F1F1F)*5+0X323232) // practical
+//#define VIDEO_FILTER_SCAN(w,b) ((((w>>1)&0X7F7F7F)+(b>>1)&0X7F7F7F)+0X010101) // 50:50
+#define VIDEO_FILTER_SCAN(w,b) ((((w>>2)&0X3F3F3F)+(b>>2)&0X3F3F3F)*3+0X020202) // 25:75
 
 #if 0 // 8 bits
 	#define AUDIO_UNIT unsigned char
@@ -88,7 +84,7 @@ VIDEO_UNIT *video_frame,*menus_frame,*video_blend; // video and UI frames, alloc
 AUDIO_UNIT *audio_frame,audio_buffer[AUDIO_LENGTH_Z*AUDIO_CHANNELS]; // audio frame
 VIDEO_UNIT *video_target; // pointer to current video pixel
 AUDIO_UNIT *audio_target; // pointer to current audio sample
-int video_pos_x,video_pos_y,audio_pos_z; // counters to keep pointers within range
+int video_pos_x,video_pos_y,frame_pos_y,audio_pos_z; // counters to keep pointers within range
 BYTE video_interlaced=0,video_interlaces=0; // video scanline status
 char video_framelimit=0,video_framecount=0; // video frameskip counters; must be signed!
 BYTE audio_disabled=0,audio_session=0; // audio status and counter
@@ -97,8 +93,9 @@ unsigned char session_path[STRMAX],session_parmtr[STRMAX],session_tmpstr[STRMAX]
 int session_timer,session_event=0; // timing synchronisation and user command
 BYTE session_fast=0,session_rhythm=0,session_wait=0,session_softblit=1,session_hardblit,session_softplay=0,session_hardplay; // software blitting enabled by default
 BYTE session_audio=1,session_stick=1,session_shift=0,session_key2joy=0; // keyboard and joystick
+int session_maus_x=0,session_maus_y=0; // mouse coordinates (UI + optional emulation)
 #ifdef MAUS_EMULATION
-int session_maus_z=0,session_maus_x=0,session_maus_y=0; // optional mouse
+int session_maus_z=0; // optional mouse emulation
 #endif
 BYTE video_scanline=0,video_scanlinez=8; // 0 = solid, 1 = scanlines, 2 = full interlace, 3 = half interlace
 BYTE video_filter=0,audio_filter=0; // filter flags
@@ -240,11 +237,11 @@ unsigned char kbd_map[256]; // key-to-key translation map
 // general engine functions and procedures -------------------------- //
 
 void session_clean(void); // clean "dirty" settings. Must be defined later on!
-void session_user(int k); // handle the user's commands; must be defined later on!
-void session_debug_show(void); // redraw the debugger text; must be defined later on, too!
-int session_debug_user(int k); // debug logic is a bit different: 0 UNKNOWN COMMAND, !0 OK
-int debug_xlat(int k); // translate debug keys into codes. Must be defined later on!
-INLINE void audio_playframe(int q,AUDIO_UNIT *ao); // handle the sound filtering; is defined in CPCEC-RT.H!
+void session_user(int); // handle the user's commands; must be defined later on!
+void session_debug_show(int); // redraw the debugger text; must be defined later on, too!
+int session_debug_user(int); // debug logic is a bit different: 0 UNKNOWN COMMAND, !0 OK
+int debug_xlat(int); // translate debug keys into codes. Must be defined later on!
+INLINE void audio_playframe(int,AUDIO_UNIT*); // handle the sound filtering; is defined in CPCEC-RT.H!
 
 void session_please(void) // stop activity for a short while
 {
@@ -290,8 +287,7 @@ SDL_Window *session_hwnd=NULL;
 // the graphical debugger effectively behaves as a temporary substitute of the emulation canvas.
 // notice that SDL_Texture, unlike SDL_Surface, doesn't rely on anything like SDL_GetWindowSurface()
 
-VIDEO_UNIT *debug_frame;
-BYTE debug_buffer[DEBUG_LENGTH_X*DEBUG_LENGTH_Y]; // [0] can be a valid character, 128 (new redraw required) or 0 (redraw not required)
+VIDEO_UNIT *debug_frame; BYTE debug_dirty; // !0 (new redraw required) or 0 (redraw not required)
 SDL_Texture *session_dbg=NULL;
 BYTE session_hidemenu=0; // positive or negative UI
 SDL_Texture *session_dib=NULL,*session_gui_dib=NULL; SDL_Renderer *session_blitter=NULL;
@@ -809,12 +805,11 @@ int session_ui_text(char *s,char *t,char q) // see session_message
 		}
 }
 
-int session_ui_input(char *s,char *t) // see session_input
+int session_ui_input(char *t) // see session_input
 {
-	int i=0,j=strlen(s),q,dirty=1,textw=SESSION_UI_MAXX;
-	if ((q=utf8len(s))>=textw)
+	int i=0,j=strlen(session_parmtr),q,dirty=1,textw=SESSION_UI_MAXX;
+	if ((q=utf8len(session_parmtr))>=textw)
 		return -1; // error!
-	strcpy(session_substr,s);
 
 	session_ui_init();
 	textw+=2; // include left+right margins
@@ -827,14 +822,14 @@ int session_ui_input(char *s,char *t) // see session_input
 		if (dirty)
 		{
 			if (q)
-				session_ui_printasciz(session_substr,textx+0,texty+1,1,textw,1,0,j); // the whole string is selected
+				session_ui_printasciz(session_parmtr,textx+0,texty+1,1,textw,1,0,j); // the whole string is selected
 			else if (i<j)
-				session_ui_printasciz(session_substr,textx+0,texty+1,1,textw,1,i,i+utf8add(&session_substr[i],+1)); // the cursor is an inverse char
+				session_ui_printasciz(session_parmtr,textx+0,texty+1,1,textw,1,i,i+utf8add(&session_parmtr[i],+1)); // the cursor is an inverse char
 			else
 			{
-				session_substr[i]=' '; session_substr[i+1]=0; // the cursor is actually an inverse space at the end
-				session_ui_printasciz(session_substr,textx+0,texty+1,1,textw,1,i,i+1);
-				session_substr[i]=0; // end of string
+				session_parmtr[i]=' '; session_parmtr[i+1]=0; // the cursor is actually an inverse space at the end
+				session_ui_printasciz(session_parmtr,textx+0,texty+1,1,textw,1,i,i+1);
+				session_parmtr[i]=0; // end of string
 			}
 			session_redraw(0);
 			dirty=0;
@@ -842,13 +837,13 @@ int session_ui_input(char *s,char *t) // see session_input
 		switch (dirty=session_ui_exchange())
 		{
 			case KBCODE_LEFT:
-				if (q||i<=0||(i+=utf8add(&session_substr[i],-1))<0)
+				if (q||i<=0||(i+=utf8add(&session_parmtr[i],-1))<0)
 			case KBCODE_HOME:
 					i=0;
 				q=0;
 				break;
 			case KBCODE_RIGHT:
-				if (q||i>=j||(i+=utf8add(&session_substr[i],+1))>j)
+				if (q||i>=j||(i+=utf8add(&session_parmtr[i],+1))>j)
 			case KBCODE_END:
 					i=j;
 				q=0;
@@ -861,7 +856,7 @@ int session_ui_input(char *s,char *t) // see session_input
 				{
 					q=0; if (session_ui_maus_x>j)
 						i=j;
-					else if (session_ui_maus_x<=1||(i=utf8add(session_substr,session_ui_maus_x-1))<0)
+					else if (session_ui_maus_x<=1||(i=utf8add(session_parmtr,session_ui_maus_x-1))<0)
 						i=0;
 					else if (i>j)
 						i=j;
@@ -877,12 +872,12 @@ int session_ui_input(char *s,char *t) // see session_input
 			case KBCODE_BKSPACE:
 			case KBCODE_DELETE:
 				if (q) // erase all?
-					*session_substr=i=j=q=0;
+					*session_parmtr=i=j=q=0;
 				else if (dirty==KBCODE_BKSPACE?i>0:i<j)
 				{
-					int o; if (dirty==KBCODE_BKSPACE) { o=i; i+=utf8add(&session_substr[i],-1); }
-					else { unsigned char *z=&session_substr[i]; utf8get((char**)&z); o=z-session_substr; }
-					memmove(&session_substr[i],&session_substr[o],j-i+1); j+=i-o;
+					int o; if (dirty==KBCODE_BKSPACE) { o=i; i+=utf8add(&session_parmtr[i],-1); }
+					else { unsigned char *z=&session_parmtr[i]; utf8get((char**)&z); o=z-session_parmtr; }
+					memmove(&session_parmtr[i],&session_parmtr[o],j-i+1); j+=i-o;
 				}
 				break;
 			default:
@@ -890,17 +885,17 @@ int session_ui_input(char *s,char *t) // see session_input
 				{
 					int o=utf8chk(session_ui_char); if (q)
 					{
-						char *z=session_substr; utf8put(&z,session_ui_char);
+						char *z=session_parmtr; utf8put(&z,session_ui_char);
 						*z=q=0; i=j=o;
 					}
 					#ifdef SDL2_UTF8
-					else if (dirty=(utf8len(session_substr)<textw-1))
+					else if (dirty=(utf8len(session_parmtr)<textw-1))
 					#else
 					else if (dirty=(j<textw-1))
 					#endif
 					{
-						memmove(&session_substr[i+o],&session_substr[i],j-i+1);
-						char *z=&session_substr[i]; utf8put(&z,session_ui_char);
+						memmove(&session_parmtr[i+o],&session_parmtr[i],j-i+1);
+						char *z=&session_parmtr[i]; utf8put(&z,session_ui_char);
 						i+=o,j+=o;
 					}
 				}
@@ -908,8 +903,6 @@ int session_ui_input(char *s,char *t) // see session_input
 		}
 	}
 	while (!done);
-	if (j>=0)
-		strcpy(s,session_substr);
 	session_ui_exit();
 	return j;
 }
@@ -1251,7 +1244,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 			if (*session_parmtr=='*') // the user wants to create a file
 			{
 				strcpy(session_parmtr,pastfile); // reuse previous name if possible
-				if (session_ui_input(session_parmtr,t)>0)
+				if (session_ui_input(t)>0)
 				{
 					if (!multiglobbing(s,session_parmtr,1)) // unknown extension?
 					{
@@ -1447,24 +1440,22 @@ int session_pad2bit(int i) // translate motions and buttons into codes
 INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 {
 	static int s=0;	if (s!=session_signal) // catch DEBUG and PAUSE
-		s=session_signal,session_dirty=1;
+		s=session_signal,session_dirty=debug_dirty=2;
 	if (session_signal&(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE))
 	{
 		session_signal_frames&=~(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE);
 		session_signal_scanlines&=~(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE); // reset traps!
 		if (session_signal&SESSION_SIGNAL_DEBUG)
-		{
-			if (*debug_buffer==128)
-				session_please(),session_debug_show();
-			if (*debug_buffer)//!=0
-				session_redraw(1),*debug_buffer=0;
-		}
+			if (debug_dirty)
+			{
+				session_please(),session_debug_show(debug_dirty!=1),
+				session_redraw(1),debug_dirty=0;
+			}
 		if (!session_paused) // set the caption just once
 		{
 			sprintf(session_tmpstr,"%s | %s | PAUSED",session_caption,session_info);
 			SDL_SetWindowTitle(session_hwnd,session_tmpstr);
-			session_please(),session_paused=1;
-			session_redraw(1); // enabling pause or debug taints the screen!
+			session_please(),session_paused=1; //session_redraw(1); // enabling pause or debug taints the screen!
 		}
 		SDL_WaitEvent(NULL);
 	}
@@ -1732,12 +1723,12 @@ void session_menuradio(int id,int a,int z) // set the option `id` in the range `
 
 // message box ------------------------------------------------------ //
 
-void session_message(char *s,char *t) { session_ui_text(s,t,0); } // show multi-lined text `s` under caption `t`
-void session_aboutme(char *s,char *t) { session_ui_text(s,t,1); } // special case: "About.."
+int session_message(char *s,char *t) { return session_ui_text(s,t,0); } // show multi-lined text `s` under caption `t`
+int session_aboutme(char *s,char *t) { return session_ui_text(s,t,1); } // special case: "About.."
 
 // input dialog ----------------------------------------------------- //
 
-int session_input(char *s,char *t) { return session_ui_input(s,t); } // `s` is the target string (empty or not), `t` is the caption; returns -1 on error or LENGTH on success
+int session_input(char *t) { return session_ui_input(t); } // `t` is the caption; returns -1 on error or LENGTH on success; both the source and target strings are in `session_parmtr`
 
 // list dialog ------------------------------------------------------ //
 
@@ -1747,7 +1738,7 @@ int session_list(int i,char *s,char *t) { return session_ui_list(i,s,t,NULL,0); 
 
 #define session_filedialog_get_readonly() (session_ui_fileflags&1)
 #define session_filedialog_set_readonly(q) (q?(session_ui_fileflags|=1):(session_ui_fileflags&=~1))
-char *session_newfile(char *r,char *s,char *t) // "Create File" | ...and returns NULL on failure, or a string on success.
+char *session_newfile(char *r,char *s,char *t) // "Create File" | ...and returns NULL on failure, or `session_parmtr` (with a file path) on success.
 	{ return session_ui_filedialog(r,s,t,0,0)?session_parmtr:NULL; }
 char *session_getfile(char *r,char *s,char *t) // "Open a File" | lists files in path `r` matching pattern `s` under caption `t`, etc.
 	{ return session_ui_filedialog(r,s,t,0,1)?session_parmtr:NULL; }
