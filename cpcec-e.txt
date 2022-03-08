@@ -1039,3 +1039,5 @@ default choice, SNA format is now secondary), the FDC ("READ ID" must fail when
 using the wrong density: noticed by Roudoudou), the audio extensions (now
 Playcity and Digiblaster can be enabled at once, as well as Turbosound and Covox
 $FB) and the video filters (weakening image contrast rather than saturation).
+- 20220307 -- minor patch fixing a bug in the "half scanlines" mode and several
+omissions in the debuggers.

@@ -1112,3 +1112,5 @@ ID" debe fallar al usar la densidad errónea: observado por Roudoudou), las
 extensiones de audio (Playcity y Digiblaster pueden coexistir, así como
 Turbosound y Covox $FB) y los filtros de vídeo (que debilitan el contraste de
 imagen en lugar de la saturación).
+- 20220307 -- parche menor que corrige un bug en el modo "half scanlines" y
+varias omisiones en los depuradores.

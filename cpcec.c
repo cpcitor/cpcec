@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20220303"//"1335"
+#define MY_VERSION "20220307"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2022 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -2425,6 +2425,15 @@ void debug_info(int q)
 		debug_hexadump(DEBUG_INFOZ(11)+4,&psg_table[8],8);
 		debug_hilight2(DEBUG_INFOZ(10+(psg_index&15)/8)+4+(psg_index&7)*2);
 		sprintf(DEBUG_INFOZ(12)+4,"PIO: %02X:%02X:%02X:%02X",pio_port_a,pio_port_b,pio_port_c,pio_control);
+		#ifdef Z80_DANDANATOR
+		sprintf(DEBUG_INFOZ(13),"DANDANATOR:");
+		sprintf(DEBUG_INFOZ(14)+4,"%02X:%02X:%02X:%02X %c%c%c%c",dandanator_cfg[4],dandanator_cfg[5],dandanator_cfg[6],dandanator_cfg[7]
+			,mmu_rom[0]>=mem_dandanator&&mmu_rom[0]<mem_dandanator+0X80000?'*':'-'
+			,mmu_rom[1]>=mem_dandanator&&mmu_rom[1]<mem_dandanator+0X80000?'*':'-'
+			,mmu_rom[2]>=mem_dandanator&&mmu_rom[2]<mem_dandanator+0X80000?'*':'-'
+			,mmu_rom[3]>=mem_dandanator&&mmu_rom[3]<mem_dandanator+0X80000?'*':'-'
+		);
+		#endif
 	}
 	else
 	{
@@ -2434,18 +2443,21 @@ void debug_info(int q)
 		sprintf(DEBUG_INFOZ(3),"    SSCR:%02X IVR:%02X %c",plus_sscr,plus_ivr,plus_gate_enabled?'*':plus_gate_counter?'@'+plus_gate_counter:'-');
 		for (q=0;q<3;++q)
 			sprintf(DEBUG_INFOZ(4+q),"DMA%c: %04X:%03X.%02X/%02X",
-					'0'+q,mgetii(&plus_dmas[q*4+0]),
-					plus_dma_regs[q][2],
-					plus_dma_regs[q][3],
-					plus_dmas[q*4+2]);
+					'0'+q,mgetii(&plus_dmas[q*4+0]), // DMA address
+					plus_dma_regs[q][2], // pause
+					plus_dma_regs[q][3], // multiplier
+					plus_dmas[q*4+2]); // pause length
 		for (q=0;q<8;++q)
-			sprintf(DEBUG_INFOZ(7+q)," %03X,%03X:%1X %03X,%03X:%1X"
-				,(mgetii(&plus_sprite_xyz[q*16+ 0]))&0xFFF
-				,(mgetii(&plus_sprite_xyz[q*16+ 2]))&0xFFF
-				,plus_sprite_xyz[q*16+ 4]&15
-				,(mgetii(&plus_sprite_xyz[q*16+ 8]))&0xFFF
-				,(mgetii(&plus_sprite_xyz[q*16+10]))&0xFFF
-				,plus_sprite_xyz[q*16+12]&15);
+		{
+			int q0=plus_sprite_xyz[q*16+ 4]&15,q1=plus_sprite_xyz[q*16+12]&15;
+			sprintf(DEBUG_INFOZ(7+q),"%03X,%03X:%c  %03X,%03X:%c"
+				,(mgetii(&plus_sprite_xyz[q*16+ 0]))&0xFFF // posx
+				,(mgetii(&plus_sprite_xyz[q*16+ 2]))&0xFFF // posy
+				,hexa1[q0]+((q0&3)*(q0&12)?128:0) // hilight if visible
+				,(mgetii(&plus_sprite_xyz[q*16+ 8]))&0xFFF // posx
+				,(mgetii(&plus_sprite_xyz[q*16+10]))&0xFFF // posy
+				,hexa1[q1]+((q1&3)*(q1&12)?128:0)); // ditto
+		}
 	}
 }
 int grafx_size(int i) { return i*4; }
@@ -2453,7 +2465,7 @@ WORD grafx_show(VIDEO_UNIT *t,int g,int n,BYTE m,WORD w,int o)
 {
 	while (n-->0)
 	{
-		BYTE b=mem_ram[w++]; if (gate_mcr&1) // MODE 1
+		BYTE b=debug_peek(0,w); ++w; if (gate_mcr&1) // MODE 1
 		{
 			*t++=video_clut[gate_mode1[0][b]];
 			*t++=video_clut[gate_mode1[1][b]];

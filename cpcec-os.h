@@ -70,7 +70,7 @@ INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 
 #define VIDEO_UNIT DWORD // 0x00RRGGBB style
 
-//#define VIDEO_FILTER_HALF(x,y) (x==y?x:((((x&0XFF00FF)+(y&0XFF00FF)+(y&0X10001))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+(y&0X100))&0X1FE00))>>1) // 50:50, better
+//#define VIDEO_FILTER_HALF(x,y) (x==y?x:x<y?((((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00))>>1:((((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1) // 50:50, better
 #define VIDEO_FILTER_HALF(x,y) (x==y?x:((((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00))>>1) // 50:50, faster
 //#define VIDEO_FILTER_BLURDATA vzz
 //#define VIDEO_FILTER_BLUR0(z) vzz=z
@@ -86,8 +86,8 @@ INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)+0X404040) // heavier
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)*3+0X161616) // lighter
 #define VIDEO_FILTER_X1(x) (((x>>3)&0X1F1F1F)*5+0X323232) // practical
-//#define VIDEO_FILTER_SCAN(w,b) ((((w>>1)&0X7F7F7F)+(b>>1)&0X7F7F7F)+0X010101) // 50:50
-#define VIDEO_FILTER_SCAN(w,b) ((((w>>2)&0X3F3F3F)+(b>>2)&0X3F3F3F)*3+0X020202) // 25:75
+//#define VIDEO_FILTER_SCAN(w,b) (((w>>1)&0X7F7F7F)+((b>>1)&0X7F7F7F)+0X010101) // 50:50
+#define VIDEO_FILTER_SCAN(w,b) (((w>>2)&0X3F3F3F)+((b>>2)&0X3F3F3F)*3+0X020202) // 25:75
 
 #if 0 // 8 bits
 	#define AUDIO_UNIT unsigned char

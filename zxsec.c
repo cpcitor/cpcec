@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20220303"//"1335"
+#define MY_VERSION "20220307"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2022 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -1639,11 +1639,12 @@ void debug_info(int q)
 	sprintf(DEBUG_INFOZ(6),"%02X: ",playcity_index[0]);
 	debug_hexadump(DEBUG_INFOZ(6)+4,&playcity_table[0][0],8);
 	debug_hexadump(DEBUG_INFOZ(7)+4,&playcity_table[0][8],8);
-	debug_hilight2(DEBUG_INFOZ(6+(playcity_index[0]&15)/8)+4+(psg_index&7)*2);
+	debug_hilight2(DEBUG_INFOZ(6+(playcity_index[0]&15)/8)+4+(playcity_index[0]&7)*2);
 	#endif
 	#ifdef Z80_DANDANATOR
 	sprintf(DEBUG_INFOZ(8),"DANDANATOR:");
-	sprintf(DEBUG_INFOZ(9)+0,"%c: %02X:%02X:%02X %02X:%02X:%02X",mem_dandanator?'0'+dandanator_temp:'-',dandanator_cfg[0],dandanator_cfg[1],dandanator_cfg[2],dandanator_cfg[4],dandanator_cfg[5],dandanator_cfg[6]);
+	sprintf(DEBUG_INFOZ(9)+0,"    %c %02X:%02X:%02X %02X:%02X",mem_dandanator?(dandanator_cfg[6]&8)?'X':(dandanator_cfg[6]&4)?'Z':'0'+dandanator_temp:'-'
+		,dandanator_cfg[0],dandanator_cfg[1],dandanator_cfg[2],dandanator_cfg[4],dandanator_cfg[5]);
 	#endif
 }
 int grafx_size(int i) { return i*8; }

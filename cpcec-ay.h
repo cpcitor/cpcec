@@ -383,7 +383,7 @@ void playcity_main(AUDIO_UNIT *t,int l)
 
 // YM3 file logging ------------------------------------------------- //
 
-char psg_tmpname[STRMAX];
+char psg_tmpname[STRMAX]="";
 FILE *psg_logfile=NULL,*psg_tmpfile;
 int psg_nextlog=1,psg_tmpsize;
 unsigned char psg_tmp[14<<9],psg_log[1<<9]; // `psg_tmp` must be 14 times as big as `psg_log`!
