@@ -154,7 +154,7 @@ void z80_reset(void) // reset the Z80
 #define Z80_OR1(x) Z80_Q_SET(z80_flags_xor[z80_af.b.h=z80_af.b.h|(x)])
 #define Z80_CP1(x) do{ int z=z80_af.b.h-x; Z80_Q_SET((z80_flags_sgn[(BYTE)z]&0xD7)+z80_flags_sub[(z^z80_af.b.h^x)&511]+(x&0x28)); }while(0) // unlike SUB, 1.- A intact, 2.- flags 3+5 from argument
 #ifdef DEBUG_HERE
-#define Z80_RET2 z80_wz=Z80_PEEK(z80_sp.w); ++z80_sp.w; z80_pc.w=z80_wz+=Z80_PEEK(z80_sp.w)<<8; if (++z80_sp.w>debug_trap_sp) { _t_=0,session_signal|=SESSION_SIGNAL_DEBUG; } // throw!
+#define Z80_RET2 z80_wz=Z80_PEEK(z80_sp.w); if (++z80_sp.w>debug_trap_sp) { _t_=0,session_signal|=SESSION_SIGNAL_DEBUG; } z80_pc.w=z80_wz+=Z80_PEEK(z80_sp.w)<<8; ++z80_sp.w; // throw!
 #else
 #define Z80_RET2 z80_wz=Z80_PEEK(z80_sp.w); ++z80_sp.w; z80_pc.w=z80_wz+=Z80_PEEK(z80_sp.w)<<8; ++z80_sp.w
 #endif
@@ -170,19 +170,10 @@ void z80_reset(void) // reset the Z80
 #define Z80_SLL1(x) do{ BYTE z=x>>7; Z80_Q_SET(z80_flags_xor[x=(x<<1)+1]+z); }while(0)
 #define Z80_SRL1(x) do{ BYTE z=x&1; Z80_Q_SET(z80_flags_xor[x=x>>1]+z); }while(0)
 #define Z80_BIT1(n,x,y) Z80_Q_SET((z80_flags_bit[x&(1<<n)]+(y&0x28))+(z80_af.b.l&1))
-#define Z80_RES1(n,x) x&=~(1<<n)
-#define Z80_SET1(n,x) x|=(1<<n)
+#define Z80_RES1(n,x) (x&=~(1<<n))
+#define Z80_SET1(n,x) (x|=(1<<n))
 #define Z80_IN2(x,y) z80_r7=r7; z80_wz=z80_bc.w; Z80_PRAE_RECV(z80_wz); Z80_Q_SET(z80_flags_xor[x=Z80_RECV(z80_wz)]+(z80_af.b.l&1)); r7=z80_r7; Z80_POST_RECV(z80_wz); ++z80_wz; Z80_STRIDE_IO(y)
 #define Z80_OUT2(x,y) z80_wz=z80_bc.w; Z80_PRAE_SEND(z80_wz); Z80_SEND(z80_wz,x); Z80_POST_SEND(z80_wz); ++z80_wz; Z80_STRIDE_IO(y)
-// the following operations "hide" and "show" the HALT status when it has an impact on PC (i.e. Spectrum versus CPC)
-#if Z80_HALT_STRIDE // CPC style, the real value of PC causes no effect during HALT
-#define Z80_PEEK_HALTED_PC
-#define Z80_POKE_HALTED_PC
-#else // Spectrum style, the real value of PC causes address contention during HALT
-#define Z80_PEEK_HALTED_PC (z80_active>1&&--z80_pc.w) // when HALT is active the PC rests on the byte after the HALT
-#define Z80_POKE_HALTED_PC (z80_active>1&&++z80_pc.w) // but we must hide it for the same reason we hide other stuff
-#endif
-// these operations ensure that saving and loading snapshots properly retriggers the HALT on Spectrum-style systems!
 
 INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 {
@@ -203,10 +194,8 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 			else
 			#endif
 			{
-				#if Z80_HALT_STRIDE // optimal HALT
 				if (z80_active>1) // HALT?
 					++z80_pc.w; // skip!
-				#endif
 				if (z80_imd&2)
 				{
 					Z80_WAIT(7); Z80_STRIDE_ZZ(0xE3); Z80_STRIDE(0x1E3); // IM 2 timing equals EX HL,(SP) : 19 T / 6 NOP
@@ -229,7 +218,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 		}
 		#if !Z80_HALT_STRIDE // careful HALT
 		else if (z80_active>1)
-			{ Z80_FETCH; Z80_STRIDE(0X000); continue; } // the Z80 is actually performing NOPs rather than HALTs
+			{ z80_wz=z80_pc.w+1; Z80_PEEKZ(z80_wz); Z80_STRIDE(0X000); continue; } // the Z80 is actually performing NOPs rather than HALTs
 		#endif
 		else
 		{
@@ -739,8 +728,8 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							r7+=z/=Z80_HALT_STRIDE;
 							Z80_SLEEP(z*Z80_HALT_STRIDE);
 						}
-						--z80_pc.w; // go back to get more!
 						#endif
+						--z80_pc.w; // go back to get more!
 						z80_active<<=1; // -1=>-2, +0=>+0 and +1=>+2
 					}
 					break;
@@ -2210,6 +2199,7 @@ void debug_leap(void) // run UNTIL meeting the next operation
 		case 0X10: q=2; break; // DJNZ $RRRR
 		case 0XCD: // CALL $NNNN
 		case 0XC4: case 0XCC: case 0XD4: case 0XDC: case 0XE4: case 0XEC: case 0XF4: case 0XFC: q=3; break; // CALL NZ/Z/NC/C/NV/V/NS/S,$NNNN
+		case 0X76: // HALT
 		case 0XC7: case 0XCF: case 0XD7: case 0XDF: case 0XE7: case 0XEF: case 0XF7: case 0XFF: q=1; break; // RST 0/1/2/3/4/5/6/7
 		case 0XED: if ((q=PEEK((z80_pc.w+1)))>=0xB0&&q<0xC0&&!(q&4)) q=2; else q=0; break; // LDIR/CPIR/INIR/OTIR+LDDR/CPDR/INDR/OTDR
 	}
@@ -2415,12 +2405,16 @@ WORD debug_dasm(char *t,WORD p) // disassembles the code at address `p` onto the
 				case 0X71: sprintf(t,"OUT  (C)"); break;
 				case 0X42: case 0X52: case 0X62: case 0X72:
 					sprintf(t,"SBC  HL,%s",twos[(o-0X40)>>4]); break;
+				case 0X4A: case 0X5A: case 0X6A: case 0X7A:
+					sprintf(t,"ADC  HL,%s",twos[(o-0X40)>>4]); break;
 				case 0X43: case 0X53: case 0X63: case 0X73:
 					sprintf(t,"LD   ($%04X),%s",DEBUG_DASM_WORD,twos[(o-0X40)>>4]); break;
+				case 0X4B: case 0X5B: case 0X6B: case 0X7B:
+					sprintf(t,"LD   %s,($%04X)",twos[(o-0X40)>>4],DEBUG_DASM_WORD); break;
 				case 0X44: case 0X4C: case 0X54: case 0X5C: case 0X64: case 0X6C: case 0X74: case 0X7C:
 					sprintf(t,"NEG"); break;
-				case 0X45: case 0X55: case 0X65: case 0X75:
-					sprintf(t,"RETN"); break;
+				case 0X45: case 0X55: case 0X65: case 0X75: sprintf(t,"RETN"); break;
+				case 0X4D: case 0X5D: case 0X6D: case 0X7D: sprintf(t,"RETI"); break;
 				case 0X46: case 0X4E: case 0X66: case 0X6E: sprintf(t,"IM   0"); break;
 				case 0X56: case 0X76: sprintf(t,"IM   1"); break;
 				case 0X5E: case 0X7E: sprintf(t,"IM   2"); break;
@@ -2430,12 +2424,6 @@ WORD debug_dasm(char *t,WORD p) // disassembles the code at address `p` onto the
 				case 0X5F: sprintf(t,"LD   A,R"); break;
 				case 0X67: sprintf(t,"RRD"); break;
 				case 0X6F: sprintf(t,"RLD"); break;
-				case 0X4A: case 0X5A: case 0X6A: case 0X7A:
-					sprintf(t,"ADC  HL,%s",twos[(o-0X40)>>4]); break;
-				case 0X4B: case 0X5B: case 0X6B: case 0X7B:
-					sprintf(t,"LD   %s,($%04X)",twos[(o-0X40)>>4],DEBUG_DASM_WORD); break;
-				case 0X4D: case 0X5D: case 0X6D: case 0X7D:
-					sprintf(t,"RETI"); break;
 				case 0XA0: sprintf(t,"LDI"); break;
 				case 0XA8: sprintf(t,"LDD"); break;
 				case 0XB0: sprintf(t,"LDIR"); break;
@@ -2520,7 +2508,7 @@ WORD debug_dasm(char *t,WORD p) // disassembles the code at address `p` onto the
 						case 0X68: case 0X69: case 0X6A: case 0X6B: case 0X6C: case 0X6D: case 0X6F:
 						case 0X70: case 0X71: case 0X72: case 0X73: case 0X74: case 0X75: case 0X77:
 						case 0X78: case 0X79: case 0X7A: case 0X7B: case 0X7C: case 0X7D: case 0X7F:
-							sprintf(t,"BIT  %d,%s,(%s%c$%02X)",(o-0X40)>>3,regs[o&7],z,y,x); break;
+							sprintf(t,"*BIT %d,(%s%c$%02X)",(o-0X40)>>3,z,y,x); break;
 						case 0X46: case 0X4E: case 0X56: case 0X5E: case 0X66: case 0X6E: case 0X76: case 0X7E:
 							sprintf(t,"BIT  %d,(%s%c$%02X)",(o-0X40)>>3,z,y,x); break;
 						case 0X80: case 0X81: case 0X82: case 0X83: case 0X84: case 0X85: case 0X87:

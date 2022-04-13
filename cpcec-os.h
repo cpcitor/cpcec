@@ -70,25 +70,6 @@ INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 
 #define VIDEO_UNIT DWORD // 0x00RRGGBB style
 
-//#define VIDEO_FILTER_HALF(x,y) (x==y?x:x<y?((((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00))>>1:((((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1) // 50:50, better
-#define VIDEO_FILTER_HALF(x,y) (x==y?x:((((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00))>>1) // 50:50, faster
-//#define VIDEO_FILTER_BLURDATA vzz
-//#define VIDEO_FILTER_BLUR0(z) vzz=z
-//#define VIDEO_FILTER_BLUR(r,z) (r=VIDEO_FILTER_HALF(vzz,z),vzz=z) // 50:50 particular
-//#define VIDEO_FILTER_BLUR(r,z) (r=VIDEO_FILTER_HALF(vzz,z),vzz=r) // 50:50 widespread
-//#define VIDEO_FILTER_BLURDATA v0h,v0l,vzh,vzl
-//#define VIDEO_FILTER_BLUR0(z) v0h=z&0XFF00FF,v0l=z&0XFF00
-//#define VIDEO_FILTER_BLUR(r,z) r=(((v0h+(vzh=z&0XFF00FF)+0X10001)&0X1FE01FE)+((v0l+(vzl=z&0XFF00)+0X100)&0x1FE00))>>1,v0h=vzh,v0l=vzl // 50:50
-#define VIDEO_FILTER_BLURDATA v2h,v2l,v1h,v1l,v0h,v0l,vzh,vzl
-#define VIDEO_FILTER_BLUR0(z) v2h=v1h=v0h=z&0XFF00FF,v2l=v1l=v0l=z&0XFF00
-#define VIDEO_FILTER_BLUR(r,z) r=(((v2h+v1h+v0h+(vzh=z&0XFF00FF)+0X20002)&0X3FC03FC)+((v2l+v1l+v0l+(vzl=z&0XFF00)+0X200)&0x3FC00))>>2,v2h=v1h,v2l=v1l,v1h=v0h,v1l=v0l,v0h=vzh,v0l=vzl // 25:25:25:25
-//#define VIDEO_FILTER_X1(x) (((x>>1)&0X7F7F7F)+0X2B2B2B) // average
-//#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)+0X404040) // heavier
-//#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)*3+0X161616) // lighter
-#define VIDEO_FILTER_X1(x) (((x>>3)&0X1F1F1F)*5+0X323232) // practical
-//#define VIDEO_FILTER_SCAN(w,b) (((w>>1)&0X7F7F7F)+((b>>1)&0X7F7F7F)+0X010101) // 50:50
-#define VIDEO_FILTER_SCAN(w,b) (((w>>2)&0X3F3F3F)+((b>>2)&0X3F3F3F)*3+0X020202) // 25:75
-
 #if 0 // 8 bits
 	#define AUDIO_UNIT unsigned char
 	#define AUDIO_BITDEPTH 8
@@ -118,14 +99,13 @@ int session_maus_x=0,session_maus_y=0; // mouse coordinates (UI + optional emula
 #ifdef MAUS_EMULATION
 int session_maus_z=0; // optional mouse
 #endif
-BYTE video_scanline=0,video_scanlinez=8; // 0 = solid, 1 = scanlines, 2 = full interlace, 3 = half interlace
 BYTE video_filter=0,audio_filter=0; // filter flags
 BYTE session_intzoom=0,session_focused=0;
 FILE *session_wavefile=NULL; // audio recording is done on each session update
 
 RECT session_ideal; // ideal rectangle where the window fits perfectly
 JOYINFOEX session_joy; // joystick+mouse buffers
-HWND session_hwnd; // window handle
+HWND session_hwnd,session_hdlg=NULL; // window handle
 HMENU session_menu=NULL; // menu handle
 BYTE session_hidemenu=0; // normal or pop-up menu
 HDC session_dc1,session_dc2=NULL; HGDIOBJ session_dib=NULL; // video structs
@@ -285,8 +265,36 @@ BYTE kbd_bit[16],joy_bit[16]; // up to 128 keys in 16 rows of 8 bits
 #define	KBCODE_X_SUB	0x4A
 #define	KBCODE_X_MUL	0x37
 #define	KBCODE_X_DIV	0xB5
-
-const BYTE kbd_k2j[]= // these keys can simulate a 4-button joystick
+BYTE native_usbkey[]={ // WIN32-USB keyboard translation table; CONTROL, SHIFT, ALT and the like aren't included
+	0,		0,		0,		0,
+	KBCODE_A,	KBCODE_B,	KBCODE_C,	KBCODE_D,
+	KBCODE_E,	KBCODE_F,	KBCODE_G,	KBCODE_H,
+	KBCODE_I,	KBCODE_J,	KBCODE_K,	KBCODE_L,
+	KBCODE_M,	KBCODE_N,	KBCODE_O,	KBCODE_P,
+	KBCODE_Q,	KBCODE_R,	KBCODE_S,	KBCODE_T,
+	KBCODE_U,	KBCODE_V,	KBCODE_W,	KBCODE_X,
+	KBCODE_Y,	KBCODE_Z,	KBCODE_1,	KBCODE_2,
+	KBCODE_3,	KBCODE_4,	KBCODE_5,	KBCODE_6,
+	KBCODE_7,	KBCODE_8,	KBCODE_9,	KBCODE_0,
+	KBCODE_ENTER,	KBCODE_ESCAPE,	KBCODE_BKSPACE,	KBCODE_TAB,
+	KBCODE_SPACE,	KBCODE_CHR1_1,	KBCODE_CHR1_2,	KBCODE_CHR2_1,
+	KBCODE_CHR2_2,	KBCODE_CHR3_3,	0,		KBCODE_CHR3_1,
+	KBCODE_CHR3_2,	KBCODE_CHR4_4,	KBCODE_CHR4_1,	KBCODE_CHR4_2,
+	KBCODE_CHR4_3,	KBCODE_CAPSLOCK,KBCODE_F1,	KBCODE_F2,
+	KBCODE_F3,	KBCODE_F4,	KBCODE_F5,	KBCODE_F6,
+	KBCODE_F7,	KBCODE_F8,	KBCODE_F9,	KBCODE_F10,
+	KBCODE_F11,	KBCODE_F12,	0,		KBCODE_SCR_LOCK,
+	KBCODE_HOLD,	KBCODE_INSERT,	KBCODE_HOME,	KBCODE_PRIOR,
+	KBCODE_DELETE,	KBCODE_END,	KBCODE_NEXT,	KBCODE_RIGHT,
+	KBCODE_LEFT,	KBCODE_DOWN,	KBCODE_UP,	KBCODE_NUM_LOCK,
+	KBCODE_X_DIV,	KBCODE_X_MUL,	KBCODE_X_SUB,	KBCODE_X_ADD,
+	KBCODE_X_ENTER,	KBCODE_X_1,	KBCODE_X_2,	KBCODE_X_3,
+	KBCODE_X_4,	KBCODE_X_5,	KBCODE_X_6,	KBCODE_X_7,
+	KBCODE_X_8,	KBCODE_X_9,	KBCODE_X_0,	KBCODE_X_DOT,
+	KBCODE_CHR4_5	};//=100
+void usbkey2native(BYTE *t,BYTE *s,int n) { while (n) { int k=*s++; *t++=k<sizeof(native_usbkey)?native_usbkey[k]:0; --n; } }
+void native2usbkey(BYTE *t,BYTE *s,int n) { while (n) { int k=0; while (k<sizeof(native_usbkey)) if (*s!=native_usbkey[k]) ++k; else break; *t++=k<sizeof(native_usbkey)?k:0; s++; --n; } }
+BYTE kbd_k2j[]= // these keys can simulate a 4-button joystick
 	{ KBCODE_UP, KBCODE_DOWN, KBCODE_LEFT, KBCODE_RIGHT, KBCODE_Z, KBCODE_X, KBCODE_C, KBCODE_V };
 
 unsigned char kbd_map[256]; // key-to-key translation map
@@ -566,8 +574,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	{
 		if (c=='=') // separator?
 		{
-			while (*s++!='\n') // ignore remainder
-				;
+			while (*s++!='\n') ; // ignore remainder
 			AppendMenu(session_submenu,MF_SEPARATOR,0,0);
 		}
 		else if (c=='0') // menu item?
@@ -680,8 +687,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	}
 
 	// cleanup, joystick and sound
-	ShowWindow(session_hwnd,SW_SHOWDEFAULT);
-	UpdateWindow(session_hwnd);
+	ShowWindow(session_hwnd,SW_SHOWDEFAULT); //UpdateWindow(session_hwnd);
 	session_timer=GetTickCount();
 	session_joy.dwSize=sizeof(session_joy);
 	session_joy.dwFlags=JOY_RETURNALL;
@@ -741,7 +747,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 		}
 		WaitMessage();
 	}
-	for (MSG msg;PeekMessage(&msg,0,0,0,PM_REMOVE);)
+	for (MSG msg;PeekMessage(&msg,NULL,0,0,PM_REMOVE);) //if (!session_hdlg||!IsDialogMessage(session_hdlg,&msg))
 	{
 		TranslateMessage(&msg);
 		if (msg.message==WM_QUIT)
@@ -923,7 +929,6 @@ void session_aboutme(char *s,char *t) // special case: "About.."
 
 // shared dialog data ----------------------------------------------- //
 
-HWND session_dialog_item; // active dialog element handle
 int session_dialog_return; // dialog outcome: integer
 char *session_dialog_text; // dialog outcome: string
 
@@ -935,9 +940,8 @@ LRESULT CALLBACK inputproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // di
 	{
 		case WM_INITDIALOG:
 			SetWindowText(hwnd,session_dialog_text);
-			session_dialog_item=GetDlgItem(hwnd,12345);
-			SendMessage(session_dialog_item,WM_SETTEXT,0,(LPARAM)session_parmtr);
-			SendMessage(session_dialog_item,EM_SETLIMITTEXT,STRMAX-1,0);
+			SendDlgItemMessage(hwnd,12345,EM_SETLIMITTEXT,STRMAX-1,0);
+			SendDlgItemMessage(hwnd,12345,WM_SETTEXT,0,(LPARAM)session_parmtr);
 			break;
 		/*case WM_SIZE:
 			RECT r; GetClientRect(hwnd,&r);
@@ -950,7 +954,7 @@ LRESULT CALLBACK inputproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // di
 				EndDialog(hwnd,0);
 			else if (!HIWORD(wparam)&&LOWORD(wparam)==IDOK)
 			{
-				session_dialog_return=SendMessage(session_dialog_item,WM_GETTEXT,STRMAX,(LPARAM)session_parmtr);
+				session_dialog_return=SendDlgItemMessage(hwnd,12345,WM_GETTEXT,STRMAX,(LPARAM)session_parmtr);
 				EndDialog(hwnd,0);
 			}
 			break;
@@ -976,15 +980,12 @@ LRESULT CALLBACK listproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // dia
 	{
 		case WM_INITDIALOG:
 			SetWindowText(hwnd,session_dialog_text);
-			session_dialog_item=GetDlgItem(hwnd,12345);
-			char *l=(char*)lparam;
-			while (*l)
+			char *l=(char*)lparam; while (*l)
 			{
-				SendMessage(session_dialog_item,LB_ADDSTRING,0,(LPARAM)l);
-				while (*l++)
-					;
+				SendDlgItemMessage(hwnd,12345,LB_ADDSTRING,0,(LPARAM)l);
+				while (*l++) ;
 			}
-			SendMessage(session_dialog_item,LB_SETCURSEL,session_dialog_return,0); // select item
+			SendDlgItemMessage(hwnd,12345,LB_SETCURSEL,session_dialog_return,0); // select item
 			session_dialog_return=-1;
 			break;
 		/*case WM_SIZE:
@@ -997,9 +998,9 @@ LRESULT CALLBACK listproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // dia
 			if (LOWORD(wparam)==IDCANCEL)
 				EndDialog(hwnd,0);
 			else if ((HIWORD(wparam)==LBN_DBLCLK)||(!HIWORD(wparam)&&LOWORD(wparam)==IDOK))
-				if ((session_dialog_return=SendMessage(session_dialog_item,LB_GETCURSEL,0,0))>=0)
+				if ((session_dialog_return=SendDlgItemMessage(hwnd,12345,LB_GETCURSEL,0,0))>=0)
 				{
-					SendMessage(session_dialog_item,LB_GETTEXT,session_dialog_return,(LPARAM)session_parmtr);
+					SendDlgItemMessage(hwnd,12345,LB_GETTEXT,session_dialog_return,(LPARAM)session_parmtr);
 					EndDialog(hwnd,0);
 				}
 			break;
@@ -1016,6 +1017,53 @@ int session_list(int i,char *s,char *t) // `s` is a list of ASCIZ entries, `i` i
 	session_dialog_text=t;
 	session_dialog_return=i;
 	DialogBoxParam(GetModuleHandle(0),(LPCSTR)34003,session_hwnd,(DLGPROC)listproc,(LPARAM)s);
+	return session_dialog_return; // the string is in `session_parmtr`
+}
+
+// scan dialog ------------------------------------------------------ //
+
+LRESULT CALLBACK scanproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // dialog callback function
+{
+	switch (msg)
+	{
+		case WM_INITDIALOG:
+			EnableWindow(session_hwnd,0);
+			SetWindowText(hwnd,session_dialog_text);
+			SendDlgItemMessage(hwnd,12345,WM_SETTEXT,0,lparam);
+			break;
+		/*case WM_SIZE:
+			RECT r; GetClientRect(hwnd,&r);
+			SetWindowPos(session_dialog_item,NULL,0,0,r.right,r.bottom,SWP_NOZORDER);
+			break;*/
+		case WM_CLOSE:
+			EnableWindow(session_hwnd,1);
+			SetFocus(session_hwnd); // avoid glitches if the user switches to another window and then back to our dialog
+			DestroyWindow(hwnd);
+			session_hdlg=NULL;
+			break;
+		default:
+			return 0;
+	}
+	return 1;
+}
+int session_scan(char *s,char *t) // `s` is the name of the event, `t` is the caption; returns <0 on error or >=0 (keyboard code) on success
+{
+	session_please();
+	session_dialog_text=t;
+	session_dialog_return=-1;
+	session_hdlg=CreateDialogParam(GetModuleHandle(0),(LPCSTR)34005,session_hwnd,(DLGPROC)scanproc,(LPARAM)s);
+	ShowWindow(session_hdlg,SW_SHOWDEFAULT); //UpdateWindow(session_hdlg);
+	for (MSG msg;session_hdlg&&GetMessage(&msg,NULL,0,0)>0;)
+	{
+		if (msg.message==WM_KEYDOWN)
+		{
+			int i=((HIWORD(msg.lParam))&127)+(((HIWORD(msg.lParam))>>1)&128);
+			if (i!=KBCODE_L_SHIFT&&i!=KBCODE_R_SHIFT&&i!=KBCODE_L_CTRL&&i!=KBCODE_R_CTRL
+				&&!((i>=KBCODE_F1&&i<=KBCODE_F10)||(i>=KBCODE_F11&&i<=KBCODE_F12)))
+				PostMessage(session_hdlg,WM_CLOSE,0,0),session_dialog_return=i==KBCODE_ESCAPE?-1:i;
+		}
+		TranslateMessage(&msg),DispatchMessage(&msg);
+	}
 	return session_dialog_return; // the string is in `session_parmtr`
 }
 

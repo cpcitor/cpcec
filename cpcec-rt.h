@@ -46,7 +46,7 @@ void mputiiii(unsigned char *x,int y) { x[3]=y>>24; x[2]=y>>16; x[1]=y>>8; *x=y;
 #define mgetmmmm(x) (*(DWORD*)(x))
 #define mputmm(x,y) ((*(WORD*)(x))=(y))
 #define mputmmmm(x,y) ((*(DWORD*)(x))=(y))
-
+// WORD/DWORD `i` must be a constant!
 #define equalsmm(x,i) (*(WORD*)(x)==(i))
 #define equalsmmmm(x,i) (*(DWORD*)(x)==(i))
 #define equalsii(x,i) (*(WORD*)(x)==(WORD)(((i>>8)&255)+((i&255)<<8)))
@@ -73,7 +73,7 @@ int  mgetmm(unsigned char *x) { return (*x<<8)+x[1]; }
 void mputmm(unsigned char *x,int y) { *x=y>>8; x[1]=y; }
 int  mgetmmmm(unsigned char *x) { return (*x<<24)+(x[1]<<16)+(x[2]<<8)+x[3]; }
 void mputmmmm(unsigned char *x,int y) { *x=y>>24; x[1]=y>>16; x[2]=y>>8; x[3]=y; }
-
+// WORD/DWORD `i` must be a constant!
 #define equalsii(x,i) (*(WORD*)(x)==(i))
 #define equalsiiii(x,i) (*(DWORD*)(x)==(i))
 #define equalsmm(x,i) (*(WORD*)(x)==(WORD)(((i>>8)&255)+((i&255)<<8)))
@@ -92,7 +92,15 @@ int fputmmmm(int i,FILE *f) { fputc(i>>24,f); fputc(i>>16,f); fputc(i>>8,f); ret
 
 // auxiliary functions ---------------------------------------------- //
 
-char *strrstr(char *h,char *n) // = strrchr + strstr
+const char hexa1[16]="0123456789ABCDEF"; // handy for `*t++=` operations
+int eval_hex(int c) // 0..15 OK, <0 ERROR!
+	{ return (c>='0'&&c<='9')?c-'0':(c>='A'&&c<='F')?c-'A'+10:(c>='a'&&c<='f')?c-'a'+10:-1; }
+int eval_dec(int c) // 0..9 OK, <0 ERROR!
+	{ return (c>='0'&&c<='9')?c-'0':-1; }
+void byte2hexa(char *t,BYTE *s,int n) { while (n-->0) { int z=*s++; *t++=hexa1[z>>4],*t++=hexa1[z&15]; } }
+int hexa2byte(BYTE *t,char *s,int n) { int h,l; while (n>0&&(h=eval_hex(*s++))>=0&&(l=eval_hex(*s++))>=0) *t++=(h<<4)+l,--n; *t=0; return n; }
+
+char *strrstr(char *h,char *n) // = strrchr + strstr (case sensitive!)
 {
 	char *z=h+strlen(h)-strlen(n); // skip last bytes that cannot match
 	while (z>=h)
@@ -106,7 +114,7 @@ char *strrstr(char *h,char *n) // = strrchr + strstr
 	}
 	return NULL;
 }
-int globbing(char *w,char *t,int q) // wildcard pattern *w against string *t; q = strcasecmp/strcmp; 0 on mismatch!
+int globbing(char *w,char *t,int q) // wildcard pattern `*w` against string `*t`; `q` = strcasecmp/strcmp; 0 on mismatch!
 {
 	char *ww=NULL,*tt=NULL,c,k; // a terribly dumbed-down take on Kirk J. Krauss' algorithm
 	if (q) // case insensitive
@@ -117,7 +125,7 @@ int globbing(char *w,char *t,int q) // wildcard pattern *w against string *t; q 
 				if (!*w) return 1; // end of pattern? succeed!
 				tt=t,ww=w; // remember wildcard and continue
 			}
-			else if (k!='?'&&lcase(k)!=lcase(c)) // wrong character?
+			else if (k!='?'&&ucase(k)!=ucase(c)) // wrong character?
 			{
 				if (!ww) return 0; // no past wildcards? fail!
 				t=++tt,w=ww; // return to wildcard and continue
@@ -145,41 +153,36 @@ int multiglobbing(char *w,char *t,int q) // like globbing(), but with multiple p
 	int n=1,c; char *m; do
 	{
 		m=session_substr; // the caller must not use this variable
-		while ((c=*w++)&&c!=';')
-			*m++=c;
-		*m=0;
+		while ((c=*w++)&&c!=';') *m++=c; *m=0;
 		if (globbing(session_substr,t,q))
 			return n;
 	}
-	while (++n,c); return 0;
+	while (++n,c);
+	return 0;
 }
 
-// the following algorithms are weak, but proper binary search is difficult to perform on packed lists; fortunately, items are likely to be partially sorted beforehand
-int sortedinsert(char *t,int z,char *s) // insert string 's' in its alphabetical order within the packed list of strings 't' of length 'z'; returns the list's new length
+// the following case-insensitive algorithms are weak, but proper binary search is difficult on packed lists; fortunately, items are more likely to be partially sorted in advance
+int sortedinsert(char *t,int z,char *s) // insert string `s` in its alphabetical order within the packed list of strings `t` of length `z`; returns the list's new length
 {
-	int m=z,n; while (m>0)
+	char *m=t+z; while (m>t)
 	{
-		n=m;
-		do --n; while (n>0&&t[n-1]); // backwards search is more convenient on partially sorted lists
-		if (strcasecmp(s,&t[n])>=0)
+		char *n=m; do --n; while (n>t&&n[-1]); // backwards search is more convenient on partially sorted lists
+		if (strcasecmp(s,n)>=0)
 			break;
 		m=n;
 	}
-	n=strlen(s)+1; if (z>m)
-		memmove(&t[m+n],&t[m],z-m);
-	return memcpy(&t[m],s,n),z+n;
+	int l=strlen(s)+1,i=z-(m-t); if (i>0) memmove(m+l,m,i);
+	return memcpy(m,s,l),z+l;
 }
-int sortedsearch(char *t,int z,char *s) // look for string 's' in an alphabetically ordered packed list of strings 't' of length 'z'; returns index (not offset!) in list
+int sortedsearch(char *t,int z,char *s) // look for string `s` in an alphabetically ordered packed list of strings `t` of length `z`; returns index (not offset!) in list
 {
-	if (s&&*s)
+	if (!s||!*s) return -1; // invalid `s` is never within `t`!
+	char *r=&t[z]; int i=0,l=1+strlen(s); while (t<r)
 	{
-		char *r=&t[z]; int i=0; while (t<r)
-		{
-			if (!strcasecmp(s,t))
-				return i;
-			++i; while (*t++)
-				;
-		}
+		char *u=t; while (*u++) ;
+		if (u-t==l&&!strcasecmp(s,t)) // minor optimisation: don't compare if lengths don't match
+			return i;
+		t=u; ++i;
 	}
 	return -1; // 's' was not found!
 }
@@ -191,10 +194,37 @@ int sortedsearch(char *t,int z,char *s) // look for string 's' in an alphabetica
 #define VIDEO_FILTER_MASK_Z 4
 int video_pos_z=0; // for timekeeping, statistics and debugging
 int video_scanblend=0,audio_mixmode=1; // 0 = pure mono, 1 = pure stereo, 2 = 50%, 3 = 25%
+BYTE video_scanline=0,video_scanlinez=8; // 0 = all scanlines, 1 = half scanlines, 2 = full interlace, 3 = half interlace, 4 = average scanlines
 VIDEO_UNIT video_lastscanline,video_halfscanline; // the fillers used in video_endscanlines() and the lightgun buffer
 #ifdef MAUS_LIGHTGUNS
 VIDEO_UNIT video_litegun; // lightgun data
 #endif
+
+// *!* are there any systems where VIDEO_UNIT is NOT the DWORD 0X00RRGGBB!? *!*
+//#define VIDEO_FILTER_HALF(x,y) (x==y?x:x<y?((((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00))>>1:((((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1) // 50:50, better
+#define VIDEO_FILTER_HALF(x,y) (x==y?x:((((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00))>>1) // 50:50, faster bur coarser: f(old,new) becomes f(0,0)=0, f(0,1)=1, f(1,0)=1 instead of 0, f(1,1)=1
+//#define VIDEO_FILTER_BLURDATA vzz
+//#define VIDEO_FILTER_BLUR0(z) vzz=z
+//#define VIDEO_FILTER_BLUR(r,z) (r=VIDEO_FILTER_HALF(vzz,z),vzz=z) // 50:50 particular
+//#define VIDEO_FILTER_BLUR(r,z) (r=VIDEO_FILTER_HALF(vzz,z),vzz=r) // 50:50 widespread
+//#define VIDEO_FILTER_BLURDATA v0h,v0l,vzh,vzl
+//#define VIDEO_FILTER_BLUR0(z) v0h=z&0XFF00FF,v0l=z&0XFF00
+//#define VIDEO_FILTER_BLUR(r,z) r=(((v0h+(vzh=z&0XFF00FF)+0X10001)&0X1FE01FE)+((v0l+(vzl=z&0XFF00)+0X100)&0x1FE00))>>1,v0h=vzh,v0l=vzl // 50:50
+//#define VIDEO_FILTER_BLURDATA v1h,v1l,v0h,v0l,vzh,vzl
+//#define VIDEO_FILTER_BLUR0(z) v1h=v0h=z&0XFF00FF,v1l=v0l=z&0XFF00
+//#define VIDEO_FILTER_BLUR(r,z) r=(((v1h+v0h+(vzh=z&0XFF00FF)*2+0X20002)&0X3FC03FC)+((v1l+v0l+(vzl=z&0XFF00)*2+0X200)&0x3FC00))>>2,v1h=v0h,v1l=v0l,v0h=vzh,v0l=vzl // 25:25:50
+#define VIDEO_FILTER_BLURDATA v2h,v2l,v1h,v1l,v0h,v0l,vzh,vzl
+#define VIDEO_FILTER_BLUR0(z) v2h=v1h=v0h=z&0XFF00FF,v2l=v1l=v0l=z&0XFF00
+#define VIDEO_FILTER_BLUR(r,z) r=(((v2h+v1h+v0h+(vzh=z&0XFF00FF)+0X20002)&0X3FC03FC)+((v2l+v1l+v0l+(vzl=z&0XFF00)+0X200)&0x3FC00))>>2,v2h=v1h,v2l=v1l,v1h=v0h,v1l=v0l,v0h=vzh,v0l=vzl // 25:25:25:25
+//#define VIDEO_FILTER_X1(x) (((x>>1)&0X7F7F7F)+0X2B2B2B) // average
+//#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)+0X404040) // heavier
+//#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)*3+0X161616) // lighter
+#define VIDEO_FILTER_X1(x) (((x>>3)&0X1F1F1F)*5+0X323232) // practical
+//#define VIDEO_FILTER_X1(x) ((((((x&0XFF0000)*54)>>16)+(((x&0XFF00)*183)>>8)+(((x&0XFF)*19)))>>8)*0X10101) // monochrome (canonical)
+//#define VIDEO_FILTER_X1(x) ((((((x&0XFF0000)*7)>>13)+(((x&0XFF00)*45)>>6)+(((x&0XFF)*20)))>>8)*0X10101) // monochrome (56:180:20)
+//#define VIDEO_FILTER_SCAN(w,b) (((w>>1)&0X7F7F7F)+((b>>1)&0X7F7F7F)+0X010101) // 50:50
+//#define VIDEO_FILTER_SCAN(w,b) (((w>>2)&0X3F3F3F)+((b>>2)&0X3F3F3F)*3+0X020202) // 25:75
+#define VIDEO_FILTER_SCAN(w,b) (((w>>3)&0X1F1F1F)+((b>>3)&0X1F1F1F)*7+0X040404) // 13:87
 
 #define MAIN_FRAMESKIP_MASK ((1<<MAIN_FRAMESKIP_BITS)-1)
 void video_resetscanline(void) // reset scanline filler values on new video options
@@ -208,6 +238,9 @@ void video_resetscanline(void) // reset scanline filler values on new video opti
 #define VIDEO_NEXT *video_target++ // "VIDEO_NEXT = VIDEO_NEXT = ..." generates invalid code on VS13 and slower code on TCC
 INLINE void video_newscanlines(int x,int y) // reset `video_target`, `video_pos_x` and `video_pos_y`, and update `video_pos_z`
 {
+	#ifdef MAUS_LIGHTGUNS
+	video_litegun=0; // the lightgun signal fades away between frames
+	#endif
 	++video_pos_z; video_target=video_frame+(video_pos_y=y)*VIDEO_LENGTH_X+(video_pos_x=x); // new coordinates
 	if (video_interlaces&&(video_scanline&2))
 		++video_pos_y,video_target+=VIDEO_LENGTH_X; // current scanline mode
@@ -228,7 +261,7 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 			vt=*vp,vs=*vp++=*vi,*vi++=VIDEO_FILTER_HALF(vt,vs); // non-accumulative gigascreen
 		vi-=VIDEO_PIXELS_X;
 	}
-	switch ((video_filter&7)+(video_scanlinez?0:8))
+	switch (video_filter+(video_scanlinez?0:8))
 	{
 		case 8: // nothing (full)
 			MEMNCPY(vo,vi,VIDEO_PIXELS_X);
@@ -342,12 +375,33 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 			while (vi<vl);
 			break;
 	}
+	if (video_scanline==4&&video_pos_y>VIDEO_OFFSET_Y+1) // fill all scanlines but one with 50:50 neighbours
+	{
+		VIDEO_UNIT *vp=(vi=vl-VIDEO_PIXELS_X)-VIDEO_LENGTH_X; vo=vp-VIDEO_LENGTH_X;
+		if (video_filter&VIDEO_FILTER_MASK_Y) // we skipped the Y-mask above, so we must perform it here
+			if (video_filter&VIDEO_FILTER_MASK_X) // if both masks are enabled, we must replicate the pattern
+				if (video_pos_y&2)
+					do
+						vt=VIDEO_FILTER_HALF(*vi,*vo),*vp++=VIDEO_FILTER_X1(vt),++vi,++vo,
+						*vp++=VIDEO_FILTER_HALF(*vi,*vo),++vi,++vo;
+					while (vi<vl);
+				else
+					do
+						*vp++=VIDEO_FILTER_HALF(*vi,*vo),++vi,++vo,
+						vt=VIDEO_FILTER_HALF(*vi,*vo),*vp++=VIDEO_FILTER_X1(vt),++vi,++vo;
+					while (vi<vl);
+			else // no X-mask, just perform the Y-mask
+				do
+					vt=VIDEO_FILTER_HALF(*vi,*vo),*vp++=VIDEO_FILTER_X1(vt),++vi,++vo;
+				while (vi<vl);
+		else // no masks, just blur the scanlines
+			do
+				*vp++=VIDEO_FILTER_HALF(*vi,*vo),++vi,++vo;
+			while (vi<vl);
+	}
 }
 INLINE void video_endscanlines(void) // end the current frame and clean up
 {
-	#ifdef MAUS_LIGHTGUNS
-	video_litegun=0; // the lightgun signal fades away between frames
-	#endif
 	static int f=-128; static VIDEO_UNIT z=~0; // first value intentionally invalid!
 	if (video_scanlinez!=video_scanline||f!=video_filter||z!=video_halfscanline) // did the config change?
 		if ((video_scanlinez=video_scanline)==1) // do we have to redo the secondary scanlines?
@@ -356,10 +410,23 @@ INLINE void video_endscanlines(void) // end the current frame and clean up
 			VIDEO_UNIT v0=f&VIDEO_FILTER_MASK_Y?VIDEO_FILTER_X1(z):z,
 				v1=f&VIDEO_FILTER_MASK_X?z:v0;
 			VIDEO_UNIT *p=video_frame+VIDEO_OFFSET_X+(VIDEO_OFFSET_Y+1)*VIDEO_LENGTH_X;
-			for (int y=0;y<VIDEO_PIXELS_Y;y+=2,p+=VIDEO_LENGTH_X*2-VIDEO_PIXELS_X)
-				for (int x=0;x<VIDEO_PIXELS_X;x+=2)
+			for (int y=0;y<VIDEO_PIXELS_Y/2;++y,p+=VIDEO_LENGTH_X*2-VIDEO_PIXELS_X)
+				for (int x=0;x<VIDEO_PIXELS_X/2;++x)
 					*p++=v0,*p++=v1; // render secondary scanlines only
 		}
+	if (video_scanline==4) // fill last scanline with 100:0 neighbours (no next line after last!)
+	{
+		VIDEO_UNIT *vi=video_frame+VIDEO_OFFSET_X+(VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-2)*VIDEO_LENGTH_X,
+			*vo=video_frame+VIDEO_OFFSET_X+(VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-1)*VIDEO_LENGTH_X;
+		if (video_filter&VIDEO_FILTER_MASK_X) // if X-mask is enabled, we must replicate the pattern
+			for (int i=0;i<VIDEO_PIXELS_X/2;++i)
+				*vo++=*vi++,*vo++=VIDEO_FILTER_X1(*vi),++vi;
+		else if (video_filter&VIDEO_FILTER_MASK_Y) // no X-mask, just perform the Y-mask
+			for (int i=0;i<VIDEO_PIXELS_X;++i)
+				*vo++=VIDEO_FILTER_X1(*vi),++vi;
+		else // no masks, just copy the scanline
+			MEMNCPY(vo,vi,VIDEO_PIXELS_X);
+	}
 }
 
 INLINE void audio_playframe(int q,AUDIO_UNIT *ao) // call between frames by the OS wrapper
@@ -414,8 +481,8 @@ INLINE void session_update(void) // render video+audio thru OS and handle realti
 		video_interlaced|=1;
 	else
 		video_interlaced&=~1;
-	if (--video_framecount<0||video_framecount>video_framelimit)
-		video_framecount=video_framelimit; // catch both <0 and >N
+	if (--video_framecount<0||video_framecount>video_framelimit+2)
+		video_framecount=video_framelimit; // catch both <0 and >N, but not automatic frameskip!
 	// simplify several frameskipping operations
 	frame_pos_y=video_framecount?video_pos_y+VIDEO_LENGTH_Y*2:video_pos_y;
 }
@@ -611,7 +678,7 @@ int huff_stored(BYTE *t,int o,BYTE *s,int i) // the storage part of DEFLATE
 		memcpy(t,s,32768); t+=32768; s+=32768; i-=32768;
 	}
 	*t++=1; *t++=i; *t++=i>>8; *t++=~i; *t++=~i>>8; // final block
-	memcpy(t,s,i); return puff_tgtl=(t-r)+i;
+	if (i) memcpy(t,s,i); return puff_tgtl=(t-r)+i;
 }
 #if DEFLATE_LEVEL > 0 // if you must save DEFLATE data and perform compression on it
 #if DEFLATE_LEVEL >= 9
@@ -625,8 +692,8 @@ void huff_write(int n,int i) // sends `n`-bit word `i` to bitstream
 	puff_buff|=i<<puff_bits; puff_bits+=n; while (puff_bits>=8)
 		puff_tgt[puff_tgtl++]=puff_buff,puff_buff>>=8,puff_bits-=8;
 }
-struct puff_huff huff_lcode={ &puff_tablez[  0],puff_lensym };
-struct puff_huff huff_ocode={ &puff_tablez[288],puff_offsym };
+struct puff_huff huff_lcode={ &puff_tablez[  0],puff_lensym }; // precalc'd length count+value tables, different to puff_lcode
+struct puff_huff huff_ocode={ &puff_tablez[288],puff_offsym }; // precalc'd offset count+value tables, different to puff_ocode
 void huff_tables(struct puff_huff *h,short *l,int n) // generates Huffman output tables from canonical length table
 {
 	for (int j=1,k=0;j<16;++j,k<<=1) for (int i=0;i<n;++i)
@@ -676,7 +743,7 @@ INLINE void huff_static(BYTE *t,BYTE *s,int i) // the compression part of DEFLAT
 int huff_main(BYTE *t,int o,BYTE *s,int i) // deflates inflated source into target; <0 ERROR, >=0 LENGTH
 {
 	puff_tgt=t; puff_tgtl=puff_buff=puff_bits=0; // beware, a bitstream isn't a bytestream!
-	if (o>i+(i>>3)) { huff_static(t,s,i),huff_write(7,0); if (puff_tgtl<i) return puff_tgtl; }
+	if (i>3&&o>i+(i>>3)) { huff_static(t,s,i),huff_write(7,0); if (puff_tgtl<i) return puff_tgtl; }
 	return huff_stored(t,o,s,i); // the actual compression failed, fall back to storage
 }
 #else // if you must save DEFLATE data but don't want to perform any compression at all
@@ -1069,7 +1136,6 @@ BYTE debug_buffer[DEBUG_LENGTH_X*DEBUG_LENGTH_Y+1];
 #define DEBUG_LOCATE(x,y) (&debug_buffer[(y)*DEBUG_LENGTH_X+(x)])
 #define debug_posx() ((VIDEO_PIXELS_X-DEBUG_LENGTH_X*8)/2)
 #define debug_posy() ((VIDEO_PIXELS_Y-DEBUG_LENGTH_Y*ONSCREEN_SIZE)/2)
-const char hexa1[16]="0123456789ABCDEF"; // handy for `*t++=` operations
 
 // these functions must be provided by the CPU code
 void debug_reset(void); // do `debug_dirty=1` and set the disassembly and stack coordinates
@@ -1099,12 +1165,38 @@ void grafx_info(VIDEO_UNIT*,int,int); // draw additional infos on the top right 
 #define DEBUG_INFOZ(n) (DEBUG_LOCATE(DEBUG_LENGTH_X-DEBUG_INFOX-10,(n))) // shortcut for debug_info to print each text line
 void debug_hilight(char *t,int n) { while (n-->0) *t++|=128; } // set inverse video on a N-character string
 void debug_hilight2(char *t) { *t|=128,t[1]|=128; } // set inverse video on exactly two characters
-void debug_hexadump(char *t,BYTE *s,int n) { while (n-->0) { int z=*s++; *t++=hexa1[z>>4],*t++=hexa1[z&15]; } }
 
 BYTE debug_panel=0,debug_page=0,debug_grafx,debug_mode=0,debug_match,debug_grafx_l=1; // debugger options: visual style, R/W mode, disasm flags...
 WORD debug_panel0_w,debug_panel1_w=1,debug_panel2_w=0,debug_panel3_w,debug_grafx_w=0; // must be unsigned!
 char debug_panel0_x,debug_panel1_x=0,debug_panel2_x=0,debug_panel3_x,debug_grafx_v=0; // must be signed!
 
+int session_debug_eval(char *s) // parse very simple expressions till an unknown character appears
+{
+	int t=0,k='+',c; for (;;)
+	{
+		while (*s==' ') ++s; // trim spaces
+		int i=0; if (*s=='.') // decimal?
+			while ((c=eval_dec(*++s))>=0)
+				i=(i*10)+c;
+		else
+			while ((c=eval_hex(*s))>=0)
+				i=(i<<4)+c,++s;
+		if (k=='+')
+			t+=i;
+		else if (k=='-')
+			t-=i;
+		else if (k=='&')
+			t&=i;
+		else if (k=='|')
+			t|=i;
+		else if (k=='^')
+			t^=i;
+		while (*s==' ') ++s; // trim spaces
+		if (!(k=*s++)||!strchr("+-&|^",k))
+			break;
+	}
+	return t;
+}
 void session_debug_print(char *t,int x,int y,int n) // print a line of `n` characters of debug text
 {
 	static BYTE debug_chrs[128*ONSCREEN_SIZE],config=~0; if (config!=debug_config) // redo font?
@@ -1230,37 +1322,6 @@ void session_debug_show(int redo) // shows the current debugger
 	}
 }
 
-int debug_expr_hex(int c) // 0..15 OK, <0 ERROR!
-	{ return (c>='0'&&c<='9')?c-'0':(c>='A'&&c<='F')?c-'A'+10:(c>='a'&&c<='f')?c-'a'+10:-1; }
-int debug_expr_dec(int c) // 0..9 OK, <0 ERROR!
-	{ return (c>='0'&&c<='9')?c-'0':-1; }
-int debug_expr(char *s) // parse very simple expressions till an unknown character appears
-{
-	int t=0,k='+',c; for (;;)
-	{
-		while (*s==' ') ++s; // trim spaces
-		int i=0; if (*s=='.') // decimal?
-			while ((c=debug_expr_dec(*++s))>=0)
-				i=(i*10)+c;
-		else
-			while ((c=debug_expr_hex(*s))>=0)
-				i=(i<<4)+c,++s;
-		if (k=='+')
-			t+=i;
-		else if (k=='-')
-			t-=i;
-		else if (k=='&')
-			t&=i;
-		else if (k=='|')
-			t|=i;
-		else if (k=='^')
-			t^=i;
-		while (*s==' ') ++s; // trim spaces
-		if (!(k=*s++)||!strchr("+-&|^",k))
-			break;
-	}
-	return t;
-}
 void debug_panel0_rewind(int n)
 {
 	while (n-->0)
@@ -1276,12 +1337,12 @@ void debug_panel0_fastfw(int n)
 		debug_panel0_w=debug_dasm(debug_buffer,debug_panel0_w);
 }
 BYTE debug_panel_string[STRMAX]="",debug_panel_pascal[STRMAX]; // looking for things like "$2100C0" must allow zeros!
-void debug_panel_search(void) // look for a Pascal string of bytes on memory; the memory dump search is case-insensitive
+void debug_panel_search(int backwards) // look for a Pascal string of bytes on memory; the memory dump search is case-insensitive
 {
-	WORD p=debug_panel?debug_panel2_w:debug_panel0_w,o=p;
+	WORD p=debug_panel?debug_panel2_w:debug_panel0_w,o=p; backwards=backwards?-1:1;
 	do
 	{
-		WORD q=++p; int i=1,j=*debug_panel_pascal; if (debug_panel)
+		WORD q=p+=backwards; int i=1,j=*debug_panel_pascal; if (debug_panel)
 		{
 			while (i<=j&&ucase(debug_panel_pascal[i])==ucase(debug_peek(debug_mode,q))) ++i,++q;
 			if (i>j) { debug_panel2_x=0,debug_panel2_w=p; return; }
@@ -1320,7 +1381,7 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 			"K\tClose log file (see L)\n"
 			"L\tLog 8-bit REGISTER into FILE\n"
 			"M\tToggle memory dump R/W mode\n"
-			"N\tNext search (see S)\n"
+			"N\tNext search (shift: prev. search; see S)\n"
 			"O\tOutput LENGTH bytes into FILE\n"
 			"P\tPrint disassembly of LENGTH bytes into FILE\n"
 			"Q\tRun until interrupt\n"
@@ -1330,7 +1391,7 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 			"U\tRun until return\n"
 			"V\tToggle appearance\n"
 			"W\tToggle debug/graphics mode\n"
-			"X\tShow more hardware info\n"
+			"X\tShow extended hardware info\n"
 			"Y\tFill LENGTH bytes with BYTE\n"
 			"Z\tDelete breakpoints\n"
 			".\tToggle breakpoint\n"
@@ -1340,10 +1401,10 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 			"Escape\tExit\n","Debugger help");
 	else if (k=='M') // TOGGLE MEMORY DUMP R/W MODE
 		debug_mode=!debug_mode;
-	else if (k=='T') // RESET CLOCK
-		main_t=0;
 	else if (k=='Q') // RUN UNTIL INTERRUPT
 		debug_inter=1,session_signal&=~SESSION_SIGNAL_DEBUG;
+	else if (k=='R') // RUN TO...
+		debug_drop(debug_panel0_w);
 	else if (k=='U') // RUN UNTIL RETURN
 		debug_fall();
 	else if (k=='V') // TOGGLE APPEARANCE
@@ -1378,7 +1439,7 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 			{
 				sprintf(session_parmtr,"%04X",debug_grafx_w);
 				if (session_input("Go to")>0)
-					debug_grafx_w=debug_expr(session_parmtr);
+					debug_grafx_w=session_debug_eval(session_parmtr);
 			}
 		else
 			k=0; // default!
@@ -1515,7 +1576,7 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 				sprintf(session_parmtr,"%04X",debug_panel>2?debug_panel3_w:debug_panel?debug_panel2_w:debug_panel0_w);
 				if (session_input("Go to")>0)
 				{
-					i=debug_expr(session_parmtr);
+					i=session_debug_eval(session_parmtr);
 					switch (debug_panel)
 					{
 						case 0: debug_panel0_x=0; debug_panel0_w=(WORD)i; break;
@@ -1551,13 +1612,13 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 			}
 			break;
 		case 'N': // NEXT SEARCH
-			if (!(debug_panel&1)) if (*debug_panel_pascal) debug_panel_search(); break;
+			if (!(debug_panel&1)) if (*debug_panel_pascal) debug_panel_search(session_shift); break;
 		case 'O': // OUTPUT BYTES INTO FILE
 			if (!(debug_panel&1))
 			{
 				char *s; FILE *f; WORD w=i=debug_panel?debug_panel2_w:debug_panel0_w;
 				if (*session_parmtr=0,session_input("Output length")>=0)
-					if (i=(WORD)debug_expr(session_parmtr))
+					if (i=(WORD)session_debug_eval(session_parmtr))
 						if (s=session_newfile(NULL,"*","Output file"))
 							if (f=fopen(s,"wb"))
 							{
@@ -1576,7 +1637,7 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 				if (*session_parmtr=0,session_input(debug_panel?"Hex dump length":"Disassembly length")>=0)
 				{
 					char *s,*t; FILE *f; WORD w=debug_panel?debug_panel2_w:debug_panel0_w,u;
-					if (i=(WORD)debug_expr(session_parmtr))
+					if (i=(WORD)session_debug_eval(session_parmtr))
 						if (s=session_newfile(NULL,"*.TXT",debug_panel?"Print hex dump":"Print disassembly"))
 							if (f=fopen(s,"w"))
 							{
@@ -1609,8 +1670,6 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 							}
 				}
 			break;
-		case 'R': // RUN TO...
-			if (debug_panel==0) debug_drop(debug_panel0_w); break;
 		case 'S': // SEARCH FOR STRING
 			if (!(debug_panel&1))
 				if (strcpy(session_parmtr,debug_panel_string),session_input("Search string")>=0)
@@ -1619,14 +1678,16 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 					if (*debug_panel_string=='$') // HEXA STRING?
 					{
 						for (i=1;debug_panel_string[i*2-1]*debug_panel_string[i*2];++i)
-							debug_panel_pascal[i]=(debug_expr_hex(debug_panel_string[i*2-1])<<4)+debug_expr_hex(debug_panel_string[i*2]);
+							debug_panel_pascal[i]=(eval_hex(debug_panel_string[i*2-1])<<4)+eval_hex(debug_panel_string[i*2]);
 						*debug_panel_pascal=i-1;
 					}
 					else // NORMAL STRING
 						memcpy(debug_panel_pascal+1,debug_panel_string,*debug_panel_pascal=strlen(debug_panel_string));
-					if (*debug_panel_pascal) debug_panel_search();
+					if (*debug_panel_pascal) debug_panel_search(0);
 				}
 			break;
+		case 'T': // RESET CLOCK
+			main_t=0; break;
 		case 'X': // SHOW MORE HARDWARE INFO
 			++debug_page; break;
 		case 'Y': // FILL BYTES WITH BYTE
@@ -1634,10 +1695,10 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 			{
 				WORD w=i=debug_panel?debug_panel2_w:debug_panel0_w; BYTE b;
 				if (*session_parmtr=0,session_input("Fill length")>=0)
-					if (i=(WORD)debug_expr(session_parmtr))
+					if (i=(WORD)session_debug_eval(session_parmtr))
 						if (*session_parmtr=0,session_input("Filler byte")>=0)
 						{
-							b=debug_expr(session_parmtr);
+							b=session_debug_eval(session_parmtr);
 							while (i--) debug_poke(w++,b);
 						}
 			}
@@ -1967,7 +2028,7 @@ char *session_configread(unsigned char *t) // reads configuration file; t points
 	{
 		if (!strcasecmp(t,"polyphony")) return audio_mixmode=*s&3,NULL;
 		if (!strcasecmp(t,"softaudio")) return audio_filter=*s&3,NULL;
-		if (!strcasecmp(t,"scanlines")) return video_scanline=*s&3,video_scanblend=*s&4,NULL;
+		if (!strcasecmp(t,"scanlines")) return video_scanline=(*s&14)>>1,video_scanline=video_scanline>4?4:video_scanline,video_scanblend=*s&1,NULL;
 		if (!strcasecmp(t,"softvideo")) return video_filter=*s&7,NULL;
 		if (!strcasecmp(t,"zoomvideo")) return session_intzoom=*s&1,NULL;
 		if (!strcasecmp(t,"safevideo")) return session_softblit=*s&1,NULL;
@@ -1983,13 +2044,14 @@ void session_configwrite(FILE *f) // save common parameters
 		"film %d\ninfo %d\n"
 		"polyphony %d\nsoftaudio %d\nscanlines %d\nsoftvideo %d\nzoomvideo %d\nsafevideo %d\nsafeaudio %d\n"
 		,session_filmscale+(session_filmtimer<<1),onscreen_flag
-		,audio_mixmode,audio_filter,(video_scanline&3)+(video_scanblend?4:0),video_filter,session_intzoom,session_softblit,session_softplay
+		,audio_mixmode,audio_filter,(video_scanline<<1)+(video_scanblend?1:0),video_filter,(session_intzoom?1:0),session_softblit,session_softplay
 		);
 }
 
 void session_wrapup(void) // final operations before `session_byebye`
 {
 	puff_byebye();
+	debug_close();
 	session_closefilm();
 	session_closewave();
 }

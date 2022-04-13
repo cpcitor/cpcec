@@ -34,10 +34,11 @@ Una tarjeta de sonido es opcional, así como emplear un joystick. El ratón pued
 emular una pistola de luz a elección del usuario.
 
 El emulador se compone de varios ficheros: los binarios ejecutables (por defecto
-CPCEC.EXE y ZXSEC.EXE para Windows) y los ficheros de firmware CPC464.ROM,
-CPC664.ROM, CPC6128.ROM, CPCADOS.ROM, CPCPLUS.ROM, SPEC128K.ROM, SPEC-P-2.ROM,
-SPEC-P-3.ROM y SPECTRUM.ROM. Todos ellos deben ser copiados en un mismo
-directorio, idealmente creado para alojar el emulador.
+CPCEC.EXE, CSFEC.EXE y ZXSEC.EXE para Windows) y los ficheros de firmware
+C1541.ROM, C64EN.ROM, CPC464.ROM, CPC664.ROM, CPC6128.ROM, CPCADOS.ROM,
+CPCPLUS.ROM, SPEC128K.ROM, SPEC-P-2.ROM, SPEC-P-3.ROM y SPECTRUM.ROM. Todos
+ellos deben ser copiados en un mismo directorio, idealmente creado para alojar
+el emulador.
 
 Los binarios pueden ser compilados a partir de los ficheros fuente siguiendo las
 instrucciones incluidas a continuación. GCC 4.9.2, GCC 5.1.0, Pelles C 4.50.113,
@@ -51,6 +52,10 @@ mediante los siguientes comandos:
 	gcc -mwindows cpcec.res -O2 -xc cpcec.c -luser32 -lgdi32 -lwinmm
 -lcomdlg32 -lshell32 -ocpcec.exe
 
+	windres csfec.rc -Ocoff -ocsfec.res
+	gcc -mwindows csfec.res -O2 -xc csfec.c -luser32 -lgdi32 -lwinmm
+-lcomdlg32 -lshell32 -osfcec.exe
+
 	windres zxsec.rc -Ocoff -ozxsec.res
 	gcc -mwindows zxsec.res -O2 -xc zxsec.c -luser32 -lgdi32 -lwinmm
 -lcomdlg32 -lshell32 -ozxsec.exe
@@ -59,11 +64,11 @@ La posibilidad de emplear opcionalmente DirectDraw consiste en añadir `-DDDRAW
 -lddraw` al final de los comandos `gcc ...`.
 
 Pelles C y otros compiladores visuales pueden definir el proyecto entero a
-partir de los ficheros fuente CPCEC.C y ZXSEC.C y los ficheros de recursos
-CPCEC.RC y ZXSEC.RC, y deducir los ficheros adicionales por sí mismos (iconos y
-ficheros de cabecera) mientras que las librerías necesarias para compilarlo (de
-no reconocerlas automáticamente el compilador) son USER32, GDI32, WINMM,
-COMDLG32 y SHELL32, todas ellas del SDK de Win32.
+partir de los ficheros fuente CPCEC.C, CSFEC.C y ZXSEC.C y los ficheros de
+recursos CPCEC.RC, CSFEC.RC y ZXSEC.RC, y deducir los ficheros adicionales por
+sí mismos (iconos y ficheros de cabecera) mientras que las librerías necesarias
+para compilarlo (de no reconocerlas automáticamente el compilador) son USER32,
+GDI32, WINMM, COMDLG32 y SHELL32, todas ellas del SDK de Win32.
 
 Los binarios para sistemas operativos con soporte SDL2 necesitan comandos
 distintos. Algunos sistemas pueden necesitar un parámetro adicional
@@ -71,6 +76,8 @@ distintos. Algunos sistemas pueden necesitar un parámetro adicional
 corto.
 
 	gcc -DSDL2 -O2 -xc cpcec.c -lSDL2 -ocpcec
+
+	gcc -DSDL2 -O2 -xc csfec.c -lSDL2 -ocsfec
 
 	gcc -DSDL2 -O2 -xc zxsec.c -lSDL2 -ozxsec
 
@@ -101,8 +108,8 @@ muestra una breve explicación de las opciones disponibles.
 * -g0, -g1, -g2, -g3, -g4 : elegir el tipo de CRTC de 0 a 4 (tipo 1 por
 defecto);
 * -h : ayuda breve;
-* -j : activar la emulación del joystick por teclado (cursores y teclas Z, X y
-C);
+* -j : activar la emulación del joystick por teclado (por defecto cursores y
+teclas Z, X y C);
 * -J : deshabilitar el uso de un joystick conectado al sistema;
 * -K, -k0 : emular solamente 64k de RAM;
 * -k1 : emular 128k de RAM (por defecto);
@@ -115,17 +122,21 @@ C);
 * -m3 : iniciar la emulación como un Amstrad Plus (Plus 464, Plus 6128 y GX4000
 solamente se distinguen en la cantidad de RAM, el controlador de disco y el
 teclado);
+* -o : mostrar indicadores en pantalla;
 * -O : ocultar indicadores en pantalla (por defecto visibles);
 * -p : habilitar audio Playcity (por defecto deshabilitado);
 * -P : deshabilitar audio Playcity;
 * -R : deshabilitar emulación en tiempo real (por defecto habilitada);
 * -S : deshabilitar sonido (por defecto habilitado si hay una tarjeta de
 sonido);
+* -t : habilitar estereofonía;
 * -T : deshabilitar estereofonía (por defecto habilitada);
-* -X : emplear la pantalla completa en lugar de una ventana;
+* -W : emplear la pantalla completa en lugar de una ventana;
 * -X : deshabilitar emulación de unidades de disco (por defecto habilitada);
+* -y : habilitar el análisis de cinta;
 * -Y : deshabilitar el análisis de cinta (por defecto habilitado; ver más
 adelante);
+* -z : habilitar la aceleración de cinta;
 * -Z : deshabilitar la aceleración de cinta (por defecto habilitada);
 * -! : deshabilitar la aceleración por hardware de vídeo y audio.
 * -$ : cambiar el menú de normal (siempre visible) a contextual (botón derecho)
@@ -435,6 +446,35 @@ menú y las opciones -g0, -g1, -g2, g3 y -g4 permiten elegir el tipo de joystick
 ZXSEC puede mostrar efectos Gigascreen (por ejemplo la demo "Mescaline
 Synesthesia" 2009 DeMarche) mediante las opciones de entrelazado en el menú
 Video.
+
+## CSFEC ##
+
+CSFEC es un emulador del sistema Commodore 64 (modelo PAL) basado en el marco de
+trabajo común de CPCEC y ZXSEC. Puede leer ficheros de programa PRG e imágenes
+de cinta TAP y T64, y admite opcionalmente un chip SID extra en el puerto $D420
+ó $DE00, o dos chips extras en los puertos $D420 y $D440 ó $DE00 y $DF00.
+
+Se compone de los ficheros CSFEC.EXE, C64EN.ROM y C1541.ROM, y funciona como
+CPCEC y ZXSEC, con unas pocas diferencias:
+
+* no hay opciones -mX, -kX y -K, dado que ahora mismo sólo emula un sistema y
+aún no considera la memoria extendida.
+* no hay opciones -p y -P;
+* los ficheros de firmware (tales como el adjunto C64EN.ROM) son ficheros de 20k
+cuyos primeros 8k son la ROM KERNAL, los 8k siguientes son la ROM BASIC, y los
+4k finales son la ROM CHAR.
+* ESCAPE emulate la tecla RUN/STOP, TAB emula CONTROL, BLOQ MAYUS emula
+CONTROL+SHIFT, CONTROL emula la tecla C=, INSERT emula la tecla POUND, HOME
+emula la tecla CLR/HOME, DELETE emula FLECHA ARRIBA, END emula RESTORE y el
+teclado numérico emula las teclas de función F1-F8; observe que CSFEC se ocupa
+automáticamente de apretar la tecla SHIFT dual de algunas teclas, por ejemplo
+CURSOR ARRIBA = CURSOR ABAJO + SHIFT;
+* las opciones de joystick se refieren al puerto #2 del joystick de C64 por
+defecto; el menú permite elegir el puerto #1 en su lugar.
+
+CSFEC puede interpretar el sonido digitalizado de títulos como "Stormlord" si la
+opción "SID 8580 type" está desactivada, obedeciendo el impacto del tipo de chip
+SID en las máquinas reales al tocar sonido digital.
 
 ## Agradecimientos ##
 
@@ -1114,3 +1154,18 @@ Turbosound y Covox $FB) y los filtros de vídeo (que debilitan el contraste de
 imagen en lugar de la saturación).
 - 20220307 -- parche menor que corrige un bug en el modo "half scanlines" y
 varias omisiones en los depuradores.
+- 20220412 -- vigésima segunda versión pública. CSFEC es un nuevo emulador de
+Commodore 64: aprueba varias pruebas del paquete PC64 (CPUTIMING, CPUPORT y todo
+el conjunto de operaciones del MOS 6510) pero suspende otras (IRQ, NMI y todas
+las pruebas de CIA); acepta hasta dos chips SID extras (tanto en $D420 y $D440
+como en $DE00 y $DF00) pero la emulación del VIC-II está incompleta (no hay
+lógica de "badline" ni contención de sprites); puede cargar ficheros PRG y leer
+imágenes de cinta T64 y TAP, pero no emula la unidad de disco C1541 y en
+consecuencia no es capaz de abrir imágenes de disco D64. Nuevo interfaz de
+joystick virtual: el usuario puede redefinir las teclas que simulan el joystick
+virtual en lugar de limitarse a las teclas Z y X y los cursores. El análisis de
+cinta puede detectar cargadores musicales: la aceleración de cinta se suspenderá
+temporalmente para asegurar que las canciones suenan con normalidad. Corregido
+un error en el Z80 (los tiempos internos de OUT (n),A estaban mal) y la
+sincronización horizontal del LA-7800 (ambos avisados por Hicks): la demo de CPC
+"Onescreen Colonies #2" se comporta debidamente.

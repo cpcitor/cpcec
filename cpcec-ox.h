@@ -49,25 +49,6 @@
 
 #define VIDEO_UNIT DWORD // 0x00RRGGBB style
 
-//#define VIDEO_FILTER_HALF(x,y) (x==y?x:x<y?((((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00))>>1:((((x&0XFF00FF)+(y&0XFF00FF))&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00))&0X1FE00))>>1) // 50:50, better
-#define VIDEO_FILTER_HALF(x,y) (x==y?x:((((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00))>>1) // 50:50, faster
-//#define VIDEO_FILTER_BLURDATA vzz
-//#define VIDEO_FILTER_BLUR0(z) vzz=z
-//#define VIDEO_FILTER_BLUR(r,z) (r=VIDEO_FILTER_HALF(vzz,z),vzz=z) // 50:50 particular
-//#define VIDEO_FILTER_BLUR(r,z) (r=VIDEO_FILTER_HALF(vzz,z),vzz=r) // 50:50 widespread
-//#define VIDEO_FILTER_BLURDATA v0h,v0l,vzh,vzl
-//#define VIDEO_FILTER_BLUR0(z) v0h=z&0XFF00FF,v0l=z&0XFF00
-//#define VIDEO_FILTER_BLUR(r,z) r=(((v0h+(vzh=z&0XFF00FF)+0X10001)&0X1FE01FE)+((v0l+(vzl=z&0XFF00)+0X100)&0x1FE00))>>1,v0h=vzh,v0l=vzl // 50:50
-#define VIDEO_FILTER_BLURDATA v2h,v2l,v1h,v1l,v0h,v0l,vzh,vzl
-#define VIDEO_FILTER_BLUR0(z) v2h=v1h=v0h=z&0XFF00FF,v2l=v1l=v0l=z&0XFF00
-#define VIDEO_FILTER_BLUR(r,z) r=(((v2h+v1h+v0h+(vzh=z&0XFF00FF)+0X20002)&0X3FC03FC)+((v2l+v1l+v0l+(vzl=z&0XFF00)+0X200)&0x3FC00))>>2,v2h=v1h,v2l=v1l,v1h=v0h,v1l=v0l,v0h=vzh,v0l=vzl // 25:25:25:25
-//#define VIDEO_FILTER_X1(x) (((x>>1)&0X7F7F7F)+0X2B2B2B) // average
-//#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)+0X404040) // heavier
-//#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)*3+0X161616) // lighter
-#define VIDEO_FILTER_X1(x) (((x>>3)&0X1F1F1F)*5+0X323232) // practical
-//#define VIDEO_FILTER_SCAN(w,b) (((w>>1)&0X7F7F7F)+((b>>1)&0X7F7F7F)+0X010101) // 50:50
-#define VIDEO_FILTER_SCAN(w,b) (((w>>2)&0X3F3F3F)+((b>>2)&0X3F3F3F)*3+0X020202) // 25:75
-
 #if 0 // 8 bits
 	#define AUDIO_UNIT unsigned char
 	#define AUDIO_BITDEPTH 8
@@ -97,7 +78,6 @@ int session_maus_x=0,session_maus_y=0; // mouse coordinates (UI + optional emula
 #ifdef MAUS_EMULATION
 int session_maus_z=0; // optional mouse emulation
 #endif
-BYTE video_scanline=0,video_scanlinez=8; // 0 = solid, 1 = scanlines, 2 = full interlace, 3 = half interlace
 BYTE video_filter=0,audio_filter=0; // filter flags
 BYTE session_intzoom=0; int session_joybits=0;
 FILE *session_wavefile=NULL; // audio recording is done on each session update
@@ -228,8 +208,9 @@ BYTE kbd_bit[16],joy_bit[16]; // up to 128 keys in 16 rows of 8 bits
 #define KBCODE_X_SUB	 86
 #define KBCODE_X_MUL	 85
 #define KBCODE_X_DIV	 84
-
-const BYTE kbd_k2j[]= // these keys can simulate a 4-button joystick
+void usbkey2native(BYTE *t,BYTE *s,int n) { memcpy(t,s,n); } // no translation is needed;
+void native2usbkey(BYTE *t,BYTE *s,int n) { memcpy(t,s,n); } // the SDL2 keyboard is USB!
+BYTE kbd_k2j[]= // these keys can simulate a 4-button joystick
 	{ KBCODE_UP, KBCODE_DOWN, KBCODE_LEFT, KBCODE_RIGHT, KBCODE_Z, KBCODE_X, KBCODE_C, KBCODE_V };
 
 unsigned char kbd_map[256]; // key-to-key translation map
@@ -624,6 +605,12 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 							if (item==k)
 								z=&m[-2],session_event=j;
 							session_ui_printasciz(m,itemx+ox+0,1+oy+k,1,itemw,1,0,item==k?-1:+0);
+							if (j==0X8000) // empty item?
+							{
+								int x=(itemx+ox+1)*8,y=(1+oy+k)*SESSION_UI_HEIGHT+SESSION_UI_HEIGHT/2;
+								session_fillrect(x,y-1,itemw*8,1,SESSION_UI_025); // high dash is dark
+								session_fillrect(x,y  ,itemw*8,1,SESSION_UI_075); // low dash is light
+							}
 							events[k++]=j;
 						}
 						while (*m++) // skip item name
@@ -686,14 +673,14 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 					break;
 				default:
 					if (session_ui_char>=32)
-						for (int o=lcase(session_ui_char),n=items;n;--n)
+						for (int o=ucase(session_ui_char),n=items;n;--n)
 						{
 							++z,++z; // skip ID
 							while (*z++)
 								;
 							if (++item>=items)
 								item=0,z=zz;
-							if (lcase(z[4])==o)
+							if (ucase(z[4])==o)
 								break;
 						}
 					break;
@@ -713,10 +700,8 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 	return;
 }
 
-int session_ui_text(char *s,char *t,char q) // see session_message
+void session_ui_textinit(char *s,char *t,char q) // used by session_ui_text and session_ui_scan
 {
-	if (!s||!t)
-		return -1;
 	session_ui_init();
 	int i,j,textw=0,texth=1+2; // caption + blank + text + blank
 	unsigned char *m=t;
@@ -790,6 +775,12 @@ int session_ui_text(char *s,char *t,char q) // see session_message
 			}
 	}
 	session_redraw(0);
+}
+
+int session_ui_text(char *s,char *t,char q) // see session_message
+{
+	if (!s||!t) return -1;
+	session_ui_textinit(s,t,q); // includes session_ui_init
 	for (;;)
 		switch (session_ui_exchange())
 		{
@@ -1052,7 +1043,7 @@ int session_ui_list(int item,char *s,char *t,void x(void),int q) // see session_
 				if (session_ui_char>=32)
 				{
 					int itemo=item,n=items;
-					for (int o=lcase(session_ui_char);n;--n)
+					for (int o=ucase(session_ui_char);n;--n)
 					{
 						if (item<0)
 							item=0,z=s;
@@ -1064,7 +1055,7 @@ int session_ui_list(int item,char *s,char *t,void x(void),int q) // see session_
 						}
 						if (!(*z))
 							item=0,z=s;
-						if (lcase(*z)==o)
+						if (ucase(*z)==o)
 							break;
 					}
 					if (!n)
@@ -1079,6 +1070,35 @@ int session_ui_list(int item,char *s,char *t,void x(void),int q) // see session_
 		strcpy(session_parmtr,z);
 	session_ui_exit();
 	return item;
+}
+
+int session_ui_redefine(void) // wait for a key, even if it isn't a character
+{
+	for (SDL_Event event;SDL_WaitEvent(&event);) // custom message handler
+		switch (event.type)
+		{
+			case SDL_WINDOWEVENT:
+				if (event.window.event==SDL_WINDOWEVENT_EXPOSED)
+					SDL_RenderPresent(session_blitter);//SDL_UpdateWindowSurface(session_hwnd); // fast redraw
+				break;
+			case SDL_QUIT:
+				return -1;
+			case SDL_MOUSEBUTTONUP: // better than SDL_MOUSEBUTTONDOWN
+				session_ui_maus_x=(event.button.x-session_ideal.x)*VIDEO_PIXELS_X/session_ideal.w/8-session_ui_base_x,session_ui_maus_y=(event.button.y-session_ideal.y)*VIDEO_PIXELS_Y/session_ideal.h/SESSION_UI_HEIGHT-session_ui_base_y;
+				return session_ui_maus_x>=0&&session_ui_maus_x<session_ui_size_x&&session_ui_maus_y>=0&&session_ui_maus_y<session_ui_size_y?0:-1;
+			case SDL_KEYDOWN:
+				if ((event.key.keysym.scancode>=KBCODE_F1&&event.key.keysym.scancode<=KBCODE_F12)||
+					(event.key.keysym.mod&(KMOD_CTRL|KMOD_SHIFT|KMOD_ALT|KMOD_GUI))) break; // reject!
+				return event.key.keysym.scancode==KBCODE_ESCAPE?-1:event.key.keysym.scancode; // escape/return
+		}
+	return 0; // can this ever happen?
+}
+int session_ui_scan(char *s,char *t) // see session_scan
+{
+	if (!s||!t) return -1;
+	session_ui_textinit(s,t,0); // includes session_ui_init
+	int i; while (!(i=session_ui_redefine())) ;
+	session_ui_exit(); return i;
 }
 
 int multiglobbing(char *w,char *t,int q); // multi-pattern globbing; must be defined later on!
@@ -1354,10 +1374,10 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 		char *r=s; int mxx=0;
 		for (;;)
 		{
-			if (*r=='=')
+			if (*r=='=') // separator?
 				while (*r++!='\n')
 					;
-			else if (*r=='0')
+			else if (*r=='0') // menu item?
 			{
 				while (*r++!=' ')
 					;
@@ -1370,18 +1390,17 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 				while (*r++!='\n')
 					;
 			}
-			else
-				break;
+			else break;
 		}
 		// second scan: generate items
 		for (;;)
-			if (*s=='=')
+			if (*s=='=') // separator?
 			{
 				*t++=0x80; *t++=0;*t++=0; // 0x8000 is an empty menu item (menus cannot generate the DROPFILE event)
 				while (*s++!='\n')
 					;
 			}
-			else if (*s=='0')
+			else if (*s=='0') // menu item?
 			{
 				int i=strtol(s,&s,0); // allow either hex or decimal
 				*t++=i>>8; *t++=i; *t++=' ';*t++=' ';
@@ -1399,8 +1418,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 						++h;
 				t[-1]=0;
 			}
-			else
-				break;
+			else break;
 		*t++=0;*t++=0;
 	}
 	*t=0;
@@ -1733,6 +1751,10 @@ int session_input(char *t) { return session_ui_input(t); } // `t` is the caption
 // list dialog ------------------------------------------------------ //
 
 int session_list(int i,char *s,char *t) { return session_ui_list(i,s,t,NULL,0); } // `s` is a list of ASCIZ entries, `i` is the default chosen item, `t` is the caption; returns -1 on error or 0..n-1 on success
+
+// scan dialog ------------------------------------------------------ //
+
+int session_scan(char *s,char *t) { return session_ui_scan(s,t); } // `s` is the name of the event, `t` is the caption; returns <0 on error or 0..n-1 (keyboard code) on success
 
 // file dialog ------------------------------------------------------ //
 
