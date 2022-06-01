@@ -572,7 +572,6 @@ void disc_data_send(BYTE b) // DATA I/O
 				disc_length=1;
 				disc_phase=4;
 				disc_offset=0;
-				break;
 		}
 	}
 	else if (disc_phase==1) // PARAMETERS?

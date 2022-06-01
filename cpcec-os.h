@@ -23,6 +23,14 @@ unsigned char session_scratch[1<<18]; // at least 256k!
 
 #define INLINE // 'inline' is useless in TCC and GCC4, and harmful in GCC5!
 #define UNUSED // '__attribute__((unused))' isn't always ready outside GCC.
+#if __GNUC__ >= 4 // optional branch prediction hints
+#define LIKELY(x) __builtin_expect(!!(x),1) // see 'likely' from Linux
+#define UNLIKELY(x) __builtin_expect((x),0) // see 'unlikely'
+#else // branch prediction hints are unreliable outside GCC
+#define LIKELY(x) (x) // not ready, fall back
+#define UNLIKELY(x) (x) // ditto
+#endif
+
 INLINE int ucase(int i) { return i>='a'&&i<='z'?i-32:i; }
 INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 #define length(x) (sizeof(x)/sizeof(*(x)))
@@ -43,8 +51,12 @@ INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 
 #ifdef DEBUG
 #define cprintf(...) fprintf(stdout,__VA_ARGS__)
-#else
+#define cputchar(x) fputc(x,stdout)
+#define cputs(x) fputs(x,stdout)
+#else // warning: parameters won't be eval'd!
 #define cprintf(...) 0
+#define cputchar(x) 0
+#define cputs(x) 0
 #endif
 
 #ifdef SDL2 // SDL2 is mandatory outside Win32 and optional inside Win32
@@ -535,6 +547,7 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 				session_event=wparam>32&&wparam<=255?wparam:0; // exclude SPACE and non-visible codes!
 			break;
 		case WM_KEYUP:
+			session_shift=GetKeyState(VK_SHIFT)<0;
 			if ((k=session_key_n_joy(((HIWORD(lparam))&127)+(((HIWORD(lparam))>>1)&128)))<128) // normal key
 				kbd_bit_res(k);
 			break;

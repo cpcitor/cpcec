@@ -22,8 +22,6 @@
 #define MEMSAVE(x,y) memcpy((x),(y),sizeof(y))
 #define MEMLOAD(x,y) memcpy((x),(y),sizeof(x))
 #define MEMNCPY(x,y,z) memcpy((x),(y),sizeof(*(x))*(z))
-#define MINNY(x,y) ((x)<(y)?(x):(y))
-#define MAXXY(x,y) ((x)>(y)?(x):(y))
 
 int fread1(void *t,int l,FILE *f) { int k=0,i; while (l&&(i=fread(t,1,l,f))) { t=(void*)((char*)t+i); k+=i; l-=i; } return k; } // safe fread(t,1,l,f)
 int fwrite1(void *t,int l,FILE *f) { int k=0,i; while (l&&(i=fwrite(t,1,l,f))) { t=(void*)((char*)t+i); k+=i; l-=i; } return k; } // safe fwrite(t,1,l,f)
@@ -188,12 +186,13 @@ int sortedsearch(char *t,int z,char *s) // look for string `s` in an alphabetica
 }
 
 // interframe functions --------------------------------------------- //
+// warning: the following code assumes that VIDEO_UNIT is DWORD 0X00RRGGBB!
 
 #define VIDEO_FILTER_MASK_X 1
 #define VIDEO_FILTER_MASK_Y 2
 #define VIDEO_FILTER_MASK_Z 4
 int video_pos_z=0; // for timekeeping, statistics and debugging
-int video_scanblend=0,audio_mixmode=1; // 0 = pure mono, 1 = pure stereo, 2 = 50%, 3 = 25%
+BYTE video_scanblend=0,audio_mixmode=1; // 0 = pure mono, 1 = pure stereo, 2 = 50%, 3 = 25%
 BYTE video_scanline=0,video_scanlinez=8; // 0 = all scanlines, 1 = half scanlines, 2 = full interlace, 3 = half interlace, 4 = average scanlines
 VIDEO_UNIT video_lastscanline,video_halfscanline; // the fillers used in video_endscanlines() and the lightgun buffer
 #ifdef MAUS_LIGHTGUNS
@@ -236,7 +235,7 @@ void video_resetscanline(void) // reset scanline filler values on new video opti
 }
 
 #define VIDEO_NEXT *video_target++ // "VIDEO_NEXT = VIDEO_NEXT = ..." generates invalid code on VS13 and slower code on TCC
-INLINE void video_newscanlines(int x,int y) // reset `video_target`, `video_pos_x` and `video_pos_y`, and update `video_pos_z`
+INLINE void video_newscanlines(int x,int y) // call before each new frame: reset `video_target`, `video_pos_x` and `video_pos_y`, and update `video_pos_z`
 {
 	#ifdef MAUS_LIGHTGUNS
 	video_litegun=0; // the lightgun signal fades away between frames
@@ -246,7 +245,7 @@ INLINE void video_newscanlines(int x,int y) // reset `video_target`, `video_pos_
 		++video_pos_y,video_target+=VIDEO_LENGTH_X; // current scanline mode
 }
 // do not manually unroll the following operations, GCC is smart enough to do a better job on its own: 1820% > 1780%!
-INLINE void video_drawscanline(void) // call between scanlines; memory caching makes this more convenient than gathering all operations in video_endscanlines()
+INLINE void video_drawscanline(void) // call after each drawn scanline; memory caching makes this more convenient than gathering all operations in video_endscanlines()
 {
 	VIDEO_UNIT vt,vs,VIDEO_FILTER_BLURDATA,*vi=video_target-video_pos_x+VIDEO_OFFSET_X,*vl=vi+VIDEO_PIXELS_X,
 		*vo=video_target-video_pos_x+VIDEO_OFFSET_X+VIDEO_LENGTH_X;
@@ -375,7 +374,7 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 			while (vi<vl);
 			break;
 	}
-	if (video_scanline==4&&video_pos_y>VIDEO_OFFSET_Y+1) // fill all scanlines but one with 50:50 neighbours
+	if (video_scanline>=4&&video_pos_y>VIDEO_OFFSET_Y+1) // fill all scanlines but one with 50:50 neighbours
 	{
 		VIDEO_UNIT *vp=(vi=vl-VIDEO_PIXELS_X)-VIDEO_LENGTH_X; vo=vp-VIDEO_LENGTH_X;
 		if (video_filter&VIDEO_FILTER_MASK_Y) // we skipped the Y-mask above, so we must perform it here
@@ -400,7 +399,9 @@ INLINE void video_drawscanline(void) // call between scanlines; memory caching m
 			while (vi<vl);
 	}
 }
-INLINE void video_endscanlines(void) // end the current frame and clean up
+INLINE void video_nextscanline(int x) // call before each new scanline: move on to next scanline, where `x` is the new horizontal position
+	{ frame_pos_y+=2,video_pos_y+=2,video_target+=VIDEO_LENGTH_X*2-video_pos_x; video_target+=video_pos_x=x; session_signal|=session_signal_scanlines; }
+INLINE void video_endscanlines(void) // call after each drawn frame: end the current frame and clean up
 {
 	static int f=-128; static VIDEO_UNIT z=~0; // first value intentionally invalid!
 	if (video_scanlinez!=video_scanline||f!=video_filter||z!=video_halfscanline) // did the config change?
@@ -414,7 +415,7 @@ INLINE void video_endscanlines(void) // end the current frame and clean up
 				for (int x=0;x<VIDEO_PIXELS_X/2;++x)
 					*p++=v0,*p++=v1; // render secondary scanlines only
 		}
-	if (video_scanline==4) // fill last scanline with 100:0 neighbours (no next line after last!)
+	if (video_scanline>=4) // fill last scanline with 100:0 neighbours (no next line after last!)
 	{
 		VIDEO_UNIT *vi=video_frame+VIDEO_OFFSET_X+(VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-2)*VIDEO_LENGTH_X,
 			*vo=video_frame+VIDEO_OFFSET_X+(VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-1)*VIDEO_LENGTH_X;
@@ -574,13 +575,12 @@ INLINE int puff_stored(void) // copies raw uncompressed byte block from source t
 {
 	if (puff_srco+4>puff_srcl)
 		return -1; // source overrun!
-	puff_buff=puff_bits=0; // ignore remaining bits
 	int l=puff_src[puff_srco++]; l+=puff_src[puff_srco++]<<8;
 	int k=puff_src[puff_srco++]; k+=puff_src[puff_srco++]<<8;
 	if (!l||l+k!=0xFFFF) return -1; // invalid value!
 	if (puff_srco+l>puff_srcl||puff_tgto+l>puff_tgtl) return -1; // source/target overrun!
 	do puff_tgt[puff_tgto++]=puff_src[puff_srco++]; while (--l); // copy source to target and update pointers
-	return 0;
+	return puff_buff=puff_bits=0; // ignore remaining bits
 }
 short puff_lencnt[15+1],puff_lensym[288]; // 286 and 287 are reserved
 short puff_offcnt[15+1],puff_offsym[32]; // 30 and 31 are reserved
@@ -640,15 +640,13 @@ int puff_main(void) // inflates deflated source into target; !0 ERROR
 {
 	int q,e; puff_buff=puff_bits=0; // puff_srcX and puff_tgtX are set by caller
 	do
-	{
-		q=puff_read(1); switch (puff_read(2)) // which type of block it is?
+		switch (q=puff_read(1),puff_read(2)) // which type of block it is?
 		{
 			case 0: e=puff_stored(); break; // uncompressed raw bytes
 			case 1: e=puff_static(); break; // default Huffman coding
 			case 2: e=puff_dynamic(); break; // custom Huffman coding
-			default: e=1; break; // invalid value!
+			default: e=1; // invalid value!
 		}
-	}
 	while (!(q|e)); // is this the last block? did something go wrong?
 	return e;
 }
@@ -667,6 +665,10 @@ int puff_zlib(BYTE *t,int o,BYTE *s,int i) // decodes a RFC1950 standard ZLIB ob
 
 // the DEFLATE method! ... or (once again) a quick-and-dirty implementation
 // based on the RFC1951 standard and reusing bits from INFLATE functions.
+
+#if defined(DEFLATE_RFC1950)&&!defined(DEFLATE_LEVEL)
+#define DEFLATE_LEVEL 0 // catch when ZLIB encoding is required but DEFLATE_LEVEL is missing
+#endif
 
 #ifdef DEFLATE_LEVEL
 int huff_stored(BYTE *t,int o,BYTE *s,int i) // the storage part of DEFLATE
@@ -721,12 +723,12 @@ INLINE void huff_static(BYTE *t,BYTE *s,int i) // the compression part of DEFLAT
 		while (hash2s<p) HUFF_HASH2(hash2s)=hash2s,++hash2s; // update hash table
 		int len=p+1,off=0,x=p-DEFLATE_SHL,y=p+258; if (x<0) x=0; if (y>i) y=i;
 		for (int o=HUFF_HASH2(p);o>=x;--o) // search: the slowest part of the function
-			if (s[o]==s[p]&&s[o+1]==s[p+1]&&s[o+2]==s[p+2]) // is there a match?
+			if (s[o]==s[p]&&s[o+1]==s[p+1]&&s[o+2]==s[p+2]) // is this a match?
 			{
 				int cmp1=o+2,cmp2=p+2; while (++cmp2<y&&s[cmp2]==s[++cmp1]);
 				if (len<cmp2) if (off=p-o,(len=cmp2)>=y) break; // maximum?
 			}
-		if ((len-=p)>2)
+		if ((len-=p)>2) // was there a match after all?
 		{
 			p+=len; // greedy algorithm always chooses the longest match
 			for (x=len/   9;x<29;++x) if (len<puff_lcode0[0][x+1]) break; //    9=(  258/30)+1
@@ -1138,6 +1140,7 @@ BYTE debug_buffer[DEBUG_LENGTH_X*DEBUG_LENGTH_Y+1];
 #define debug_posy() ((VIDEO_PIXELS_Y-DEBUG_LENGTH_Y*ONSCREEN_SIZE)/2)
 
 // these functions must be provided by the CPU code
+void debug_clear(void); // clean temporary breakpoints
 void debug_reset(void); // do `debug_dirty=1` and set the disassembly and stack coordinates
 char *debug_list(void); // return a string of letters of registers that can be logged
 BYTE debug_peek(BYTE,WORD); // receive a byte from address WORD and R/W flag BYTE
@@ -1170,6 +1173,14 @@ BYTE debug_panel=0,debug_page=0,debug_grafx,debug_mode=0,debug_match,debug_grafx
 WORD debug_panel0_w,debug_panel1_w=1,debug_panel2_w=0,debug_panel3_w,debug_grafx_w=0; // must be unsigned!
 char debug_panel0_x,debug_panel1_x=0,debug_panel2_x=0,debug_panel3_x,debug_grafx_v=0; // must be signed!
 
+WORD debug_longdasm(char *t,WORD p) // disassemble code and include its hexadecimal dump
+{
+	WORD q=p; memset(t,' ',9); p=debug_dasm(t+9,p);
+	for (BYTE n=4,b;q!=p&&n>0;++q,--n)
+		b=debug_peek(0,q),*t++=hexa1[b>>4],*t++=hexa1[b&15];
+	if (q!=p) t[-2]='\177',t[-1]='.'; // too long? truncate! :(
+	return p;
+}
 int session_debug_eval(char *s) // parse very simple expressions till an unknown character appears
 {
 	int t=0,k='+',c; for (;;)
@@ -1199,7 +1210,7 @@ int session_debug_eval(char *s) // parse very simple expressions till an unknown
 }
 void session_debug_print(char *t,int x,int y,int n) // print a line of `n` characters of debug text
 {
-	static BYTE debug_chrs[128*ONSCREEN_SIZE],config=~0; if (config!=debug_config) // redo font?
+	static BYTE debug_chrs[128*ONSCREEN_SIZE],config=16; if (config!=debug_config) // redo font?
 		switch (((config=debug_config&=15)>>2)&3)
 		{
 			case 0: for (int i=0,j=0;i<sizeof(debug_chrs);++i) j=onscreen_chrs[i],debug_chrs[i]=j|(j>>1); break; // NORMAL
@@ -1233,7 +1244,7 @@ void session_debug_show(int redo) // shows the current debugger
 	static int videox,videoy,videoz; int i; WORD p; BYTE b; char *t;
 	memset(debug_buffer,' ',sizeof(debug_buffer)); // clear buffer
 	if (redo||((videox^video_pos_x)|(videoy^video_pos_y)|(videoz^video_pos_z)))
-		debug_reset(); // reset debugger and background!
+		debug_clear(),debug_reset(); // reset debugger and background!
 	videoz=video_pos_z; session_backupvideo(debug_frame); // translucent debug text needs this :-/
 	if ((videoy=video_pos_y)>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-1)
 		for (int x=0,z=((video_pos_y&-2)-VIDEO_OFFSET_Y)*VIDEO_PIXELS_X;x<VIDEO_PIXELS_X;++x,++z)
@@ -1276,7 +1287,6 @@ void session_debug_show(int redo) // shows the current debugger
 	else
 	{
 		// the order of the printing hinges on sprintf() appending a ZERO to each string :-/
-		debug_info(debug_page); // print the emulators' hardware info
 		// top right panel: the CPU registers
 		for (i=0;i<DEBUG_LENGTH_Y/2;++i)
 			debug_regs(DEBUG_LOCATE(DEBUG_LENGTH_X-9,i),i);
@@ -1287,14 +1297,13 @@ void session_debug_show(int redo) // shows the current debugger
 			if (debug_match) // hilight active stack item
 				debug_hilight(DEBUG_LOCATE(DEBUG_LENGTH_X-9,i),4);
 		}
+		// print the hardware info next to the CPU registers
+		debug_info(debug_page);
 		// top left panel: the disassembler
 		for (i=0,p=debug_panel0_w;i<DEBUG_LENGTH_Y/2;++i)
 		{
-			sprintf(DEBUG_LOCATE(0,i),"%04X:%c",p,debug_point[p]?(debug_point[p]&8)?debug_list()[debug_point[p]&7]:'@':' ');
-			WORD q=p; p=debug_dasm(DEBUG_LOCATE(15,i),p);
-			t=DEBUG_LOCATE(6,i); int n=4; while (q!=p&&n-->0)
-				b=debug_peek(0,q),*t++=hexa1[b>>4],*t++=hexa1[b&15],++q;
-			if (q!=p) t[-2]='\177',t[-1]='.'; // long disassemblies are truncated :(
+			sprintf(DEBUG_LOCATE(0,i),"%04X:%c",p,(debug_point[p]&63)?(debug_point[p]&8)?debug_list()[debug_point[p]&7]:'@':' ');
+			p=debug_longdasm(DEBUG_LOCATE(6,i),p);
 			if (debug_match) // hilight current opcode
 				debug_hilight(DEBUG_LOCATE(0,i),4);
 		}
@@ -1661,7 +1670,7 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 								else // DISASSEMBLY
 									do // WRAP!
 									{
-										u=debug_dasm(session_substr,w);
+										u=debug_longdasm(session_substr,w);
 										fprintf(f,"$%04X: %s\n",w,session_substr);
 										i-=(WORD)(u-w); w=u;
 									}

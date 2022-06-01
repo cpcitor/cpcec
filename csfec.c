@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CSFEC"
 #define my_caption "csfec"
-#define MY_VERSION "20220412"//"2555"
+#define MY_VERSION "20220531"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2022 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -188,31 +188,45 @@ const unsigned char kbd_map_xlt[]=
 
 const VIDEO_UNIT video_table[][16]= // colour table, 0xRRGGBB style: the 16 original colours
 {
-	// monochrome - black and white
-	{
-		0X000000,0XFFFFFF,0X454545,0XB9B9B9,0X565656,0X919191,0X353535,0XE6E6E6,
-		0X5B5B5B,0X3A3A3A,0X818181,0X4A4A4A,0X7B7B7B,0XE4E4E4,0X777777,0XB2B2B2,
-	},
-	// dark colour, pow(a,1.5)/16.0
-	{
+	{ // monochrome - black 'n white
+		0X000000,0XFFFFFF,0X505050,0XA0A0A0,0X606060,0X808080,0X404040,0XC0C0C0,
+		0X606060,0X404040,0X808080,0X505050,0X787878,0XC0C0C0,0X787878,0XA0A0A0,
+		},{
+#if 0 // Pepto's Colodore v1 -- colodore.com
+		//0X000000,0XFFFFFF,0X454545,0XB9B9B9,0X565656,0X919191,0X353535,0XE6E6E6,
+		//0X5B5B5B,0X3A3A3A,0X818181,0X4A4A4A,0X7B7B7B,0XE4E4E4,0X777777,0XB2B2B2,
+		//},{
 		0X000000,0XFFFFFF,0X5C171A,0X4FB9B1,0X6A1D74,0X328D2A,0X131279,0XE4EA4B,
 		0X6A2D10,0X311A00,0XAC464B,0X282828,0X555555,0X89FF7D,0X4A47E1,0X949494,
-	},
-	// normal colour, cfr. colodore.com
-	{
+		},{
 		0X000000,0XFFFFFF,0X813338,0X75CEC8,0X8E3C97,0X56AC4D,0X2E2C9B,0XEDF171,
 		0X8E5029,0X553800,0XC46C71,0X4A4A4A,0X7B7B7B,0XA9FF9F,0X706DEB,0XB2B2B2,
-	},
-	// bright colour, pow(a*16.0,0.666667)
-	{
+		},{
 		0X000000,0XFFFFFF,0XA2575D,0X98DDD9,0XAD61B4,0X7CC473,0X524FB7,0XF3F694,
 		0XAD764B,0X7B5D00,0XD69094,0X707070,0X9D9D9D,0XC2FFBA,0X9491F2,0XC9C9C9,
-	},
-	// monochrome - green screen
-	{
-		0X003C00,0X82FF82,0X1A631A,0X69DA69,0X1F6A1F,0X58C058,0X165E16,0X7BF47B,
-		0X297929,0X1D671D,0X378F37,0X267526,0X3F9A3F,0X82FF82,0X388F38,0X5BC45B,
-	},
+		//},{
+		//0X003C00,0X82FF82,0X237123,0X5EC95E,0X2C7E2C,0X4AAB4A,0X1B651B,0X75EC75,
+		//0X2F822F,0X1E691E,0X429E42,0X267526,0X3F9A3F,0X74EA74,0X3D973D,0X5BC45B,
+#else // Community-Colors v1.2a -- p1x3l.net
+		//0X000000,0XFFFFFF,0X494949,0XBCBCBC,0X626262,0XA0A0A0,0X434343,0XDFDFDF,
+		//0X6A6A6A,0X3F3F3F,0X8F8F8F,0X4D4D4D,0X848484,0XE0E0E0,0X818181,0XB6B6B6,
+		//},{
+		0X000000,0XFFFFFF,0X911110,0X3DC6B6,0X921F99,0X28AE28,0X191BAC,0XD7E42B,
+		0X993409,0X421A01,0XE04E46,0X2A2A2A,0X5F5F5F,0X86F77C,0X4A56DA,0X999998,
+		},{
+		0X000000,0XFFFFFF,0XAF2A29,0X62D8CC,0XB03FB6,0X4AC64A,0X3739C4,0XE4ED4E,
+		0XB6591C,0X683808,0XEA746C,0X4D4D4D,0X848484,0XA6FA9E,0X707CE6,0XB6B6B5,
+		},{
+		0X000000,0XFFFFFF,0XC74D4B,0X87E5DC,0XC765CC,0X70D870,0X5C5ED6,0XEDF374,
+		0XCC7F3B,0X8C5D19,0XF19790,0X737373,0XA5A5A5,0XC0FCBA,0X949EEE,0XCCCCCB,
+		//},{
+		//0X003C00,0X82FF82,0X257425,0X60CC60,0X328732,0X51B651,0X226F22,0X72E672,
+		//0X368D36,0X206C20,0X49A949,0X277727,0X43A143,0X72E772,0X429F42,0X5DC75D,
+#endif
+		},{
+		0X003C00,0X82FF82,0X297929,0X52B652,0X318531,0X419E41,0X216D21,0X62CF62,
+		0X318531,0X216D21,0X419E41,0X297929,0X3D983D,0X62CF62,0X3D983D,0X52B652,
+	}, // monochrome - green screen
 };
 
 // GLOBAL DEFINITIONS =============================================== //
@@ -225,7 +239,7 @@ int multi_t=1; // overclocking factor
 
 BYTE mem_ram[9<<16],mem_rom[5<<12],mem_i_o[1<<12]; // RAM (64K C64 + 512K REU), ROM (8K KERNAL, 8K BASIC, 4K CHARGEN) and I/O (1K VIC-II, 1K SID, 1K VRAM, 1K CIA+EXTRAS)
 BYTE *mmu_rom[256],*mmu_ram[256]; // pointers to all the 256-byte pages
-BYTE mmu_bit[256]; // flags of all the 256-byte pages: +1 filters READs and +2 filters WRITEs
+BYTE mmu_bit[256]; // flags of all the 256-byte pages: +1 PEEK, +2 POKE, +4 DUMBPEEK, +8 DUMBPOKE
 #define PEEK(x) mmu_rom[(x)>>8][x] // WARNING, x cannot be `x=EXPR`!
 #define POKE(x) mmu_ram[(x)>>8][x] // WARNING, x cannot be `x=EXPR`!
 
@@ -234,12 +248,12 @@ BYTE mmu_bit[256]; // flags of all the 256-byte pages: +1 filters READs and +2 f
 #define CIA_TABLE_0 (&mem_i_o[0XC00])
 #define CIA_TABLE_1 (&mem_i_o[0XD00])
 #define SID_TABLE_0 (&mem_i_o[0X400])
-BYTE *SID_TABLE[3]={SID_TABLE_0,&mem_i_o[0XE00],&mem_i_o[0XF00]}; // default addresses: $D400, $DE00 and $DF00
+BYTE *SID_TABLE[3]={SID_TABLE_0,&mem_i_o[0XE00],&mem_i_o[0XF00]}; // default addresses: $D400 (always 1st), $DE00 (2nd) and $DF00 (3rd)
 
 BYTE disc_disabled=0; // disables the disc drive altogether as well as its extended logic
 BYTE disc_filemode=1; // default read only + strict disc writes
 BYTE reu_depth=0,reu_dirty=0; // REU memory extension
-int reu_kbyte[]={0,64,128,256,512};
+int reu_kbyte[]={0,64,128,256,512}; // REU size in kb
 
 BYTE video_type=length(video_table)/2; // 0 = monochrome, 1=darkest colour, etc.
 VIDEO_UNIT video_clut[32]; // precalculated 16-colour palette + $D020 border [16] + $D021.. background 0-3 [17..20] + $D025.. sprite multicolour 0-1 [21,22] + sprite #0-7 colour [23..30] + DEBUG
@@ -250,42 +264,44 @@ void video_clut_update(void) // precalculate palette following `video_type`
 		video_clut[i]=video_table[video_type][i]; // VIC-II built-in palette
 	for (int i=0;i<15;++i)
 		video_clut[16+i]=video_table[video_type][VICII_TABLE[32+i]&15]; // VIC-II dynamic palette
-	video_clut[31]=video_clut[1]; // DEBUG
 }
 
-int audio_dirty,audio_queue=0; // used to clump audio updates together to gain speed
+//char audio_dirty; int audio_queue=0; // used to clump audio updates together to gain speed
 
 // the MOS 6510 and its MMU ----------------------------------------- //
 
-Z80W m6510_pc; BYTE m6510_a,m6510_x,m6510_y,m6510_s,m6510_p,m6510_i; // the MOS 6510 registers; we must be able to spy them!
-BYTE m6510_irq; // +1 = VIC-II IRQ; +2 = CIA #1 IRQ; +128 = CIA #2 NMI
+Z80W m6510_pc; BYTE m6510_a,m6510_x,m6510_y,m6510_s,m6510_p; int m6510_i_t,m6510_n_t; // the MOS 6510 registers; we must be able to spy them!
 BYTE mmu_cfg[2]; // the first two bytes in the MOS 6510 address map; distinct to the first two bytes of RAM!
-BYTE mmu_out,mmu_mmu; // the full and MMU-only values defined by the MOS 6510's first two bytes
+BYTE mmu_out,mmu_mcr; // the full and MMU-only values defined by the MOS 6510's first two bytes
 BYTE mmu_inp=0X17; // the tape bit mask, whose bits can appear at address 0X0001: bit 4 is !TAPE, bits 0-2 are always 1
-BYTE tape_enabled=0; int cia_port_13_n=0; // manual + automatic tape playback
+BYTE mmu_fly; // the counter of the volatile contents of `mmu_out`, that fade away as time goes on
+BYTE tape_enabled=0; int tape_polling=0; // hard/soft automatic tape playback
+#define tape_disabled (tape_enabled<=(mmu_cfg[1]&32)) // the machine can disable the tape even when we enable it
+
+int m6510_ready=0,m6510_power=0X07;
 
 void mmu_setup(void) // by default, everything is RAM
 {
-	for (int i=0;i<256;++i)
-		mmu_bit[i]=0,mmu_rom[i]=mmu_ram[i]=mem_ram;
-	mmu_bit[0]=3; // ZEROPAGE is always special!
+	for (int i=0;i<256;++i) mmu_rom[i]=mmu_ram[i]=mem_ram;
+	MEMZERO(mmu_bit); mmu_bit[0]=1+2; // ZEROPAGE is always special!
 }
 
-void tape_autoplay(void)
-{
-	int cia=CIA_TABLE_0[13]&16,mmu=mmu_cfg[1]&32;
-	if (cia&&!mmu) tape_enabled|=+1;
-	else if (!cia&&mmu) tape_enabled&=~1;
-}
+// PORT $0001 input mask: 0XFF -0X17 (MMU + TAPE INP) -0X20 (TAPE MOTOR) =0XC8!
+#define MMU_CFG_GET(w) (w?(mmu_cfg[0]&mmu_cfg[1])+(~mmu_cfg[0]&((mmu_out&0XC8)|mmu_inp)):mmu_cfg[0])
+BYTE mmu_cfg_get(WORD w) { return MMU_CFG_GET(w); }
+#define MMU_CFG_SET(w,b) do{ mmu_cfg[w]=b; mmu_update(); }while(0)
+#define mmu_cfg_set MMU_CFG_SET
 
 void mmu_update(void) // set the address offsets, as well as the tables for m6510_recv(WORD) and m6510_send(WORD,BYTE)
 {
+	int i=((~mmu_cfg[0]&mmu_inp)+(mmu_cfg[0]&mmu_cfg[1]))&7;
+	if ((mmu_cfg[1]&~mmu_out)&0X37) mmu_fly=4; // set limit
 	mmu_out=(~mmu_cfg[0]&mmu_out)+(mmu_cfg[0]&mmu_cfg[1]);
-	int i=(~mmu_cfg[0]&0X17)+(mmu_cfg[0]&mmu_cfg[1])&7;
-	if (mmu_mmu!=i) // this function is slow, avoid clobbering
+	// KNUCKLEBUSTER.TAP expects something about bit 4 of mmu_out...
+	if (mmu_mcr!=i) // this function is slow, avoid clobbering
 	{
 		BYTE *recva=mem_ram,*recvd=mem_ram,*sendd=mem_ram,*recve=mem_ram;
-		switch (mmu_mmu=i) // notice the "incremental" design and the lack of `break` here!
+		switch (mmu_mcr=i) // notice the "incremental" design and the lack of `break` here!
 		{
 			case 3: recva=&mem_rom[0X2000-0XA000]; // BASIC
 			case 2: recve=&mem_rom[0X0000-0XE000]; // KERNAL
@@ -300,25 +316,34 @@ void mmu_update(void) // set the address offsets, as well as the tables for m651
 			mmu_rom[i+0XA0]=mmu_rom[i+0XB0]=recva,
 			mmu_rom[i+0XD0]=recvd,mmu_ram[i+0XD0]=sendd,
 			mmu_rom[i+0XE0]=mmu_rom[i+0XF0]=recve;
-		i=mmu_mmu>4?3:0; // tag the page I/O only if possible
-		memset(&mmu_bit[0XD0],i  ,0X08); // $D000-$D7FF: VIC-II + SID catches R/W
-		memset(&mmu_bit[0XD8],i&2,0X04); // $D800-$DBFF: VIC-II COLOR catches W
-		memset(&mmu_bit[0XDC],i  ,0X04); // $DC00-$DFFF: CIA #1+#2 AREA catches R/W
+		i=mmu_mcr>4?15:0; // tag the page I/O only if possible
+		memset(&mmu_bit[0XD0],i  ,0X04); // $D000-$D7FF: VIC-II catches all operations
+		memset(&mmu_bit[0XD4],i&3,0X04); // $D000-$D7FF: SID #1 catches non-dumb R/W
+		memset(&mmu_bit[0XD8],i&2,0X04); // $D800-$DBFF: VIC-II COLOR catches non-dumb W
+		memset(&mmu_bit[0XDC],i  ,0X04); // $DC00-$DFFF: CIA #1+#2 AREA catches all operations
 	}
-	tape_autoplay();
 }
 
 void mmu_reset(void)
-	{ mmu_cfg[0]=mmu_cfg[1]=mmu_out=mmu_mmu=0XFF; mmu_update(); }
+	{ mmu_cfg[0]=0X2F; mmu_cfg[1]=mmu_mcr=0XFF; mmu_out=0; mmu_update(); }
 
 // the VIC-II video chip ============================================ //
 
-BYTE *vicii_memory,*vicii_attrib,*vicii_bitmap; // pointers to video data
-short vicii_pos_y,vicii_chr_y,vicii_irq_y,vicii_impact[512+8],vicii_pixel,vicii_lines; // X and Y ranges are 0-62 and 0-311 respectively in PAL
-char vicii_pos_x,vicii_chr_x,vicii_pos_z,vicii_mode; // mode: +1, +2 and +4 = 8 pixel modes, +8 = BACKGROUND, +16 = BORDER HORIZONTAL, +32 = BORDER VERTICAL
-BYTE vicii_sprite_l[8],vicii_sprite_h[8],vicii_sprite_z[8]; // sprite buffers + zoom
+BYTE *vicii_memory,*vicii_attrib,*vicii_bitmap; // pointers to the video data blocks: the 16K page, the attribute map and the pixel table
+BYTE vicii_mode; // the current video mode: 0..7 video mode proper, +8 LEFT/RIGHT BORDER, +16 = BACKGROUND COLOUR, +32 TOP/BOTTOM BORDER
+int vicii_pos_y,vicii_len_y,vicii_irq_y; // coordinates and dimensions of the current frame (PAL-312 or NTSC-262)
+int vicii_pos_x,vicii_len_x,vicii_irq_x; // coordinates and dimensions of the current scanline and its sprite fetch point
+#define VICII_MINUS 8 // the amount of final ticks that are reserved for the sprite fetching
+BYTE vicii_ready; // bit 4 of $D011, the DEN bit; it must stick in several moments of the frame
+BYTE vicii_frame; // enabled when a new frame must begin (not exactly the same as vicii_pos_y>=vicii_len_y)
+BYTE vicii_badline; // are we in a badline?
+BYTE vicii_takeover; // is the VIC-II going to fetch the sprites, a badline...?
+BYTE vicii_dmadelay; // advanced horizontal scroll caused by DMA delay
+BYTE vicii_nosprites=0,vicii_noimpacts=0; // cheating!!
 
-void vicii_setmaps(void) // recalculate memory maps
+void vicii_setmode(void) // recalculate bitmap mode when VIC-II registers 17 or 22 are modified
+	{ vicii_mode=(vicii_mode&~7)+(((VICII_TABLE[17]&96)+(VICII_TABLE[22]&16))>>4); }
+void vicii_setmaps(void) // recalculate memory maps when VIC-II register 17 or 24 or CIA #2 registers 0 or 2 are modified
 {
 	int i=~CIA_TABLE_1[0]&CIA_TABLE_1[2]&3;
 	vicii_memory=&mem_ram[i<<14];
@@ -332,27 +357,35 @@ void vicii_setmaps(void) // recalculate memory maps
 		vicii_attrib=&vicii_memory[(VICII_TABLE[24]&240)<<6];
 		if (!(i&1)&&((VICII_TABLE[24]&12)==4)) // CHAR ROM?
 			vicii_bitmap=&mem_rom[0X4000+((VICII_TABLE[24]&2)<<10)];
-		else // 64K AREA!
+		else // BASE RAM!
 			vicii_bitmap=&vicii_memory[(VICII_TABLE[24]&14)<<10];
 	}
 }
 
-void vicii_setmode(void) // recalculate bitmap mode
-	{ vicii_mode=(vicii_mode&-8)+(((VICII_TABLE[17]&96)+(VICII_TABLE[22]&16))>>4); }
-
 void vicii_reset(void)
 {
-	VICII_TABLE[25]=VICII_TABLE[26]=vicii_pos_x=vicii_chr_x=vicii_pixel=0; vicii_irq_y=-1; vicii_setmaps(); vicii_setmode();
-	memset(vicii_sprite_l,63,sizeof(vicii_sprite_l)),MEMZERO(vicii_sprite_h),MEMZERO(vicii_sprite_z);
+	memset(VICII_TABLE,vicii_mode=vicii_pos_x=vicii_pos_y=vicii_irq_y=vicii_frame=0,64);
+	vicii_setmaps(); vicii_setmode();
 }
-
-// ...
 
 // the CIA #1+#2 gate arrays ======================================== //
 
-WORD cia_count_a[2],cia_count_b[2]; // the CIA event counters
+BYTE key2joy_flag=0; // alternate joystick ports
+BYTE kbd_bit0[10]; // combined keyboard+joystick bits
+
+int cia_count_a[2],cia_count_b[2]; // the CIA event counters: the active value range is 0..65536
+int cia_minor_a[2],cia_minor_b[2],cia_major_b[2]; // MINOR values matter on each clock tick, MAJOR values matter on each cia_count_a[] underflow
+BYTE cia_state_a[2],cia_state_b[2]; // state bit masks: +8 LOAD, +4 WAIT, +2 MOVE, +1 STOP
+int cia_event_a[2],cia_event_b[2]; // some events change the behavior of the CIA chips; -1 means no new event
+int cia_xchange[2],cia_serials[2]; // serial bit transfer timeouts
+
+#define cia_port_14(i,b) (cia_minor_a[i]=((b)&32)?0:-1)
+#define cia_port_15(i,b) ((cia_minor_b[i]=((b)&96)?0:-1),(cia_major_b[i]=((b)&96)!=64?0:-1))
+
 DWORD cia_hhmmssd[2]; // the CIA time-of-day registers
-BYTE cia_port_13[2]; // the CIA interrupt status flags
+BYTE cia_port_13[2],cia_port_11[2]; // flags: CIA interrupt status + locked time-of-day status
+char cia_old6526=1; // the original CIA 6526 had a bug that the later CIA 6526A fixed out: polling port 13 halted the countdown for an instant (?)
+char cia_oldglue=1; // the original CIA 6526 - VIC-II 6569 bridge relied on discrete glue logic instead of a custom IC devised for the VIC-II 8565
 
 void cia_reset(void)
 {
@@ -360,20 +393,26 @@ void cia_reset(void)
 	memset(CIA_TABLE_0,cia_port_13[0]=0,16);
 	memset(CIA_TABLE_1,cia_port_13[1]=0,16);
 	CIA_TABLE_0[11]=CIA_TABLE_1[11]=1;
-	CIA_TABLE_0[0]=CIA_TABLE_0[1]=cia_count_a[0]=cia_count_b[0]=
-	CIA_TABLE_1[0]=CIA_TABLE_1[1]=cia_count_a[1]=cia_count_b[1]=-1;
+	cia_state_a[0]=cia_state_a[1]=cia_state_b[0]=cia_state_b[1]=+0+0+0+1;
+	cia_minor_a[0]=cia_minor_a[1]=
+	cia_minor_b[0]=cia_minor_b[1]=
+	cia_major_b[0]=cia_major_b[1]=
+	cia_port_11[0]=cia_port_11[1]=
+	cia_xchange[0]=cia_xchange[1]=0;
+	cia_serials[0]=cia_serials[1]=0;
+	CIA_TABLE_0[4]=CIA_TABLE_0[5]=CIA_TABLE_0[6]=CIA_TABLE_0[7]=
+	CIA_TABLE_1[4]=CIA_TABLE_1[5]=CIA_TABLE_1[6]=CIA_TABLE_1[7]=
+	CIA_TABLE_0[0]=CIA_TABLE_0[1]=CIA_TABLE_1[0]=CIA_TABLE_1[1]=
+	cia_count_a[0]=cia_count_a[1]=cia_count_b[0]=cia_count_b[1]=
+	cia_event_a[0]=cia_event_a[1]=cia_event_b[0]=cia_event_b[1]=-1;
 }
-
-// ...
 
 // behind the CIA: tape I/O handling -------------------------------- //
 
-char tape_path[STRMAX]="",tap_magic[]="C64-TAPE-RAW",t64_magic1[]="C64 tape image",t64_magic2[]="C64S tape file";
-FILE *tape=NULL; int tape_filetell=0,tape_filesize=0;
+char tape_path[STRMAX]="",tap_magic[]="C64-TAPE-RAW",t64_magic1[]="C64 tape image",t64_magic2[]="C64S tape ";
+FILE *tape=NULL; int tape_filetell=0,tape_filesize=0; // file handle, offset and length
 
-int tape_fastload=1; // catch musical loaders
-
-BYTE tape_buffer[8<<8]; int tape_length,tape_offset; // tape buffer/directory (must be >1k!)
+BYTE tape_buffer[8<<8],tape_old_type; int tape_length,tape_offset; // tape buffer/directory (must be >1k!)
 int tape_seek(int i) // moves file cursor to `i`, cancels the cache if required
 {
 	if (i<0) i=0; else if (i>tape_filesize) i=tape_filesize; // sanitize
@@ -395,21 +434,21 @@ int tape_getccc(void) // returns an Intel-style 24-bit; see tape_getc()
 int tape_getcccc(void) // returns an Intel-style DWORD; mind the sign in 32bits!
 	{ int i; if ((i=tape_getc())>=0) if ((i|=tape_getc()<<8)>=0) if ((i|=tape_getc()<<16)>=0) return i|(tape_getc()<<24); return i; }
 
-int tape_rewind=0,tape_skipload=1/*,tape_fastload=1,tape_skipping=0*/; // tape options
+int tape_rewind=0,tape_skipload=1,tape_fastload=1/*,tape_skipping=0*/; // tape options
 int tape_signal/*,tape_status=0,tape_output*/,tape_record,tape_type=0; // tape status
-int tape_n=-1; // TAP-specific variable
-int m6510_t64ok=-1; // T64-specific variable
+int tape_t; // duration of the current tape signal in microseconds
+int m6510_t64ok=-1; // T64-specific variable: MMU configuration trap
 
 int tape_close(void) // closes tape and cleans up
 {
 	if (tape)
 	{
-		if (tape_type<0) fseek(tape,16,SEEK_SET),fputiiii(tape_filesize-20,tape); // store the real tape length
+		if (tape_type<0) fseek(tape,16,SEEK_SET),fputiiii(tape_filesize-20,tape); // saving a tape? store the real tape length
 		puff_fclose(tape),tape=NULL;
 		mmu_inp|=16; // i.e. TAPE IS MISSING
 	}
 	tape_filesize=tape_filetell=0; m6510_t64ok=-1;
-	return tape_n=-1,tape_type=/*tape_output=tape_status=*/0;
+	return tape_type=tape_t=/*tape_output=tape_status=*/0;
 }
 
 int tape_open(char *s) // inserts a tape from path `s`; 0 OK, !0 ERROR
@@ -420,15 +459,16 @@ int tape_open(char *s) // inserts a tape from path `s`; 0 OK, !0 ERROR
 	tape_length=fread1(tape_buffer,sizeof(tape_buffer),tape);
 	if (tape_length>(tape_offset=16)&&!memcmp(tape_buffer,tap_magic,12))
 	{
+		tape_old_type=!tape_buffer[12]; // in the old versions a zero isn't a prefix ("HAWKEYE") but a signal-less 256-tick duration
 		tape_filesize=tape_getcccc()+tape_filetell;
-		tape_n=0; tape_type=+1; mmu_inp&=~16; // i.e. TAPE IS READY
+		tape_type=+1; mmu_inp&=~16; // i.e. TAPE IS READY
 	}
 	else if (tape_length>=64+tape_buffer[34]*32&&!memcmp(tape_buffer,t64_magic1,14)&&tape_buffer[33]==1&&tape_buffer[34]>=tape_buffer[36]&&tape_buffer[36])
 	{
 		tape_filetell=0; tape_filesize=tape_buffer[36]; // the buffer won't be used as such, so we can rewire it to our purposes
 		tape_type=+2; m6510_t64ok=0X07;
 	}
-	else if (tape_length>=64&&!memcmp(tape_buffer,t64_magic2,14)&&tape_buffer[36]<2) // obsolete T64 archives made with faulty tools
+	else if (tape_length>=64&&!memcmp(tape_buffer,t64_magic2,10)&&tape_buffer[36]<2) // obsolete T64 archives made with faulty tools
 	{
 		fseek(tape,0,SEEK_END); int i=ftell(tape)+mgetii(&tape_buffer[66])-mgetiiii(&tape_buffer[72]); // the actual size...
 		mputii(&tape_buffer[68],i); //  ...is the archive size plus the loading address minus the offset within the archive
@@ -441,37 +481,6 @@ int tape_open(char *s) // inserts a tape from path `s`; 0 OK, !0 ERROR
 	return /*tape_output=tape_status=*/0;
 }
 
-int tape_t64load(char *s) // loads a file from a T64 archive into the emulated C64; `s` is the filename, NULL if none
-{
-	if (s&&strcmp("*",s)) // a filename instead of NULL or a wildcard? search!
-	{
-		int i; for (i=0;i<tape_filesize;++i)
-			if (tape_buffer[64+i*32]==1&&tape_buffer[65+i*32]&&!memcmp(&tape_buffer[80+i*32],s,16))
-				break; // found!!
-		if (i>=tape_filesize) return 1; // file not found!
-		tape_filetell=i;
-	}
-	WORD l=mgetii(&tape_buffer[66+tape_filetell*32]),h=mgetii(&tape_buffer[68+tape_filetell*32]);
-	if (l<2||h<2||h<=l) return 1; // wrong init+exit values!!
-	fseek(tape,mgetiiii(&tape_buffer[72+tape_filetell*32]),SEEK_SET);
-	//if (!mem_ram[0XB9]) h=h-l+0X0801,l=0X0801; // adjust init+exit values? INTENSIT.T64 is at odds with https://www.c64-wiki.com/wiki/LOAD
-	//mputii(&mem_ram[0X002D],h); mputii(&mem_ram[0X002F],h); mputii(&mem_ram[0X0031],h);
-	mputii(&mem_ram[0X00AC],h); mputii(&mem_ram[0X00AE],h); // end-of-file KERNAL pokes
-	fread1(&mem_ram[l],(WORD)(h-l),tape); // load the file data into RAM!
-	if (++tape_filetell>=tape_filesize) tape_filetell=0; // wrap back!
-	return mem_ram[0X90]=0X00; // OK!
-}
-int t64_loadfile(void) // handles the KERNAL operation "$F533: Load File From Tape"; 0 OK, !0 ERROR
-{
-	mem_ram[0X90]=0X04; // TAPE ERROR! (in theory FILE NOT FOUND)
-	int i=mem_ram[0XB7]; // Number of Characters in Filename: see "$FDF9: Set Filename"
-	if (mem_ram[0X93]||i>16) return 1; // VERIFY (instead of LOAD) or invalid filename? quit!
-	if (!i) return tape_t64load(NULL);// no filename? load anything!
-	char t[17]; memcpy(t,&mem_ram[mgetii(&mem_ram[0XBB])],16);
-	while (i<16) t[i++]=' '; t[i]=0; // pad the filename with spaces!
-	return tape_t64load(t);
-}
-
 int tape_create(char *s) // creates a tape on path `s`; 0 OK, !0 ERROR
 {
 	tape_close();
@@ -481,7 +490,7 @@ int tape_create(char *s) // creates a tape on path `s`; 0 OK, !0 ERROR
 	if (tape_path!=s) strcpy(tape_path,s);
 	mmu_inp&=~16; // i.e. TAPE IS READY
 	tape_filesize=tape_filetell=0;
-	tape_type=-1; return tape_n=-1,/*tape_output=tape_status=*/0;
+	return tape_type=-1,tape_t=/*tape_output=tape_status=*/0;
 }
 
 int tape_catalog(char *t,int x) // fills the buffer `t` of size `x` with the tape contents as an ASCIZ list; returns <0 ERROR, >=0 CURRENT BLOCK
@@ -521,48 +530,72 @@ int tape_select(int i)
 	switch (tape_type)
 	{
 		case +1: // TAP
-			return tape_seek(i),tape_n=0;
+			return tape_seek(i),tape_t=0,0;
 		case +2: // T64
 			return tape_filetell=i,0;
 	}
 	return -1; // unknown type!
 }
 
-void tape_main(int t) // play the current tape back; `t` is nonzero!
+int tape_feed(void) // fetch next tape sample length
 {
 	switch (tape_type)
 	{
-		case +1: // TAP file?
-			tape_n-=t; int watchdog=127; // the watchdog catches corrupted tapes!!
-			while (tape_n<=0)
+		case +1: // TAP
+			for (int watchdog=99,i;watchdog>0;--watchdog) // catch bad tapes
 			{
-				if (((cia_port_13[0]|=16)&CIA_TABLE_0[13]&31)&&!(cia_port_13[0]&128))
-					cia_port_13[0]|=128,m6510_irq|=2; // throw tape CIA #1 IRQ!
-				/*tape_status=1-tape_status;*/ // just for the echo
-				if (!--watchdog)
-					{ tape_close(); tape_signal=-1; break; } // bad tape!!
-				if ((t=tape_getc())<0) // end of file?
+				if ((i=tape_getc())<0) // EOF?
 				{
-					if (tape_rewind)
-						{ tape_seek(20); } // rewind tape, but allow reading more
-					else
-						{ tape_close(); tape_signal=-1; break; } // end of tape!!
+					if (!tape_rewind) break; // end of tape!
+					tape_seek(20); // rewind and retry
 				}
-				else if (!t) // prefix?
+				else if (i>0) return i<<3;
+				else if (tape_old_type) // zero in old tapes is a padding, not a prefix
 				{
-					if ((t=tape_getccc())<0) // can it be zero at all!?!?!?
-						{ tape_close(); tape_signal=-1; break; } // bad tape!!
-					else
-						tape_n+=t; // prefix: 24-bit 1 MHz
+					do i+=256<<3; while (!(watchdog=tape_getc()));
+					if (watchdog>0) return i+watchdog; break; // end of tape!
 				}
-				else
-					tape_n+=t*8; // no prefix: 8-bit 125 kHz
+				else if ((i=tape_getccc())<0) break; // end of tape!
+				else if (i>0) return i;
+				else return 1<<24; // can this ever happen?
 			}
-			break;
+			tape_close(),tape_signal=-1; // watchdog crisis!
 	}
+	return 1<<16;
 }
 
-// ...
+// T64 files aren't real tapes, but archives of virtual files; reading them relies on "trapping" the MOS 6510
+
+int tape_t64load(char *s) // loads a file from a T64 archive into the emulated C64; `s` is the filename, NULL if none
+{
+	if (s&&strcmp("*",s)) // a filename instead of NULL or a wildcard? search!
+	{
+		int i; for (i=0;i<tape_filesize;++i)
+			if (tape_buffer[64+i*32]==1&&tape_buffer[65+i*32]&&!memcmp(&tape_buffer[80+i*32],s,16))
+				break; // found!!
+		if (i>=tape_filesize) return 1; // file not found!
+		tape_filetell=i;
+	}
+	WORD l=mgetii(&tape_buffer[66+tape_filetell*32]),h=mgetii(&tape_buffer[68+tape_filetell*32]);
+	if (l<2||h<2||h<=l) return 1; // wrong init+exit values!!
+	fseek(tape,mgetiiii(&tape_buffer[72+tape_filetell*32]),SEEK_SET);
+	//if (!mem_ram[0XB9]) h=h-l+0X0801,l=0X0801; // adjust init+exit values? INTENSIT.T64 is at odds with https://www.c64-wiki.com/wiki/LOAD
+	//mputii(&mem_ram[0X002D],h); mputii(&mem_ram[0X002F],h); mputii(&mem_ram[0X0031],h);
+	mputii(&mem_ram[0X00AC],h); mputii(&mem_ram[0X00AE],h); // end-of-file KERNAL pokes
+	fread1(&mem_ram[l],(WORD)(h-l),tape); // load the file data into RAM!
+	if (++tape_filetell>=tape_filesize) tape_filetell=0; // wrap back!
+	return mem_ram[0X90]=0X00; // OK!
+}
+int t64_loadfile(void) // handles the KERNAL operation "$F533: Load File From Tape"; 0 OK, !0 ERROR
+{
+	mem_ram[0X90]=0X04; // TAPE ERROR! (in theory FILE NOT FOUND)
+	int i=mem_ram[0XB7]; // Number of Characters in Filename: see "$FDF9: Set Filename"
+	if (mem_ram[0X93]||i>16) return 1; // VERIFY (instead of LOAD) or invalid filename? quit!
+	if (!i) return tape_t64load(NULL); // no filename? load anything!
+	char t[17]; memcpy(t,&mem_ram[mgetii(&mem_ram[0XBB])],16);
+	while (i<16) t[i++]=' '; t[i]=0; // pad the filename with spaces!
+	return tape_t64load(t);
+}
 
 // behind the CIA: disc I/O handling -------------------------------- //
 
@@ -591,12 +624,12 @@ int disc_create(char *s) // create a blank D64 disc on path `s`; 0 OK, !0 ERROR
 	if (!f) return 1; // cannot create file!
 	char t[256],u[256]=
 	{
-		18,1,65,0,21,-1,-1,31,21,-1,-1,31,21,-1,-1,31,21,-1,-1,31,21,-1,-1,31,
-		21,-1,-1,31,21,-1,-1,31,21,-1,-1,31,21,-1,-1,31,21,-1,-1,31,21,-1,-1,
+		18,1,65,-0,21,-1,-1,31,21,-1,-1,31,21,-1,-1,31,21,-1,-1,31,21,-1,-1,
 		31,21,-1,-1,31,21,-1,-1,31,21,-1,-1,31,21,-1,-1,31,21,-1,-1,31,21,-1,
-		-1,31,17,-4,-1,7,19,-1,-1,7,19,-1,-1,7,19,-1,-1,7,19,-1,-1,7,19,-1,-1,
-		7,19,-1,-1,7,18,-1,-1,3,18,-1,-1,3,18,-1,-1,3,18,-1,-1,3,18,-1,-1,3,
-		18,-1,-1,3,17,-1,-1,1,17,-1,-1,1,17,-1,-1,1,17,-1,-1,1,17,-1,-1,1,
+		-1,31,21,-1,-1,31,21,-1,-1,31,21,-1,-1,31,21,-1,-1,31,21,-1,-1,31,21,
+		-1,-1,31,17,-4,-1,7,19,-1,-1,7,19,-1,-1,7,19,-1,-1,7,19,-1,-1,7,19,-1,
+		-1,7,19,-1,-1,7,18,-1,-1,3,18,-1,-1,3,18,-1,-1,3,18,-1,-1,3,18,-1,-1,
+		3,18,-1,-1,3,17,-1,-1,1,17,-1,-1,1,17,-1,-1,1,17,-1,-1,1,17,-1,-1,1,
 		85,78,84,73,84,76,69,68,-96,-96,-96,-96,-96,-96,-96,-96,-96,-96,48,32,
 		-96,50,65,-96,-96,-96,-96,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 		0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -622,7 +655,67 @@ int disc_open(char *s,int drive,int canwrite) // open a disc file from path `s`,
 	if (disc_path!=s) strcpy(disc_path,s); return 0;
 }
 
-// ...
+// D64: MOS 6502 MICROPROCESSOR ===================================== //
+
+BYTE d64_mem[64<<10],d64_track[4]={0,0,0,0},d64_motor[4]={0,0,0,0}; // 48K RAM + 16K ROM
+BYTE *d64_ram[4]={NULL,NULL,NULL,NULL};
+FILE *d64[4]={NULL,NULL,NULL,NULL};
+#define d64_rom &d64_mem[48<<10]
+
+void m6502_sync(int t) // runs the C1541 hardware for `t` microseconds
+{
+	; // nothing here yet!
+}
+
+Z80W m6502_pc; BYTE m6502_a,m6502_x,m6502_y,m6502_s,m6502_p; int m6502_i_t; // the MOS 6502 registers
+
+BYTE m6502_recv(WORD w) // receive a byte from the D64 address `w`
+{
+	return 0XFF; // nothing here yet!
+}
+void m6502_send(WORD w,BYTE b) // send the byte `b` to the D64 address `w`
+{
+	; // nothing here yet!
+}
+
+// the MOS 6510 memory operations: PAGE, PEEK, POKE and others
+#define M65XX_LOCAL
+#define M65XX_PAGE(x) (0)
+#define M65XX_PEEK(x) ((x>=0X2000&&x<0X1800)?m6502_recv(x):d64_mem[x]) // tell apart between 0000-17FF, 1800-1FFF, 2000-BFFF and C000-FFFF
+#define M65XX_POKE(x,o) do{ if (x<0X2000) { if (x<0X1800) d64_mem[x]=o; else m6502_send(x,o); } else if (x<0XC000) d64_mem[x]=0; }while(0)
+#define M65XX_PEEKZERO(x) (d64_mem[x])
+#define M65XX_POKEZERO(x,o) (d64_mem[x]=o)
+#define M65XX_PULL(x) (d64_mem[256+x])
+#define M65XX_PUSH(x,o) (d64_mem[256+x]=o)
+// the C1541's MOS 6502 "dumb" operations do nothing relevant, they only consume clock ticks
+#define M65XX_DUMBPAGE(x) (0)
+#define M65XX_DUMBPEEK(x) (0)
+#define M65XX_DUMBPOKE(x,o) (0)
+#define M65XX_DUMBPEEKZERO(x) (0)
+#define M65XX_DUMBPOKEZERO(x,o) (0)
+#define M65XX_DUMBPULL(x) (0)
+// the delays between instructions are simple 1 T pauses
+#define M65XX_XEE 0XEE
+#define M65XX_XEF 0XEF
+#define M65XX_RDY 0
+#define M65XX_TICK (++m65xx_t)
+#define M65XX_WAIT (++m65xx_t)
+
+#define M65XX_START (mgetii(&d64_mem[0XFFFC]))
+#define M65XX_RESET m6502_reset
+#define M65XX_MAIN m6502_main
+#define M65XX_SYNC m6502_sync
+#define M65XX_I_T m6502_i_t
+#define M65XX_IRQ_ACK 0
+#define M65XX_PC m6502_pc
+#define M65XX_A m6502_a
+#define M65XX_X m6502_x
+#define M65XX_Y m6502_y
+#define M65XX_S m6502_s
+#define M65XX_P m6502_p
+#define M65XX_I m6502_i
+
+#include "cpcec-m6.h"
 
 // CPU-HARDWARE-VIDEO-AUDIO INTERFACE =============================== //
 
@@ -637,634 +730,950 @@ const int sid_stereos[][3]={{0,0,0},{+256,0,-256},{+128,0,-128},{+64,0,-64}};
 int sid_extras=0;
 #include "cpcec-m8.h"
 
-VIDEO_UNIT *video_impact;
-BYTE vicii_nohits=0; // cheating!!
-void video_sprite_1x1b(int x,BYTE i,BYTE q) // SINGLE HI-RES
+int /*tape_loud=1,*/tape_song=0;
+//void audio_main(int t) { sid_main(t/*,((tape_status^tape_output)&tape_loud)<<12*/); }
+#define audio_main sid_main
+
+WORD vicii_hits[512]; // 96+320+96 pixels (although we only show 32+320+32); +1..+128 means impact with sprite #0..#7, +256 means impact with a pixel in the scenery
+WORD vicii_copy_hits; // the old value may stick for a short while (DL/Discrete Logic versus IC/Integrated Circuit)
+BYTE vicii_copy_border[256],vicii_copy_border_l,vicii_copy_border_r; // backups of border colours and states
+int vicii_cursor=0,vicii_backup=0; BYTE vicii_eighth=0; // 0..1023, 0..1023 and 0..7 respectively while drawing the bitmap
+BYTE vicii_cache[40]; // the 40 ATTRIB bytes that are read once every badline
+BYTE vicii_horizon=0,vicii_port_22=0; // bits 2-0 and 3 of register 22
+DWORD vicii_sprite_k[8]; // the current 24 bits of each sprite's scanline
+BYTE vicii_sprite_y[8]; // the low 6 bits of each sprite's counter
+BYTE vicii_sprite_x; // the double-height flip-flop table
+BYTE vicii_spritexy; // toggling the sprite height can delay sprite reloading
+BYTE vicii_cow=0; // "fetchez la vache!"
+
+void vicii_draw_sprite(VIDEO_UNIT *t,char i,DWORD k) // draw a sprite on screen; `t` is the video buffer (NULL if only the collision matters), `i` is the sprite ID and `k` is its current 24-bit data
 {
-	VIDEO_UNIT p=video_clut[23+i];
-	BYTE *s=&vicii_memory[vicii_sprite_h[i]*64+vicii_sprite_l[i]]; WORD j=0; i=1<<i;
-	if (!q) // invisible?
+	vicii_sprite_k[i]=0; // don't draw the same sprite twice!
+	BYTE j=1<<i; int x=VICII_TABLE[0+i*2];
+	if (VICII_TABLE[16]&j) if ((x+=256)>=384) x-=vicii_len_x*8; // PAL wraps at $01F8!
+	if ((x-=24)>=320+8) return; // too far to the right? (cfr. the bouncing circle of letters of "4KRAWALL")
+	WORD *h=&vicii_hits[96+x]; char a; // collision bit pointer and buffers
+	if (t) // draw sprite and update collision bits
 	{
-		for (BYTE n=3;n;--n)
-			for (BYTE b=*s++,m=128;m;++x,m>>=1)
-				if (b&m)
-					j|=vicii_impact[x  ]|=i;
-	}
-	else if (VICII_TABLE[27]&i) // background?
-	{
-		for (BYTE n=3;n;--n)
-			for (BYTE b=*s++,m=128;m;++x,m>>=1)
-				if (b&m)
-				{
-					j|=vicii_impact[x  ]|=i;
-					if (vicii_impact[x  ]<256)
-						video_impact[x*2  ]=video_impact[x*2+1]=p;
-				}
-	}
-	else // foreground!
-		for (BYTE n=3;n;--n)
-			for (BYTE b=*s++,m=128;m;++x,m>>=1)
-				if (b&m)
-				{
-					j|=vicii_impact[x  ]|=i;
-					video_impact[x*2]=video_impact[x*2+1]=p;
-				}
-	if (vicii_nohits) return;
-	if (j&256) VICII_TABLE[31]|=i,VICII_TABLE[25]|=2; if ((j&=255)&&i!=j) VICII_TABLE[30]|=j,VICII_TABLE[25]|=4;
-}
-void video_sprite_2x1b(int x,BYTE i,BYTE q) // DOUBLE HI-RES
-{
-	VIDEO_UNIT p=video_clut[23+i];
-	BYTE *s=&vicii_memory[vicii_sprite_h[i]*64+vicii_sprite_l[i]]; WORD j=0; i=1<<i;
-	if (!q) // invisible?
-	{
-		for (BYTE n=3;n;--n)
-			for (BYTE b=*s++,m=128;m;x+=2,m>>=1)
-				if (b&m)
-					j|=vicii_impact[x  ]|=i,j|=vicii_impact[x+1]|=i;
-	}
-	else if (VICII_TABLE[27]&i) // background?
-	{
-		for (BYTE n=3;n;--n)
-			for (BYTE b=*s++,m=128;m;x+=2,m>>=1)
-				if (b&m)
-				{
-					j|=vicii_impact[x  ]|=i,j|=vicii_impact[x+1]|=i;
-					if (vicii_impact[x  ]<256)
-						video_impact[x*2  ]=video_impact[x*2+1]=p;
-					if (vicii_impact[x+1]<256)
-						video_impact[x*2+2]=video_impact[x*2+3]=p;
-				}
-	}
-	else // foreground!
-		for (BYTE n=3;n;--n)
-			for (BYTE b=*s++,m=128;m;x+=2,m>>=1)
-				if (b&m)
-				{
-					j|=vicii_impact[x  ]|=i,j|=vicii_impact[x+1]|=i;
-					video_impact[x*2]=video_impact[x*2+1]=video_impact[x*2+2]=video_impact[x*2+3]=p;
-				}
-	if (vicii_nohits) return;
-	if (j&256) VICII_TABLE[31]|=i,VICII_TABLE[25]|=2; if ((j&=255)&&i!=j) VICII_TABLE[30]|=j,VICII_TABLE[25]|=4;
-}
-void video_sprite_1x2b(int x,BYTE i,BYTE q) // SINGLE LO-RES
-{
-	VIDEO_UNIT p,pp[4]={0,video_clut[21],video_clut[23+i],video_clut[22]};
-	BYTE *s=&vicii_memory[vicii_sprite_h[i]*64+vicii_sprite_l[i]]; WORD j=0; i=1<<i;
-	if (!q) // invisible?
-	{
-		for (BYTE n=3;n;--n)
-			for (BYTE m=4,b=*s++;m;b<<=2,x+=2,--m)
-				if (b&192)
-					j|=vicii_impact[x  ]|=i,j|=vicii_impact[x+1]|=i;
-	}
-	else if (VICII_TABLE[27]&i) // background?
-	{
-		for (BYTE n=3;n;--n)
-			for (BYTE m=4,b=*s++,c;m;b<<=2,x+=2,--m)
-				if (c=b>>6)
-				{
-					p=pp[c];
-					j|=vicii_impact[x  ]|=i,j|=vicii_impact[x+1]|=i;
-					if (vicii_impact[x  ]<256)
-						video_impact[x*2  ]=video_impact[x*2+1]=p;
-					if (vicii_impact[x+1]<256)
-						video_impact[x*2+2]=video_impact[x*2+3]=p;
-				}
-	}
-	else // foreground!
-		for (BYTE n=3;n;--n)
-			for (BYTE m=4,b=*s++,c;m;b<<=2,x+=2,--m)
-				if (c=b>>6)
-				{
-					j|=vicii_impact[x  ]|=i,j|=vicii_impact[x+1]|=i;
-					video_impact[x*2]=video_impact[x*2+1]=video_impact[x*2+2]=video_impact[x*2+3]=pp[c];
-				}
-	if (vicii_nohits) return;
-	if (j&256) VICII_TABLE[31]|=i,VICII_TABLE[25]|=2; if ((j&=255)&&i!=j) VICII_TABLE[30]|=j,VICII_TABLE[25]|=4;
-}
-void video_sprite_2x2b(int x,BYTE i,BYTE q) // DOUBLE LO-RES
-{
-	VIDEO_UNIT p,pp[4]={0,video_clut[21],video_clut[23+i],video_clut[22]};
-	BYTE *s=&vicii_memory[vicii_sprite_h[i]*64+vicii_sprite_l[i]]; WORD j=0; i=1<<i;
-	if (!q) // hidden?
-	{
-		for (BYTE n=3;n;--n)
-			for (BYTE m=4,b=*s++;m;b<<=2,x+=4,--m)
-				if (b&192)
-					j|=vicii_impact[x  ]|=i,j|=vicii_impact[x+1]|=i,j|=vicii_impact[x+2]|=i,j|=vicii_impact[x+3]|=i;
-	}
-	else if (VICII_TABLE[27]&i) // background?
-	{
-		for (BYTE n=3;n;--n)
-			for (BYTE m=4,b=*s++,c;m;b<<=2,x+=4,--m)
-				if (c=b>>6)
-				{
-					p=pp[c];
-					j|=vicii_impact[x  ]|=i,j|=vicii_impact[x+1]|=i,j|=vicii_impact[x+2]|=i,j|=vicii_impact[x+3]|=i;
-					if (vicii_impact[x  ]<256)
-						video_impact[x*2  ]=video_impact[x*2+1]=p;
-					if (vicii_impact[x+1]<256)
-						video_impact[x*2+2]=video_impact[x*2+3]=p;
-					if (vicii_impact[x+2]<256)
-						video_impact[x*2+4]=video_impact[x*2+5]=p;
-					if (vicii_impact[x+3]<256)
-						video_impact[x*2+6]=video_impact[x*2+7]=p;
-				}
-	}
-	else // foreground!
-		for (BYTE n=3;n;--n)
-			for (BYTE m=4,b=*s++,c;m;b<<=2,x+=4,--m)
-				if (c=b>>6)
-				{
-					j|=vicii_impact[x  ]|=i,j|=vicii_impact[x+1]|=i,j|=vicii_impact[x+2]|=i,j|=vicii_impact[x+3]|=i;
-					video_impact[x*2]=video_impact[x*2+1]=video_impact[x*2+2]=video_impact[x*2+3]=
-						video_impact[x*2+4]=video_impact[x*2+5]=video_impact[x*2+6]=video_impact[x*2+7]=pp[c];
-				}
-	if (vicii_nohits) return;
-	if (j>=256) VICII_TABLE[31]|=i,VICII_TABLE[25]|=2; if ((j&=255)&&i!=j) VICII_TABLE[30]|=j,VICII_TABLE[25]|=4;
-}
-
-#if 1 // no contention at all
-
-#define m6510_vicii_reading() 1
-#define m6510_vicii_writing() 1
-
-#else // still incomplete :_(
-
-BYTE vicii_badline,vicii_sprites;
-
-// ...........[[[[[[########################################]]]]]] //
-// 123456789012345678901234567890123456789012345678901234567890123 //
-// 3344556677...CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC#...001122 //
-// ........................:  63   01   02   03   04   05   06   07   08   09   10  11...................................................................................54  55   56   57   58   59   60   61   62
-BYTE vicii_chr_reading[66]={ 0X1C,0X18,0X38,0X30,0X70,0X60,0XE0,0XC0,0XC0,0X80,0X80,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0X01,0X01,0X03,0X03,0X07,0X06,0X0E,0X0C };
-BYTE vicii_chr_allbits[66]={ 0X0C,0X14,0X14,0X28,0X28,0X50,0X50,0XA0,0XA0,0X00,0X00,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0X00,0X00,0X00,0X03,0X03,0X06,0X06,0X0C };
-BYTE vicii_chr_writing[66]={ 0X04,0X08,0X08,0X10,0X10,0X20,0X20,0X40,0X40,0X80,0X80,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0X00,0X00,0X00,0X01,0X01,0X02,0X02,0X04 };
-
-#define VICII_CHR_BADLINE (!(vicii_mode&32)&&vicii_chr_y>=48&&vicii_chr_y<248&&!((vicii_chr_y^VICII_TABLE[17])&7))
-#define VICII_CHR_SPRITES ((vicii_mode&32)?0:((vicii_sprite_l[0]<63?1:0)+(vicii_sprite_l[1]<63?2:0)+(vicii_sprite_l[2]<63?4:0)+(vicii_sprite_l[3]<63?8:0)\
-	+(vicii_sprite_l[4]<63?16:0)+(vicii_sprite_l[5]<63?32:0)+(vicii_sprite_l[6]<63?64:0)+(vicii_sprite_l[7]<63?128:0)))
-#define VICII_CHR_BETWEEN (!(~vicii_sprites&vicii_chr_allbits[vicii_chr_x]))
-
-int m6510_vicii_reading(void)
-{
-	int t=1; for (;;++t)
-	{
-		if (++vicii_chr_x<54) // before the PAL-NTSC safe zone
+		t+=x*2; if (UNLIKELY(VICII_TABLE[29]&j)) // double?
 		{
-			if (vicii_chr_x<11) // sprites 3..7
+			if (x<-48) return; // too far to the left!
+			x=0; if (VICII_TABLE[28]&j) // LO-RES?
 			{
-				if (!(vicii_sprites&vicii_chr_reading[vicii_chr_x])&&!VICII_CHR_BETWEEN) return t;
-			}
-			else // 3-char prefix + 40 characters
-			{
-				if (vicii_chr_x==11) { if (!(vicii_badline=VICII_CHR_BADLINE)) return t; } // recalc! quit?
-				else if (!vicii_badline) return t; // quit!
-				//if (vicii_chr_y<56) printf("\n"); printf("R%03d ",vicii_chr_y);
-				t+=54-vicii_chr_x,vicii_chr_x=54; return t; // badline!
-			}
-		}
-		else // inside the safe zone or sprites 0..2
-		{
-			if (vicii_chr_x==63-8) vicii_sprites=VICII_CHR_SPRITES; // recalc
-			if (vicii_chr_x>=63) ++vicii_chr_y,vicii_chr_x=0; // rewind!
-			if (!(vicii_sprites&vicii_chr_reading[vicii_chr_x])&&!VICII_CHR_BETWEEN) return t;
-		}
-	}
-}
-int m6510_vicii_writing(void)
-{
-	int t=1; for (;;++t)
-	{
-		if (++vicii_chr_x<54) // before the PAL-NTSC safe zone
-		{
-			if (vicii_chr_x<11) // sprites 3..7
-			{
-				if (!(vicii_sprites&vicii_chr_writing[vicii_chr_x])&&!VICII_CHR_BETWEEN) return t;
-			}
-			else // 3-char prefix + 40 characters
-			{
-				if (vicii_chr_x==11) return vicii_badline=VICII_CHR_BADLINE,t; // recalc, quit!
-				if (vicii_chr_x<14||!vicii_badline) return t; // quit!
-				//if (vicii_chr_y<56) printf("\n"); printf("W%03d ",vicii_chr_y);
-				t+=54-vicii_chr_x,vicii_chr_x=54; return t; // badline!
-			}
-		}
-		else // inside the safe zone or sprites 0..2
-		{
-			if (vicii_chr_x==63-8) return vicii_sprites=VICII_CHR_SPRITES,t; // recalc and quit!
-			if (vicii_chr_x>=63) ++vicii_chr_y,vicii_chr_x=0; // rewind!
-			if (!(vicii_sprites&vicii_chr_writing[vicii_chr_x])&&!VICII_CHR_BETWEEN) return t;
-		}
-	}
-}
-
-#endif
-
-void video_main(int t)
-{
-	static BYTE buffer[64]=""; static short vicii_cursor=0,vicii_backup=0; do
-	{
-		BYTE attrib=buffer[vicii_pos_x],bitmap,colour=VICII_COLOR[vicii_cursor];
-		if (vicii_lines<0||vicii_lines>=200||vicii_mode&-8)
-			bitmap=0;//vicii_memory[0X3FFF];
-		else
-		{
-			if (vicii_mode&4) // EXTENDED
-				bitmap=vicii_bitmap[(attrib&63) *8+vicii_pos_z];
-			else if (vicii_mode&2) // GRAPHICS
-				bitmap=vicii_bitmap[vicii_cursor*8+vicii_pos_z];
-			else // CHARACTER
-				bitmap=vicii_bitmap[ attrib     *8+vicii_pos_z];
-			if (!(vicii_mode&1)||(colour<8&&!(vicii_mode&2))) // MASK!
-				vicii_impact[vicii_pixel  ]=(bitmap&128)<<1,
-				vicii_impact[vicii_pixel+1]=(bitmap& 64)<<2,
-				vicii_impact[vicii_pixel+2]=(bitmap& 32)<<3,
-				vicii_impact[vicii_pixel+3]=(bitmap& 16)<<4,
-				vicii_impact[vicii_pixel+4]=(bitmap&  8)<<5,
-				vicii_impact[vicii_pixel+5]=(bitmap&  4)<<6,
-				vicii_impact[vicii_pixel+6]=(bitmap&  2)<<7,
-				vicii_impact[vicii_pixel+7]=(bitmap&  1)<<8;
-			else
-				vicii_impact[vicii_pixel  ]=vicii_impact[vicii_pixel+1]=(bitmap&128)<<1,
-				vicii_impact[vicii_pixel+2]=vicii_impact[vicii_pixel+3]=(bitmap& 32)<<3,
-				vicii_impact[vicii_pixel+4]=vicii_impact[vicii_pixel+5]=(bitmap&  8)<<5,
-				vicii_impact[vicii_pixel+6]=vicii_impact[vicii_pixel+7]=(bitmap&  2)<<7;
-		}
-		if (frame_pos_y>=VIDEO_OFFSET_Y&&frame_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y&&video_pos_x>=VIDEO_OFFSET_X-15&&video_pos_x<VIDEO_OFFSET_X+VIDEO_PIXELS_X)
-			switch (vicii_mode)
-			{
-				VIDEO_UNIT p;
-				case  1: // LO-RES CHARACTER
-					if (colour>=8)
-					{
-						VIDEO_UNIT p1x[4]={video_clut[17],video_clut[18],video_clut[19],video_clut[colour-8]};
-						VIDEO_NEXT=p=p1x[ bitmap>>6   ]; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=p1x[(bitmap>>4)&3]; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=p1x[(bitmap>>2)&3]; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=p1x[ bitmap    &3]; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
-						break;
-					}
-					// no `break` here!
-				case  0: // HI-RES CHARACTER
-					{
-						VIDEO_UNIT p01=video_clut[colour];
-						VIDEO_NEXT=p=(bitmap&128)?p01:video_clut[17]; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=(bitmap& 64)?p01:video_clut[17]; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=(bitmap& 32)?p01:video_clut[17]; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=(bitmap& 16)?p01:video_clut[17]; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=(bitmap&  8)?p01:video_clut[17]; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=(bitmap&  4)?p01:video_clut[17]; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=(bitmap&  2)?p01:video_clut[17]; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=(bitmap&  1)?p01:video_clut[17]; VIDEO_NEXT=p;
-					}
-					break;
-				case  2: // HI-RES GRAPHICS
-					{
-						VIDEO_UNIT p20=video_clut[attrib&15],p21=video_clut[attrib>>4];
-						VIDEO_NEXT=p=(bitmap&128)?p21:p20; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=(bitmap& 64)?p21:p20; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=(bitmap& 32)?p21:p20; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=(bitmap& 16)?p21:p20; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=(bitmap&  8)?p21:p20; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=(bitmap&  4)?p21:p20; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=(bitmap&  2)?p21:p20; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=(bitmap&  1)?p21:p20; VIDEO_NEXT=p;
-					}
-					break;
-				case  3: // LO-RES GRAPHICS
-					{
-						VIDEO_UNIT p3x[4]={video_clut[17],video_clut[attrib>>4],video_clut[attrib&15],video_clut[colour]};
-						VIDEO_NEXT=p=p3x[ bitmap>>6   ]; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=p3x[(bitmap>>4)&3]; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=p3x[(bitmap>>2)&3]; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=p3x[ bitmap    &3]; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
-					}
-					break;
-				case  4: // HI-RES EXTENDED
-					{
-						VIDEO_UNIT p40=video_clut[(attrib>>6)+17],p41=video_clut[colour];
-						VIDEO_NEXT=p=(bitmap&128)?p41:p40; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=(bitmap& 64)?p41:p40; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=(bitmap& 32)?p41:p40; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=(bitmap& 16)?p41:p40; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=(bitmap&  8)?p41:p40; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=(bitmap&  4)?p41:p40; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=(bitmap&  2)?p41:p40; VIDEO_NEXT=p;
-						VIDEO_NEXT=p=(bitmap&  1)?p41:p40; VIDEO_NEXT=p;
-					}
-					break;
-				default: // BORDER!!
-					p=video_clut[16];
-					VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
-					VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
-					VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
-					VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
-					break;
-				//case  5: // INVALID! (1/3)
-				//case  6: // INVALID! (2/3)
-				//case  7: // INVALID! (3/3)
-				case  8: case  9: case 10: case 11: // BACKGROUND (1/2)
-				case 12: case 13: case 14: case 15: // BACKGROUND (2/2)
-					p=(bitmap&128)?video_clut[0]:video_clut[17]; VIDEO_NEXT=p; VIDEO_NEXT=p;
-					p=(bitmap& 64)?video_clut[0]:video_clut[17]; VIDEO_NEXT=p; VIDEO_NEXT=p;
-					p=(bitmap& 32)?video_clut[0]:video_clut[17]; VIDEO_NEXT=p; VIDEO_NEXT=p;
-					p=(bitmap& 16)?video_clut[0]:video_clut[17]; VIDEO_NEXT=p; VIDEO_NEXT=p;
-					p=(bitmap&  8)?video_clut[0]:video_clut[17]; VIDEO_NEXT=p; VIDEO_NEXT=p;
-					p=(bitmap&  4)?video_clut[0]:video_clut[17]; VIDEO_NEXT=p; VIDEO_NEXT=p;
-					p=(bitmap&  2)?video_clut[0]:video_clut[17]; VIDEO_NEXT=p; VIDEO_NEXT=p;
-					p=(bitmap&  1)?video_clut[0]:video_clut[17]; VIDEO_NEXT=p; VIDEO_NEXT=p;
-					break;
-			}
-		else
-			video_target+=16;
-
-		video_pos_x+=16; vicii_pixel+=8;
-
-		vicii_cursor=(vicii_cursor+1)&0X3FF;
-
-		static short vicii_l_n=0,vicii_r_n=0; static VIDEO_UNIT vicii_l_p,vicii_r_p; // border masks
-		if (++vicii_pos_x>=63)
-		{
-			video_impact=video_target-video_pos_x;
-			int q=frame_pos_y>=VIDEO_OFFSET_Y&&frame_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;
-			if (!(vicii_mode&32))
-				for (BYTE i=8,j=128;i--;j>>=1) // draw the sprites?
-					if (vicii_sprite_l[i]<63&&(VICII_TABLE[21]&j))
-					{
-						int x=VICII_TABLE[i*2]; if (VICII_TABLE[16]&j) if ((x+=256)>384) x-=63<<3; // not 64<<3!
-						if ((x+=104)<448)
+				h+=48-4,t+=96-8;
+				VIDEO_UNIT p,pp[4]={0,video_clut[21],video_clut[23+i],video_clut[22]};
+				if (VICII_TABLE[27]&j) // back?
+					do
+						if (a=k&3)
 						{
-							if (VICII_TABLE[28]&j)
-								{ if (VICII_TABLE[29]&j) { if (x>80) { video_sprite_2x2b(x,i,q); } } else { if (x>104) video_sprite_1x2b(x,i,q); } }
-							else
-								{ if (VICII_TABLE[29]&j) { if (x>80) { video_sprite_2x1b(x,i,q); } } else { if (x>104) video_sprite_1x1b(x,i,q); } }
+							p=pp[a];
+							x|=h[0]|=j;
+							x|=h[1]|=j;
+							x|=h[2]|=j;
+							x|=h[3]|=j;
+							if (h[0]<256) t[0]=t[1]=p;
+							if (h[1]<256) t[2]=t[3]=p;
+							if (h[2]<256) t[4]=t[5]=p;
+							if (h[3]<256) t[6]=t[7]=p;
+						}
+					while (h-=4,t-=8,k>>=2);
+				else // fore!
+					do
+						if (a=k&3)
+						{
+							p=pp[a];
+							x|=h[0]|=j;
+							x|=h[1]|=j;
+							x|=h[2]|=j;
+							x|=h[3]|=j;
+							t[0]=t[1]=
+							t[2]=t[3]=
+							t[4]=t[5]=
+							t[6]=t[7]=p;
+						}
+					while (h-=4,t-=8,k>>=2);
+			}
+			else // HI-RES
+			{
+				h+=48-2,t+=96-4;
+				VIDEO_UNIT p=video_clut[23+i];
+				if (VICII_TABLE[27]&j) // back?
+					do
+						if (k&1)
+						{
+							x|=h[0]|=j;
+							x|=h[1]|=j;
+							if (h[0]<256) t[0]=t[1]=p;
+							if (h[1]<256) t[2]=t[3]=p;
+						}
+					while (h-=2,t-=4,k>>=1);
+				else // fore!
+					do
+						if (k&1)
+						{
+							x|=h[0]|=j;
+							x|=h[1]|=j;
+							t[0]=t[1]=
+							t[2]=t[3]=p;
+						}
+					while (h-=2,t-=4,k>>=1);
+			}
+		}
+		else // single!
+		{
+			if (x<-24) return; // too far to the left!
+			x=0; if (VICII_TABLE[28]&j) // LO-RES?
+			{
+				h+=24-2,t+=48-4;
+				VIDEO_UNIT p,pp[4]={0,video_clut[21],video_clut[23+i],video_clut[22]};
+				if (VICII_TABLE[27]&j) // back?
+					do
+						if (a=k&3)
+						{
+							p=pp[a];
+							x|=h[0]|=j;
+							x|=h[1]|=j;
+							if (h[0]<256) t[0]=t[1]=p;
+							if (h[1]<256) t[2]=t[3]=p;
+						}
+					while (h-=2,t-=4,k>>=2);
+				else // fore!
+					do
+						if (a=k&3)
+						{
+							p=pp[a];
+							x|=h[0]|=j;
+							x|=h[1]|=j;
+							t[0]=t[1]=
+							t[2]=t[3]=p;
+						}
+					while (h-=2,t-=4,k>>=2);
+			}
+			else // HI-RES
+			{
+				h+=24-1,t+=48-2;
+				VIDEO_UNIT p=video_clut[23+i];
+				if (VICII_TABLE[27]&j) // back?
+					do
+						if (k&1)
+						{
+							x|=h[0]|=j;
+							if (h[0]<256) t[0]=t[1]=p;
+						}
+					while (h-=1,t-=2,k>>=1);
+				else // fore!
+					do
+						if (k&1)
+						{
+							x|=h[0]|=j;
+							t[0]=t[1]=p;
+						}
+					while (h-=1,t-=2,k>>=1);
+			}
+		}
+	}
+	else // don't draw, just plot the collision bits
+	{
+		if (UNLIKELY(VICII_TABLE[29]&j)) // double?
+		{
+			if (x<=-48) return; // too far to the left!
+			x=0; if (VICII_TABLE[28]&j) // LO-RES?
+			{
+				h+=48-4;
+				if (VICII_TABLE[27]&j) // back?
+					do
+						if (a=k&3)
+						{
+							x|=h[0]|=j;
+							x|=h[1]|=j;
+							x|=h[2]|=j;
+							x|=h[3]|=j;
+						}
+					while (h-=4,k>>=2);
+				else // fore!
+					do
+						if (a=k&3)
+						{
+							x|=h[0]|=j;
+							x|=h[1]|=j;
+							x|=h[2]|=j;
+							x|=h[3]|=j;
+						}
+					while (h-=4,k>>=2);
+			}
+			else // HI-RES
+			{
+				h+=48-2;
+				if (VICII_TABLE[27]&j) // back?
+					do
+						if (k&1)
+						{
+							x|=h[0]|=j;
+							x|=h[1]|=j;
+						}
+					while (h-=2,k>>=1);
+				else // fore!
+					do
+						if (k&1)
+						{
+							x|=h[0]|=j;
+							x|=h[1]|=j;
+						}
+					while (h-=2,k>>=1);
+			}
+		}
+		else // single!
+		{
+			if (x<=-24) return; // too far to the left!
+			x=0; if (VICII_TABLE[28]&j) // LO-RES?
+			{
+				h+=24-2;
+				if (VICII_TABLE[27]&j) // back?
+					do
+						if (a=k&3)
+						{
+							x|=h[0]|=j;
+							x|=h[1]|=j;
+						}
+					while (h-=2,k>>=2);
+				else // fore!
+					do
+						if (a=k&3)
+						{
+							x|=h[0]|=j;
+							x|=h[1]|=j;
+						}
+					while (h-=2,k>>=2);
+			}
+			else // HI-RES
+			{
+				h+=24-1;
+				if (VICII_TABLE[27]&j) // back?
+					do
+						if (k&1)
+						{
+							x|=h[0]|=j;
+						}
+					while (h-=1,k>>=1);
+				else // fore!
+					do
+						if (k&1)
+						{
+							x|=h[0]|=j;
+						}
+					while (h-=1,k>>=1);
+			}
+		}
+	}
+	if (vicii_noimpacts) return; // no sprite hits!
+	if (x&256) VICII_TABLE[31]|=j,VICII_TABLE[25]|=2; if ((x&=255)&&j!=x) VICII_TABLE[30]|=x,VICII_TABLE[25]|=4;
+}
+
+void vicii_draw_canvas(void) // render a single line of the canvas, relying on previously gathered datas
+{
+	if (frame_pos_y>=VIDEO_OFFSET_Y&&frame_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y)
+	{
+		VIDEO_UNIT *t=video_target-video_pos_x+VIDEO_OFFSET_X,*u=t,p; WORD y=vicii_cursor;
+		p=(vicii_mode&4)?video_clut[0]:video_clut[17]; // "UKIYO-SAMAR" uses mode 7 in the first picture (red background and black border)
+		for (BYTE i=(VIDEO_PIXELS_X-640)/2+vicii_horizon*2;i--;) *t++=p;
+		if ((!vicii_cow||vicii_nosprites)) // no sprites, no collisions, just the pixels!
+		{
+			switch (vicii_mode) // render all the background pixels in a single go!
+			{
+				case 0: // HI-RES CHARACTER
+					for (BYTE x=0;x<40;++x)
+					{
+						BYTE b=vicii_bitmap[vicii_cache[x]*8+vicii_eighth];
+						VIDEO_UNIT p0=video_clut[VICII_COLOR[y++&1023]];
+						*t++=p=(b&128)?p0:video_clut[17]; *t++=p;
+						*t++=p=(b& 64)?p0:video_clut[17]; *t++=p;
+						*t++=p=(b& 32)?p0:video_clut[17]; *t++=p;
+						*t++=p=(b& 16)?p0:video_clut[17]; *t++=p;
+						*t++=p=(b&  8)?p0:video_clut[17]; *t++=p;
+						*t++=p=(b&  4)?p0:video_clut[17]; *t++=p;
+						*t++=p=(b&  2)?p0:video_clut[17]; *t++=p;
+						*t++=p=(b&  1)?p0:video_clut[17]; *t++=p;
+					}
+					break;
+				case 1: // LO-RES CHARACTER
+					for (BYTE x=0;x<40;++x)
+					{
+						BYTE b=vicii_bitmap[vicii_cache[x]*8+vicii_eighth],c=VICII_COLOR[y++&1023];
+						if (c>=8) // LO-RES?
+						{
+							VIDEO_UNIT q[4]={video_clut[17],video_clut[18],video_clut[19],video_clut[c-8]};
+							*t++=p=q[ b>>6   ]; *t++=p; *t++=p; *t++=p;
+							*t++=p=q[(b>>4)&3]; *t++=p; *t++=p; *t++=p;
+							*t++=p=q[(b>>2)&3]; *t++=p; *t++=p; *t++=p;
+							*t++=p=q[(b   )&3]; *t++=p; *t++=p; *t++=p;
+						}
+						else // HI-RES!
+						{
+							VIDEO_UNIT q1=video_clut[c];
+							*t++=p=(b&128)?q1:video_clut[17]; *t++=p;
+							*t++=p=(b& 64)?q1:video_clut[17]; *t++=p;
+							*t++=p=(b& 32)?q1:video_clut[17]; *t++=p;
+							*t++=p=(b& 16)?q1:video_clut[17]; *t++=p;
+							*t++=p=(b&  8)?q1:video_clut[17]; *t++=p;
+							*t++=p=(b&  4)?q1:video_clut[17]; *t++=p;
+							*t++=p=(b&  2)?q1:video_clut[17]; *t++=p;
+							*t++=p=(b&  1)?q1:video_clut[17]; *t++=p;
 						}
 					}
-			if (q)
-			{
-				if (vicii_l_n>0) // draw the left border?
-				{
-					VIDEO_UNIT *t=video_impact+VIDEO_OFFSET_X;
-					do *t++=vicii_l_p; while (--vicii_l_n);
-				}
-				if (vicii_r_n>0) // draw the right border?
-				{
-					VIDEO_UNIT *t=video_impact+VIDEO_OFFSET_X+VIDEO_PIXELS_X;
-					do *--t=vicii_r_p; while (--vicii_r_n);
-				}
-				video_drawscanline();
+					break;
+				case 2: // HI-RES GRAPHICS
+					for (BYTE x=0;x<40;++x)
+					{
+						BYTE a=vicii_cache[x],b=vicii_bitmap[(y++&1023)*8+vicii_eighth];
+						VIDEO_UNIT q0=video_clut[a&15],q1=video_clut[a>>4];
+						*t++=p=(b&128)?q1:q0; *t++=p;
+						*t++=p=(b& 64)?q1:q0; *t++=p;
+						*t++=p=(b& 32)?q1:q0; *t++=p;
+						*t++=p=(b& 16)?q1:q0; *t++=p;
+						*t++=p=(b&  8)?q1:q0; *t++=p;
+						*t++=p=(b&  4)?q1:q0; *t++=p;
+						*t++=p=(b&  2)?q1:q0; *t++=p;
+						*t++=p=(b&  1)?q1:q0; *t++=p;
+					}
+					break;
+				case 3: // LO-RES GRAPHICS
+					for (BYTE x=0;x<40;++x)
+					{
+						BYTE a=vicii_cache[x],b=vicii_bitmap[(y&=1023)*8+vicii_eighth];
+						VIDEO_UNIT q[4]={video_clut[17],video_clut[a>>4],video_clut[a&15],video_clut[VICII_COLOR[y++]]};
+						*t++=p=q[ b>>6   ]; *t++=p; *t++=p; *t++=p;
+						*t++=p=q[(b>>4)&3]; *t++=p; *t++=p; *t++=p;
+						*t++=p=q[(b>>2)&3]; *t++=p; *t++=p; *t++=p;
+						*t++=p=q[(b   )&3]; *t++=p; *t++=p; *t++=p;
+					}
+					break;
+				case 4: // HI-RES EXTENDED
+					for (BYTE x=0;x<40;++x)
+					{
+						BYTE a=vicii_cache[x],b=vicii_bitmap[(a&63)*8+vicii_eighth];
+						VIDEO_UNIT q0=video_clut[(a>>6)+17],q1=video_clut[VICII_COLOR[y++&1023]];
+						*t++=p=(b&128)?q1:q0; *t++=p;
+						*t++=p=(b& 64)?q1:q0; *t++=p;
+						*t++=p=(b& 32)?q1:q0; *t++=p;
+						*t++=p=(b& 16)?q1:q0; *t++=p;
+						*t++=p=(b&  8)?q1:q0; *t++=p;
+						*t++=p=(b&  4)?q1:q0; *t++=p;
+						*t++=p=(b&  2)?q1:q0; *t++=p;
+						*t++=p=(b&  1)?q1:q0; *t++=p;
+					}
+					break;
+				case 16+0: // IDLE HI-RES CHARACTER
+				case 16+1: // IDLE LO-RES CHARACTER
+				case 16+4: // IDLE HI-RES EXTENDED
+					for (BYTE x=0,b=vicii_memory[(vicii_mode&4)?0X39FF:0X3FFF];x<40;++x)
+					{
+						*t++=p=(b&128)?video_clut[0]:video_clut[17]; *t++=p;
+						*t++=p=(b& 64)?video_clut[0]:video_clut[17]; *t++=p;
+						*t++=p=(b& 32)?video_clut[0]:video_clut[17]; *t++=p;
+						*t++=p=(b& 16)?video_clut[0]:video_clut[17]; *t++=p;
+						*t++=p=(b&  8)?video_clut[0]:video_clut[17]; *t++=p;
+						*t++=p=(b&  4)?video_clut[0]:video_clut[17]; *t++=p;
+						*t++=p=(b&  2)?video_clut[0]:video_clut[17]; *t++=p;
+						*t++=p=(b&  1)?video_clut[0]:video_clut[17]; *t++=p;
+					}
+					break;
+				case 16+3: // IDLE LO-RES GRAPHICS
+					for (BYTE x=0,b=vicii_memory[(vicii_mode&4)?0X39FF:0X3FFF];x<40;++x)
+					{
+						*t++=p=(b&192)?video_clut[0]:video_clut[17]; *t++=p; *t++=p; *t++=p;
+						*t++=p=(b& 48)?video_clut[0]:video_clut[17]; *t++=p; *t++=p; *t++=p;
+						*t++=p=(b& 12)?video_clut[0]:video_clut[17]; *t++=p; *t++=p; *t++=p;
+						*t++=p=(b&  3)?video_clut[0]:video_clut[17]; *t++=p; *t++=p; *t++=p;
+					}
+					break;
+				case 16+2: // IDLE HI-RES GRAPHICS
+				case 5:
+				case 6:
+				case 7: // UNDEFINED MODES! (always black!?!?!?)
+				case 16+5:
+				case 16+6:
+				case 16+7: // IDLE UNDEFINED MODES!
+				default: // BLACK BACKGROUND!
+					p=video_clut[0]; for (int x=0;x<320;++x) *t++=p,*t++=p;
 			}
+			p=video_clut[17]; for (BYTE i=(VIDEO_PIXELS_X-640)/2-vicii_horizon*2;i--;) *t++=p;
+			MEMZERO(vicii_sprite_k); // nuke sprites!
+		}
+		else
+		{
+			memset( vicii_hits     ,0,sizeof(vicii_hits)/4);
+			memset(&vicii_hits[384],0,sizeof(vicii_hits)/4);
+			WORD *h=&vicii_hits[(512-320)/2+vicii_horizon];
+			switch (vicii_mode) // render the background pixels and the collision bitmap in a single go!
+			{
+				case 0: // HI-RES CHARACTER
+					for (BYTE x=0;x<40;++x,h+=8)
+					{
+						BYTE b=vicii_bitmap[vicii_cache[x]*8+vicii_eighth];
+						VIDEO_UNIT p0=video_clut[VICII_COLOR[y++&1023]];
+						*t++=p=(h[0]=(b&128)<<1)?p0:video_clut[17]; *t++=p;
+						*t++=p=(h[1]=(b& 64)<<2)?p0:video_clut[17]; *t++=p;
+						*t++=p=(h[2]=(b& 32)<<3)?p0:video_clut[17]; *t++=p;
+						*t++=p=(h[3]=(b& 16)<<4)?p0:video_clut[17]; *t++=p;
+						*t++=p=(h[4]=(b&  8)<<5)?p0:video_clut[17]; *t++=p;
+						*t++=p=(h[5]=(b&  4)<<6)?p0:video_clut[17]; *t++=p;
+						*t++=p=(h[6]=(b&  2)<<7)?p0:video_clut[17]; *t++=p;
+						*t++=p=(h[7]=(b&  1)<<8)?p0:video_clut[17]; *t++=p;
+					}
+					break;
+				case 1: // LO-RES CHARACTER
+					for (BYTE x=0;x<40;++x,h+=8)
+					{
+						BYTE b=vicii_bitmap[vicii_cache[x]*8+vicii_eighth],c=VICII_COLOR[y++&1023];
+						if (c>=8) // LO-RES?
+						{
+							VIDEO_UNIT q[4]={video_clut[17],video_clut[18],video_clut[19],video_clut[c-8]};
+							h[0]=h[1]=(b&128)<<1; *t++=p=q[ b>>6   ]; *t++=p; *t++=p; *t++=p;
+							h[2]=h[3]=(b& 32)<<3; *t++=p=q[(b>>4)&3]; *t++=p; *t++=p; *t++=p;
+							h[4]=h[5]=(b&  8)<<5; *t++=p=q[(b>>2)&3]; *t++=p; *t++=p; *t++=p;
+							h[6]=h[7]=(b&  2)<<7; *t++=p=q[(b   )&3]; *t++=p; *t++=p; *t++=p;
+						}
+						else // HI-RES!
+						{
+							VIDEO_UNIT q1=video_clut[c];
+							*t++=p=(h[0]=(b&128)<<1)?q1:video_clut[17]; *t++=p;
+							*t++=p=(h[1]=(b& 64)<<2)?q1:video_clut[17]; *t++=p;
+							*t++=p=(h[2]=(b& 32)<<3)?q1:video_clut[17]; *t++=p;
+							*t++=p=(h[3]=(b& 16)<<4)?q1:video_clut[17]; *t++=p;
+							*t++=p=(h[4]=(b&  8)<<5)?q1:video_clut[17]; *t++=p;
+							*t++=p=(h[5]=(b&  4)<<6)?q1:video_clut[17]; *t++=p;
+							*t++=p=(h[6]=(b&  2)<<7)?q1:video_clut[17]; *t++=p;
+							*t++=p=(h[7]=(b&  1)<<8)?q1:video_clut[17]; *t++=p;
+						}
+					}
+					break;
+				case 2: // HI-RES GRAPHICS
+					for (BYTE x=0;x<40;++x,h+=8)
+					{
+						BYTE a=vicii_cache[x],b=vicii_bitmap[(y++&1023)*8+vicii_eighth];
+						VIDEO_UNIT q0=video_clut[a&15],q1=video_clut[a>>4];
+						*t++=p=(h[0]=(b&128)<<1)?q1:q0; *t++=p;
+						*t++=p=(h[1]=(b& 64)<<2)?q1:q0; *t++=p;
+						*t++=p=(h[2]=(b& 32)<<3)?q1:q0; *t++=p;
+						*t++=p=(h[3]=(b& 16)<<4)?q1:q0; *t++=p;
+						*t++=p=(h[4]=(b&  8)<<5)?q1:q0; *t++=p;
+						*t++=p=(h[5]=(b&  4)<<6)?q1:q0; *t++=p;
+						*t++=p=(h[6]=(b&  2)<<7)?q1:q0; *t++=p;
+						*t++=p=(h[7]=(b&  1)<<8)?q1:q0; *t++=p;
+					}
+					break;
+				case 3: // LO-RES GRAPHICS
+					for (BYTE x=0;x<40;++x,h+=8)
+					{
+						BYTE a=vicii_cache[x],b=vicii_bitmap[(y&=1023)*8+vicii_eighth];
+						VIDEO_UNIT q[4]={video_clut[17],video_clut[a>>4],video_clut[a&15],video_clut[VICII_COLOR[y++]]};
+						h[0]=h[1]=(b&128)<<1; *t++=p=q[ b>>6   ]; *t++=p; *t++=p; *t++=p;
+						h[2]=h[3]=(b& 32)<<3; *t++=p=q[(b>>4)&3]; *t++=p; *t++=p; *t++=p;
+						h[4]=h[5]=(b&  8)<<5; *t++=p=q[(b>>2)&3]; *t++=p; *t++=p; *t++=p;
+						h[6]=h[7]=(b&  2)<<7; *t++=p=q[(b   )&3]; *t++=p; *t++=p; *t++=p;
+					}
+					break;
+				case 4: // HI-RES EXTENDED
+					for (BYTE x=0;x<40;++x,h+=8)
+					{
+						BYTE a=vicii_cache[x],b=vicii_bitmap[(a&63)*8+vicii_eighth];
+						VIDEO_UNIT q0=video_clut[(a>>6)+17],q1=video_clut[VICII_COLOR[y++&1023]];
+						*t++=p=(h[0]=(b&128)<<1)?q1:q0; *t++=p;
+						*t++=p=(h[1]=(b& 64)<<2)?q1:q0; *t++=p;
+						*t++=p=(h[2]=(b& 32)<<3)?q1:q0; *t++=p;
+						*t++=p=(h[3]=(b& 16)<<4)?q1:q0; *t++=p;
+						*t++=p=(h[4]=(b&  8)<<5)?q1:q0; *t++=p;
+						*t++=p=(h[5]=(b&  4)<<6)?q1:q0; *t++=p;
+						*t++=p=(h[6]=(b&  2)<<7)?q1:q0; *t++=p;
+						*t++=p=(h[7]=(b&  1)<<8)?q1:q0; *t++=p;
+					}
+					break;
+				case 16+0: // IDLE HI-RES CHARACTER
+				case 16+1: // IDLE LO-RES CHARACTER
+				case 16+4: // IDLE HI-RES EXTENDED
+					for (BYTE x=0,b=vicii_memory[(vicii_mode&4)?0X39FF:0X3FFF];x<40;++x,h+=8)
+					{
+						*t++=p=(h[0]=(b&128)<<1)?video_clut[0]:video_clut[17]; *t++=p;
+						*t++=p=(h[1]=(b& 64)<<2)?video_clut[0]:video_clut[17]; *t++=p;
+						*t++=p=(h[2]=(b& 32)<<3)?video_clut[0]:video_clut[17]; *t++=p;
+						*t++=p=(h[3]=(b& 16)<<4)?video_clut[0]:video_clut[17]; *t++=p;
+						*t++=p=(h[4]=(b&  8)<<5)?video_clut[0]:video_clut[17]; *t++=p;
+						*t++=p=(h[5]=(b&  4)<<6)?video_clut[0]:video_clut[17]; *t++=p;
+						*t++=p=(h[6]=(b&  2)<<7)?video_clut[0]:video_clut[17]; *t++=p;
+						*t++=p=(h[7]=(b&  1)<<8)?video_clut[0]:video_clut[17]; *t++=p;
+					}
+					break;
+				case 16+3: // IDLE LO-RES GRAPHICS
+					for (BYTE x=0,b=vicii_memory[(vicii_mode&4)?0X39FF:0X3FFF];x<40;++x,h+=8)
+					{
+						h[0]=h[1]=(b&128)<<1; *t++=p=(b&192)?video_clut[0]:video_clut[17]; *t++=p; *t++=p; *t++=p;
+						h[2]=h[3]=(b& 32)<<3; *t++=p=(b& 48)?video_clut[0]:video_clut[17]; *t++=p; *t++=p; *t++=p;
+						h[4]=h[5]=(b&  8)<<5; *t++=p=(b& 12)?video_clut[0]:video_clut[17]; *t++=p; *t++=p; *t++=p;
+						h[6]=h[7]=(b&  2)<<7; *t++=p=(b&  3)?video_clut[0]:video_clut[17]; *t++=p; *t++=p; *t++=p;
+					}
+					break;
+				case 16+2: // IDLE HI-RES GRAPHICS
+				case 5:
+				case 6:
+				case 7: // UNDEFINED MODES! (always black!?!?!?)
+				case 16+5:
+				case 16+6:
+				case 16+7: // IDLE UNDEFINED MODES!
+				default: // BLACK BACKGROUND!
+					p=video_clut[0]; for (BYTE x=0,b=vicii_memory[(vicii_mode&4)?0X39FF:0X3FFF];x<40;++x,h+=8)
+					{
+						h[0]=(b&128)<<1; *t++=p; *t++=p;
+						h[1]=(b& 64)<<2; *t++=p; *t++=p;
+						h[2]=(b& 32)<<3; *t++=p; *t++=p;
+						h[3]=(b& 16)<<4; *t++=p; *t++=p;
+						h[4]=(b&  8)<<5; *t++=p; *t++=p;
+						h[5]=(b&  4)<<6; *t++=p; *t++=p;
+						h[6]=(b&  2)<<7; *t++=p; *t++=p;
+						h[7]=(b&  1)<<8; *t++=p; *t++=p;
+					}
+			}
+			p=video_clut[17]; for (BYTE i=(VIDEO_PIXELS_X-640)/2-vicii_horizon*2;i--;) *t++=p;
+			// render the sprites and handle their collision bits
+			t=u+(VIDEO_PIXELS_X/2)-320; { int k; for (BYTE i=8;i--;) if (k=vicii_sprite_k[i]) vicii_draw_sprite(t,i,k); }
+		}
+	}
+	else if (vicii_cow&&!(vicii_nosprites|vicii_noimpacts)) // wrong scanline or frame, do the collission bitmap and nothing else
+	{
+		memset( vicii_hits     ,0,sizeof(vicii_hits)/4);
+		memset(&vicii_hits[384],0,sizeof(vicii_hits)/4);
+		WORD *h=&vicii_hits[(512-320)/2+vicii_horizon],y=vicii_cursor;
+		switch (vicii_mode) // render the background's collision bitmap in a single go!
+		{
+			case 0: // HI-RES CHARACTER
+				for (BYTE x=0;x<40;++x,h+=8)
+				{
+					BYTE b=vicii_bitmap[vicii_cache[x]*8+vicii_eighth];
+					h[0]=(b&128)<<1;
+					h[1]=(b& 64)<<2;
+					h[2]=(b& 32)<<3;
+					h[3]=(b& 16)<<4;
+					h[4]=(b&  8)<<5;
+					h[5]=(b&  4)<<6;
+					h[6]=(b&  2)<<7;
+					h[7]=(b&  1)<<8;
+				}
+				break;
+			case 1: // LO-RES CHARACTER
+				for (BYTE x=0;x<40;++x,h+=8)
+				{
+					BYTE b=vicii_bitmap[vicii_cache[x]*8+vicii_eighth];
+					if (VICII_COLOR[y++&1023]>=8) // LO-RES?
+					{
+						h[0]=h[1]=(b&128)<<1;
+						h[2]=h[3]=(b& 32)<<3;
+						h[4]=h[5]=(b&  8)<<5;
+						h[6]=h[7]=(b&  2)<<7;
+					}
+					else // HI-RES!
+					{
+						h[0]=(b&128)<<1;
+						h[1]=(b& 64)<<2;
+						h[2]=(b& 32)<<3;
+						h[3]=(b& 16)<<4;
+						h[4]=(b&  8)<<5;
+						h[5]=(b&  4)<<6;
+						h[6]=(b&  2)<<7;
+						h[7]=(b&  1)<<8;
+					}
+				}
+				break;
+			case 2: // HI-RES GRAPHICS
+				for (BYTE x=0;x<40;++x,h+=8,++y)
+				{
+					BYTE b=vicii_bitmap[(y&1023)*8+vicii_eighth];
+					h[0]=(b&128)<<1;
+					h[1]=(b& 64)<<2;
+					h[2]=(b& 32)<<3;
+					h[3]=(b& 16)<<4;
+					h[4]=(b&  8)<<5;
+					h[5]=(b&  4)<<6;
+					h[6]=(b&  2)<<7;
+					h[7]=(b&  1)<<8;
+				}
+				break;
+			case 3: // LO-RES GRAPHICS
+				for (BYTE x=0;x<40;++x,h+=8,++y)
+				{
+					BYTE b=vicii_bitmap[(y&1023)*8+vicii_eighth];
+					h[0]=h[1]=(b&128)<<1;
+					h[2]=h[3]=(b& 32)<<3;
+					h[4]=h[5]=(b&  8)<<5;
+					h[6]=h[7]=(b&  2)<<7;
+				}
+				break;
+			case 4: // HI-RES EXTENDED
+				for (BYTE x=0;x<40;++x,h+=8)
+				{
+					BYTE b=vicii_bitmap[(vicii_cache[x]&63)*8+vicii_eighth];
+					h[0]=(b&128)<<1;
+					h[1]=(b& 64)<<2;
+					h[2]=(b& 32)<<3;
+					h[3]=(b& 16)<<4;
+					h[4]=(b&  8)<<5;
+					h[5]=(b&  4)<<6;
+					h[6]=(b&  2)<<7;
+					h[7]=(b&  1)<<8;
+				}
+				break;
+			case 5:
+			case 6:
+			case 7: // UNDEFINED MODES!
+				if (vicii_mode&1) // LO-RES?
+					for (BYTE x=0,b=vicii_memory[(vicii_mode&4)?0X39FF:0X3FFF];x<40;++x,h+=8)
+					{
+						h[0]=h[1]=(b&128)<<1;
+						h[2]=h[3]=(b& 32)<<3;
+						h[4]=h[5]=(b&  8)<<5;
+						h[6]=h[7]=(b&  2)<<7;
+					}
+				else // HI-RES!
+					for (BYTE x=0,b=vicii_memory[(vicii_mode&4)?0X39FF:0X3FFF];x<40;++x,h+=8)
+					{
+						h[0]=(b&128)<<1;
+						h[1]=(b& 64)<<2;
+						h[2]=(b& 32)<<3;
+						h[3]=(b& 16)<<4;
+						h[4]=(b&  8)<<5;
+						h[5]=(b&  4)<<6;
+						h[6]=(b&  2)<<7;
+						h[7]=(b&  1)<<8;
+					}
+				break;
+			default: // BACKGROUND!
+				for (BYTE x=0,b=vicii_memory[(vicii_mode&4)?0X39FF:0X3FFF];x<40;++x,h+=8)
+				{
+					h[0]=(b&128)<<1;
+					h[1]=(b& 64)<<2;
+					h[2]=(b& 32)<<3;
+					h[3]=(b& 16)<<4;
+					h[4]=(b&  8)<<5;
+					h[5]=(b&  4)<<6;
+					h[6]=(b&  2)<<7;
+					h[7]=(b&  1)<<8;
+				}
+		}
+		// handle the sprites' collision bits
+		{ int k; for (BYTE i=8;i--;) if (k=vicii_sprite_k[i]) vicii_draw_sprite(NULL,i,k); }
+	}
+	else
+		MEMZERO(vicii_sprite_k); // nuke sprites!
+}
+void vicii_draw_border(void) // render a single line of the border, again relying on extant datas
+{
+	if (frame_pos_y>=VIDEO_OFFSET_Y&&frame_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y)
+	{
+		VIDEO_UNIT p,*t=video_target-video_pos_x+VIDEO_OFFSET_X;
+		if (UNLIKELY(vicii_mode&32)) // VIC-II off or drawing the top/bottom border?
+			for (int i=VIDEO_OFFSET_X>>4;p=video_clut[vicii_copy_border[i]],i<((VIDEO_OFFSET_X+VIDEO_PIXELS_X)>>4);++i)
+				for (char x=16;x;--x) *t++=p;
+		else // render the borders
+		{
+			VIDEO_UNIT *u=t; int i,j,k; if (vicii_port_22&8)
+				k=j=(VIDEO_PIXELS_X-640)/2;
 			else
-				vicii_l_n=vicii_r_n=0; // reset the border masks!
-			for (int i=8,j=128;i--;j>>=1) // reload or update sprites?
-			{
-				vicii_sprite_h[i]=vicii_attrib[1016+i];
-				if (!((vicii_pos_y^VICII_TABLE[i*2+1])&255))
-					vicii_sprite_l[i]=vicii_sprite_z[i]=0;
-				else if (vicii_sprite_l[i]<63&&(!(VICII_TABLE[23]&j)||!(vicii_sprite_z[i]=!vicii_sprite_z[i])))
-					vicii_sprite_l[i]+=3;
-			}
-			MEMZERO(vicii_impact);
-
-			frame_pos_y+=2,video_pos_y+=2,video_target+=VIDEO_LENGTH_X*2-video_pos_x; video_pos_x=vicii_pixel=0; session_signal|=session_signal_scanlines; // scanline event!
-
-			++vicii_lines; if (++vicii_pos_y>=312)
-			{
-				vicii_pos_y=vicii_backup=vicii_pos_z=0;
-				vicii_mode|=64; // forbid character rendering until the first badline happens
-
-				// handle decimals, seconds, minutes, hours and alarm in a single block;
-				// bit 30 keeps the clock from updating (f.e. while setting the time)
-				#define CIAS_24HOURS(x,y,z) do{ if (!(x&0X40000000)) { if ((++x&15)>=10) \
-				if (!(~(x+= 256 - 10 )&0X00000A00)) if (!(~(x+=0X00000600)&0X00006000)) \
-				if (!(~(x+=0X0000A000)&0X000A0000)) if (!(~(x+=0X00060000)&0X00600000)) \
-				{ if (!(~(x+=0X00A00000)&0X13000000)) x-=0X92000000; \
-				else if (!(~(x&0X0A000000))) x+=0X06000000; } \
-				if (equalsiiii(y,x)) z; } }while(0)
-				static char decimal=0; if (++decimal>=5)
-				{
-					decimal=0;
-					CIAS_24HOURS(cia_hhmmssd[0],&CIA_TABLE_0[8],0);
-					CIAS_24HOURS(cia_hhmmssd[1],&CIA_TABLE_1[8],0);
-				}
-
-				if (!video_framecount) video_endscanlines(); // frame is complete!
-				video_newscanlines(video_pos_x,0); // vertical reset
-				session_signal|=SESSION_SIGNAL_FRAME+session_signal_frames; // frame event!
-			}
-			else if (vicii_pos_y== 51) // PAL 25CHAR BEGIN
-				{ vicii_lines=3-(VICII_TABLE[17]&7); if ((VICII_TABLE[17]&24)==24) { vicii_mode&=~32; } }
-			else if (vicii_pos_y== 55) // PAL 24CHAR BEGIN
-				{ if ((VICII_TABLE[17]&24)==16) { vicii_mode&=~32; } }
-			else if (vicii_pos_y==247) // PAL 24CHAR END
-				{ if (!(VICII_TABLE[17]&8)) { vicii_mode|= 32; } }
-			else if (vicii_pos_y==251) // PAL 25CHAR END
-				{ if (  VICII_TABLE[17]&8 ) { vicii_mode|= 32; } }
-
-			vicii_pos_x=0; //vicii_setmaps(); vicii_setmode();
-			if (vicii_pos_y==vicii_irq_y) VICII_TABLE[25]|=1;
-			if (VICII_TABLE[25]&VICII_TABLE[26]&15)
-				VICII_TABLE[25]|=128,m6510_irq|=1; // throw VIC-II IRQ!
-		}
-		else if (vicii_pos_x==16)
-		{
-			if (!(vicii_mode&32))
-			{
-				int i=VICII_TABLE[22]&7; vicii_pixel+=i; video_pos_x+=i*2; // "shift" the screen right to horizontal scroll
-				if (frame_pos_y>=VIDEO_OFFSET_Y&&frame_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y)
-					while (i-->0)
-						VIDEO_NEXT=video_clut[17],VIDEO_NEXT=video_clut[17]; // the left gap is NOT the border!!
-				else
-					video_target+=i*2;
-			}
-			{ if (  VICII_TABLE[22]&8 ) { if (  vicii_mode&16 ) { vicii_l_n=(VIDEO_PIXELS_X-640   )/2,vicii_l_p=video_clut[16]; } } }
-			vicii_mode&=~16;
-			vicii_cursor=vicii_backup;
-			if (!(vicii_mode&32)&&vicii_pos_y>=48&&vicii_pos_y<248&&!((vicii_pos_y^VICII_TABLE[17])&7)) // do we need to fetch a "badline"?
-			{
-				vicii_mode&=~64;
-				vicii_pos_z=0;
-				for (int i=0;i<40;++i)
-					buffer[16+i]=vicii_attrib[(vicii_backup+i)&0X3FF];
-			}
-		}
-		else if (vicii_pos_x==17)
-			{ if (!(VICII_TABLE[22]&8)) { if (! vicii_l_n     ) { vicii_l_n=(VIDEO_PIXELS_X-640+32)/2,vicii_l_p=video_clut[16]; } } }
-		else if (vicii_pos_x==55)
-			{ if (!(VICII_TABLE[22]&8)) { if (!(vicii_mode&16)) { vicii_mode|= 16; vicii_r_n=(VIDEO_PIXELS_X-640+32)/2,vicii_r_p=video_clut[16]; } } }
-		else if (vicii_pos_x==56)
-		{
-			int i=vicii_pixel&7; vicii_pixel-=i,video_target-=i*2,video_pos_x-=i*2; // "shift" the screen back to normal
-			if (vicii_pos_y>=48&&vicii_pos_y<256)
-			{
-				if (vicii_pos_z>=7)
-					vicii_backup=vicii_cursor,vicii_pos_z=0;
-				else
-					++vicii_pos_z;
-			}
-			{ if (  VICII_TABLE[22]&8 ) { if (!(vicii_mode&16)) { vicii_mode|= 16; vicii_r_n=(VIDEO_PIXELS_X-640   )/2,vicii_r_p=video_clut[16]; } } }
+				k=4+(j=(VIDEO_PIXELS_X-640)/2+14); // left border 7 px, right border 9 px
+			if (vicii_copy_border_l)
+				for (p=video_clut[vicii_copy_border[VIDEO_OFFSET_X>>4]],u=t;j--;) *u++=p;
+			if (vicii_copy_border_r)
+				for (p=video_clut[vicii_copy_border[((VIDEO_OFFSET_X+VIDEO_PIXELS_X)>>4)-1]],u=t+VIDEO_PIXELS_X-k;k--;) *u++=p;
 		}
 	}
-	while (--t>0);
 }
 
-int /*tape_loud=1,*/tape_song=0;
-void audio_main(int t)
-{
-	sid_main(t,0/*+(((tape_status^tape_output)&tape_loud)<<12)*/);
-}
-
-// autorun runtime logic -------------------------------------------- //
-
-BYTE snap_done; // avoid accidents with ^F2, see all_reset()
-char autorun_path[STRMAX]="",autorun_line[STRMAX];
-int autorun_mode=0,autorun_t=0,autorun_i=0;
-
-BYTE autorun_kbd[16]; // automatic keypresses
-#define autorun_kbd_set(k) (autorun_kbd[k>>3]|=1<<(k&7))
-#define autorun_kbd_res(k) (autorun_kbd[k>>3]&=~(1<<(k&7)))
-
-int autorun_type(char *s,int n)
-{
-	autorun_t=9; if (!(m6510_pc.w>=0XE5CD&&m6510_pc.w<0XE5D6)) return -1; // try again later!
-	if (n)
-	{
-		memcpy(&mem_ram[mem_ram[0XD1]+mem_ram[0XD2]*256+mem_ram[0XD3]],s,n); // copy string
-		mem_ram[0XD3]+=n; autorun_kbd_set(0001); // move the cursor forward and press RETURN
-	}
-	return 0;
-}
-
-INLINE void autorun_next(void)
-{
-	switch (autorun_mode)
-	{
-		case 1: // TYPE "RUN", PRESS RETURN...
-			if (autorun_type("\022\025\016",3)) break;
-			// no `break`!
-		case 2: // INJECT FILE...
-			if (autorun_type(NULL,0)) break;
-			if (autorun_i) memcpy(&mem_ram[0X0801],&mem_ram[1<<16],autorun_i);
-			autorun_i+=0X0801; // end of prog, rather than prog size
-			mputii(&mem_ram[0X00AC],autorun_i); mputii(&mem_ram[0X00AE],autorun_i); // poke end-of-file KERNAL pokes
-			mputii(&mem_ram[0X002D],autorun_i); mputii(&mem_ram[0X002F],autorun_i); mputii(&mem_ram[0X0031],autorun_i); // end-of-file BASIC pokes
-			autorun_i=0; autorun_mode=9;
-			break;
-		case 3: // TYPE "LOAD", PRESS RETURN...
-			if (autorun_type("\014\017\001\004",4)) break;
-			++autorun_mode;
-			break;
-		case 4: // RELEASE RETURN...
-			autorun_t=1;
-			autorun_kbd_res(0001);
-			++autorun_mode;
-			break;
-		case 5: // TYPE "RUN", PRESS RETURN...
-			if (m6510_pc.w>=0XE000&&autorun_type("\022\025\016",3)) break;
-			autorun_t=autorun_mode=9;
-			break;
-		case 8: // TYPE "LOAD"*",8,1", PRESS RETURN...
-			if (autorun_type("\014\017\001\004\042\052\042" ",8,1",11)) break;
-			autorun_mode=9;
-			break;
-		case 9: // ...RELEASE RETURN!
-			autorun_kbd_res(0001);
-			autorun_mode=0;
-			break;
-	}
-}
+//void video_main(int t) // the VIC-II updates the video on its own!
 
 // CPU: MOS 6510 MICROPROCESSOR ===================================== //
 
-void m6502_main(int); // required by the 6510; will be defined later on!
+// interrupt queue operations; notice that the 6510 can temporarily decrease these counters
+#define M6510_IRQ_SET() do{ if (m6510_i_t<-9) m6510_i_t=-2; }while(0)
+#define M6510_NMI_SET() do{ if (m6510_n_t<-9) m6510_n_t=-2; }while(0)
 
-void m6510_sync(int t) // the MOS 6510 "drives" the whole system
+void m6510_tape_main(void) // refill the tape counter
 {
-	static int r=0; main_t+=t;
+	if (((cia_port_13[0]|=16)&CIA_TABLE_0[13]&31)&&cia_port_13[0]<128)
+		{ cia_port_13[0]+=128; M6510_IRQ_SET(); }
+	while ((tape_t+=tape_feed())<0) ;
+}
+#define M6510_TAPE_N_DISC(zzz) do{ if (tape&&!tape_disabled) { if ((tape_t-=zzz)<0) m6510_tape_main(); } else if (!disc_disabled) m6502_main(zzz); }while(0)
+#define M6510_LOAD_SPRITE(i) do{ WORD z=vicii_attrib[1016+i]*64+vicii_sprite_y[i]; vicii_sprite_k[i]=vicii_memory[z+2]+(vicii_memory[z+1]<<8)+(vicii_memory[z]<<16); }while(0)
+
+int m6510_tick(int q) // handles the essential events that happen on each tick, according to the threshold `q`; returns the resulting timing (1 if no delays happen, >1 otherwise)
+{
+	for (int t=1;;++t)
+	{
+		vicii_copy_border[(BYTE)(video_pos_x>>4)]=VICII_TABLE[32];
+		video_target+=16,video_pos_x+=16; // just for debugging purposes
+		++m6510_i_t,++m6510_n_t; // this must happen before any IRQ/NMI events
+		if (UNLIKELY(++vicii_pos_x>=vicii_irq_x)) // update the VIC-II clock
+			vicii_pos_x=-VICII_MINUS; // the "logical" ticker wraps before the "physical" one; this makes NTSC and PAL effectively equivalent, as their differences lay after the canvas and before the sprites
+		switch (vicii_pos_x)
+		{
+			case -8: // equivalent to 55 on PAL, and to 56 or 57 on NTSC depending on the horizontal timing (64 or 65 T)
+				vicii_cow=0; for (BYTE i=8,j=128;i--;j>>=1)
+				{
+					vicii_sprite_x^=VICII_TABLE[23]&j; // toggle height step
+					if (VICII_TABLE[21]&j) // enabled sprite?
+						if ((vicii_pos_y&255)==VICII_TABLE[1+i*2]) // new sprite?
+							vicii_sprite_y[i]=((vicii_spritexy&j)&&vicii_pos_y>=256)?vicii_sprite_y[i]:0, // reload!
+							vicii_sprite_x=(VICII_TABLE[23]&j)+(vicii_sprite_x&~j); // set height!
+					if (vicii_sprite_y[i]<63)
+						vicii_cow|=j; // tag sprite for fetching!
+				}
+				vicii_spritexy=0;
+				vicii_takeover=vicii_cow&  1;
+				break;
+			case -7:
+				if (!(VICII_TABLE[22]&8)) vicii_mode|=+8; // borderless 38-char mode
+				break;
+			case -6:
+				if ( (VICII_TABLE[22]&8)) vicii_mode|=+8; // borderless 40-char mode
+				vicii_copy_border_r=vicii_mode&8;
+				if (vicii_cow&  2) vicii_takeover=1;
+				break;
+			case -5:
+				if (vicii_eighth==7)
+					vicii_mode|=+16,vicii_backup=vicii_cursor+vicii_dmadelay,vicii_dmadelay=0;
+				if (vicii_badline||!(vicii_mode&16))
+					vicii_mode&=~16,vicii_eighth=(vicii_eighth+1)&7;
+				break;
+			case -4:
+				if (vicii_cow&  4) vicii_takeover=1;
+				break;
+			case -3:
+				if (vicii_cow&  1) { M6510_LOAD_SPRITE(0); if (!(vicii_cow&  6)) vicii_takeover=0; }
+				break;
+			case -2:
+				if (vicii_cow&  8) vicii_takeover=1;
+				break;
+			case -1:
+				if (vicii_cow&  2) { M6510_LOAD_SPRITE(1); if (!(vicii_cow& 12)) vicii_takeover=0; }
+				break;
+			case +0:
+				if (vicii_cow& 16) vicii_takeover=1;
+				vicii_draw_border();
+				if (frame_pos_y>=VIDEO_OFFSET_Y&&frame_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y) video_drawscanline(); // scanline is complete!
+				video_nextscanline(0); // scanline event!
+				// update other devices, if required
+				{
+					int tt=vicii_len_x/multi_t;
+					if (!audio_disabled) audio_main(tt); // even the sharpest samples eat more than one scanline per signal
+					if ((cia_serials[0]-=cia_xchange[0])<=0&&cia_xchange[0])
+						if (cia_xchange[0]=cia_serials[0]=0,CIA_TABLE_0[14]&64)
+							if (((cia_port_13[0]|=8)&CIA_TABLE_0[13]&31)&&cia_port_13[0]<128)
+								{ cia_port_13[0]+=128; M6510_IRQ_SET(); }
+					if ((cia_serials[1]-=cia_xchange[1])<=0&&cia_xchange[1])
+						if (cia_xchange[1]=cia_serials[1]=0,CIA_TABLE_1[14]&64)
+							if (((cia_port_13[1]|=8)&CIA_TABLE_1[13]&31)&&cia_port_13[1]<128)
+								{ cia_port_13[1]+=128; M6510_NMI_SET(); }
+				}
+				M6510_TAPE_N_DISC(16);
+				break;
+			case +1:
+				if (vicii_cow&  4) { M6510_LOAD_SPRITE(2); if (!(vicii_cow& 24)) vicii_takeover=0; }
+				if (++vicii_pos_y<vicii_len_y)
+				{
+					if (vicii_pos_y==vicii_irq_y) // the RASTER IRQ doesn't happen here on line 0!
+						VICII_TABLE[25]|=1;
+					if ((VICII_TABLE[25]&VICII_TABLE[26]&7)&&VICII_TABLE[25]<128) // kludge: check both RASTER (+1) and COLLISION (+2+4) here
+						{ VICII_TABLE[25]+=128; M6510_IRQ_SET(); }
+					if (vicii_pos_y==48)
+						vicii_ready=VICII_TABLE[17]&16; // DEN bit: allow badlines (and enable bitmap)
+					if (vicii_badline=vicii_pos_y>=48&&vicii_pos_y<248&&vicii_ready&&!((vicii_pos_y-VICII_TABLE[17])&7))
+						vicii_mode&=~16; // we're in a badline, thus we must NOT display the background!
+				}
+				else
+					vicii_frame=--vicii_pos_y; // line 311 must last one extra tick, but the CPU must never see "312" here!
+				break;
+			case +2:
+				if (vicii_frame)
+				{
+					//if (video_pos_y>=VIDEO_LENGTH_Y)
+					//{
+						if (!video_framecount) video_endscanlines(); // frame is complete!
+						video_newscanlines(video_pos_x,0); session_signal|=SESSION_SIGNAL_FRAME+session_signal_frames; // frame event!
+					//}
+					// handle decimals, seconds, minutes, hours and alarm in a single block;
+					// bit 30 keeps the clock from updating (f.e. while setting the time)
+					#define cia_alarmclock(xxx,yyy,zzz) \
+						do{ if (((cia_port_13[yyy]|=4)&xxx[13]&31)&&cia_port_13[yyy]<128) { cia_port_13[yyy]+=128; zzz; } }while(0)
+					#define CIAS_24HOURS(x,y,z) do{ if (!(x&0X40000000)) { if ((++x&15)>=10) \
+						if (!(~(x+= 256 - 10 )&0X00000A00)) if (!(~(x+=0X00000600)&0X00006000)) \
+						if (!(~(x+=0X0000A000)&0X000A0000)) if (!(~(x+=0X00060000)&0X00600000)) \
+						{ if (!(~(x+=0X00A00000)&0X13000000)) x-=0X92000000; \
+						else if (!(~(x&0X0A000000))) x+=0X06000000; } \
+						if (equalsiiii(y,x)) z; } }while(0)
+					static char decimal=0; if (--decimal<=0)
+					{
+						decimal=vicii_len_y<288?6:5; // i.e. NTSC versus PAL
+						if (!cia_port_11[0]) CIAS_24HOURS(cia_hhmmssd[0],&CIA_TABLE_0[8],cia_alarmclock(CIA_TABLE_0,0,M6510_IRQ_SET()));
+						if (!cia_port_11[1]) CIAS_24HOURS(cia_hhmmssd[1],&CIA_TABLE_1[8],cia_alarmclock(CIA_TABLE_1,1,M6510_NMI_SET()));
+					}
+					if (mmu_fly&&!--mmu_fly) mmu_out&=0X37; // unused bits slowly fade away
+					// reset VIC-II in-frame counters
+					vicii_pos_y=vicii_backup=vicii_frame=0;
+					if (!vicii_irq_y) // the RASTER IRQ happens 1 T later on line 0!
+						if (((VICII_TABLE[25]|=1)&VICII_TABLE[26]&31)&&VICII_TABLE[25]<128)
+							{ VICII_TABLE[25]+=128; M6510_IRQ_SET(); }
+				}
+				if (vicii_cow& 32) vicii_takeover=1;
+				break;
+			case +3:
+				if (vicii_cow&  8) { M6510_LOAD_SPRITE(3); if (!(vicii_cow& 48)) vicii_takeover=0; }
+				break;
+			case +4:
+				if (vicii_cow& 64) vicii_takeover=1;
+				break;
+			case +5:
+				if (vicii_cow& 16) { M6510_LOAD_SPRITE(4); if (!(vicii_cow& 96)) vicii_takeover=0; }
+				break;
+			case +6:
+				if (vicii_cow&128) vicii_takeover=1;
+				break;
+			case +7:
+				if (vicii_cow& 32) { M6510_LOAD_SPRITE(5); if (!(vicii_cow&192)) vicii_takeover=0; }
+				break;
+			case +9:
+				if (vicii_cow& 64) { M6510_LOAD_SPRITE(6); if (!(vicii_cow&128)) vicii_takeover=0; }
+				break;
+			case 11:
+				if (vicii_cow&128) { M6510_LOAD_SPRITE(7); vicii_takeover=0; }
+				break;
+			case 12:
+				if (vicii_takeover=vicii_badline) vicii_mode&=~16;
+				break;
+			case 14:
+				if (vicii_takeover=vicii_badline) vicii_mode&=~16,vicii_eighth=0;
+				vicii_cursor=vicii_backup;//,vicii_dmadelay=0; // *!* redundant!?
+				break;
+			case 16:
+				for (BYTE i=8,j=128;i--;j>>=1) // sprites move to next line
+					if (vicii_sprite_y[i]<63)
+						if (!(vicii_sprite_x&j))
+							vicii_sprite_y[i]=(vicii_sprite_y[i]+3)&63;
+				vicii_copy_border_l=vicii_mode&8;
+				vicii_mode&=~8; // here the left border ends and the bitmap begins, even if the 38-char mode hides the first char
+				if (VICII_TABLE[17]&8)
+					{ if (vicii_pos_y==51&&vicii_ready) vicii_mode&=~32; else if (vicii_pos_y==251) vicii_mode|=+32; }
+				else
+					{ if (vicii_pos_y==55&&vicii_ready) vicii_mode&=~32; else if (vicii_pos_y==247) vicii_mode|=+32; }
+				if (vicii_badline)
+				{
+					//vicii_mode&=~16; // *!* redundant!?
+					WORD y=vicii_cursor; for (BYTE x=0;x<40;++x) vicii_cache[x]=vicii_attrib[y++&1023];
+					if (vicii_takeover>1) vicii_cache[0]=vicii_cache[1]=vicii_cache[2]=255; // the "light grey" bug, see below
+				}
+				// no `break`!
+			case 48: // evenly distributed
+				M6510_TAPE_N_DISC(16);
+				break;
+			case 18: // the VIC-II 6569/8565 barrier is 18/19
+				vicii_horizon=VICII_TABLE[22]&7; // the canvas needs this right now!
+				vicii_port_22=VICII_TABLE[22]; // the borders will need this later
+				vicii_copy_hits=VICII_TABLE[31]*256,VICII_TABLE[30]; // custom IC
+				break;
+			case 18+11: // empyrical middle point: 18+10 is the minimum value where "DISCONNECT" works, but 18+13 breaks "BOX CHECK TEST"
+				if (cia_oldglue)
+					{ if (vicii_mode&32) MEMZERO(vicii_sprite_k); else vicii_draw_canvas(); if (!(vicii_mode&16)) vicii_cursor+=40; }
+				break;
+			case 18+14: // empyrical middle point: the cylinder of "REWIND-TEMPEST" needs 18+11..18+18, but "BOX CHECK TEST" breaks at 18+17
+				if (!cia_oldglue)
+					{ if (vicii_mode&32) MEMZERO(vicii_sprite_k); else vicii_draw_canvas(); if (!(vicii_mode&16)) vicii_cursor+=40; }
+				// no `break`!
+			//case 32: // evenly distributed
+				M6510_TAPE_N_DISC(16);
+				break;
+		}
+		// handle pending CIA events before updating the counters
+		#define CIA_DO_STATE(xxx,yyy,zzz,aaa) \
+			case +0+4+2+0: yyy=+0+0+2+0; break; \
+			case +8+0+0+1: yyy=+0+0+0+1; xxx=mgetii(&zzz); break; \
+			case +8+0+2+0: yyy=+0+0+2+0; xxx=mgetii(&zzz); break; \
+			case +8+4+2+0: yyy=+0+4+2+0; if (xxx==1) goto aaa; xxx=mgetii(&zzz); break; \
+			case +0+0+2+1: yyy=+0+0+0+1; case +0+0+2+0:
+		// `goto` is a terrible reserved word, but it simplifies the work here :-(
+		#define CIA_DO_CNT_A(xxx,yyy,zzz,aaa) \
+			if (cia_minor_a[zzz]&&UNLIKELY(!--cia_count_a[zzz])) \
+				{ if (cia_state_a[zzz]!=+0+0+0+1) { \
+					aaa: if (!(cia_count_a[zzz]=mgetii(&yyy[4]))) cia_count_a[zzz]=65536; \
+					if (((cia_port_13[zzz]|=1)&yyy[13]&31)&&cia_port_13[zzz]<128) \
+						{ cia_port_13[zzz]+=128; xxx; } \
+					cia_state_a[zzz]=(yyy[14]&8)?yyy[14]&=~1,cia_event_a[zzz]&=~1,+8+0+0+1:+8+0+2+0; \
+				} cia_carry=cia_major_b[zzz]; }
+		#define CIA_DO_CNT_B(xxx,yyy,zzz,aaa) \
+			if ((cia_minor_b[zzz]|cia_carry)&&UNLIKELY(!--cia_count_b[zzz])) \
+				{ if (cia_state_b[zzz]!=+0+0+0+1) { \
+					aaa: if (!(cia_count_b[zzz]=mgetii(&yyy[6]))) cia_count_b[zzz]=65536; \
+					if (((cia_port_13[zzz]|=2)&yyy[13]&31)&&cia_port_13[zzz]<128) \
+						{ cia_port_13[zzz]+=128; xxx; } \
+					cia_state_b[zzz]=(yyy[15]&8)?yyy[15]&=~1,cia_event_b[zzz]&=~1,+8+0+0+1:+8+0+2+0; \
+				} }
+		// the macros thus cover both halves of the CIA logic: the state machine and the control listener
+		#define CIA_DO_EVENT(xxx,yyy,zzz) \
+			if (UNLIKELY(xxx>=0)) switch (yyy) { \
+				case +0+0+0+1: case +8+0+0+1: \
+					if (xxx&1) yyy=xxx&16?+8+4+2+0:+0+4+2+0; \
+					else if (xxx&16) yyy=+8+0+0+1; \
+					zzz=xxx&~16; xxx=-1; break; \
+				case +0+0+2+0: \
+					if (xxx&1) { if (xxx&16) yyy=8+4+2+0; } \
+					else yyy=xxx&16?+8+0+0+1:+0+0+2+1; \
+					zzz=xxx&~16; xxx=-1; break; \
+				case +8+0+2+0: case +0+4+2+0: \
+					if (xxx&1) { \
+						if (xxx&8) --xxx,yyy=+0+0+0+1; \
+						else if (xxx&16) yyy=+8+4+2+0; \
+					} else yyy=+0+0+0+1; \
+					zzz=xxx&~16; xxx=-1; }
+		char cia_carry=0; switch (cia_state_a[0])
+		{
+			CIA_DO_STATE(cia_count_a[0],cia_state_a[0],CIA_TABLE_0[4],cia_goto0_a);
+			CIA_DO_CNT_A(M6510_IRQ_SET(),CIA_TABLE_0,0,cia_goto0_a);
+		}
+		CIA_DO_EVENT(cia_event_a[0],cia_state_a[0],CIA_TABLE_0[14]);
+		switch (cia_state_b[0])
+		{
+			CIA_DO_STATE(cia_count_b[0],cia_state_b[0],CIA_TABLE_0[6],cia_goto0_b);
+			CIA_DO_CNT_B(M6510_IRQ_SET(),CIA_TABLE_0,0,cia_goto0_b);
+		}
+		CIA_DO_EVENT(cia_event_b[0],cia_state_b[0],CIA_TABLE_0[15]);
+		cia_carry=0; switch (cia_state_a[1])
+		{
+			CIA_DO_STATE(cia_count_a[1],cia_state_a[1],CIA_TABLE_1[4],cia_goto1_a);
+			CIA_DO_CNT_A(M6510_NMI_SET(),CIA_TABLE_1,1,cia_goto1_a);
+		}
+		CIA_DO_EVENT(cia_event_a[1],cia_state_a[1],CIA_TABLE_1[14]);
+		switch (cia_state_b[1])
+		{
+			CIA_DO_STATE(cia_count_b[1],cia_state_b[1],CIA_TABLE_1[6],cia_goto1_b);
+			CIA_DO_CNT_B(M6510_NMI_SET(),CIA_TABLE_1,1,cia_goto1_b);
+		}
+		CIA_DO_EVENT(cia_event_b[1],cia_state_b[1],CIA_TABLE_1[15]);
+		// freeze the CPU if required, return otherwise
+		if (vicii_takeover<=q) return main_t+=t,t;
+	}
+}
+
+/*void m6510_sync(int t) // handles the hardware events that can gather multiple clock ticks, set here as `t`
+{
+	static int r=0; //main_t+=t;
 	int tt=(r+=t)/multi_t; // calculate base value of `t`
 	r-=(t=tt*multi_t); // adjust `t` and keep remainder
 	if (t>0)
 	{
 		if (tt>0)
 		{
-			audio_queue+=tt;
 			if (audio_dirty&&!audio_disabled)
-				audio_main(audio_queue),audio_dirty=audio_queue=0;
-			if (tape&&tape_enabled>(mmu_out&32))
-				/*audio_dirty|=tape_loud,*/tape_main(tt);
-			/*
-			else if (!disc_disabled) // else!? *!*
-				m6502_main(tt);
-			*/
-			video_main(tt);
-			t=0; if ((CIA_TABLE_0[14]&33)==1) // update the CIA #1 timer A
-			{
-				if (cia_count_a[0]>tt)
-					cia_count_a[0]-=tt;
-				else
-				{
-					t=1; if (((cia_port_13[0]|=1)&CIA_TABLE_0[13]&31)&&!(cia_port_13[0]&128))
-						cia_port_13[0]|=128,m6510_irq|=2;
-					if ((CIA_TABLE_0[14]&8)) // just once?
-						/*cia_count_a[0]=-1,*/CIA_TABLE_0[14]&=~1;
-					//else
-						cia_count_a[0]+=1+CIA_TABLE_0[4]+CIA_TABLE_0[5]*256-tt;
-				}
-			}
-			if ((CIA_TABLE_0[15]&33)==1) // update the CIA #1 timer B
-			{
-				if (!(CIA_TABLE_0[15]&64))
-					t=tt;
-				if (cia_count_b[0]>t)
-					cia_count_b[0]-=t;
-				else //if (t)
-				{
-					if (((cia_port_13[0]|=2)&CIA_TABLE_0[13]&31)&&!(cia_port_13[0]&128))
-						cia_port_13[0]|=128,m6510_irq|=2;
-					if ((CIA_TABLE_0[15]&8)) // just once?
-						/*cia_count_b[0]=-1,*/CIA_TABLE_0[15]&=~1;
-					//else
-						cia_count_b[0]+=1+CIA_TABLE_0[6]+CIA_TABLE_0[7]*256-t;
-				}
-			}
-			t=0; if ((CIA_TABLE_1[14]&33)==1) // update the CIA #2 timer A
-			{
-				if (cia_count_a[1]>tt)
-					cia_count_a[1]-=tt;
-				else
-				{
-					t=1; if (((cia_port_13[1]|=1)&CIA_TABLE_1[13]&31)&&!(cia_port_13[1]&128))
-						cia_port_13[1]|=128,m6510_irq|=128;
-					if ((CIA_TABLE_1[14]&8)) // just once?
-						/*cia_count_a[1]=-1,*/CIA_TABLE_1[14]&=~1;
-					//else
-						cia_count_a[1]+=1+CIA_TABLE_1[4]+CIA_TABLE_1[5]*256-tt;
-				}
-			}
-			if ((CIA_TABLE_1[15]&33)==1) // update the CIA #2 timer B
-			{
-				if (!(CIA_TABLE_1[15]&64))
-					t=tt;
-				if (cia_count_b[1]>t)
-					cia_count_b[1]-=t;
-				else //if (t)
-				{
-					if (((cia_port_13[1]|=2)&CIA_TABLE_1[13]&31)&&!(cia_port_13[1]&128))
-						cia_port_13[1]|=128,m6510_irq|=128;
-					if ((CIA_TABLE_1[15]&8)) // just once?
-						/*cia_count_b[1]=-1,*/CIA_TABLE_1[15]&=~1;
-					//else
-						cia_count_b[1]+=1+CIA_TABLE_1[6]+CIA_TABLE_1[7]*256-t;
-				}
-			}
+				audio_main(audio_queue+tt),audio_dirty=audio_queue=0;
+			else
+				audio_queue+=tt;
 		}
 	}
-}
-
-BYTE key2joy_flag=0; // alternate joystick ports
-BYTE kbd_bit0[10]; // combined keyboard+joystick bits
+}*/
 
 // the C64 special I/O addresses are divided in several spaces:
 // 0000-0001 : memory configuration
@@ -1277,17 +1686,12 @@ BYTE kbd_bit0[10]; // combined keyboard+joystick bits
 // DE00-DFFF : hardware expansions
 // remember: 0100-CFFF + E000-FFFF get filtered out in advance!
 
-BYTE sid_detection=-1; // kludge for "BOX CHECK TEST" :-(
-
+BYTE sid_detection; // kludge for "BOX CHECK TEST" :-(
 #define m6510_sid_extras0() (sid_multichip1=sid_multichip2=0)
 BYTE sid_multichip1=0; // kludge for multi SID chips at $D420 and $D440 :-(
-void m6510_sid_extras1(WORD w,BYTE b) { sid_multichip1=(w==24&&b==128)?4:0; }
 BYTE sid_multichip2=0; // kludge for multi SID chips at $DE00 and $DF00 :-(
+void m6510_sid_extras1(WORD w,BYTE b) { sid_multichip1=(w==24&&b==128)?4:0; }
 void m6510_sid_extras2(WORD w,BYTE b) { sid_multichip2=(w==24&&b==128)?6:0; }
-
-// PORT $0001 input mask: 0XFF -0X17 (MMU + TAPE INP) -0X20 (TAPE MOTOR) =0XC8!
-#define MMU_CFG_GET(w) (w?(mmu_cfg[0]&mmu_cfg[1])+(~mmu_cfg[0]&((mmu_out&0XC8)+mmu_inp)):mmu_cfg[0])
-#define MMU_CFG_SET(w,b) do{ mmu_cfg[w]=b; mmu_update(); }while(0)
 
 BYTE m6510_recv(WORD w) // receive a byte from the I/O address `w`
 {
@@ -1377,9 +1781,11 @@ BYTE m6510_recv(WORD w) // receive a byte from the I/O address `w`
 					case 10: return cia_hhmmssd[0]>>16;
 					case 11: return cia_hhmmssd[0]>>24;
 					case 13: // acknowledge CIA #1 IRQ!
-						if (!(CIA_TABLE_0[13]&16)) ++cia_port_13_n; // autodetect non-IRQ tape loaders ("TWIN WORLD")
-						w=cia_port_13[0]; cia_port_13[0]=0;
-						return m6510_irq&=~2,w;
+						if (!(CIA_TABLE_0[13]&16)) ++tape_polling; // autodetect non-IRQ tape loaders ("TWIN WORLD")
+						w=cia_port_13[0]; cia_port_13[0]=0; if (VICII_TABLE[25]<128) m6510_i_t=-1<<20;
+						// this satisfies "BOX CHECK TEST" but there are more differences (PC64 CIA IRQ test)
+						if (cia_old6526&&cia_state_a[0]==0+0+2+0&&CIA_TABLE_0[4]+CIA_TABLE_0[5]*256-1==cia_count_a[0]) ++cia_count_a[0];
+						return w;
 					case 14: return CIA_TABLE_0[14]&~16;
 					case 15: return CIA_TABLE_0[15]&~16;
 					default: return CIA_TABLE_0[w];
@@ -1399,8 +1805,10 @@ BYTE m6510_recv(WORD w) // receive a byte from the I/O address `w`
 					case 10: return cia_hhmmssd[1]>>16;
 					case 11: return cia_hhmmssd[1]>>24;
 					case 13: // acknowledge CIA #2 NMI!
-						w=cia_port_13[1]; cia_port_13[1]=0;
-						return m6510_irq&=127,w;
+						w=cia_port_13[1]; cia_port_13[1]=0; m6510_n_t=-1<<20;
+						// this satisfies "BOX CHECK TEST" but there are more differences (PC64 CIA NMI test)
+						if (cia_old6526&&cia_state_a[1]==0+0+2+0&&CIA_TABLE_1[4]+CIA_TABLE_1[5]*256-1==cia_count_a[1]) ++cia_count_a[1];
+						return w;
 					case 14: return CIA_TABLE_1[14]&~16;
 					case 15: return CIA_TABLE_1[15]&~16;
 					default: return CIA_TABLE_1[w];
@@ -1417,7 +1825,6 @@ BYTE m6510_recv(WORD w) // receive a byte from the I/O address `w`
 				return 0XFF; // nothing else!
 			}
 }
-
 void m6510_send(WORD w,BYTE b) // send the byte `b` to the I/O address `w`
 {
 	if (w<0XD800)
@@ -1431,32 +1838,61 @@ void m6510_send(WORD w,BYTE b) // send the byte `b` to the I/O address `w`
 				switch (w&=63)
 				{
 					case 17: // $D011: CONTROL REGISTER 1
+						if (b&16)
+						{
+							if (vicii_pos_y==48)
+								vicii_ready=1; // we can enable the display if we're still on line $30
+							else if (vicii_pos_y>=48&&vicii_pos_y<248&&!vicii_ready)
+								vicii_mode&=~32; // remove border but DON'T enable display: "SWIRL BY DNP"
+						}
+						if (vicii_pos_y>=48&&vicii_pos_y<248/*&&vicii_pos_x!=0*/&&vicii_ready&&((b-VICII_TABLE[17])&7))
+						{
+							// we must satisfy many different and seemingly contradictory cases:
+							// - "CREATURES" ($23B1, Y=$032) scrolls the screen;
+							// - "REWIND-TEMPEST" ($85D1, Y=$03B) scrolls the screen;
+							// - "SMR-PAF" ($0A38, Y=$030) scrolls the screen;
+							// - "DAWNFALL" ($B25A, Y=$034,$03C,$044...) reloads the attributes;
+							// - "MS PACMAN" ($09E2..., Y=$02F...) reloads the attributes;
+							// - "FUNNY RASTERS" ($C15F, Y=$03A,$03B...) freezes the cursor;
+							// ...and all we know is that the VIC-II dominant range is X=12..55
+							if (vicii_badline=!((b-vicii_pos_y)&7))
+								if (vicii_pos_x>=12&&vicii_pos_x<55)
+								{
+									vicii_takeover=vicii_pos_x==14?2:1; // "MS PACMAN" and other FLI pictures force an attribute reload without the 3-T pause
+									if ((vicii_dmadelay=55-1-vicii_pos_x)>40||!(vicii_mode&16)) vicii_dmadelay=0; // "CREATURES" scrolls with delays of 0..40
+								}
+						}
+						// the remainder of the consequences of modifying this register are handled in the VIC-II ticker, not here
 					case 18: // $D012: RASTER POSITION
 						VICII_TABLE[w]=b;
 						if (w==17) vicii_setmode(),vicii_setmaps();
 						w=(VICII_TABLE[17]&128)*2+VICII_TABLE[18];
 						if (vicii_irq_y!=w)
 							if (vicii_pos_y==(vicii_irq_y=w))
-								if (VICII_TABLE[25]|=1,VICII_TABLE[26]&1)
-									VICII_TABLE[25]|=128,m6510_irq|=1;
+								if (((VICII_TABLE[25]|=1)&VICII_TABLE[26]&31)&&VICII_TABLE[25]<128)
+									{ VICII_TABLE[25]+=128; M6510_IRQ_SET(); }
 						break;
 					case 22: // $D016: CONTROL REGISTER 2
 						VICII_TABLE[22]=b&31; vicii_setmode();
+						break;
+					case 23: // $D017: SPRITE Y EXPANSION
+						vicii_spritexy|=b; // cfr. the bottom border of "FOR YOUR SPRITES ONLY"
+						vicii_sprite_x&=VICII_TABLE[23]=b;
 						break;
 					case 24: // $D018: MEMORY CONTROL REGISTER
 						VICII_TABLE[24]=b&~1; vicii_setmaps();
 						break;
 					case 25: // $D019: INTERRUPT REQUEST REGISTER
-						if ((VICII_TABLE[25]&=(15&~b))&VICII_TABLE[26]&15)
-							VICII_TABLE[25]|=128,m6510_irq|=1; // throw pending VIC-II IRQ
+						if ((VICII_TABLE[25]&=(~b&15))&VICII_TABLE[26]&15)
+							{ if (VICII_TABLE[25]<128) { VICII_TABLE[25]+=128; M6510_IRQ_SET(); } } // throw pending VIC-II IRQ
 						else
-							VICII_TABLE[25]&=127,m6510_irq&=~1; // acknowledge VIC-II IRQ
+							{ VICII_TABLE[25]&=127; if (cia_port_13[0]<128) m6510_i_t=-1<<20; } // acknowledge VIC-II IRQ
 						break;
 					case 26: // $D01A: INTERRUPT REQUEST MASK
 						if (VICII_TABLE[25]&(VICII_TABLE[26]=b&15))
-							VICII_TABLE[25]|=128,m6510_irq|=1; // throw pending VIC-II IRQ
+							{ if (VICII_TABLE[25]<128) { VICII_TABLE[25]+=128; M6510_IRQ_SET(); } } // throw pending VIC-II IRQ
 						else
-							VICII_TABLE[25]&=127,m6510_irq&=~1; // acknowledge VIC-II IRQ
+							{ VICII_TABLE[25]&=127; if (cia_port_13[0]<128) m6510_i_t=-1<<20; } // acknowledge VIC-II IRQ
 						break;
 					case 19: case 20: break; // $D013 and $D014 are READ ONLY!?
 					case 30: case 31: break; // $D01E and $D01F are READ ONLY!!
@@ -1483,9 +1919,9 @@ void m6510_send(WORD w,BYTE b) // send the byte `b` to the I/O address `w`
 					return; // stop here!
 				}
 				// the base chip, without extensions, spans the whole $D400-$D7FF range
-				if (w==0XD400+18&&b==0X20&&SID_TABLE_0[18]==0X7F)
-					sid_detection=0; // "BOX CHECK TEST" modifies this port; see above
-				SID_TABLE_0[w&=31]=b,sid_reg_update(0,w),m6510_sid_extras0(),tape_song|=w<21&&b;
+				if (w==0XD400+18&&b==0X20&&!(~SID_TABLE_0[18]&0X7F))
+					sid_detection=sid_nouveau?-1:0; // "BOX CHECK TEST" modifies this port; see above
+				SID_TABLE_0[w&=31]=b,sid_reg_update(0,w),m6510_sid_extras0(); if (w<21&&b) tape_song=(tape_disabled||(audio_disabled&1))?0:240;
 			}
 	else
 		if (w<0XDD00)
@@ -1495,49 +1931,53 @@ void m6510_send(WORD w,BYTE b) // send the byte `b` to the I/O address `w`
 				switch (w&=15)
 				{
 					case  5: // reload TIMER A
-						CIA_TABLE_0[5]=b; if (!(CIA_TABLE_0[14]&1))
-							cia_count_a[0]=CIA_TABLE_0[4]+b*256; // *!* set TIMER LOAD flag
+						CIA_TABLE_0[5]=b; if (!(CIA_TABLE_0[14]&1)) // *!* set TIMER LOAD flag?
+							if (!(cia_count_a[0]=CIA_TABLE_0[4]+b*256)) cia_count_a[0]=65536;
+						//if (((CIA_TABLE_0[14]&65)==65)&&!cia_xchange[0]) cia_xchange[0]=3,cia_serials[0]=cia_count_a[0];
 						break;
 					case  7: // reload TIMER B
-						CIA_TABLE_0[7]=b; if (!(CIA_TABLE_0[15]&1))
-							cia_count_b[0]=CIA_TABLE_0[6]+b*256; // *!* set TIMER LOAD flag
+						CIA_TABLE_0[7]=b; if (!(CIA_TABLE_0[15]&1)) // *!* set TIMER LOAD flag?
+							if (!(cia_count_b[0]=CIA_TABLE_0[6]+b*256)) cia_count_b[0]=65536;
 						break;
 					case  8: // decimals
-						if (CIA_TABLE_0[15]&128) CIA_TABLE_0[ 8]=b&15;
-							else cia_hhmmssd[0]=(cia_hhmmssd[0]&0XBFFFFF00)+ (b& 15);
+						cia_port_11[0]=0; if (CIA_TABLE_0[15]&128) CIA_TABLE_0[ 8]=b&15;
+							else cia_hhmmssd[0]=(cia_hhmmssd[0]&0XFFFFFF00)+ (b& 15);
+						if (equalsiiii(&CIA_TABLE_0[8],cia_hhmmssd[0])) cia_alarmclock(CIA_TABLE_0,0,M6510_IRQ_SET()); // "HAMMERFIST" needs this to run (cfr. $A7D0)
 						break;
 					case  9: // seconds
-						if (CIA_TABLE_0[15]&128) CIA_TABLE_0[11]|=64,CIA_TABLE_0[ 9]=b& 63;
-							else cia_hhmmssd[0]=(cia_hhmmssd[0]&0XBFFF00FF)+((b& 63)<< 8)+0X40000000;
+						cia_port_11[0]=1; if (CIA_TABLE_0[15]&128) CIA_TABLE_0[ 9]=b&63;
+							else cia_hhmmssd[0]=(cia_hhmmssd[0]&0XFFFF00FF)+((b& 63)<< 8);
 						break;
 					case 10: // minutes
-						if (CIA_TABLE_0[15]&128) CIA_TABLE_0[11]|=64,CIA_TABLE_0[10]=b& 63;
-							else cia_hhmmssd[0]=(cia_hhmmssd[0]&0XBF00FFFF)+((b& 63)<<16)+0X40000000;
+						cia_port_11[0]=1; if (CIA_TABLE_0[15]&128) CIA_TABLE_0[10]=b&63;
+							else cia_hhmmssd[0]=(cia_hhmmssd[0]&0XFF00FFFF)+((b& 63)<<16);
 						break;
 					case 11: // hours + AM/PM bit
-						if (CIA_TABLE_0[15]&128) CIA_TABLE_0[11]=(b&143)+64;
-							else cia_hhmmssd[0]=(cia_hhmmssd[0]&0X00FFFFFF)+((b&143)<<24)+0X40000000;
+						cia_port_11[0]=1; if (CIA_TABLE_0[15]&128) CIA_TABLE_0[11]=b&143;
+							else cia_hhmmssd[0]=(cia_hhmmssd[0]&0X00FFFFFF)+((b&143)<<24);
 						break;
+					/*case 12: // serial data transfer
+						if (((CIA_TABLE_0[14]&65)==65)&&!cia_xchange[0]) cia_xchange[0]=3,cia_serials[0]=39;
+						break;*/
 					case 13: // CIA #1 int.mask
 						if (b&128) CIA_TABLE_0[13]|=b&31;
 							else CIA_TABLE_0[13]&=~(b&31);
-						if ((cia_port_13[0]&CIA_TABLE_0[13]&31)&&!(cia_port_13[0]&128))
-							cia_port_13[0]|=128,m6510_irq|=2; // throw pending CIA #1 IRQ!
-						tape_autoplay();
+						if ((CIA_TABLE_0[13]&cia_port_13[0]&31)&&cia_port_13[0]<128) // throw pending CIA #1 IRQ?
+							{ cia_port_13[0]+=128; M6510_IRQ_SET(); }
 						break;
 					case 14: // CIA #1 TIMER A control
-						if (b&16)
-							cia_count_a[0]=CIA_TABLE_0[4]+CIA_TABLE_0[5]*256;
-						if (b&64) // SERIAL PORT???
-							cia_port_13[0]|=8;
+						// SERIAL PORT: temporary placeholder, just to let "Arkanoid" launch as expected...
+						if (b&64)
+							cia_port_13[0]|=+8;
 						else
 							cia_port_13[0]&=~8;
-						CIA_TABLE_0[14]=b&~16;
+						// setting bit 3 shouldn't happen instantly, but where does the delay come from?
+						cia_event_a[0]=b;
+						cia_port_14(0,b);
 						break;
 					case 15: // CIA #1 TIMER B control
-						if (b&16)
-							cia_count_b[0]=CIA_TABLE_0[6]+CIA_TABLE_0[7]*256;
-						CIA_TABLE_0[15]=b&~16;
+						cia_event_b[0]=b;
+						cia_port_15(0,b);
 						break;
 					default:
 						CIA_TABLE_0[w]=b;
@@ -1547,52 +1987,60 @@ void m6510_send(WORD w,BYTE b) // send the byte `b` to the I/O address `w`
 				switch (w&=15)
 				{
 					case  0:
+						if (cia_oldglue) // *!* kludge for glue logic: unlike IC (Integrated Circuit), DL (Discrete Logic) delays collisions on page switch
+							if ((CIA_TABLE_1[0]^b)&3) VICII_TABLE[31]=vicii_copy_hits>>8,VICII_TABLE[30]=vicii_copy_hits;
+						// no `break`! (btw, it's more probable that IC performs vicii_setmaps() here, while DL does it once per scanline)
 					case  2:
 						CIA_TABLE_1[w]=b; vicii_setmaps();
 						break;
 					case  5: // reload TIMER A
-						CIA_TABLE_1[5]=b; if (!(CIA_TABLE_1[14]&1))
-							cia_count_a[1]=CIA_TABLE_1[4]+b*256; // *!* set TIMER LOAD flag
+						CIA_TABLE_1[5]=b; if (!(CIA_TABLE_1[14]&1)) // *!* set TIMER LOAD flag?
+							if (!(cia_count_a[1]=CIA_TABLE_1[4]+b*256)) cia_count_a[1]=65536;
+						//if (((CIA_TABLE_1[14]&65)==65)&&!cia_xchange[1]) cia_xchange[1]=3,cia_serials[1]=cia_count_a[1];
 						break;
 					case  7: // reload TIMER B
-						CIA_TABLE_1[7]=b; if (!(CIA_TABLE_1[15]&1))
-							cia_count_b[1]=CIA_TABLE_1[6]+b*256; // *!* set TIMER LOAD flag
+						CIA_TABLE_1[7]=b; if (!(CIA_TABLE_1[15]&1)) // *!* set TIMER LOAD flag?
+							if (!(cia_count_b[1]=CIA_TABLE_1[6]+b*256)) cia_count_b[1]=65536;
 						break;
 					case  8: // decimals
-						if (CIA_TABLE_1[15]&128) CIA_TABLE_1[ 8]=b&15;
-							else cia_hhmmssd[1]=(cia_hhmmssd[1]&0XBFFFFF00)+ (b& 15);
+						cia_port_11[1]=0; if (CIA_TABLE_1[15]&128) CIA_TABLE_1[ 8]=b&15;
+							else cia_hhmmssd[1]=(cia_hhmmssd[1]&0XFFFFFF00)+ (b& 15);
+						if (equalsiiii(&CIA_TABLE_1[8],cia_hhmmssd[1])) cia_alarmclock(CIA_TABLE_1,1,M6510_NMI_SET());
 						break;
 					case  9: // seconds
-						if (CIA_TABLE_1[15]&128) CIA_TABLE_1[11]|=64,CIA_TABLE_1[ 9]=b& 63;
-							else cia_hhmmssd[1]=(cia_hhmmssd[1]&0XBFFF00FF)+((b& 63)<< 8)+0X40000000;
+						cia_port_11[1]=1; if (CIA_TABLE_1[15]&128) CIA_TABLE_1[ 9]=b&63;
+							else cia_hhmmssd[1]=(cia_hhmmssd[1]&0XFFFF00FF)+((b& 63)<< 8);
 						break;
 					case 10: // minutes
-						if (CIA_TABLE_1[15]&128) CIA_TABLE_1[11]|=64,CIA_TABLE_1[10]=b& 63;
-							else cia_hhmmssd[1]=(cia_hhmmssd[1]&0XBF00FFFF)+((b& 63)<<16)+0X40000000;
+						cia_port_11[1]=1; if (CIA_TABLE_1[15]&128) CIA_TABLE_1[10]=b&63;
+							else cia_hhmmssd[1]=(cia_hhmmssd[1]&0XFF00FFFF)+((b& 63)<<16);
 						break;
 					case 11: // hours + AM/PM bit
-						if (CIA_TABLE_1[15]&128) CIA_TABLE_1[11]=(b&143)+64;
-							else cia_hhmmssd[1]=(cia_hhmmssd[1]&0X00FFFFFF)+((b&143)<<24)+0X40000000;
+						cia_port_11[1]=1; if (CIA_TABLE_1[15]&128) CIA_TABLE_1[11]=b&143;
+							else cia_hhmmssd[1]=(cia_hhmmssd[1]&0X00FFFFFF)+((b&143)<<24);
 						break;
+					/*case 12: // serial data transfer
+						if (((CIA_TABLE_1[14]&65)==65)&&!cia_xchange[1]) cia_xchange[1]=3,cia_serials[1]=39;
+						break;*/
 					case 13: // CIA #2 int.mask
 						if (b&128) CIA_TABLE_1[13]|=b&31;
 							else CIA_TABLE_1[13]&=~(b&31);
-						if ((cia_port_13[1]&CIA_TABLE_1[13]&31)&&!(cia_port_13[1]&128))
-							cia_port_13[1]|=128,m6510_irq|=128; // throw pending CIA #2 NMI!
+						if ((CIA_TABLE_1[13]&cia_port_13[1]&31)&&cia_port_13[1]<128) // throw pending CIA #2 NMI!
+							{ cia_port_13[1]+=128; M6510_NMI_SET(); }
 						break;
 					case 14: // CIA #2 TIMER A control
-						if (b&16)
-							cia_count_a[1]=CIA_TABLE_1[4]+CIA_TABLE_1[5]*256;
+						/* // RS232 PORT: "Athena" uses it to trigger NMIs, but how does it exactly happen?
 						if (b&64) // SERIAL PORT???
 							cia_port_13[1]|=8;
 						else
 							cia_port_13[1]&=~8;
-						CIA_TABLE_1[14]=b&~16;
+						*/
+						cia_event_a[1]=b;
+						cia_port_14(1,b);
 						break;
 					case 15: // CIA #2 TIMER B control
-						if (b&16)
-							cia_count_b[1]=CIA_TABLE_1[6]+CIA_TABLE_1[7]*256;
-						CIA_TABLE_1[15]=b&~16;
+						cia_event_b[1]=b;
+						cia_port_15(1,b);
 						break;
 					default:
 						CIA_TABLE_1[w]=b;
@@ -1614,45 +2062,50 @@ void m6510_send(WORD w,BYTE b) // send the byte `b` to the I/O address `w`
 }
 
 // the MOS 6510 memory operations PAGE (setup MMU), PEEK and POKE, plus ZEROPAGE and others
-#define M65XX_LOCAL BYTE m6510_aux
-#define M65XX_PEEKSYNC (m6510_sync(m65xx_t),_t_=m65xx_t=0)
-#define M65XX_POKESYNC (audio_dirty=(m6510_aux>=0XD4&&m6510_aux<0XD8)?1:audio_dirty,M65XX_PEEKSYNC)
-#define M65XX_PAGE(x) (m6510_aux=x)
-#define M65XX_PEEK(x) (m65xx_t+=m6510_vicii_reading(),((mmu_bit[m6510_aux]&1)?M65XX_PEEKSYNC,m6510_recv(x):mmu_rom[m6510_aux][x]))
-#define M65XX_POKE(x,o) do{ m65xx_t+=m6510_vicii_writing(); if (mmu_bit[m6510_aux]&2) M65XX_POKESYNC,m6510_send(x,o); else mem_ram[x]=o; }while(0) // simplify ROM-RAM fall back
-#define M65XX_PEEKZERO(x) (m65xx_t+=m6510_vicii_reading(),x<0X0002?MMU_CFG_GET(x):mem_ram[x]) // ZEROPAGE is simpler, we only need to filter the first two bytes
-#define M65XX_POKEZERO(x,o) do{ m65xx_t+=m6510_vicii_writing(); if (x<0X0002) MMU_CFG_SET(x,o); else mem_ram[x]=o; }while(0) // ditto
-#define M65XX_PULL(x) (m65xx_t+=m6510_vicii_reading(),mem_ram[256+(x)]) // stack operations are simpler, they're always located on the same RAM area
-#define M65XX_PUSH(x,o) (m65xx_t+=m6510_vicii_writing(),mem_ram[256+(x)]=o) // ditto
-
+#define M65XX_LOCAL BYTE m6510_aux1,m6510_aux2
+#define M65XX_PEEKSYNC (0) // (_t_-=m65xx_t, m6510_sync(m65xx_t), m65xx_t-=0)
+#define M65XX_POKESYNC (0) // do{ if (m6510_aux1>=0XD4&&m6510_aux1<0XD8) audio_dirty=1; M65XX_PEEKSYNC; }while(0)
+#define M65XX_PAGE(x) (m6510_aux2=mmu_bit[m6510_aux1=x])
+#define M65XX_PEEK(x) ((m6510_aux2&1)?M65XX_PEEKSYNC,m6510_recv(x):mmu_rom[m6510_aux1][x])
+#define M65XX_POKE(x,o) do{ if (m6510_aux2&2) { M65XX_POKESYNC; m6510_send(x,o); } else mem_ram[x]=o; }while(0) // simplify ROM-RAM fall back
+#define M65XX_PEEKZERO(x) (x<0X0002?mmu_cfg_get(x):mem_ram[x]) // ZEROPAGE is simpler, we only need to filter the first two bytes
+#define M65XX_POKEZERO(x,o) do{ if (x<0X0002) mmu_cfg_set(x,o); else mem_ram[x]=o; }while(0) // ditto
+#define M65XX_PULL(x) (mem_ram[256+(x)]) // stack operations are simpler, they're always located on the same RAM area
+#define M65XX_PUSH(x,o) (mem_ram[256+(x)]=o) // ditto
 // the MOS 6510 "dumb" operations sometimes have an impact on the hardware of the C64
-#define M65XX_DUMBPAGE(x) (m6510_aux=x)
-#define M65XX_DUMBPEEK(x) (m65xx_t+=m6510_vicii_reading(),((mmu_bit[m6510_aux]&1)&&(M65XX_PEEKSYNC,m6510_recv(x))))
-#define M65XX_DUMBPOKE(x,o) do{ m65xx_t+=m6510_vicii_writing(); if (mmu_bit[m6510_aux]&2) M65XX_POKESYNC,m6510_send(x,o); }while(0)
-#define M65XX_DUMBPEEKZERO(x) (m65xx_t+=m6510_vicii_reading())
-#define M65XX_DUMBPOKEZERO(x,o) (m65xx_t+=m6510_vicii_writing())
-#define M65XX_DUMBPULL(x) (m65xx_t+=m6510_vicii_reading())
+#define M65XX_DUMBPAGE(x) (m6510_aux2=mmu_bit[m6510_aux1=x])
+#define M65XX_DUMBPEEK(x) ((m6510_aux2&4)&&(M65XX_PEEKSYNC,m6510_recv(x)))
+#define M65XX_DUMBPOKE(x,o) do{ if (m6510_aux2&8) { M65XX_POKESYNC; m6510_send(x,o); } }while(0)
+#define M65XX_DUMBPEEKZERO(x) (0)
+#define M65XX_DUMBPOKEZERO(x,o) (0)
+#define M65XX_DUMBPULL(x) (0)
+// When the VIC-II announces that it needs the MOS 6510 to wait, it allows up to three writing operations at the beginning;
+// this is equivalent to writing operations being non-blocking because the 6510 never does more than three writes in a row.
+#define M65XX_TICK (m65xx_t+=m6510_tick(2)) // we use 2 because `vicii_takeover` can be 0 (idle), 1 (busy normal) and 2 (busy rushed)
+#define M65XX_WAIT (m65xx_t+=m6510_tick(0)) // and the comparison is against the highest acceptable value of the takeover status
 
-#define M65XX_START (mem_rom[0X1FFC]+mem_rom[0X1FFD]*256)
+#define M65XX_START (mgetii(&mem_rom[0X1FFC]))
 #define M65XX_RESET m6510_reset
 #define M65XX_MAIN m6510_main
-#define M65XX_SYNC m6510_sync
-#define M65XX_IRQ m6510_irq
-#define M65XX_NMI (m6510_irq&=127)
-#define M65XX_ACK 0
+#define M65XX_SYNC(x) (x)
+#define M65XX_IRQ_ACK 0
+#define M65XX_NMI_ACK (m6510_n_t=-1<<20)
 #define M65XX_PC m6510_pc
 #define M65XX_A m6510_a
 #define M65XX_X m6510_x
 #define M65XX_Y m6510_y
 #define M65XX_S m6510_s
 #define M65XX_P m6510_p
-#define M65XX_I m6510_i
+#define M65XX_I_T m6510_i_t
+#define M65XX_N_T m6510_n_t
 
-int m6510_ready=0,m6510_power=0X07;//,m6510_found=-1
-#define M65XX_RDY m6510_ready
-#define M65XX_TRAP_0X20 if (M65XX_PC.w==0XF53A&&mmu_mmu==m6510_t64ok) { t64_loadfile(); M65XX_X=mem_ram[0X00AC]; M65XX_Y=mem_ram[0X00AD]; M65XX_PC.w=0XF8D1; } // jump to the TEST BREAK routine
-#define M65XX_TRAP_0XF0 if (M65XX_PC.w==0XFD87&&mmu_mmu==m6510_power) mem_ram[0XC2]=0X9F; // power-up boost
-// `!m6510_ready` freezes FELLAS-EXT.PRG; compare with MICRO64 where "instable illegal opcode mode" must be 1!
+BYTE m6510_xef=0XEE; // by default we assume 0XEE, but the user must be able to choose
+#define M65XX_XEE 0XEE
+#define M65XX_XEF m6510_xef
+#define M65XX_RDY (!vicii_takeover) // FELLAS-EXT.PRG checks this; it needs "instable illegal opcode mode" in MICRO64!
+#define M65XX_SHW (vicii_pos_x!=1-VICII_MINUS||!vicii_badline||(vicii_cow&1)) // (sort of) kludge: FELLAS-EXT checks this too to detect when M65XX_RDY goes true
+#define M65XX_TRAP_0X20 if (M65XX_PC.w==0XF53A&&mmu_mcr==m6510_t64ok) { t64_loadfile(); M65XX_X=mem_ram[0X00AC],M65XX_Y=mem_ram[0X00AD],M65XX_PC.w=0XF8D1; } // load T64 file
+#define M65XX_TRAP_0XF0 if (M65XX_PC.w==0XFD87&&mmu_mcr==m6510_power) mem_ram[0XC2]=0X9F; // power-up boost: skip RAM test
 
 #define DEBUG_HERE
 #define DEBUG_INFOX 20 // panel width
@@ -1669,24 +2122,28 @@ void debug_info_sid(int x,int y)
 void debug_info(int q)
 {
 	sprintf(DEBUG_INFOZ( 0),"6510:");
-	sprintf(DEBUG_INFOZ( 1)+4,"%07X:%08X",debug_info_binary(mmu_cfg[0]&127),debug_info_binary(mmu_cfg[1]));
+	sprintf(DEBUG_INFOZ( 1)+4,"[%02X:%02X] %08X",mmu_cfg[0],mmu_cfg[1],debug_info_binary(mmu_out));
 	if (!(q&1)) // 1/2
 	{
-		sprintf(DEBUG_INFOZ( 2),"CIA #1: %02X  %04X%04X",cia_port_13[0],cia_count_a[0],cia_count_b[0]);
-		if (m6510_irq&2) debug_hilight2(DEBUG_INFOZ(2)+4+4);
-		byte2hexa(DEBUG_INFOZ( 3)+4,&CIA_TABLE_0[0],8);
-		byte2hexa(DEBUG_INFOZ( 4)+4,&CIA_TABLE_0[8],8);
-		sprintf(DEBUG_INFOZ( 5)+4,"%08X",cia_hhmmssd[0]);
-		sprintf(DEBUG_INFOZ( 6),"CIA #2: %02X  %04X%04X",cia_port_13[1],cia_count_a[1],cia_count_b[1]);
-		if (m6510_irq&128) debug_hilight2(DEBUG_INFOZ(6)+4+4);
-		byte2hexa(DEBUG_INFOZ( 7)+4,&CIA_TABLE_1[0],8);
-		byte2hexa(DEBUG_INFOZ( 8)+4,&CIA_TABLE_1[8],8);
-		sprintf(DEBUG_INFOZ( 9)+4,"%08X",cia_hhmmssd[1]);
-		if ((q='0'+(vicii_mode&31))>'9') q+=7;
-		sprintf(DEBUG_INFOZ(10),"VIC-II: %02X %03X:%03X %c",VICII_TABLE[25]&VICII_TABLE[26]&0X8F,vicii_pos_y,VICII_TABLE[18]+(VICII_TABLE[17]&128)*2,q+(vicii_mode&32)*4);
-		if (m6510_irq&1) debug_hilight2(DEBUG_INFOZ(10)+4+4);
+		sprintf(DEBUG_INFOZ( 2),"CIA #1: %02X %04X:%04X",cia_port_13[0],cia_count_a[0]&0XFFFF,cia_count_b[0]&0XFFFF);
+		if (cia_port_13[0] &128) debug_hilight2(DEBUG_INFOZ( 2)+4+4);
+		sprintf(DEBUG_INFOZ( 3),"%c%c%c",cia_state_a[0]&8?'L':'-',cia_state_a[0]&4?'W':'-',cia_state_a[0]&2?'*':cia_state_a[0]&1?'-':'?'); byte2hexa(DEBUG_INFOZ( 3)+4,&CIA_TABLE_0[0],8);
+		sprintf(DEBUG_INFOZ( 4),"%c%c%c",cia_state_b[0]&8?'L':'-',cia_state_b[0]&4?'W':'-',cia_state_b[0]&2?'*':cia_state_b[0]&1?'-':'?'); byte2hexa(DEBUG_INFOZ( 4)+4,&CIA_TABLE_0[8],8);
+		sprintf(DEBUG_INFOZ( 5),"CIA #2: %02X %04X:%04X",cia_port_13[1],cia_count_a[1]&0XFFFF,cia_count_b[1]&0XFFFF);
+		if (cia_port_13[1] &128) debug_hilight2(DEBUG_INFOZ( 5)+4+4);
+		sprintf(DEBUG_INFOZ( 6),"%c%c%c",cia_state_a[1]&8?'L':'-',cia_state_a[1]&4?'W':'-',cia_state_a[1]&2?'*':cia_state_a[1]&1?'-':'?'); byte2hexa(DEBUG_INFOZ( 6)+4,&CIA_TABLE_1[0],8);
+		sprintf(DEBUG_INFOZ( 7),"%c%c%c",cia_state_b[1]&8?'L':'-',cia_state_b[1]&4?'W':'-',cia_state_b[1]&2?'*':cia_state_b[1]&1?'-':'?'); byte2hexa(DEBUG_INFOZ( 7)+4,&CIA_TABLE_1[8],8);
+		sprintf(DEBUG_INFOZ( 8),"TOD %07X//%07X",(cia_hhmmssd[0]>>4)+(cia_hhmmssd[0]&15),(cia_hhmmssd[1]>>4)+(cia_hhmmssd[1]&15)); // CIA #1+#2 time-of-day
+		sprintf(DEBUG_INFOZ( 9),"VIC-II: %02X %02X%c%03X %02X",VICII_TABLE[25],(video_pos_x>>4)&255,vicii_badline?'*':'-',vicii_pos_y&4095,vicii_mode);
+		if (VICII_TABLE[25]&128) debug_hilight2(DEBUG_INFOZ( 9)+4+4);
 		for (q=0;q<4;++q)
-			byte2hexa(DEBUG_INFOZ(11+q)+4,&VICII_TABLE[q*8],8);
+			byte2hexa(DEBUG_INFOZ(10+q)+4,&VICII_TABLE[q*8],8);
+		sprintf(DEBUG_INFOZ( 9)+21,"ATTR:%04X",vicii_attrib-mem_ram);
+		sprintf(DEBUG_INFOZ(10)+21,"BASE:%04X",vicii_backup&1023);
+		sprintf(DEBUG_INFOZ(11)+21,"Y:%2d:%04X",vicii_eighth&63,vicii_cursor&1023);
+		sprintf(DEBUG_INFOZ(12)+21,"IEC1:%02X %c",cia_serials[0]&255,cia_xchange[0]?'*':'-');
+		sprintf(DEBUG_INFOZ(13)+21,"IEC2:%02X %c",cia_serials[1]&255,cia_xchange[1]?'*':'-');
+		byte2hexa(DEBUG_INFOZ(14)+4,vicii_sprite_y,8); // the 6-bit sprite offset counters
 	}
 	else // 2/2
 	{
@@ -1700,6 +2157,7 @@ void debug_info(int q)
 	}
 }
 int grafx_size(int i) { return i*8; }
+VIDEO_UNIT grafx_show2b[4]={0,0X0080FF,0XFF8000,0XFFFFFF};
 WORD grafx_show(VIDEO_UNIT *t,int g,int n,BYTE m,WORD w,int o)
 {
 	while (n-->0)
@@ -1707,11 +2165,11 @@ WORD grafx_show(VIDEO_UNIT *t,int g,int n,BYTE m,WORD w,int o)
 		BYTE b=mem_ram[w++];
 		if (o&1)
 		{
-			VIDEO_UNIT p,pp[4]={0,0XFF0000,0X00FFFF,0XFFFFFF};
-			*t++=p=pp[ b>>6   ]; *t++=p;
-			*t++=p=pp[(b>>4)&3]; *t++=p;
-			*t++=p=pp[(b>>2)&3]; *t++=p;
-			*t++=p=pp[ b    &3]; *t++=p;
+			VIDEO_UNIT p;
+			*t++=p=grafx_show2b[ b>>6   ]; *t++=p;
+			*t++=p=grafx_show2b[(b>>4)&3]; *t++=p;
+			*t++=p=grafx_show2b[(b>>2)&3]; *t++=p;
+			*t++=p=grafx_show2b[ b    &3]; *t++=p;
 		}
 		else
 		{
@@ -1738,9 +2196,8 @@ void grafx_info(VIDEO_UNIT *t,int g,int o) // draw the palette and the sprites
 				if (o&1)
 					for (int xx=0;xx<3;++xx,++ii)
 					{
-						VIDEO_UNIT pp[4]={0,0XFF0000,0X00FFFF,0XFFFFFF};//;{video_clut[17],video_clut[21],video_clut[23+i],video_clut[22]};
 						for (int zz=0;zz<8;zz+=2)
-							tt[xx*8+zz]=tt[xx*8+zz+1]=pp[(vicii_memory[ii]>>(6-zz))&3];
+							tt[xx*8+zz]=tt[xx*8+zz+1]=grafx_show2b[(vicii_memory[ii]>>(6-zz))&3];
 					}
 				else
 					for (int xx=0;xx<3;++xx,++ii)
@@ -1751,66 +2208,65 @@ void grafx_info(VIDEO_UNIT *t,int g,int o) // draw the palette and the sprites
 #include "cpcec-m6.h"
 #undef DEBUG_HERE
 
-// ... ... ... //
-// ... ... ... //
-// ... ... ... //
+// autorun runtime logic -------------------------------------------- //
 
-// D64: MOS 6502 MICROPROCESSOR ===================================== //
+BYTE snap_done; // avoid accidents with ^F2, see all_reset()
+char autorun_path[STRMAX]="",autorun_line[STRMAX];
+int autorun_mode=0,autorun_t=0,autorun_i=0;
 
-BYTE d64_mem[64<<10],d64_track[4]={0,0,0,0},d64_motor[4]={0,0,0,0}; // 48K RAM + 16K ROM
-BYTE *d64_ram[4]={NULL,NULL,NULL,NULL};
-FILE *d64[4]={NULL,NULL,NULL,NULL};
-#define d64_rom &d64_mem[48<<10]
+BYTE autorun_kbd[16]; // automatic keypresses
+#define autorun_kbd_set(k) (autorun_kbd[k>>3]|=1<<(k&7))
+#define autorun_kbd_res(k) (autorun_kbd[k>>3]&=~(1<<(k&7)))
 
-void m6502_sync(int t)
+int autorun_type(char *s,int n)
 {
-	; // nothing here yet!
+	autorun_t=9; if (!(m6510_pc.w>=0XE5CD&&m6510_pc.w<0XE5D6)) return -1; // try again later!
+	if (n)
+	{
+		memcpy(&mem_ram[mem_ram[0XD1]+mem_ram[0XD2]*256+mem_ram[0XD3]],s,n); // copy string
+		mem_ram[0XD3]+=n; autorun_kbd_set(0001); // move the cursor forward and press RETURN
+	}
+	return 0;
 }
 
-Z80W m6502_pc; BYTE m6502_a,m6502_x,m6502_y,m6502_s,m6502_p,m6502_i,m6502_irq; // the MOS 6502 registers
-
-BYTE m6502_recv(WORD w)
+INLINE void autorun_next(void)
 {
-	return 0XFF; // nothing here yet!
+	switch (autorun_mode)
+	{
+		case 1: // TYPE "RUN", PRESS RETURN...
+			if (autorun_type("\022\025\016",3)) break;
+			// no `break`!
+		case 2: // INJECT FILE...
+			if (autorun_type(NULL,0)) break;
+			if (autorun_i) memcpy(&mem_ram[0X0801],&mem_ram[1<<16],autorun_i);
+			autorun_i+=0X0801; // end of prog, rather than prog size
+			mputii(&mem_ram[0X00AC],autorun_i); mputii(&mem_ram[0X00AE],autorun_i); // poke end-of-file KERNAL pokes
+			mputii(&mem_ram[0X002D],autorun_i); mputii(&mem_ram[0X002F],autorun_i); mputii(&mem_ram[0X0031],autorun_i); // end-of-file BASIC pokes
+			autorun_i=0; autorun_mode=9;
+			break;
+		case 3: // TYPE "LOAD", PRESS RETURN...
+			if (autorun_type("\014\017\001\004",4)) break;
+			++autorun_mode;
+			break;
+		case 4: // RELEASE RETURN...
+			autorun_t=1;
+			autorun_kbd_res(0001);
+			++autorun_mode;
+			break;
+		case 5: // TYPE "RUN", PRESS RETURN...
+			if (m6510_pc.w>=0XE000&&autorun_type("\022\025\016",3)) break; // we must NOT retry if we're already running code!!
+			autorun_t=autorun_mode=9;
+			break;
+		case 8: // TYPE "LOAD"*",8,1", PRESS RETURN...
+			if (autorun_type("\014\017\001\004\042\052\042" ",8,1",11)) break;
+			autorun_mode=9;
+			break;
+		case 9: // ...RELEASE RETURN!
+			autorun_kbd_res(0001);
+			autorun_mode=0;
+			break;
+	}
 }
-void m6502_send(WORD w,BYTE b)
-{
-	; // nothing here yet!
-}
-
-#define M65XX_LOCAL
-#define M65XX_PAGE(x) (0)
-#define M65XX_PEEK(x) (++m65xx_t,(x>=0X2000&&x<0X1800)?m6502_recv(x):d64_mem[x]) // tell apart between 0000-17FF, 1800-1FFF, 2000-BFFF and C000-FFFF
-#define M65XX_POKE(x,o) do{ ++m65xx_t; if (x<0X2000) { if (x<0X1800) d64_mem[x]=o; else m6502_send(x,o); } else if (x<0XC000) d64_mem[x]=0; }while(0)
-#define M65XX_PEEKZERO(x) (++m65xx_t,d64_mem[x])
-#define M65XX_POKEZERO(x,o) (++m65xx_t,(d64_mem[x]=o))
-#define M65XX_PULL(x) (++m65xx_t,d64_mem[256+x])
-#define M65XX_PUSH(x,o) (++m65xx_t,d64_mem[256+x]=o)
-
-// the C1541's MOS 6502 "dumb" operations do nothing relevant, they only consume clock ticks
-#define M65XX_DUMBPAGE(x) (0)
-#define M65XX_DUMBPEEK(x) (++m65xx_t)
-#define M65XX_DUMBPOKE(x,o) (++m65xx_t)
-#define M65XX_DUMBPEEKZERO(x) (++m65xx_t)
-#define M65XX_DUMBPOKEZERO(x,o) (++m65xx_t)
-#define M65XX_DUMBPULL(x) (++m65xx_t)
-
-#define M65XX_START (d64_mem[0XFFFC]+d64_mem[0XFFFD]*256)
-#define M65XX_RESET m6502_reset
-#define M65XX_MAIN m6502_main
-#define M65XX_SYNC m6502_sync
-#define M65XX_IRQ m6502_irq
-//#define M65XX_NMI 0
-#define M65XX_ACK 0
-#define M65XX_PC m6502_pc
-#define M65XX_A m6502_a
-#define M65XX_X m6502_x
-#define M65XX_Y m6502_y
-#define M65XX_S m6502_s
-#define M65XX_P m6502_p
-#define M65XX_I m6502_i
-
-#include "cpcec-m6.h"
 
 // EMULATION CONTROL ================================================ //
 
@@ -1832,7 +2288,7 @@ void all_reset(void) // reset everything!
 	MEMZERO(autorun_kbd);
 	mmu_reset(),m6510_reset(),m6502_reset(),cia_reset();
 	vicii_reset(),sid_all_reset();
-	m6510_irq=m6502_irq=0; debug_reset();
+	m6510_i_t=m6510_n_t=m6502_i_t=-1<<20; debug_clear(),debug_reset();
 	snap_done=0; //MEMFULL(z80_tape_index); // avoid accidents!
 	memcmp(&mem_ram[0X8004],"\303\302\31580",5)||(mem_ram[0X8004]=0330); // disable "CBM80" trap!
 }
@@ -1866,9 +2322,9 @@ char snap_pattern[]="*.s64"; BYTE snap_magic8[]="C64-SNAPSHOT v1\032";
 char snap_path[STRMAX]="",snap_extended=1; // compress memory dumps
 
 // extremely simple run-length encoding:
-// - a single instance of byte X is stored as "X";
-// - N=(2..256) repetitions of byte X become "X,X,N-2";
-// - the end marker is "255-X,255-X,255".
+// - a single instance of byte X is stored as it is, "X";
+// - N=2..256 instances of byte X become the series "X,X,N-2";
+// - the end marker is "~X,~X,255" where X is the last source byte.
 int bin2rle(unsigned char *t,int o,unsigned char *s,int i) // encode `i` exact bytes at source `s` onto up to `o` bytes of run-length target `t`; >=0 OK (encoded bytes), <0 ERROR
 {
 	unsigned char *u=t,*r=&s[i],j=0; while (s<r)
@@ -1880,13 +2336,12 @@ int bin2rle(unsigned char *t,int o,unsigned char *s,int i) // encode `i` exact b
 }
 int rle2bin(unsigned char *t,int o,unsigned char *s,int i) // decode up to `i` bytes of run-length source `s` onto up to `o` bytes of target `t`; >=0 OK (decoded bytes), <0 ERROR
 {
-	unsigned char *u=t,j; short l; for (;;)
+	unsigned char *u=t,j; short l; while (i>=3)
 	{
-		if (i<3) return -2; j=*s; // ERROR: source is too short!
-		if (j!=*++s) --i,l=1; else if ((l=s[1])<255) i-=3,s+=2,l+=2; else break;
+		j=*s; if (j!=*++s) --i,l=1; else if ((l=s[1])<255) i-=3,s+=2,l+=2; else return t-u;
 		if ((o-=l)<0) return -1; do *t++=j; while (--l); // ERROR: target is too short!
 	}
-	return t-u;
+	return -2; // ERROR: source is too short!
 }
 
 // uncompressed snapshots store 0 as the compressed size (Intel WORD at offset 16)
@@ -1895,7 +2350,7 @@ int snap_save(char *s) // saves snapshot file `s`; 0 OK, !0 ERROR
 	FILE *f=puff_fopen(s,"wb"); if (!f) return 1;
 	BYTE header[512]; MEMZERO(header);
 	strcpy(header,snap_magic8);
-	int q=snap_extended?bin2rle(session_scratch,(1<<16)-1,mem_ram,1<<16):0;
+	int i,q=snap_extended?bin2rle(session_scratch,(1<<16)-1,mem_ram,1<<16):0;
 	if (q>0) mputii(&header[0x10],q); else q=0;
 	// CPU #1
 	header[0x20]=m6510_pc.b.l;
@@ -1905,21 +2360,21 @@ int snap_save(char *s) // saves snapshot file `s`; 0 OK, !0 ERROR
 	header[0x24]=m6510_x;
 	header[0x25]=m6510_y;
 	header[0x26]=m6510_s;
-	header[0x27]=m6510_irq&=(128+2+1); // stick to NMI+CIA+VIC
+	header[0x27]=(m6510_n_t<-9?0:128)+(VICII_TABLE[25]<128?0:1)+(cia_port_13[0]<128?0:2);
 	header[0x30]=mmu_cfg[0];
 	header[0x31]=mmu_cfg[1];
-	header[0x32]=mmu_out; // this value is normally identical to mmu_cfg[1], but not always, cfr. CPUPORT.PRG
+	//header[0x32]=mmu_out; // this value is normally identical to mmu_cfg[1], but not always, cfr. CPUPORT.PRG
 	// CIA #1
 	memcpy(&header[0x40],CIA_TABLE_0,0X10);
 	mputii(&header[0x54],cia_count_a[0]);
 	mputii(&header[0x56],cia_count_b[0]);
-	mputiiii(&header[0x58],cia_hhmmssd[0]);
+	i=cia_hhmmssd[0]|(cia_port_11[0]?64<<24:0); mputiiii(&header[0x58],i);
 	header[0x5D]=cia_port_13[0];
 	// CIA #2
 	memcpy(&header[0x60],CIA_TABLE_1,0X10);
 	mputii(&header[0x74],cia_count_a[1]);
 	mputii(&header[0x76],cia_count_b[1]);
-	mputiiii(&header[0x78],cia_hhmmssd[0]);
+	i=cia_hhmmssd[1]|(cia_port_11[1]?64<<24:0); mputiiii(&header[0x78],i);
 	header[0x7D]=cia_port_13[1];
 	// SID #1
 	memcpy(&header[0x80],SID_TABLE_0,0X20-4);
@@ -1953,28 +2408,31 @@ int snap_load(char *s) // loads snapshot file `s`; 0 OK, !0 ERROR
 	m6510_x=header[0x24];
 	m6510_y=header[0x25];
 	m6510_s=header[0x26];
-	m6510_irq=header[0x27]&(128+2+1);
+	m6510_n_t=(header[0x27]&128)?-2:-1<<20;
+	m6510_i_t=(header[0x27]&  3)?-2:-1<<20;
 	mmu_cfg[0]=header[0x30];
 	mmu_cfg[1]=header[0x31];
-	mmu_out=header[0x32];
-	mmu_update();
-	m6510_i=4; // avoid accidents!
+	//if (!(mmu_out=header[0x32])) mmu_out=0XFF; // *!* temporary bugfix
 	// CIA #1
 	memcpy(CIA_TABLE_0,&header[0x40],0X10);
-	cia_count_a[0]=mgetii(&header[0x54]);
-	cia_count_b[0]=mgetii(&header[0x56]);
-	cia_hhmmssd[0]=mgetiiii(&header[0x58]);
-	cia_port_13[0]=header[0x5D];
-	if ((CIA_TABLE_0[14]&1)>=cia_count_a[0]) cia_count_a[0]=0XFFFF; // bug?
-	if ((CIA_TABLE_0[15]&1)>=cia_count_b[0]) cia_count_b[0]=0XFFFF; // bug?
+	if (!(cia_count_a[0]=mgetii(&header[0x54]))) cia_count_a[0]=65536;
+	if (!(cia_count_b[0]=mgetii(&header[0x56]))) cia_count_b[0]=65536;
+	cia_event_a[0]=cia_event_b[0]=-1;
+	cia_port_14(0,CIA_TABLE_0[14]); cia_state_a[0]=(CIA_TABLE_0[14]&1)?+0+0+2+0:+0+0+0+1;
+	cia_port_15(0,CIA_TABLE_0[15]); cia_state_b[0]=(CIA_TABLE_0[15]&1)?+0+0+2+0:+0+0+0+1;
+	cia_port_11[0]=CIA_TABLE_0[11]&64; CIA_TABLE_0[11]&=143; // bit 30 is the "locked" flag
+	cia_hhmmssd[0]=mgetiiii(&header[0x58]); cia_port_13[0]=header[0x5D];
+	mmu_update(); // CPU #1 ports $00 and $01 handle the tape together with CIA #1
 	// CIA #2
 	memcpy(CIA_TABLE_1,&header[0x60],0X10);
-	cia_count_a[1]=mgetii(&header[0x74]);
-	cia_count_b[1]=mgetii(&header[0x76]);
-	cia_hhmmssd[1]=mgetiiii(&header[0x78]);
-	cia_port_13[1]=header[0x7D];
-	if ((CIA_TABLE_1[14]&1)>=cia_count_a[1]) cia_count_a[1]=0XFFFF; // bug?
-	if ((CIA_TABLE_1[15]&1)>=cia_count_b[1]) cia_count_b[1]=0XFFFF; // bug?
+	if (!(cia_count_a[1]=mgetii(&header[0x74]))) cia_count_a[1]=65536;
+	if (!(cia_count_b[1]=mgetii(&header[0x76]))) cia_count_b[1]=65536;
+	cia_event_a[1]=cia_event_b[1]=-1;
+	cia_port_14(1,CIA_TABLE_1[14]); cia_state_a[1]=(CIA_TABLE_1[14]&1)?+0+0+2+0:+0+0+0+1;
+	cia_port_15(1,CIA_TABLE_1[15]); cia_state_b[1]=(CIA_TABLE_1[15]&1)?+0+0+2+0:+0+0+0+1;
+	cia_port_11[1]=CIA_TABLE_1[11]&64; CIA_TABLE_1[11]&=143; // bit 30 is the "locked" flag
+	cia_hhmmssd[1]=mgetiiii(&header[0x78]); cia_port_13[1]=header[0x7D];
+	debug_reset();
 	// SID #1
 	memcpy(SID_TABLE_0,&header[0x80],0X1C);
 	if (equalsii(&header[0x9C],0XD420))
@@ -1988,14 +2446,14 @@ int snap_load(char *s) // loads snapshot file `s`; 0 OK, !0 ERROR
 	memcpy(VICII_TABLE,&header[0xB0],0X30);
 	vicii_irq_y=(VICII_TABLE[17]&128)*2+VICII_TABLE[18];
 	vicii_setmaps(),vicii_setmode();
-	debug_reset();
 	video_clut_update();
-	fread1(header,512,f);
 	// COLOR TABLE
+	fread1(header,512,f);
 	for (int i=0;i<512;++i) VICII_COLOR[i*2]=header[i]>>4,VICII_COLOR[1+i*2]=header[i]&15;
 	// 64K RAM
 	q?rle2bin(mem_ram,1<<16,session_scratch,fread1(session_scratch,q,f)):fread1(mem_ram,1<<16,f);
 	// ... future blocks will go here ...
+	//if ((VICII_TABLE[25]&VICII_TABLE[26]&31)||(cia_port_13[0]&CIA_TABLE_0[13]&31)) m6510_i_t=-2; // pending IRQ workaround?
 	if (snap_path!=s) strcpy(snap_path,s);
 	return snap_done=!fclose(f),0;
 }
@@ -2071,6 +2529,7 @@ char session_menudata[]=
 	"0xC800 Record tape..\tShift+F8\n"
 	"0x8801 Browse tape..\n"
 	"0x0800 Remove tape\tCtrl+F8\n"
+	//"0x4800 Play tape\tCtrl+Shift+F8\n"
 	"=\n"
 	"0x0080 E_xit\n"
 	"Machine\n"
@@ -2087,11 +2546,13 @@ char session_menudata[]=
 	"0x8514 256k REU\n"
 	"0x8515 512k REU\n"
 	*/
-	"0x8501 Power-up boost\n"
-	"0x8502 RDY 6510 switch\n"
-	"0x8503 Disable sprite impacts\n"
-	"0x8504 Enable SID filter\n"
-	"0x8505 SID 8580 type\n"
+	"0x8501 Reset ANE bit0\n"
+	"0x8502 CIA 6526A revision\n"
+	"0x8503 C64C IC glue logic\n"
+	"0x8504 SID 8580 revision\n"
+	"0x8505 Internal SID filter\n"
+	"0x8506 Disable VIC-II sprites\n"
+	"0x8507 Disable sprite collisions\n"
 	"=\n"
 	//"0x0600 Raise 6510 speed\tCtrl+F6\n"
 	//"0x4600 Lower 6510 speed\tCtrl+Shift+F6\n"
@@ -2099,6 +2560,7 @@ char session_menudata[]=
 	"0x0602 2x CPU clock\n"
 	"0x0603 3x CPU clock\n"
 	"0x0604 4x CPU clock\n"
+	"0x0605 Power-up boost\n"
 	"0x8508 SID x1\n"
 	"0x8509 SID x2 #:$D420\n"
 	"0x850A SID x2 #:$DE00\n"
@@ -2118,13 +2580,13 @@ char session_menudata[]=
 	"0x0401 Redefine virtual joystick\n"
 	"0x4400 Flip joystick ports\tCtrl+Shift+F4\n"
 	"=\n"
-	"0x852F Printer output..\n"
+	//"0x852F Printer output..\n"
 	"0x851F Strict snapshots\n"
 	/*
 	"0x8510 Disc controller\n"
-	*/
 	"0x8590 Strict disc writes\n"
 	"0x8591 Read-only disc by default\n"
+	*/
 	//"=\n"
 	"0x0900 Tape speed-up\tCtrl+F9\n"
 	"0x4900 Tape analysis\tCtrl+Shift+F9\n"
@@ -2208,15 +2670,18 @@ void session_clean(void) // refresh options
 	session_menucheck(0x0400,session_key2joy);
 	session_menucheck(0x4400,key2joy_flag);
 	session_menuradio(0x0601+multi_t-1,0x0601,0x0604);
-	session_menucheck(0x8502,m6510_ready);
-	session_menucheck(0x8503,vicii_nohits);
-	session_menucheck(0x8504,sid_filters);
-	session_menucheck(0x8505,sid_nouveau);
+	session_menucheck(0x0605,m6510_power>=0);
+	session_menucheck(0x8502,!cia_old6526);
+	session_menucheck(0x8503,!cia_oldglue);
+	session_menucheck(0x8501,!(m6510_xef&1));
+	session_menucheck(0x8507,vicii_noimpacts);
+	session_menucheck(0x8506,vicii_nosprites);
+	session_menucheck(0x8505,sid_filters);
+	session_menucheck(0x8504,sid_nouveau);
 	session_menuradio(0x8508+sid_extras,0X8508,0X850C);
 	//session_menucheck(0x850D,sid_muted[0]);
 	//session_menucheck(0x850E,sid_muted[1]);
 	//session_menucheck(0x850F,sid_muted[2]);
-	session_menucheck(0x8501,m6510_power>=0);
 	session_menucheck(0x8590,!(disc_filemode&2));
 	session_menucheck(0x8591,disc_filemode&1);
 	session_menucheck(0x8510,!(disc_disabled&1));
@@ -2233,6 +2698,8 @@ void session_clean(void) // refresh options
 	session_menucheck(0x8902,video_filter&VIDEO_FILTER_MASK_Y);
 	session_menucheck(0x8903,video_filter&VIDEO_FILTER_MASK_X);
 	session_menucheck(0x8904,video_filter&VIDEO_FILTER_MASK_Z);
+	vicii_len_y=312; // PAL/NTSC vertical configuration
+	vicii_irq_x=(vicii_len_x=63*multi_t)-VICII_MINUS; // PAL/NTSC horizontal
 	if (sid_extras&1)
 		SID_TABLE[1]=&mem_i_o[0X420],SID_TABLE[2]=&mem_i_o[0X440];
 	else
@@ -2290,9 +2757,6 @@ void session_user(int k) // handle the user's commands
 				"\n"
 				"F6\tToggle realtime" MESSAGEBOX_WIDETAB
 				"^F6\tNext CPU speed"
-				"\n"
-				"\t(shift: ..CRTC)" MESSAGEBOX_WIDETAB
-				"\t(shift: previous..)"
 				"\n"
 				/*
 				"F7\tInsert disc into 8:..\t"
@@ -2408,24 +2872,31 @@ void session_user(int k) // handle the user's commands
 			if ((t[4]=session_scan("FIRE",s))>=0)
 				for (int i=0;i<length(t);++i) kbd_k2j[i]=t[i];
 			break;
-		case 0x8502: // RDY 6510 SWITCH
-			m6510_ready=!m6510_ready;
+		case 0x8501: // MOS 6510 $EE/$EF SWITCH
+			m6510_xef^=1;
 			break;
-		case 0x8503: // DISABLE SPRITE IMPACTS
-			vicii_nohits=!vicii_nohits;
+		case 0x8502: // CIA 6526/652A SWITCH
+			cia_old6526=!cia_old6526;
+			break;
+		case 0x8503: // CIA DISCRETE/CUSTOM IC SWITCH
+			cia_oldglue=!cia_oldglue;
+			break;
+		case 0x8507: // DISABLE SPRITE COLLISIONS
+			vicii_noimpacts=!vicii_noimpacts;
 			VICII_TABLE[31]=VICII_TABLE[30]=0;
 			break;
-		case 0x8504: // SID FILTERS
+		case 0x8506: // DISABLE VIC-II SPRITES
+			vicii_nosprites=!vicii_nosprites;
+			VICII_TABLE[31]=VICII_TABLE[30]=0;
+			break;
+		case 0x8505: // DISABLE SID FILTER
 			sid_filters=!sid_filters;
 			sid_reg_update(0,23);
 			sid_reg_update(1,23);
 			sid_reg_update(2,23);
 			break;
-		case 0x8505: // SID 8580/6581
+		case 0x8504: // SID 8580/6581
 			sid_nouveau=!sid_nouveau;
-			break;
-		case 0x8501: // POWER-UP BOOST
-			m6510_power=m6510_power>=0?-1:0X07;
 			break;
 		case 0x8508: // SID X1
 		case 0x8509: // SID X2 (base:$D420)
@@ -2498,6 +2969,9 @@ void session_user(int k) // handle the user's commands
 		case 0x0604: // CPU x4
 			multi_t=k-0x0600;
 			break;
+		case 0x0605: // POWER-UP BOOST
+			m6510_power=m6510_power>=0?-1:0X07;
+			break;
 		case 0x8701: // CREATE DISC..
 			if (!disc_disabled)
 				if (s=puff_session_newfile(disc_path,"*.d64",session_shift?"Create disc in B:":"Create disc in A:"))
@@ -2542,7 +3016,7 @@ void session_user(int k) // handle the user's commands
 				}
 			}
 			break;
-		case 0x0800: // ^F8: REMOVE TAPE
+		case 0x0800: // ^F8: REMOVE OR PLAY TAPE
 			tape_close();
 			break;
 		case 0x8900: // F9: DEBUG
@@ -2564,7 +3038,7 @@ void session_user(int k) // handle the user's commands
 			video_filter^=VIDEO_FILTER_MASK_Z;
 			break;
 		case 0x9000: // RESTORE key (NMI)
-			m6510_irq|=128;
+			m6510_n_t=-2;
 			break;
 		case 0x0900: // ^F9: TOGGLE TAPE SONG OR FAST TAPE
 			if (session_shift)
@@ -2687,10 +3161,10 @@ void session_configreadmore(char *s)
 	else if (!strcasecmp(session_parmtr,"prog")) strcpy(prog_path,s);
 	else if (!strcasecmp(session_parmtr,"card")) strcpy(bios_path,s);
 	else if (!strcasecmp(session_parmtr,"vjoy")) { if (!hexa2byte(session_parmtr,s,5)) usbkey2native(kbd_k2j,session_parmtr,5); }
-	else if (!strcasecmp(session_parmtr,"c15x")) disc_disabled=!(*s&1);
+	else if (!strcasecmp(session_parmtr,"type")) disc_disabled=!(*s&1),cia_old6526=!!(*s&2),cia_oldglue=!!(*s&4);
 	else if (!strcasecmp(session_parmtr,"fdcw")) disc_filemode=*s&3;
-	else if (!strcasecmp(session_parmtr,"bank")) { if ((i=*s&7)<length(reu_kbyte)) reu_depth=i; }
-	else if (!strcasecmp(session_parmtr,"joys")) key2joy_flag=(*s&1);
+	else if (!strcasecmp(session_parmtr,"bank")) reu_depth=*s&7,reu_depth=reu_depth>length(reu_kbyte)?0:reu_depth;
+	else if (!strcasecmp(session_parmtr,"joy1")) key2joy_flag=(*s&1);
 	else if (!strcasecmp(session_parmtr,"sidx")) sid_nouveau=(*s&1),sid_extras=(*s/2)&7,sid_extras=sid_extras>4?0:sid_extras;
 	else if (!strcasecmp(session_parmtr,"misc")) snap_extended=(*s&1);
 	else if (!strcasecmp(session_parmtr,"palette")) { if ((i=*s&15)<length(video_table)) video_type=i; }
@@ -2701,10 +3175,10 @@ void session_configwritemore(FILE *f)
 {
 	native2usbkey(kbd_k2j,kbd_k2j,5); byte2hexa(session_parmtr,kbd_k2j,5); session_parmtr[10]=0;
 	fprintf(f,
-		"c15x %d\nfdcw %d\nbank %d\njoys %d\nsidx %d\nmisc %d\n"
+		"type %d\nfdcw %d\nbank %d\njoy1 %d\nsidx %d\nmisc %d\n"
 		"file %s\nsnap %s\ntape %s\ndisc %s\nprog %s\ncard %s\n"
 		"vjoy %s\npalette %d\ncasette %d\ndebug %d\n",
-		!(disc_disabled&1),disc_filemode,reu_depth,!!key2joy_flag,(sid_nouveau?1:0)+sid_extras*2,!!snap_extended,
+		(~disc_disabled&1)+(cia_old6526?2:0)+(cia_oldglue?4:0),disc_filemode,reu_depth,!!key2joy_flag,(sid_nouveau?1:0)+sid_extras*2,(snap_extended?1:0),
 		autorun_path,snap_path,tape_path,disc_path,prog_path,bios_path,
 		session_parmtr,video_type,(tape_rewind?1:0)+(tape_skipload?2:0)+(tape_fastload?4:0),debug_configwrite());
 }
@@ -2901,24 +3375,19 @@ int main(int argc,char *argv[])
 	while (!session_listen())
 	{
 		if (autorun_mode)
-			MEMLOAD(kbd_bit0,autorun_kbd);
+			MEMLOAD(kbd_bit0,autorun_kbd); // the active keys are fully virtual
 		else
 		{
-			for (int i=0;i<length(kbd_bit0);++i)
-				kbd_bit0[i]=kbd_bit[i]|joy_bit[i];
+			for (int i=0;i<length(kbd_bit0);++i) kbd_bit0[i]=kbd_bit[i]|joy_bit[i]; // mix keyboard + joystick bits
 			if (kbd_bit[ 8]) kbd_bit0[0]|=kbd_bit[ 8],kbd_bit0[1]|=128; // LEFT SHIFT + right side KEY combos (1/2)
 			if (kbd_bit[15]) kbd_bit0[7]|=kbd_bit[15],kbd_bit0[1]|=128; // LEFT SHIFT + left  side KEY combos (2/2)
 			if (!(~kbd_bit0[9]&3)) kbd_bit0[9]-=3; if (!(~kbd_bit0[9]&12)) kbd_bit0[9]-=12; // catch illegal UP+DOWN and LEFT+RIGHT joystick bits
 		}
 		while (!session_signal)
 		{
-			int t=63-vicii_pos_x; if (tape&&tape_enabled&&t>tape_n) t=tape_n;
-			if ((CIA_TABLE_0[14]&1)&&t>cia_count_a[0]) t=cia_count_a[0];
-			if ((CIA_TABLE_0[15]&1)&&t>cia_count_b[0]) t=cia_count_b[0];
-			if ((CIA_TABLE_1[14]&1)&&t>cia_count_a[1]) t=cia_count_a[1];
-			if ((CIA_TABLE_1[15]&1)&&t>cia_count_b[1]) t=cia_count_b[1];
 			m6510_main( // clump MOS 6510 instructions together to gain speed...
-			t*multi_t); // ...without missing any deadlines!
+			((VIDEO_LENGTH_X+15-video_pos_x)>>4)
+			*multi_t); // ...without missing any deadlines!
 		}
 		if (session_signal&SESSION_SIGNAL_FRAME) // end of frame?
 		{
@@ -2932,7 +3401,7 @@ int main(int argc,char *argv[])
 					onscreen_byte(+1,-3,d64_track[0],d64_motor[0]);
 					onscreen_byte(+4,-3,d64_track[1],d64_motor[1]);
 				}
-				int q=tape_enabled?128:0;
+				int q=tape_disabled?0:128;
 				if (tape&&tape_skipload)
 					onscreen_char(+6,-3,'+'+q);
 				if (tape_filesize<=0||tape_type<0)
@@ -2945,11 +3414,19 @@ int main(int argc,char *argv[])
 				}
 				if (session_stick|session_key2joy)
 				{
-					onscreen_bool(-5,-6,3,1,kbd_bit_tst(kbd_joy[0]));
-					onscreen_bool(-5,-2,3,1,kbd_bit_tst(kbd_joy[1]));
-					onscreen_bool(-6,-5,1,3,kbd_bit_tst(kbd_joy[2]));
-					onscreen_bool(-2,-5,1,3,kbd_bit_tst(kbd_joy[3]));
-					onscreen_bool(-4,-4,1,1,kbd_bit_tst(kbd_joy[4]));
+					if (autorun_mode)
+						onscreen_bool(-5,-7,3,1,autorun_t>1),
+						onscreen_bool(-5,-4,3,1,autorun_t>1),
+						onscreen_bool(-6,-6,1,5,autorun_t>1),
+						onscreen_bool(-2,-6,1,5,autorun_t>1);
+					else
+					{
+						onscreen_bool(-5,-6,3,1,kbd_bit_tst(kbd_joy[0]));
+						onscreen_bool(-5,-2,3,1,kbd_bit_tst(kbd_joy[1]));
+						onscreen_bool(-6,-5,1,3,kbd_bit_tst(kbd_joy[2]));
+						onscreen_bool(-2,-5,1,3,kbd_bit_tst(kbd_joy[3]));
+						onscreen_bool(-4,-4,1,1,kbd_bit_tst(kbd_joy[4]));
+					}
 				}
 				#ifdef DEBUG
 				if (session_audio) // Win32 audio cycle / SDL2 audio queue
@@ -2968,32 +3445,30 @@ int main(int argc,char *argv[])
 				sid_frame(); // soften the sample output, it must not stick forever
 			}
 			psg_writelog();
-			if (m6510_pc.w>=0XE4E2&&m6510_pc.w<0XE4EB&&mmu_mmu==7) m6510_pc.w=0XE4EB; // tape "FOUND FILENAME" boost
-			//#define M65XX_TRAP_0XD0 if (M65XX_PC.w==0XE4EA&&mmu_mmu==m6510_found) z=0; // tape "FOUND FILENAME" boost
-			//m6510_found=(tape&&tape_fastload)?0X07:-1; // set tape "FOUND FILENAME" boost
-			if (cia_port_13_n>500)
-				{ /*if (~tape_enabled&2) */tape_enabled|=+2; }
-			else if (cia_port_13_n<50)
-				{ /*if (tape_enabled&2) */tape_enabled&=~2; }
-			cia_port_13_n=0;
-			static BYTE tape_loud_n=0; if (!tape_fastload)
-				tape_loud_n=0/*,tape_loud=1*/;
-			else if (tape_song||(sid_mixer[0]&&(SID_TABLE_0[4]|SID_TABLE_0[11]|SID_TABLE_0[18])))
-				tape_loud_n|=16,tape_song=/*tape_loud=*/0; // expect song to play for several frames
-			else if (tape_loud_n) // no sound, slowly return to normal
-				/*if (!*/--tape_loud_n/*) tape_loud=1*/;
+			video_clut[31]=video_clut[video_pos_z&7]; // DEBUG COLOUR!
+			if (m6510_i_t>0) m6510_i_t=0; else if (m6510_i_t<-9) m6510_i_t=-1<<20; // catch IRQ overflows; notice that the 6510 can temporarily turn -2 into -3
+			if (m6510_n_t>0) m6510_n_t=0; else if (m6510_n_t<-9) m6510_n_t=-1<<20; // catch NMI overflows
+			if (m6510_pc.w>=0XE4E2&&m6510_pc.w<0XE4EB&&mmu_mcr==7&&tape_fastload) m6510_pc.w=0XE4EB; // tape "FOUND FILENAME" boost
+			if (!(mmu_cfg[1]&32)&&(CIA_TABLE_0[13]&16)) tape_enabled|=+1; // IRQ tape:
+			else tape_enabled&=~1; // "SIDEWIZE" proves that mmu_cfg[1]&32 matters, not mmu_out&32
+			if (tape_polling>500) tape_enabled|=+2; // non-IRQ tape: is the machine polling the port fast enough?
+			else if (tape_polling<50) tape_enabled&=~2; // not fast enough, apparently not a tape loader
+			if (!tape_fastload) tape_song=0/*,tape_loud=1*/;
+			else if (tape_song) /*tape_loud=0,*/--tape_song;
+			//else tape_loud=1; // expect song to play for several frames
+			tape_polling=0;
 			if (tape_signal)
 			{
 				if (tape_signal<2) tape_enabled=0; // stop tape if required
 				tape_signal=0,session_dirty=1; // update config
 			}
-			/*tape_skipping=*/audio_queue=0; // reset tape and audio flags
-			if (tape_filetell<tape_filesize&&tape_skipload&&!session_filmfile&&tape_enabled&&!tape_loud_n)
+			/*tape_skipping=audio_queue=0;*/ // reset tape and audio flags
+			if (tape&&tape_filetell<tape_filesize&&tape_skipload&&!session_filmfile&&!tape_disabled&&!tape_song)
 				video_framelimit|=(MAIN_FRAMESKIP_MASK+1),session_fast|=2,video_interlaced|=2,audio_disabled|=2; // abuse binary logic to reduce activity
 			else
 				video_framelimit&=~(MAIN_FRAMESKIP_MASK+1),session_fast&=~2,video_interlaced&=~2,audio_disabled&=~2; // ditto, to restore normal activity
 			session_update();
-			vicii_chr_y=vicii_pos_y; vicii_chr_x=vicii_pos_x; //if (!audio_disabled) audio_main(1+(video_pos_x>>4)); // preload audio buffer
+			//if (!audio_disabled) audio_main(1+(video_pos_x>>4)); // preload audio buffer
 		}
 	}
 	// it's over, "acta est fabula"

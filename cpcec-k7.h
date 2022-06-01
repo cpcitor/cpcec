@@ -342,7 +342,6 @@ int tape_catalog(char *t,int x) // fills the buffer `t` of size `x` with the tap
 					case 0x5A: t+=1+sprintf(t,"GLUE");
 						break;
 					default: t+=1+sprintf(t,"UNKNOWN!");
-						break;
 				}
 				tape_skip(l=i>0?tape_tzx1size(i):0); i=-1;
 				if (l) --t,t+=1+sprintf(t,", %d bytes",l);

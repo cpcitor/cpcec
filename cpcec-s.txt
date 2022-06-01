@@ -1055,7 +1055,7 @@ lógica de autoarranque y la aceleración de cintas tanto de CPCEC como de ZXSEC
 y añade la extensión ULAplus de 64 colores para Spectrum, así como la capacidad
 de leer snapshots SP y SZX.
 - 20211004 -- parche menor que corrige un error en ZXSEC, el cargador de
-snapshots Z80 comprobaba mal la integridad de los bloques comprimiddos de 48K.
+snapshots Z80 comprobaba mal la integridad de los bloques comprimidos de 48K.
 - 20211105 -- parche menor que añade soporte de ficheros PZX para ZXSEC y
 reorganiza el código de lectura de cinta (los bloques JUMP, CALL y RETURN de
 TZX1 se manejan debidamente), mejora la lógica de vídeo del Pentagon ("Across
@@ -1163,9 +1163,28 @@ lógica de "badline" ni contención de sprites); puede cargar ficheros PRG y lee
 imágenes de cinta T64 y TAP, pero no emula la unidad de disco C1541 y en
 consecuencia no es capaz de abrir imágenes de disco D64. Nuevo interfaz de
 joystick virtual: el usuario puede redefinir las teclas que simulan el joystick
-virtual en lugar de limitarse a las teclas Z y X y los cursores. El análisis de
-cinta puede detectar cargadores musicales: la aceleración de cinta se suspenderá
-temporalmente para asegurar que las canciones suenan con normalidad. Corregido
-un error en el Z80 (los tiempos internos de OUT (n),A estaban mal) y la
+virtual en lugar de limitarse a las teclas Z y X y los cursores. Corregido un
+error en el Z80 (los tiempos internos de OUT (n),A estaban mal) y la
 sincronización horizontal del LA-7800 (ambos avisados por Hicks): la demo de CPC
-"Onescreen Colonies #2" se comporta debidamente.
+"Onescreen Colonies #2" se comporta debidamente. El análisis de cinta puede
+detectar cargadores musicales: la aceleración de cinta se suspenderá
+temporalmente para que las canciones suenen con normalidad.
+- 20220531 -- parche menor que añade una nueva opción para acelerar el arranque
+(activa por defecto) por la que los emuladores interceptan los procedimientos de
+inicio y los aceleran. Imprimir un desensamblado ahora incluye los bytes de
+origen, lo que asegura que el binario siempre puede reconstruirse incluso cuando
+el desensamblado es ambiguo. Las operaciones del Z80 RETN y RETI ahora son
+idénticas: distinguirlas es asunto del hardware que lanza la NMI. La función
+SSSL del ASIC de Plus es compatible con 32k, tal como requiere la intro "Simply
+the Bests". El modelo de contención de memoria de la ULA de ZX es más simple: el
+buffer de tiempos ahora mide 128k en lugar de 256k. El chip VIC-II es más
+preciso: emula los retrasos causados por las "badlines" y la carga de sprites
+("Fellas" de Extend, la intro "HVSC 10 Years"...), lo que hace posible la
+manipulación de badlines ("Data Zombies" de Archmage, "Ms. Pac Man" de Focus,
+"Funny Rasters" de Excess...), el scroll horizontal por retraso de DMA
+("Creatures", "Rewind" de Tempest...) y alargamiento de sprites ("20 Years" de
+Oxyron). La paleta por defecto ahora es Community-Colors en vez de Colodore. Los
+chips CIA también son más precisos ("4Krawall" de TRSI) pero aún no superan el
+paquete de pruebas PC64. El filtro interno del SID está emulado parcialmente; el
+usuario puede deshabilitarlo a mano. Optimizaciones menores mediante pistas de
+ramificación "likely/unlikely".

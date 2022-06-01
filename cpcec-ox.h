@@ -50,11 +50,11 @@
 #define VIDEO_UNIT DWORD // 0x00RRGGBB style
 
 #if 0 // 8 bits
-	#define AUDIO_UNIT unsigned char
+	#define AUDIO_UNIT Uint8
 	#define AUDIO_BITDEPTH 8
 	#define AUDIO_ZERO 128
 #else // 16 bits
-	#define AUDIO_UNIT signed short
+	#define AUDIO_UNIT Sint16
 	#define AUDIO_BITDEPTH 16
 	#define AUDIO_ZERO 0
 #endif // bitsize
@@ -499,10 +499,9 @@ int session_ui_exchange(void) // wait for a keystroke or a mouse motion
 		switch (event.type)
 		{
 			case SDL_WINDOWEVENT:
-				if (event.window.event==SDL_WINDOWEVENT_FOCUS_LOST&&session_ui_focusing)
-					return KBCODE_ESCAPE;
 				if (event.window.event==SDL_WINDOWEVENT_EXPOSED)
 					SDL_RenderPresent(session_blitter);//SDL_UpdateWindowSurface(session_hwnd); // fast redraw
+				//else if (event.window.event==SDL_WINDOWEVENT_FOCUS_LOST&&session_ui_focusing) return KBCODE_ESCAPE;
 				break;
 			case SDL_MOUSEWHEEL:
 				if (event.wheel.direction==SDL_MOUSEWHEEL_FLIPPED) event.wheel.y=-event.wheel.y;
@@ -683,7 +682,6 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 							if (ucase(z[4])==o)
 								break;
 						}
-					break;
 			}
 			session_ui_focusing=0;
 			if (menuz!=menu)
@@ -704,7 +702,7 @@ void session_ui_textinit(char *s,char *t,char q) // used by session_ui_text and 
 {
 	session_ui_init();
 	int i,j,textw=0,texth=1+2; // caption + blank + text + blank
-	unsigned char *m=t;
+	char *m=t;
 	while (*m++)
 		++textw;
 	i=0;
@@ -758,7 +756,7 @@ void session_ui_textinit(char *s,char *t,char q) // used by session_ui_text and 
 				++j,*m++=' ';
 		}
 	}
-	if (m!=session_parmtr) // last line lacks a line feed?
+	if (m!=(char*)session_parmtr) // last line lacks a line feed?
 		*m=0,session_ui_printasciz(m=session_parmtr,textx+q,texty+(++i),1,textw-q,1,0,+0);
 	session_ui_printasciz("",textx+q,texty+(++i),1,textw-q,1,0,+0); // blank
 	if (q) // draw icon?
@@ -890,7 +888,6 @@ int session_ui_input(char *t) // see session_input
 						i+=o,j+=o;
 					}
 				}
-				break;
 		}
 	}
 	while (!done);
@@ -1062,7 +1059,6 @@ int session_ui_list(int item,char *s,char *t,void x(void),int q) // see session_
 						item=itemo; // allow rewinding to -1
 					dblclk=0;
 				}
-				break;
 		}
 	}
 	while (!done);
@@ -1352,7 +1348,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	session_timer=SDL_GetTicks();
 
 	#ifdef _WIN32
-	long int z;
+	DWORD z;
 	for (session_ui_drive[0]='A';session_ui_drive[0]<='Z';++session_ui_drive[0]) // scan session_ui_drive just once
 		if (GetDriveType(session_ui_drive)>2&&GetDiskFreeSpace(session_ui_drive,&z,&z,&z,&z))
 			session_ui_drives|=1<<(session_ui_drive[0]-'A');
@@ -1483,9 +1479,8 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 		{
 			case SDL_WINDOWEVENT:
 				if (event.window.event==SDL_WINDOWEVENT_EXPOSED)
-					session_clrscr(),session_redraw(1);// clear and redraw
-				else if (event.window.event==SDL_WINDOWEVENT_FOCUS_LOST)
-					session_kbdclear(); // loss of focus: no keys!
+					session_clrscr(),session_redraw(1); // clear and redraw
+				else if (event.window.event==SDL_WINDOWEVENT_FOCUS_LOST) session_kbdclear(); // loss of focus: no keys!
 				break;
 			case SDL_MOUSEWHEEL:
 				if (event.wheel.direction==SDL_MOUSEWHEEL_FLIPPED) event.wheel.y=-event.wheel.y;
@@ -1521,12 +1516,12 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 						session_togglefullscreen();
 					break;
 				}
-				session_shift=!!(event.key.keysym.mod&KMOD_SHIFT);
 				if (event.key.keysym.sym==SDLK_F10)
 				{
 					session_event=0x8080; // F10 shows the popup menu
 					break;
 				}
+				session_shift=!!(event.key.keysym.mod&KMOD_SHIFT);
 				if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant inside debugger, see below
 					session_event=debug_xlat(event.key.keysym.scancode);
 				if ((k=session_key_n_joy(event.key.keysym.scancode))<128) // normal key
@@ -1544,6 +1539,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 							session_event=128+(session_event&31)*64+(event.text.text[1]&63);
 				break;
 			case SDL_KEYUP:
+				session_shift=!!(event.key.keysym.mod&KMOD_SHIFT);
 				if ((k=session_key_n_joy(event.key.keysym.scancode))<128)
 					kbd_bit_res(k);
 				break;

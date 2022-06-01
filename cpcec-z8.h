@@ -28,10 +28,13 @@ BYTE z80_q; // internal register Q
 
 #ifdef DEBUG_HERE
 int debug_trap_sp,debug_trap_pc=0;
-void debug_reset(void) // sets the debugger's PC and SP, and cleans temporary stuff up
+void debug_clear(void) // cleans volatile breakpoints
 {
 	debug_inter=0; debug_trap_sp=1<<16; // cancel interrupt+return traps!
 	debug_point[debug_trap_pc]&=127; // cancel volatile breakpoint!
+}
+void debug_reset(void) // sets the debugger's PC and SP
+{
 	debug_panel0_w=z80_pc.w; debug_panel0_x=0;
 	debug_panel3_w=z80_sp.w; debug_panel3_x=0;
 }
@@ -435,7 +438,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					}
 					else
 					{
-						o=Z80_RD_PC; ++z80_pc.w; // dummy!
+						/*o=*/Z80_RD_PC; ++z80_pc.w; // dummy!
 						#ifdef Z80_DNTR_0X10
 						Z80_DNTR_0X10(z80_pc.w);
 						#endif
@@ -456,7 +459,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					}
 					else
 					{
-						o=Z80_RD_PC; ++z80_pc.w; // dummy!
+						/*o=*/Z80_RD_PC; ++z80_pc.w; // dummy!
 					}
 					break;
 				case 0x28: // JR Z,$RRRR
@@ -469,7 +472,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					}
 					else
 					{
-						o=Z80_RD_PC; ++z80_pc.w; // dummy!
+						/*o=*/Z80_RD_PC; ++z80_pc.w; // dummy!
 					}
 					break;
 				case 0x30: // JR NC,$RRRR
@@ -482,7 +485,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					}
 					else
 					{
-						o=Z80_RD_PC; ++z80_pc.w; // dummy!
+						/*o=*/Z80_RD_PC; ++z80_pc.w; // dummy!
 					}
 					break;
 				case 0x38: // JR C,$RRRR
@@ -495,7 +498,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					}
 					else
 					{
-						o=Z80_RD_PC; ++z80_pc.w; // dummy!
+						/*o=*/Z80_RD_PC; ++z80_pc.w; // dummy!
 					}
 					break;
 				case 0x27: // DAA
@@ -1271,7 +1274,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					#ifdef Z80_DNTR_0XFB
 					Z80_DNTR_0XFB();
 					#endif
-					z80_iff.w=0x0101; z80_active=0; // enable interruptions two instructions later: CPC demo "KKB FIRST" does DI...EI:EI:HALT...DI; Spectrum 48K test "EI48K"
+					z80_iff.w=0x0101; z80_active=0; // enable interruptions after the next instruction: CPC demo "KKB FIRST" does DI...EI:EI:HALT...DI; Spectrum 48K test "EI48K"
 					break;
 				case 0xC7: // RST 0
 				case 0xCF: // RST 1
@@ -1817,7 +1820,6 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 								--r7; --z80_pc.w; // undo increases!!
 								// Z80_STRIDE(o) MUST BE ZERO if `o` is illegal!!
 								Z80_REWIND; // terrible hack to undo the opcode fetching!
-								break;
 						}
 					}
 					break;
@@ -1938,16 +1940,16 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 						case 0x55: // *RETN
 						case 0x65: // *RETN
 						case 0x75: // *RETN
-							#ifdef Z80_NMI_ACK
-							z80_iff.b.l=z80_iff.b.h; // NMI!?
-							// no `break`!
-							#endif
 						case 0x4D: // RETI
 						case 0x5D: // *RETI
 						case 0x6D: // *RETI
 						case 0x7D: // *RETI
-							Z80_RET2; // AFAIK no devices track this operation
-							Z80_TRDOS_ENTER(z80_pc); // see IM2 INT event above
+							z80_active=z80_iff.b.l; // delay interruptions if IFF1 was false; reported by TonyB and ZjoyKiler
+							#ifdef Z80_NMI_ACK
+							z80_iff.b.l=z80_iff.b.h; // NMI! the only real difference between RETI and RETN is that the hardware can check the opcode's bit 3
+							#endif
+							Z80_RET2;
+							Z80_TRDOS_ENTER(z80_pc); // see IM 2 INT event above
 							break;
 						case 0x46: // IM 0
 						case 0x4E: // *IM 0
@@ -2144,13 +2146,12 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 							// no `break`!
 						#endif
 						//default: // ILLEGAL EDXX!
-							break;
 					}
 					break;
 			}
 		}
 		#ifdef DEBUG_HERE
-		if (debug_point[z80_pc.w])
+		if (UNLIKELY(debug_point[z80_pc.w]))
 		{
 			if (debug_point[z80_pc.w]&8) // log byte?
 			{
@@ -2440,7 +2441,7 @@ WORD debug_dasm(char *t,WORD p) // disassembles the code at address `p` onto the
 				case 0XAB: sprintf(t,"OUTD"); break;
 				case 0XB3: sprintf(t,"OTIR"); break;
 				case 0XBB: sprintf(t,"OTDR"); break;
-				default: sprintf(t,"*NOP"); break;
+				default: sprintf(t,"*NOP");
 			}
 			break;
 		case 0XDD: case 0XFD:
@@ -2535,7 +2536,7 @@ WORD debug_dasm(char *t,WORD p) // disassembles the code at address `p` onto the
 							sprintf(t,"SET  %d,(%s%c$%02X)",(o-0XC0)>>3,z,y,x); break;
 					}
 					break;
-				default: sprintf(t,"*NOP"); --p; break;
+				default: sprintf(t,"*NOP"); --p;
 			}
 			break;
 	}

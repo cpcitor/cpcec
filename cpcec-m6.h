@@ -14,11 +14,12 @@
 // M65XX_RESET -- name of the RESET() procedure
 // M65XX_START -- expression of PC on RESET
 // M65XX_MAIN -- name of the interpreter
-// BYTE M65XX_IRQ -- interrupt requests
-// void M65XX_ACK(BYTE) -  NMI/IRQ ack.
 // Z80W M65XX_PC -- the Program Counter
 // BYTE M65XX_P -- the Processor status
-// BYTE M65XX_I -- the IRQ filter, usually =M65XX_P&4
+// BYTE M65XX_I_T -- the IRQ delay, -2..+inf
+// BYTE M65XX_N_T -- the NMI delay, -2..+inf
+// void M65XX_IRQ_ACK -- the IRQ acknowledger
+// void M65XX_NMI_ACK -- the NMI acknowledger
 // BYTE M65XX_S -- the Stack pointer
 // BYTE M65XX_A -- the Accumulator
 // BYTE M65XX_X -- the X Register
@@ -37,7 +38,8 @@
 // BYTE M65XX_DUMBPEEKZERO(BYTE) -- "dumb" receive from ZEROPAGE
 // void M65XX_DUMBPOKEZERO(BYTE,BYTE) -- "dumb" send to ZEROPAGE
 // BYTE M65XX_DUMBPULL(BYTE) -- "dumb" receive from PAGE ONE
-// void M65XX_WRITTEN -- signal write end
+// void M65XX_READING(void) -- spend one clock tick after reading
+// void M65XX_WRITING(void) -- spend one clock tick after writing
 
 // Notice that M65XX_PEEK and M65XX_POKE must handle the special cases
 // $0000 and $0001 when they're emulating a 6510 instead of a 6502.
@@ -50,18 +52,21 @@
 
 // BEGINNING OF MOS 6510/6502 EMULATION ============================= //
 
-#ifndef _M65XX_H_
-
 #ifdef DEBUG_HERE
 int debug_trap_sp,debug_trap_pc=0;
-void debug_reset(void) // sets the debugger's PC and SP, and cleans temporary stuff up
+void debug_clear(void) // cleans volatile breakpoints
 {
 	debug_inter=0; debug_trap_sp=1<<8; // cancel interrupt+return traps!
 	debug_point[debug_trap_pc]&=127; // cancel volatile breakpoint!
+}
+void debug_reset(void) // sets the debugger's PC and SP
+{
 	debug_panel0_w=M65XX_PC.w; debug_panel0_x=0;
 	debug_panel3_w=256+M65XX_S; debug_panel3_x=0;
 }
 #endif
+
+#ifndef _M65XX_H_
 
 BYTE m65xx_p_adc[512],m65xx_p_sbc[512]; // Carry and oVerflow
 
@@ -92,38 +97,40 @@ void m65xx_setup(void) // unlike in the Z80, precalc'd tables are limited to the
 // the memory access modes! notice that only the immediate mode already feeds you the value, other modes expect the operation to do the PEEKs and POKEs
 
 // this happens in operations that waste additional ticks from "dumb" reads from PC
-#define M65XX_BADPC do{ M65XX_DUMBPAGE(M65XX_PC.b.h); M65XX_DUMBPEEK(M65XX_PC.w); }while(0)
+#define M65XX_BADPC do{ M65XX_WAIT; M65XX_DUMBPAGE(M65XX_PC.b.h); M65XX_DUMBPEEK(M65XX_PC.w); }while(0)
 // this happens when an operation builds a 16-bit address and the 8-bit carry is true!
-#define M65XX_BADXY do{ M65XX_DUMBPAGE(q); WORD p=q*256+a.b.l; M65XX_DUMBPEEK(p); }while(0)
+#define M65XX_BADXY do{ M65XX_WAIT; M65XX_DUMBPAGE(q); i=q*256+a.b.l; M65XX_DUMBPEEK(i); }while(0)
 // #$NN: immediate; 1 T
-#define M65XX_FETCH(o) do{ M65XX_PAGE(M65XX_PC.b.h); o=M65XX_PEEK(M65XX_PC.w); M65XX_PC.w++; }while(0)
+#define M65XX_FETCH(o) do{ M65XX_WAIT; M65XX_PAGE(M65XX_PC.b.h); o=M65XX_PEEK(M65XX_PC.w); ++M65XX_PC.w; }while(0)
 // $NN: zeropage; 1 T
 #define M65XX_ZPG M65XX_FETCH(a.w)
 // $NN,X: zeropage, X-indexed; 1 T
-#define M65XX_ZPG_X do{ M65XX_ZPG; a.b.l+=M65XX_X; }while(0)
 #define M65XX_ZPG_X_BADPC do{ M65XX_ZPG; a.b.l+=M65XX_X; M65XX_BADPC; }while(0)
 // $NN,Y: zeropage, Y-indexed; 1 T
-#define M65XX_ZPG_Y do{ M65XX_ZPG; a.b.l+=M65XX_Y; }while(0)
-#define M65XX_ZPG_Y_BADPC do{ M65XX_ZPG; a.b.l+=M65XX_Y; M65XX_BADPC; }while(0)
+#define M65XX_ZPG_Y_IRQ_BADPC do{ M65XX_ZPG; a.b.l+=M65XX_Y; M65XX_BADPC; }while(0)
 // ($NN,X) indirect, X-indexed; 4 T
-#define M65XX_IND_X do{ M65XX_ZPG; q=a.b.l+M65XX_X; M65XX_BADPC; a.b.l=M65XX_PEEKZERO(q); ++q; a.b.h=M65XX_PEEKZERO(q); }while(0)
+#define M65XX_IND_X do{ M65XX_ZPG; q=a.b.l+M65XX_X; M65XX_BADPC; M65XX_WAIT; a.b.l=M65XX_PEEKZERO(q); ++q; M65XX_WAIT; a.b.h=M65XX_PEEKZERO(q); }while(0)
 // ($NN),Y indirect, Y-indexed; 4/5 T
-#define M65XX_IND_Y do{ M65XX_ZPG; q=M65XX_PEEKZERO(a.b.l); ++a.b.l; a.b.h=M65XX_PEEKZERO(a.b.l); a.b.l=q; q=a.b.h; a.w+=M65XX_Y; if (q!=a.b.h) M65XX_BADXY; }while(0)
-#define M65XX_IND_Y_BADXY do { M65XX_ZPG; q=M65XX_PEEKZERO(a.b.l); ++a.b.l; a.b.h=M65XX_PEEKZERO(a.b.l); a.b.l=q; q=a.b.h; a.w+=M65XX_Y; M65XX_BADXY; }while(0)
+#define M65XX_IND_Y do{ M65XX_ZPG; M65XX_WAIT; q=M65XX_PEEKZERO(a.b.l); ++a.b.l; M65XX_WAIT; a.b.h=M65XX_PEEKZERO(a.b.l); a.b.l=q; q=a.b.h; a.w+=M65XX_Y; if (q!=a.b.h) { M65XX_BADXY; } }while(0)
+#define M65XX_IND_Y_BADXY do{ M65XX_ZPG; M65XX_WAIT; q=M65XX_PEEKZERO(a.b.l); ++a.b.l; M65XX_WAIT; a.b.h=M65XX_PEEKZERO(a.b.l); a.b.l=q; q=a.b.h; a.w+=M65XX_Y; M65XX_BADXY; }while(0)
 // $NNNN absolute; 2 T
 #define M65XX_ABS do{ M65XX_FETCH(a.b.l); M65XX_FETCH(a.b.h); }while(0)
 // $NNNN,X absolute, X-indexed; 2/3 T
-#define M65XX_ABS_X do{ M65XX_ABS; q=a.b.h; a.w+=M65XX_X; if (q!=a.b.h) M65XX_BADXY; }while(0)
+#define M65XX_ABS_X do{ M65XX_ABS; q=a.b.h; a.w+=M65XX_X; if (q!=a.b.h) { M65XX_BADXY; } }while(0)
 #define M65XX_ABS_X_BADXY do{ M65XX_ABS; q=a.b.h; a.w+=M65XX_X; M65XX_BADXY; }while(0)
 // $NNNN,Y absolute, Y-indexed; 2/3 T
-#define M65XX_ABS_Y do{ M65XX_ABS; q=a.b.h; a.w+=M65XX_Y; if (q!=a.b.h) M65XX_BADXY; }while(0)
+#define M65XX_ABS_Y do{ M65XX_ABS; q=a.b.h; a.w+=M65XX_Y; if (q!=a.b.h) { M65XX_BADXY; } }while(0)
 #define M65XX_ABS_Y_BADXY do{ M65XX_ABS; q=a.b.h; a.w+=M65XX_Y; M65XX_BADXY; }while(0)
 
 // the operation macros!
 
 #define M65XX_CARRY(r) ((r)?(M65XX_P|=1):(M65XX_P&=~1))
-#define M65XX_BRANCH(r) do{ M65XX_FETCH(o); if (r) { M65XX_BADPC; q=M65XX_PC.b.h; M65XX_PC.w+=(signed char)o; if (q!=M65XX_PC.b.h) { a.b.l=M65XX_PC.b.l; M65XX_BADXY; } } }while(0)
-#define M65XX_SAX (M65XX_A&M65XX_X) // a.k.a. AXS
+#ifdef M65XX_NMI_ACK
+	#define M65XX_BRANCH(r) do{ M65XX_FETCH(o); if (r) { M65XX_BADPC; q=M65XX_PC.b.h; M65XX_PC.w+=(signed char)o; if (q!=M65XX_PC.b.h) { a.b.l=M65XX_PC.b.l; M65XX_BADXY; } else --M65XX_I_T,--M65XX_N_T; } }while(0)
+#else
+	#define M65XX_BRANCH(r) do{ M65XX_FETCH(o); if (r) { M65XX_BADPC; q=M65XX_PC.b.h; M65XX_PC.w+=(signed char)o; if (q!=M65XX_PC.b.h) { a.b.l=M65XX_PC.b.l; M65XX_BADXY; } else --M65XX_I_T; } }while(0)
+#endif
+#define M65XX_SAX (M65XX_A&M65XX_X) // a.k.a. AXS; it appears in multiple operations
 #define M65XX_DEC(r) (z=n=--r)
 #define M65XX_INC(r) (z=n=++r)
 
@@ -164,48 +171,55 @@ void m65xx_setup(void) // unlike in the Z80, precalc'd tables are limited to the
 
 #endif
 
-#ifdef M65XX_RDY
-	#define M65XX_SHZ(t,r) do{ i=(q+1)&(o=r); if (!M65XX_RDY) o=i; if (q!=a.b.h) a.b.h=i; t=o; }while(0)
-	#define M65XX_XEE (M65XX_RDY?0XEF:0XEE)
-#else
-	#define M65XX_SHZ(t,r) (t=r) // simplified version to be used if quirks don't matter
-	#define M65XX_XEE 0XEE
+#ifdef M65XX_SHW
+	#define M65XX_SHZ(t,r) do{ i=(q+1)&(o=r); if (M65XX_SHW) o=i; if (q!=a.b.h) a.b.h=i; t=o; }while(0)
+#else // simpler version if quirks don't matter
+	#define M65XX_SHZ(t,r) (t=r)
 #endif
 
 // M65XX interpreter ------------------------------------------------ //
 
 void M65XX_RESET(void) // resets the M65XX chip; notice that the start address is defined by the external hardware
-	{ M65XX_PC.w=M65XX_START; M65XX_A=M65XX_X=M65XX_Y=0; M65XX_S=0XFF; M65XX_P=32+16+(M65XX_I=4); } // empty stack, ignore IRQs
+	{ M65XX_PC.w=M65XX_START; M65XX_A=M65XX_X=M65XX_Y=0; M65XX_S=0XFF; M65XX_P=32+16+4; } // empty stack, ignore IRQs
 
 void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; notice that _t_<1 runs exactly one operation
 {
 	int m65xx_t=0; BYTE n,z; M65XX_SPLIT_P; M65XX_LOCAL; do
 	{
-		if (M65XX_I<M65XX_IRQ) // catch NMI (+128: accept regardless of flags) or IRQ (+1..3: accept only if I is false)
+		M65XX_TICK;
+		#ifdef M65XX_NMI_ACK
+		if (M65XX_N_T>=0||(M65XX_I_T>=0&&!(M65XX_P&4))) // catch NMI (always) or IRQ when I is false
+		#else
+		if (M65XX_I_T>=0&&!(M65XX_P&4)) // catch IRQ when I is false
+		#endif
 		{
-			M65XX_BADPC; M65XX_BADPC; // two dumb reads in a row!
-			M65XX_PUSH(M65XX_S,M65XX_PC.b.h); --M65XX_S;
-			M65XX_PUSH(M65XX_S,M65XX_PC.b.l); --M65XX_S;
-			M65XX_BREAK_P; M65XX_PUSH(M65XX_S,M65XX_P); --M65XX_S; M65XX_P|=M65XX_I=4; // set I!
-			M65XX_PAGE(0XFF);
-			#ifdef M65XX_NMI
-			if (M65XX_IRQ&128)
+			if (!M65XX_RDY) M65XX_WAIT; M65XX_PAGE(M65XX_PC.b.h); M65XX_DUMBPEEK(M65XX_PC.w); // 1st dumb read...
+			M65XX_BADPC; // ...2nd dumb read!
+			M65XX_TICK; M65XX_PUSH(M65XX_S,M65XX_PC.b.h); --M65XX_S;
+			M65XX_TICK; M65XX_PUSH(M65XX_S,M65XX_PC.b.l); --M65XX_S;
+			M65XX_TICK; M65XX_BREAK_P; M65XX_PUSH(M65XX_S,M65XX_P); --M65XX_S; M65XX_P|=4; // set I!
+			M65XX_WAIT; M65XX_PAGE(0XFF);
+			#ifdef M65XX_NMI_ACK
+			if (M65XX_N_T>=0)
 			{
-				M65XX_NMI;
-				M65XX_PC.b.l=M65XX_PEEK(0XFFFA); M65XX_PC.b.h=M65XX_PEEK(0XFFFB);
+				M65XX_NMI_ACK;
+				M65XX_PC.b.l=M65XX_PEEK(0XFFFA);
+				M65XX_WAIT; M65XX_PC.b.h=M65XX_PEEK(0XFFFB);
 			}
 			else
 			#endif
 			{
-				M65XX_ACK;
-				M65XX_PC.b.l=M65XX_PEEK(0XFFFE); M65XX_PC.b.h=M65XX_PEEK(0XFFFF);
+				M65XX_IRQ_ACK;
+				M65XX_PC.b.l=M65XX_PEEK(0XFFFE);
+				M65XX_WAIT; M65XX_PC.b.h=M65XX_PEEK(0XFFFF);
 			}
 			if (debug_inter) debug_inter=_t_=0,session_signal|=SESSION_SIGNAL_DEBUG; // throw!
 		}
 		else
 		{
-			M65XX_I=M65XX_P&4; // kludge: ignore IRQ after CLI :-/
-			int i; Z80W a; BYTE o,q; M65XX_FETCH(o); switch (o)
+			int i; Z80W a; BYTE o,q;
+			if (!M65XX_RDY) M65XX_WAIT; M65XX_PAGE(M65XX_PC.b.h);
+			o=M65XX_PEEK(M65XX_PC.w); ++M65XX_PC.w; switch (o)
 			{
 				// opcodes N*8+0 ---------------------------- //
 				case 0X00: // BRK #$NN
@@ -213,15 +227,15 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 					M65XX_TRAP_0X00;
 					#endif
 					M65XX_BADPC; ++M65XX_PC.w; // throw away the byte that follows BRK!
-					M65XX_PUSH(M65XX_S,M65XX_PC.b.h); --M65XX_S;
-					M65XX_PUSH(M65XX_S,M65XX_PC.b.l); --M65XX_S;
-					M65XX_MERGE_P; M65XX_PUSH(M65XX_S,M65XX_P); --M65XX_S;
-					M65XX_PAGE(0XFF); M65XX_PC.b.l=M65XX_PEEK(0XFFFE);
-					M65XX_PC.b.h=M65XX_PEEK(0XFFFF); M65XX_P|=M65XX_I=4; // set I!
+					M65XX_TICK; M65XX_PUSH(M65XX_S,M65XX_PC.b.h); --M65XX_S;
+					M65XX_TICK; M65XX_PUSH(M65XX_S,M65XX_PC.b.l); --M65XX_S;
+					M65XX_TICK; M65XX_MERGE_P; M65XX_PUSH(M65XX_S,M65XX_P); --M65XX_S;
+					M65XX_WAIT; M65XX_PAGE(0XFF); M65XX_PC.b.l=M65XX_PEEK(0XFFFE);
+					M65XX_WAIT; M65XX_PC.b.h=M65XX_PEEK(0XFFFF); M65XX_P|=4; // set I!
 					break;
 				case 0X08: // PHP
 					M65XX_BADPC;
-					M65XX_MERGE_P; M65XX_PUSH(M65XX_S,M65XX_P); --M65XX_S;
+					M65XX_TICK; M65XX_MERGE_P; M65XX_PUSH(M65XX_S,M65XX_P); --M65XX_S;
 					break;
 				case 0X10: // BPL $RRRR
 					#ifdef M65XX_TRAP_0X10
@@ -230,21 +244,21 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 					M65XX_BRANCH(n<128);
 					break;
 				case 0X18: // CLC
-					M65XX_P&=~1; M65XX_BADPC;
+					M65XX_BADPC; M65XX_P&=~1;
 					break;
 				case 0X20: // JSR $NNNN
 					#ifdef M65XX_TRAP_0X20
 					M65XX_TRAP_0X20;
 					#endif
 					M65XX_FETCH(o);
-					M65XX_DUMBPULL(M65XX_S);
-					M65XX_PUSH(M65XX_S,M65XX_PC.b.h); --M65XX_S;
-					M65XX_PUSH(M65XX_S,M65XX_PC.b.l); --M65XX_S;
-					M65XX_PAGE(M65XX_PC.b.h); M65XX_PC.b.h=M65XX_PEEK(M65XX_PC.w); M65XX_PC.b.l=o; // don't use M65XX_FETCH here!
+					M65XX_WAIT; M65XX_DUMBPULL(M65XX_S);
+					M65XX_TICK; M65XX_PUSH(M65XX_S,M65XX_PC.b.h); --M65XX_S;
+					M65XX_TICK; M65XX_PUSH(M65XX_S,M65XX_PC.b.l); --M65XX_S;
+					M65XX_WAIT; M65XX_PAGE(M65XX_PC.b.h); M65XX_PC.b.h=M65XX_PEEK(M65XX_PC.w); M65XX_PC.b.l=o; // don't use M65XX_FETCH here!
 					break;
 				case 0X28: // PLP
 					M65XX_BADPC; M65XX_BADPC; // both dumb reads aim to PC+1!
-					++M65XX_S; M65XX_I=4&(M65XX_P=M65XX_PULL(M65XX_S)); M65XX_SPLIT_P;
+					M65XX_WAIT; ++M65XX_S; M65XX_P=M65XX_PULL(M65XX_S); M65XX_SPLIT_P;
 					break;
 				case 0X30: // BMI $RRRR
 					#ifdef M65XX_TRAP_0X30
@@ -253,16 +267,16 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 					M65XX_BRANCH(n>=128);
 					break;
 				case 0X38: // SEC
-					M65XX_P|=1; M65XX_BADPC;
+					M65XX_BADPC; M65XX_P|=1;
 					break;
 				case 0X40: // RTI
 					#ifdef M65XX_TRAP_0X40
 					M65XX_TRAP_0X40;
 					#endif
 					M65XX_BADPC; M65XX_BADPC; // both dumb reads aim to PC+1!
-					++M65XX_S; M65XX_I=4&(M65XX_P=M65XX_PULL(M65XX_S)); M65XX_SPLIT_P;
-					++M65XX_S; M65XX_PC.b.l=M65XX_PULL(M65XX_S);
-					++M65XX_S; M65XX_PC.b.h=M65XX_PULL(M65XX_S);
+					M65XX_WAIT; ++M65XX_S; M65XX_P=M65XX_PULL(M65XX_S); M65XX_SPLIT_P;
+					M65XX_WAIT; ++M65XX_S; M65XX_PC.b.l=M65XX_PULL(M65XX_S);
+					M65XX_WAIT; ++M65XX_S; M65XX_PC.b.h=M65XX_PULL(M65XX_S);
 					#ifdef DEBUG_HERE
 					if (M65XX_S>debug_trap_sp)
 						{ _t_=0,session_signal|=SESSION_SIGNAL_DEBUG; } // throw!
@@ -270,7 +284,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 					break;
 				case 0X48: // PHA
 					M65XX_BADPC;
-					M65XX_PUSH(M65XX_S,M65XX_A); --M65XX_S;
+					M65XX_TICK; M65XX_PUSH(M65XX_S,M65XX_A); --M65XX_S;
 					break;
 				case 0X50: // BVC $RRRR
 					#ifdef M65XX_TRAP_0X50
@@ -279,16 +293,21 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 					M65XX_BRANCH(!(M65XX_P&64));
 					break;
 				case 0X58: // CLI
-					M65XX_P&=~4; M65XX_BADPC; // no M65XX_I=0 here!
+					#ifdef M65XX_TRAP_0X58
+					M65XX_TRAP_0X58;
+					#endif
+					M65XX_WAIT; M65XX_PAGE(M65XX_PC.b.h); o=M65XX_PEEK(M65XX_PC.w);
+					if ((M65XX_P&4)) if (M65XX_I_T>=-2) if (o!=0X78) M65XX_I_T=-2; // delay next IRQ check: "RIMRUNNER" ($85DE) but not "4KRAWALL" ($8230)!
+					M65XX_P&=~4;
 					break;
 				case 0X60: // RTS
 					#ifdef M65XX_TRAP_0X60
 					M65XX_TRAP_0X60;
 					#endif
 					M65XX_BADPC; M65XX_BADPC; // both dumb reads aim to PC+1!
-					++M65XX_S; M65XX_PC.b.l=M65XX_PULL(M65XX_S);
-					++M65XX_S; M65XX_PC.b.h=M65XX_PULL(M65XX_S);
-					M65XX_DUMBPULL(M65XX_S); ++M65XX_PC.w;
+					M65XX_WAIT; ++M65XX_S; M65XX_PC.b.l=M65XX_PULL(M65XX_S);
+					M65XX_WAIT; ++M65XX_S; M65XX_PC.b.h=M65XX_PULL(M65XX_S);
+					M65XX_WAIT; M65XX_DUMBPULL(M65XX_S); ++M65XX_PC.w;
 					#ifdef DEBUG_HERE
 					if (M65XX_S>debug_trap_sp)
 						{ _t_=0,session_signal|=SESSION_SIGNAL_DEBUG; } // throw!
@@ -296,7 +315,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 					break;
 				case 0X68: // PLA
 					M65XX_BADPC; M65XX_BADPC; // both dumb reads aim to PC+1!
-					++M65XX_S; z=n=M65XX_A=M65XX_PULL(M65XX_S);
+					M65XX_WAIT; ++M65XX_S; z=n=M65XX_A=M65XX_PULL(M65XX_S);
 					break;
 				case 0X70: // BVS $RRRR
 					#ifdef M65XX_TRAP_0X70
@@ -305,7 +324,12 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 					M65XX_BRANCH(M65XX_P&64);
 					break;
 				case 0X78: // SEI
-					M65XX_P|=M65XX_I=4; M65XX_BADPC;
+					#ifdef M65XX_TRAP_0X78
+					M65XX_TRAP_0X78;
+					#endif
+					M65XX_WAIT; M65XX_DUMBPAGE(M65XX_PC.b.h); /*o=*/M65XX_DUMBPEEK(M65XX_PC.w);
+					//if (!(M65XX_P&4)) if (M65XX_I_T>=-2) M65XX_I_T=-2; // delay next NMI check???
+					M65XX_P|=+4;
 					break;
 				case 0X88: // DEY
 					z=n=--M65XX_Y; M65XX_BADPC;
@@ -332,7 +356,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 					M65XX_BRANCH(M65XX_P&1);
 					break;
 				case 0XB8: // CLV
-					M65XX_P&=~64; M65XX_BADPC;
+					M65XX_BADPC; M65XX_P&=~64;
 					break;
 				case 0XC0: // CPY #$NN
 					M65XX_FETCH(o);
@@ -348,7 +372,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 					M65XX_BRANCH(z);
 					break;
 				case 0XD8: // CLD
-					M65XX_P&=~8; M65XX_BADPC;
+					M65XX_BADPC; M65XX_P&=~8;
 					break;
 				case 0XE0: // CPX #$NN
 					M65XX_FETCH(o);
@@ -364,12 +388,12 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 					M65XX_BRANCH(!z);
 					break;
 				case 0XF8: // SED
-					M65XX_P|=8; M65XX_BADPC;
+					M65XX_BADPC; M65XX_P|=8;
 					break;
 				// opcodes N*8+1 ---------------------------- //
 				case 0X01: // ORA ($NN,X)
 					M65XX_IND_X; M65XX_PAGE(a.b.h);
-					M65XX_ORA(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_ORA(M65XX_PEEK(a.w));
 					break;
 				case 0X09: // ORA #$NN
 					M65XX_FETCH(o);
@@ -377,15 +401,15 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 					break;
 				case 0X11: // ORA ($NN),Y
 					M65XX_IND_Y; M65XX_PAGE(a.b.h);
-					M65XX_ORA(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_ORA(M65XX_PEEK(a.w));
 					break;
 				case 0X19: // ORA $NNNN,Y
 					M65XX_ABS_Y; M65XX_PAGE(a.b.h);
-					M65XX_ORA(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_ORA(M65XX_PEEK(a.w));
 					break;
 				case 0X21: // AND ($NN,X)
 					M65XX_IND_X; M65XX_PAGE(a.b.h);
-					M65XX_AND(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_AND(M65XX_PEEK(a.w));
 					break;
 				case 0X29: // AND #$NN
 					M65XX_FETCH(o);
@@ -393,15 +417,15 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 					break;
 				case 0X31: // AND ($NN),Y
 					M65XX_IND_Y; M65XX_PAGE(a.b.h);
-					M65XX_AND(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_AND(M65XX_PEEK(a.w));
 					break;
 				case 0X39: // AND $NNNN,Y
 					M65XX_ABS_Y; M65XX_PAGE(a.b.h);
-					M65XX_AND(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_AND(M65XX_PEEK(a.w));
 					break;
 				case 0X41: // EOR ($NN,X)
 					M65XX_IND_X; M65XX_PAGE(a.b.h);
-					M65XX_EOR(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_EOR(M65XX_PEEK(a.w));
 					break;
 				case 0X49: // EOR #$NN
 					M65XX_FETCH(o);
@@ -409,15 +433,15 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 					break;
 				case 0X51: // EOR ($NN),Y
 					M65XX_IND_Y; M65XX_PAGE(a.b.h);
-					M65XX_EOR(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_EOR(M65XX_PEEK(a.w));
 					break;
 				case 0X59: // EOR $NNNN,Y
 					M65XX_ABS_Y; M65XX_PAGE(a.b.h);
-					M65XX_EOR(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_EOR(M65XX_PEEK(a.w));
 					break;
 				case 0X61: // ADC ($NN,X)
 					M65XX_IND_X; M65XX_PAGE(a.b.h);
-					M65XX_ADC(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_ADC(M65XX_PEEK(a.w));
 					break;
 				case 0X69: // ADC #$NN
 					M65XX_FETCH(o);
@@ -425,42 +449,42 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 					break;
 				case 0X71: // ADC ($NN),Y
 					M65XX_IND_Y; M65XX_PAGE(a.b.h);
-					M65XX_ADC(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_ADC(M65XX_PEEK(a.w));
 					break;
 				case 0X79: // ADC $NNNN,Y
 					M65XX_ABS_Y; M65XX_PAGE(a.b.h);
-					M65XX_ADC(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_ADC(M65XX_PEEK(a.w));
 					break;
 				case 0X81: // STA ($NN,X)
 					M65XX_IND_X; M65XX_PAGE(a.b.h);
-					M65XX_POKE(a.w,M65XX_A);
+					M65XX_TICK; M65XX_POKE(a.w,M65XX_A);
 					break;
 				case 0X91: // STA ($NN),Y
 					M65XX_IND_Y_BADXY; M65XX_PAGE(a.b.h);
-					M65XX_POKE(a.w,M65XX_A);
+					M65XX_TICK; M65XX_POKE(a.w,M65XX_A);
 					break;
 				case 0X99: // STA $NNNN,Y
 					M65XX_ABS_Y_BADXY; M65XX_PAGE(a.b.h);
-					M65XX_POKE(a.w,M65XX_A);
+					M65XX_TICK; M65XX_POKE(a.w,M65XX_A);
 					break;
 				case 0XA1: // LDA ($NN,X)
 					M65XX_IND_X; M65XX_PAGE(a.b.h);
-					z=n=M65XX_A=M65XX_PEEK(a.w);
+					M65XX_WAIT; z=n=M65XX_A=M65XX_PEEK(a.w);
 					break;
 				case 0XA9: // LDA #$NN
 					M65XX_FETCH(M65XX_A); z=n=M65XX_A;
 					break;
 				case 0XB1: // LDA ($NN),Y
 					M65XX_IND_Y; M65XX_PAGE(a.b.h);
-					z=n=M65XX_A=M65XX_PEEK(a.w);
+					M65XX_WAIT; z=n=M65XX_A=M65XX_PEEK(a.w);
 					break;
 				case 0XB9: // LDA $NNNN,Y
 					M65XX_ABS_Y; M65XX_PAGE(a.b.h);
-					z=n=M65XX_A=M65XX_PEEK(a.w);
+					M65XX_WAIT; z=n=M65XX_A=M65XX_PEEK(a.w);
 					break;
 				case 0XC1: // CMP ($NN,X)
 					M65XX_IND_X; M65XX_PAGE(a.b.h);
-					M65XX_CMP(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_CMP(M65XX_PEEK(a.w));
 					break;
 				case 0XC9: // CMP #$NN
 					M65XX_FETCH(o);
@@ -468,15 +492,15 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 					break;
 				case 0XD1: // CMP ($NN),Y
 					M65XX_IND_Y; M65XX_PAGE(a.b.h);
-					M65XX_CMP(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_CMP(M65XX_PEEK(a.w));
 					break;
 				case 0XD9: // CMP $NNNN,Y
 					M65XX_ABS_Y; M65XX_PAGE(a.b.h);
-					M65XX_CMP(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_CMP(M65XX_PEEK(a.w));
 					break;
 				case 0XE1: // SBC ($NN,X)
 					M65XX_IND_X; M65XX_PAGE(a.b.h);
-					M65XX_SBC(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_SBC(M65XX_PEEK(a.w));
 					break;
 				case 0XE9: // SBC #$NN
 				case 0XEB: // SBC #$NN (illegal!)
@@ -485,11 +509,11 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 					break;
 				case 0XF1: // SBC ($NN),Y
 					M65XX_IND_Y; M65XX_PAGE(a.b.h);
-					M65XX_SBC(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_SBC(M65XX_PEEK(a.w));
 					break;
 				case 0XF9: // SBC $NNNN,Y
 					M65XX_ABS_Y; M65XX_PAGE(a.b.h);
-					M65XX_SBC(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_SBC(M65XX_PEEK(a.w));
 					break;
 				// opcodes N*8+2 ---------------------------- //
 				case 0X0A: // ASL
@@ -525,9 +549,10 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				// opcodes N*8+3 ---------------------------- //
 				case 0X03: // SLO ($NN,X)
 					M65XX_IND_X; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_SLO(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_SLO(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X0B: // ANC #$NN
 				case 0X2B: // ANC #$NN
@@ -536,33 +561,38 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 					break;
 				case 0X13: // SLO ($NN),Y
 					M65XX_IND_Y_BADXY; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_SLO(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_SLO(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X1B: // SLO $NNNN,Y
 					M65XX_ABS_Y_BADXY; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_SLO(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_SLO(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X23: // RLA ($NN,X)
 					M65XX_IND_X; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_RLA(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_RLA(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X33: // RLA ($NN),Y
 					M65XX_IND_Y_BADXY; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_RLA(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_RLA(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X3B: // RLA $NNNN,Y
 					M65XX_ABS_Y_BADXY; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_RLA(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_RLA(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X4B: // ASR #$NN // a.k.a. ALR
 					M65XX_FETCH(o);
@@ -585,690 +615,759 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 						M65XX_P=(M65XX_P&~65)+(o>>7)+((o^(o>>1))&64);
 					break;
 				case 0X8B: // ANE #$NN
+					// "...Mastertronic variant of the 'burner' tape loader ([...] 'Spectipede', 'BMX Racer') [...]
+					// the commonly assumed value $EE for the 'magic constant' will not work, but $EF does..." (Groepaz/Solution)
 					M65XX_FETCH(o);
-					z=n=M65XX_A=(M65XX_A|(M65XX_XEE))&M65XX_X&o;
+					z=n=M65XX_A=(M65XX_A|(M65XX_XEF))&M65XX_X&o;
 					break;
 				case 0X43: // SRE ($NN,X)
 					M65XX_IND_X; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_SRE(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_SRE(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X53: // SRE ($NN),Y
 					M65XX_IND_Y_BADXY; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_SRE(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_SRE(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X5B: // SRE $NNNN,Y
 					M65XX_ABS_Y_BADXY; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_SRE(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_SRE(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X63: // RRA ($NN,X)
 					M65XX_IND_X; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_RRA(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_RRA(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X73: // RRA ($NN),Y
 					M65XX_IND_Y_BADXY; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_RRA(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_RRA(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X7B: // RRA $NNNN,Y
 					M65XX_ABS_Y_BADXY; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_RRA(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_RRA(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X83: // SAX ($NN,X)
 					M65XX_IND_X; M65XX_PAGE(a.b.h);
-					M65XX_POKE(a.w,M65XX_SAX);
+					M65XX_TICK; M65XX_POKE(a.w,M65XX_SAX);
 					break;
 				case 0X93: // SHA ($NN),Y
 					M65XX_IND_Y_BADXY;
-					M65XX_SHZ(q,M65XX_A&M65XX_X);
+					M65XX_TICK; M65XX_SHZ(q,M65XX_SAX);
 					M65XX_PAGE(a.b.h); M65XX_POKE(a.w,q);
 					break;
 				case 0X9B: // SHS $NNNN,Y
 					M65XX_ABS_Y_BADXY;
-					M65XX_SHZ(q,M65XX_S=M65XX_A&M65XX_X);
+					M65XX_TICK; M65XX_SHZ(q,M65XX_S=M65XX_SAX);
 					M65XX_PAGE(a.b.h); M65XX_POKE(a.w,q);
 					break;
 				case 0XA3: // LAX ($NN,X)
 					M65XX_IND_X; M65XX_PAGE(a.b.h);
-					z=n=M65XX_A=M65XX_X=M65XX_PEEK(a.w);
+					M65XX_WAIT; z=n=M65XX_A=M65XX_X=M65XX_PEEK(a.w);
 					break;
 				case 0XAB: // LXA #$NN
+					// "...a very popular C-64 game, 'Wizball', actually uses the LAX #imm opcode [...]
+					// $EE really seems to be the one and only value to make it work correctly..." (Groepaz/Solution)
 					M65XX_FETCH(o);
 					z=n=M65XX_A=M65XX_X=(M65XX_A|(M65XX_XEE))&o;
 					break;
 				case 0XB3: // LAX ($NN),Y
 					M65XX_IND_Y; M65XX_PAGE(a.b.h);
-					z=n=M65XX_A=M65XX_X=M65XX_PEEK(a.w);
+					M65XX_WAIT; z=n=M65XX_A=M65XX_X=M65XX_PEEK(a.w);
 					break;
 				case 0XBB: // LAS $NNNN,Y
 					M65XX_ABS_Y; M65XX_PAGE(a.b.h);
-					z=n=M65XX_A=M65XX_X=M65XX_S&=M65XX_PEEK(a.w);
+					M65XX_WAIT; z=n=M65XX_A=M65XX_X=M65XX_S&=M65XX_PEEK(a.w);
 					break;
 				case 0XCB: // SBX #$NN
 					M65XX_FETCH(o);
-					z=n=M65XX_X=i=((M65XX_A&M65XX_X)-o);
+					z=n=M65XX_X=i=M65XX_SAX-o;
 					M65XX_CARRY(i>=0);
 					break;
 				case 0XC3: // DCP ($NN,X)
 					M65XX_IND_X; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_DCP(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_DCP(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0XD3: // DCP ($NN),Y
 					M65XX_IND_Y_BADXY; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_DCP(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_DCP(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0XDB: // DCP $NNNN,Y
 					M65XX_ABS_Y_BADXY; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_DCP(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_DCP(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0XE3: // ISB ($NN,X)
 					M65XX_IND_X; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_ISB(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_ISB(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0XF3: // ISB ($NN),Y
 					M65XX_IND_Y_BADXY; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_ISB(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_ISB(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0XFB: // ISB $NNNN,Y
 					M65XX_ABS_Y_BADXY; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_ISB(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_ISB(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				// opcodes N*8+4 ---------------------------- //
 				case 0X24: // BIT $NN
-					M65XX_ZPG; M65XX_BIT(M65XX_PEEKZERO(a.w));
+					M65XX_ZPG;
+					M65XX_WAIT; M65XX_BIT(M65XX_PEEKZERO(a.w));
 					break;
 				case 0X2C: // BIT $NNNN
-					M65XX_ABS; M65XX_PAGE(a.b.h); M65XX_BIT(M65XX_PEEK(a.w));
+					M65XX_ABS; M65XX_PAGE(a.b.h);
+					M65XX_WAIT; M65XX_BIT(M65XX_PEEK(a.w));
 					break;
 				case 0X4C: // JMP $NNNN
 					#ifdef M65XX_TRAP_0X4C
 					M65XX_TRAP_0X4C;
 					#endif
-					M65XX_FETCH(o); M65XX_PAGE(M65XX_PC.b.h); M65XX_PC.b.h=M65XX_PEEK(M65XX_PC.w); M65XX_PC.b.l=o;
+					M65XX_FETCH(o);
+					M65XX_PAGE(M65XX_PC.b.h); M65XX_WAIT; M65XX_PC.b.h=M65XX_PEEK(M65XX_PC.w);
+					M65XX_PC.b.l=o;
 					break;
 				case 0X6C: // JMP ($NNNN)
 					#ifdef M65XX_TRAP_0X6C
 					M65XX_TRAP_0X6C;
 					#endif
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					M65XX_PC.b.l=M65XX_PEEK(a.w); ++a.b.l; // not `++a.w`!
-					M65XX_PC.b.h=M65XX_PEEK(a.w);
+					M65XX_WAIT; M65XX_PC.b.l=M65XX_PEEK(a.w); ++a.b.l; // not `++a.w`!
+					M65XX_WAIT; M65XX_PC.b.h=M65XX_PEEK(a.w);
 					break;
 				case 0X84: // STY $NN
 					M65XX_ZPG;
-					M65XX_POKEZERO(a.w,M65XX_Y);
+					M65XX_TICK; M65XX_POKEZERO(a.w,M65XX_Y);
 					break;
 				case 0X8C: // STY $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					M65XX_POKE(a.w,M65XX_Y);
+					M65XX_TICK; M65XX_POKE(a.w,M65XX_Y);
 					break;
 				case 0X94: // STY $NN,X
 					M65XX_ZPG_X_BADPC;
-					M65XX_POKEZERO(a.w,M65XX_Y);
+					M65XX_TICK; M65XX_POKEZERO(a.w,M65XX_Y);
 					break;
 				case 0X9C: // SHY $NNNN,X
 					M65XX_ABS_X_BADXY;
-					M65XX_SHZ(q,M65XX_Y);
+					M65XX_TICK; M65XX_SHZ(q,M65XX_Y);
 					M65XX_PAGE(a.b.h); M65XX_POKE(a.w,q);
 					break;
 				case 0XA4: // LDY $NN
 					M65XX_ZPG;
-					z=n=M65XX_Y=M65XX_PEEKZERO(a.w);
+					M65XX_WAIT; z=n=M65XX_Y=M65XX_PEEKZERO(a.w);
 					break;
 				case 0XAC: // LDY $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					z=n=M65XX_Y=M65XX_PEEK(a.w);
+					M65XX_WAIT; z=n=M65XX_Y=M65XX_PEEK(a.w);
 					break;
 				case 0XB4: // LDY $NN,X
 					M65XX_ZPG_X_BADPC;
-					z=n=M65XX_Y=M65XX_PEEKZERO(a.w);
+					M65XX_WAIT; z=n=M65XX_Y=M65XX_PEEKZERO(a.w);
 					break;
 				case 0XBC: // LDY $NNNN,X
 					M65XX_ABS_X; M65XX_PAGE(a.b.h);
-					z=n=M65XX_Y=M65XX_PEEK(a.w);
+					M65XX_WAIT; z=n=M65XX_Y=M65XX_PEEK(a.w);
 					break;
 				case 0XC4: // CPY $NN
 					M65XX_ZPG;
-					M65XX_CPY(M65XX_PEEKZERO(a.w));
+					M65XX_WAIT; M65XX_CPY(M65XX_PEEKZERO(a.w));
 					break;
 				case 0XCC: // CPY $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					M65XX_CPY(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_CPY(M65XX_PEEK(a.w));
 					break;
 				case 0XE4: // CPX $NN
 					M65XX_ZPG;
-					M65XX_CPX(M65XX_PEEKZERO(a.w));
+					M65XX_WAIT; M65XX_CPX(M65XX_PEEKZERO(a.w));
 					break;
 				case 0XEC: // CPX $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					M65XX_CPX(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_CPX(M65XX_PEEK(a.w));
 					break;
 				// opcodes N*8+5 ---------------------------- //
 				case 0X05: // ORA $NN
 					M65XX_ZPG;
-					M65XX_ORA(M65XX_PEEKZERO(a.w));
+					M65XX_WAIT; M65XX_ORA(M65XX_PEEKZERO(a.w));
 					break;
 				case 0X0D: // ORA $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					M65XX_ORA(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_ORA(M65XX_PEEK(a.w));
 					break;
 				case 0X15: // ORA $NN,X
 					M65XX_ZPG_X_BADPC;
-					M65XX_ORA(M65XX_PEEKZERO(a.w));
+					M65XX_WAIT; M65XX_ORA(M65XX_PEEKZERO(a.w));
 					break;
 				case 0X1D: // ORA $NNNN,X
 					M65XX_ABS_X; M65XX_PAGE(a.b.h);
-					M65XX_ORA(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_ORA(M65XX_PEEK(a.w));
 					break;
 				case 0X25: // AND $NN
 					M65XX_ZPG;
-					M65XX_AND(M65XX_PEEKZERO(a.w));
+					M65XX_WAIT; M65XX_AND(M65XX_PEEKZERO(a.w));
 					break;
 				case 0X2D: // AND $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					M65XX_AND(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_AND(M65XX_PEEK(a.w));
 					break;
 				case 0X35: // AND $NN,X
 					M65XX_ZPG_X_BADPC;
-					M65XX_AND(M65XX_PEEKZERO(a.w));
+					M65XX_WAIT; M65XX_AND(M65XX_PEEKZERO(a.w));
 					break;
 				case 0X3D: // AND $NNNN,X
 					M65XX_ABS_X; M65XX_PAGE(a.b.h);
-					M65XX_AND(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_AND(M65XX_PEEK(a.w));
 					break;
 				case 0X45: // EOR $NN
 					M65XX_ZPG;
-					M65XX_EOR(M65XX_PEEKZERO(a.w));
+					M65XX_WAIT; M65XX_EOR(M65XX_PEEKZERO(a.w));
 					break;
 				case 0X4D: // EOR $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					M65XX_EOR(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_EOR(M65XX_PEEK(a.w));
 					break;
 				case 0X55: // EOR $NN,X
 					M65XX_ZPG_X_BADPC;
-					M65XX_EOR(M65XX_PEEKZERO(a.w));
+					M65XX_WAIT; M65XX_EOR(M65XX_PEEKZERO(a.w));
 					break;
 				case 0X5D: // EOR $NNNN,X
 					M65XX_ABS_X; M65XX_PAGE(a.b.h);
-					M65XX_EOR(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_EOR(M65XX_PEEK(a.w));
 					break;
 				case 0X65: // ADC $NN
 					M65XX_ZPG;
-					M65XX_ADC(M65XX_PEEKZERO(a.w));
+					M65XX_WAIT; M65XX_ADC(M65XX_PEEKZERO(a.w));
 					break;
 				case 0X6D: // ADC $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					M65XX_ADC(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_ADC(M65XX_PEEK(a.w));
 					break;
 				case 0X75: // ADC $NN,X
 					M65XX_ZPG_X_BADPC;
-					M65XX_ADC(M65XX_PEEKZERO(a.w));
+					M65XX_WAIT; M65XX_ADC(M65XX_PEEKZERO(a.w));
 					break;
 				case 0X7D: // ADC $NNNN,X
 					M65XX_ABS_X; M65XX_PAGE(a.b.h);
-					M65XX_ADC(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_ADC(M65XX_PEEK(a.w));
 					break;
 				case 0X85: // STA $NN
 					M65XX_ZPG;
-					M65XX_POKEZERO(a.w,M65XX_A);
+					M65XX_TICK; M65XX_POKEZERO(a.w,M65XX_A);
 					break;
 				case 0X8D: // STA $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					M65XX_POKE(a.w,M65XX_A);
+					M65XX_TICK; M65XX_POKE(a.w,M65XX_A);
 					break;
 				case 0X95: // STA $NN,X
 					M65XX_ZPG_X_BADPC;
-					M65XX_POKEZERO(a.w,M65XX_A);
+					M65XX_TICK; M65XX_POKEZERO(a.w,M65XX_A);
 					break;
 				case 0X9D: // STA $NNNN,X
 					M65XX_ABS_X_BADXY; M65XX_PAGE(a.b.h);
-					M65XX_POKE(a.w,M65XX_A);
+					M65XX_TICK; M65XX_POKE(a.w,M65XX_A);
 					break;
 				case 0XA5: // LDA $NN
 					M65XX_ZPG;
-					z=n=M65XX_A=M65XX_PEEKZERO(a.w);
+					M65XX_WAIT; z=n=M65XX_A=M65XX_PEEKZERO(a.w);
 					break;
 				case 0XAD: // LDA $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					z=n=M65XX_A=M65XX_PEEK(a.w);
+					M65XX_WAIT; z=n=M65XX_A=M65XX_PEEK(a.w);
 					break;
 				case 0XB5: // LDA $NN,X
 					M65XX_ZPG_X_BADPC;
-					z=n=M65XX_A=M65XX_PEEKZERO(a.w);
+					M65XX_WAIT; z=n=M65XX_A=M65XX_PEEKZERO(a.w);
 					break;
 				case 0XBD: // LDA $NNNN,X
 					M65XX_ABS_X; M65XX_PAGE(a.b.h);
-					z=n=M65XX_A=M65XX_PEEK(a.w);
+					M65XX_WAIT; z=n=M65XX_A=M65XX_PEEK(a.w);
 					break;
 				case 0XC5: // CMP $NN
 					M65XX_ZPG;
-					M65XX_CMP(M65XX_PEEKZERO(a.w));
+					M65XX_WAIT; M65XX_CMP(M65XX_PEEKZERO(a.w));
 					break;
 				case 0XCD: // CMP $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					M65XX_CMP(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_CMP(M65XX_PEEK(a.w));
 					break;
 				case 0XD5: // CMP $NN,X
 					M65XX_ZPG_X_BADPC;
-					M65XX_CMP(M65XX_PEEKZERO(a.w));
+					M65XX_WAIT; M65XX_CMP(M65XX_PEEKZERO(a.w));
 					break;
 				case 0XDD: // CMP $NNNN,X
 					M65XX_ABS_X; M65XX_PAGE(a.b.h);
-					M65XX_CMP(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_CMP(M65XX_PEEK(a.w));
 					break;
 				case 0XE5: // SBC $NN
 					M65XX_ZPG;
-					M65XX_SBC(M65XX_PEEKZERO(a.w));
+					M65XX_WAIT; M65XX_SBC(M65XX_PEEKZERO(a.w));
 					break;
 				case 0XED: // SBC $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					M65XX_SBC(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_SBC(M65XX_PEEK(a.w));
 					break;
 				case 0XF5: // SBC $NN,X
 					M65XX_ZPG_X_BADPC;
-					M65XX_SBC(M65XX_PEEKZERO(a.w));
+					M65XX_WAIT; M65XX_SBC(M65XX_PEEKZERO(a.w));
 					break;
 				case 0XFD: // SBC $NNNN,X
 					M65XX_ABS_X; M65XX_PAGE(a.b.h);
-					M65XX_SBC(M65XX_PEEK(a.w));
+					M65XX_WAIT; M65XX_SBC(M65XX_PEEK(a.w));
 					break;
 				// opcodes N*8+6 ---------------------------- //
 				case 0X06: // ASL $NN
 					M65XX_ZPG;
-					o=M65XX_PEEKZERO(a.w);
-					M65XX_DUMBPOKEZERO(a.w,o);
-					M65XX_ASL(q,o); M65XX_POKEZERO(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
+					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_ASL(q,o);
+					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
 				case 0X0E: // ASL $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_ASL(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_ASL(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X16: // ASL $NN,X
 					M65XX_ZPG_X_BADPC;
-					o=M65XX_PEEKZERO(a.w);
-					M65XX_DUMBPOKEZERO(a.w,o);
-					M65XX_ASL(q,o); M65XX_POKEZERO(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
+					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_ASL(q,o);
+					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
 				case 0X1E: // ASL $NNNN,X
 					M65XX_ABS_X_BADXY; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_ASL(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_ASL(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X26: // ROL $NN
 					M65XX_ZPG;
-					o=M65XX_PEEKZERO(a.w);
-					M65XX_DUMBPOKEZERO(a.w,o);
-					M65XX_ROL(q,o); M65XX_POKEZERO(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
+					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_ROL(q,o);
+					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
 				case 0X2E: // ROL $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_ROL(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_ROL(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X36: // ROL $NN,X
 					M65XX_ZPG_X_BADPC;
-					o=M65XX_PEEKZERO(a.w);
-					M65XX_DUMBPOKEZERO(a.w,o);
-					M65XX_ROL(q,o); M65XX_POKEZERO(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
+					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_ROL(q,o);
+					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
 				case 0X3E: // ROL $NNNN,X
 					M65XX_ABS_X_BADXY; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_ROL(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_ROL(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X46: // LSR $NN
 					M65XX_ZPG;
-					o=M65XX_PEEKZERO(a.w);
-					M65XX_DUMBPOKEZERO(a.w,o);
-					M65XX_LSR(q,o); M65XX_POKEZERO(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
+					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_LSR(q,o);
+					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
 				case 0X4E: // LSR $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_LSR(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_LSR(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X56: // LSR $NN,X
 					M65XX_ZPG_X_BADPC;
-					o=M65XX_PEEKZERO(a.w);
-					M65XX_DUMBPOKEZERO(a.w,o);
-					M65XX_LSR(q,o); M65XX_POKEZERO(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
+					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_LSR(q,o);
+					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
 				case 0X5E: // LSR $NNNN,X
 					M65XX_ABS_X_BADXY; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_LSR(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_LSR(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X66: // ROR $NN
 					M65XX_ZPG;
-					o=M65XX_PEEKZERO(a.w);
-					M65XX_DUMBPOKEZERO(a.w,o);
-					M65XX_ROR(q,o); M65XX_POKEZERO(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
+					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_ROR(q,o);
+					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
 				case 0X6E: // ROR $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_ROR(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_ROR(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X76: // ROR $NN,X
 					M65XX_ZPG_X_BADPC;
-					o=M65XX_PEEKZERO(a.w);
-					M65XX_DUMBPOKEZERO(a.w,o);
-					M65XX_ROR(q,o); M65XX_POKEZERO(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
+					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_ROR(q,o);
+					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
 				case 0X7E: // ROR $NNNN,X
 					M65XX_ABS_X_BADXY; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_ROR(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_ROR(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X86: // STX $NN
 					M65XX_ZPG;
-					M65XX_POKEZERO(a.w,M65XX_X);
+					M65XX_TICK; M65XX_POKEZERO(a.w,M65XX_X);
 					break;
 				case 0X8E: // STX $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					M65XX_POKE(a.w,M65XX_X);
+					M65XX_TICK; M65XX_POKE(a.w,M65XX_X);
 					break;
 				case 0X96: // STX $NN,Y
-					M65XX_ZPG_Y_BADPC;
-					M65XX_POKEZERO(a.w,M65XX_X);
+					M65XX_ZPG_Y_IRQ_BADPC;
+					M65XX_TICK; M65XX_POKEZERO(a.w,M65XX_X);
 					break;
 				case 0X9E: // SHX $NNNN,Y
 					M65XX_ABS_Y_BADXY;
-					M65XX_SHZ(q,M65XX_X);
+					M65XX_TICK; M65XX_SHZ(q,M65XX_X); // used in "FELLAS-EXT.PRG"
 					M65XX_PAGE(a.b.h); M65XX_POKE(a.w,q);
 					break;
 				case 0XA6: // LDX $NN
 					M65XX_ZPG;
-					z=n=M65XX_X=M65XX_PEEKZERO(a.w);
+					M65XX_WAIT; z=n=M65XX_X=M65XX_PEEKZERO(a.w);
 					break;
 				case 0XAE: // LDX $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					z=n=M65XX_X=M65XX_PEEK(a.w);
+					M65XX_WAIT; z=n=M65XX_X=M65XX_PEEK(a.w);
 					break;
 				case 0XB6: // LDX $NN,Y
-					M65XX_ZPG_Y_BADPC;
-					z=n=M65XX_X=M65XX_PEEKZERO(a.w);
+					M65XX_ZPG_Y_IRQ_BADPC;
+					M65XX_WAIT; z=n=M65XX_X=M65XX_PEEKZERO(a.w);
 					break;
 				case 0XBE: // LDX $NNNN,Y
 					M65XX_ABS_Y; M65XX_PAGE(a.b.h);
-					z=n=M65XX_X=M65XX_PEEK(a.w);
+					M65XX_WAIT; z=n=M65XX_X=M65XX_PEEK(a.w);
 					break;
 				case 0XC6: // DEC $NN
 					M65XX_ZPG;
-					o=M65XX_PEEKZERO(a.w);
-					M65XX_DUMBPOKEZERO(a.w,o);
-					M65XX_DEC(o); M65XX_POKEZERO(a.w,o);
+					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
+					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_DEC(o);
+					M65XX_TICK; M65XX_POKEZERO(a.w,o);
 					break;
 				case 0XCE: // DEC $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_DEC(o); M65XX_POKE(a.w,o);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_DEC(o);
+					M65XX_TICK; M65XX_POKE(a.w,o);
 					break;
 				case 0XD6: // DEC $NN,X
 					M65XX_ZPG_X_BADPC;
-					o=M65XX_PEEKZERO(a.w);
-					M65XX_DUMBPOKEZERO(a.w,o);
-					M65XX_DEC(o); M65XX_POKEZERO(a.w,o);
+					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
+					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_DEC(o);
+					M65XX_TICK; M65XX_POKEZERO(a.w,o);
 					break;
 				case 0XDE: // DEC $NNNN,X
 					M65XX_ABS_X_BADXY; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_DEC(o); M65XX_POKE(a.w,o);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_DEC(o);
+					M65XX_TICK; M65XX_POKE(a.w,o);
 					break;
 				case 0XE6: // INC $NN
 					M65XX_ZPG;
-					o=M65XX_PEEKZERO(a.w);
-					M65XX_DUMBPOKEZERO(a.w,o);
-					M65XX_INC(o); M65XX_POKEZERO(a.w,o);
+					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
+					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_INC(o);
+					M65XX_TICK; M65XX_POKEZERO(a.w,o);
 					break;
 				case 0XEE: // INC $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_INC(o); M65XX_POKE(a.w,o);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_INC(o);
+					M65XX_TICK; M65XX_POKE(a.w,o);
 					break;
 				case 0XF6: // INC $NN,X
 					M65XX_ZPG_X_BADPC;
-					o=M65XX_PEEKZERO(a.w);
-					M65XX_DUMBPOKEZERO(a.w,o);
-					M65XX_INC(o); M65XX_POKEZERO(a.w,o);
+					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
+					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_INC(o);
+					M65XX_TICK; M65XX_POKEZERO(a.w,o);
 					break;
 				case 0XFE: // INC $NNNN,X
 					M65XX_ABS_X_BADXY; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_INC(o); M65XX_POKE(a.w,o);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_INC(o);
+					M65XX_TICK; M65XX_POKE(a.w,o);
 					break;
 				// opcodes N*8+7 ---------------------------- //
 				case 0X07: // SLO $NN
 					M65XX_ZPG;
-					o=M65XX_PEEKZERO(a.w);
-					M65XX_DUMBPOKEZERO(a.w,o);
-					M65XX_SLO(q,o); M65XX_POKEZERO(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
+					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_SLO(q,o);
+					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
 				case 0X0F: // SLO $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_SLO(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_SLO(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X17: // SLO $NN,X
 					M65XX_ZPG_X_BADPC;
-					o=M65XX_PEEKZERO(a.w);
-					M65XX_DUMBPOKEZERO(a.w,o);
-					M65XX_SLO(q,o); M65XX_POKEZERO(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
+					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_SLO(q,o);
+					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
 				case 0X1F: // SLO $NNNN,X
 					M65XX_ABS_X_BADXY; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_SLO(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_SLO(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X27: // RLA $NN
 					M65XX_ZPG;
-					o=M65XX_PEEKZERO(a.w);
-					M65XX_DUMBPOKEZERO(a.w,o);
-					M65XX_RLA(q,o); M65XX_POKEZERO(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
+					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_RLA(q,o);
+					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
 				case 0X2F: // RLA $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_RLA(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_RLA(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X37: // RLA $NN,X
 					M65XX_ZPG_X_BADPC;
-					o=M65XX_PEEKZERO(a.w);
-					M65XX_DUMBPOKEZERO(a.w,o);
-					M65XX_RLA(q,o); M65XX_POKEZERO(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
+					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_RLA(q,o);
+					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
 				case 0X3F: // RLA $NNNN,X
-					M65XX_ABS_X_BADXY;;
-					M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_RLA(q,o); M65XX_POKE(a.w,q);
+					M65XX_ABS_X_BADXY; M65XX_PAGE(a.b.h);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_RLA(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X47: // SRE $NN
 					M65XX_ZPG;
-					o=M65XX_PEEKZERO(a.w);
-					M65XX_DUMBPOKEZERO(a.w,o);
-					M65XX_SRE(q,o); M65XX_POKEZERO(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
+					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_SRE(q,o);
+					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
 				case 0X4F: // SRE $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_SRE(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_SRE(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X57: // SRE $NN,X
 					M65XX_ZPG_X_BADPC;
-					o=M65XX_PEEKZERO(a.w);
-					M65XX_DUMBPOKEZERO(a.w,o);
-					M65XX_SRE(q,o); M65XX_POKEZERO(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
+					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_SRE(q,o);
+					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
 				case 0X5F: // SRE $NNNN,X
-					M65XX_ABS_X_BADXY;;
-					M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_SRE(q,o); M65XX_POKE(a.w,q);
+					M65XX_ABS_X_BADXY; M65XX_PAGE(a.b.h);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_SRE(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X67: // RRA $NN
 					M65XX_ZPG;
-					o=M65XX_PEEKZERO(a.w);
-					M65XX_DUMBPOKEZERO(a.w,o);
-					M65XX_RRA(q,o); M65XX_POKEZERO(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
+					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_RRA(q,o);
+					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
 				case 0X6F: // RRA $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_RRA(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_RRA(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X77: // RRA $NN,X
 					M65XX_ZPG_X_BADPC;
-					o=M65XX_PEEKZERO(a.w);
-					M65XX_DUMBPOKEZERO(a.w,o);
-					M65XX_RRA(q,o); M65XX_POKEZERO(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
+					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_RRA(q,o);
+					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
 				case 0X7F: // RRA $NNNN,X
-					M65XX_ABS_X_BADXY;;
-					M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_RRA(q,o); M65XX_POKE(a.w,q);
+					M65XX_ABS_X_BADXY; M65XX_PAGE(a.b.h);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_RRA(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0X87: // SAX $NN
 					M65XX_ZPG;
-					M65XX_POKEZERO(a.w,M65XX_SAX);
+					M65XX_TICK; M65XX_POKEZERO(a.w,M65XX_SAX);
 					break;
 				case 0X8F: // SAX $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					M65XX_POKE(a.w,M65XX_SAX);
+					M65XX_TICK; M65XX_POKE(a.w,M65XX_SAX);
 					break;
 				case 0X97: // SAX $NN,Y
-					M65XX_ZPG_Y_BADPC;
-					M65XX_POKEZERO(a.w,M65XX_SAX);
+					M65XX_ZPG_Y_IRQ_BADPC;
+					M65XX_TICK; M65XX_POKEZERO(a.w,M65XX_SAX);
 					break;
 				case 0X9F: // SHA $NNNN,Y
 					M65XX_ABS_Y_BADXY;
-					M65XX_SHZ(q,M65XX_A&M65XX_X);
+					M65XX_TICK; M65XX_SHZ(q,M65XX_SAX);
 					M65XX_PAGE(a.b.h); M65XX_POKE(a.w,q);
 					break;
 				case 0XA7: // LAX $NN
 					M65XX_ZPG; M65XX_PAGE(a.b.h);
-					z=n=M65XX_A=M65XX_X=M65XX_PEEK(a.w);
+					M65XX_WAIT; z=n=M65XX_A=M65XX_X=M65XX_PEEK(a.w);
 					break;
 				case 0XAF: // LAX $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					z=n=M65XX_A=M65XX_X=M65XX_PEEK(a.w);
+					M65XX_WAIT; z=n=M65XX_A=M65XX_X=M65XX_PEEK(a.w);
 					break;
 				case 0XB7: // LAX $NN,Y
-					M65XX_ZPG_Y_BADPC;
-					M65XX_PAGE(a.b.h);
-					z=n=M65XX_A=M65XX_X=M65XX_PEEK(a.w);
+					M65XX_ZPG_Y_IRQ_BADPC;
+					M65XX_WAIT; z=n=M65XX_A=M65XX_X=M65XX_PEEKZERO(a.w);
 					break;
 				case 0XBF: // LAX $NNNN,Y
 					M65XX_ABS_Y; M65XX_PAGE(a.b.h);
-					z=n=M65XX_A=M65XX_X=M65XX_PEEK(a.w);
+					M65XX_WAIT; z=n=M65XX_A=M65XX_X=M65XX_PEEK(a.w);
 					break;
 				case 0XC7: // DCP $NN
 					M65XX_ZPG;
-					o=M65XX_PEEKZERO(a.w);
-					M65XX_DUMBPOKEZERO(a.w,o);
-					M65XX_DCP(q,o); M65XX_POKEZERO(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
+					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_DCP(q,o);
+					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
 				case 0XCF: // DCP $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_DCP(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_DCP(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0XD7: // DCP $NN,X
 					M65XX_ZPG_X_BADPC;
-					o=M65XX_PEEKZERO(a.w);
-					M65XX_DUMBPOKEZERO(a.w,o);
-					M65XX_DCP(q,o); M65XX_POKEZERO(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
+					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_DCP(q,o);
+					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
 				case 0XDF: // DCP $NNNN,X
 					M65XX_ABS_X_BADXY; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_DCP(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_DCP(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0XE7: // ISB $NN
 					M65XX_ZPG;
-					o=M65XX_PEEKZERO(a.w);
-					M65XX_DUMBPOKEZERO(a.w,o);
-					M65XX_ISB(q,o); M65XX_POKEZERO(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
+					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_ISB(q,o);
+					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
 				case 0XEF: // ISB $NNNN
 					M65XX_ABS; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_ISB(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_ISB(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				case 0XF7: // ISB $NN,X
 					M65XX_ZPG_X_BADPC;
-					o=M65XX_PEEKZERO(a.w);
-					M65XX_DUMBPOKEZERO(a.w,o);
-					M65XX_ISB(q,o); M65XX_POKEZERO(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
+					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_ISB(q,o);
+					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
 				case 0XFF: // ISB $NNNN,X
 					M65XX_ABS_X_BADXY; M65XX_PAGE(a.b.h);
-					o=M65XX_PEEK(a.w);
-					M65XX_DUMBPOKE(a.w,o);
-					M65XX_ISB(q,o); M65XX_POKE(a.w,q);
+					M65XX_WAIT; o=M65XX_PEEK(a.w);
+					M65XX_TICK; M65XX_DUMBPOKE(a.w,o);
+					M65XX_ISB(q,o);
+					M65XX_TICK; M65XX_POKE(a.w,q);
 					break;
 				// NOP and JAM opcodes ---------------------- //
 				case 0X80: case 0X82: case 0X89: case 0XC2: case 0XE2: // NOP #$NN
 					M65XX_BADPC; ++M65XX_PC.w;
 					break;
 				case 0X04: case 0X44: case 0X64: // NOP $NN
-					M65XX_BADPC; ++M65XX_PC.w; M65XX_DUMBPEEK(M65XX_PC.w);
+					M65XX_BADPC; ++M65XX_PC.w;
+					M65XX_BADPC;
 					break;
 				case 0X14: case 0X34: case 0X54: case 0X74: case 0XD4: case 0XF4: // NOP $NN,X
-					M65XX_BADPC; ++M65XX_PC.w; M65XX_DUMBPEEK(M65XX_PC.w); M65XX_DUMBPEEK(M65XX_PC.w);
+					M65XX_BADPC; ++M65XX_PC.w;
+					M65XX_BADPC;
+					M65XX_WAIT; M65XX_DUMBPEEK(M65XX_PC.w); // don't repeat M65XX_DUMBPAGE
 					break;
 				case 0X0C: // NOP $NNNN
-					M65XX_ABS; M65XX_DUMBPAGE(a.b.h); M65XX_DUMBPEEK(a.w);
+					M65XX_ABS; M65XX_DUMBPAGE(a.b.h);
+					M65XX_WAIT; M65XX_DUMBPEEK(a.w);
 					break;
 				case 0X1C: case 0X3C: case 0X5C: case 0X7C: case 0XDC: case 0XFC: // NOP $NNNN,X
-					M65XX_ABS_X; M65XX_DUMBPAGE(a.b.h); M65XX_DUMBPEEK(a.w);
+					M65XX_ABS_X; M65XX_DUMBPAGE(a.b.h);
+					M65XX_WAIT; M65XX_DUMBPEEK(a.w);
 					break;
 				case 0XFA: // $FA BREAKPOINT
 					#ifdef DEBUG_HERE
@@ -1278,20 +1377,19 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0XEA: // NOP (official)
 					M65XX_BADPC;
 					break;
-				default: // UNDEF'D!
-				case 0X02: case 0X12: case 0X22: case 0X32: case 0X42: case 0X52: // JAM (1/2)
-				case 0X62: case 0X72: case 0X92: case 0XB2: case 0XD2: case 0XF2: // JAM (2/2)
+				default: // ILLEGAL CODE!
+				//case 0X02: case 0X12: case 0X22: case 0X32: case 0X42: case 0X52: // JAM (1/2)
+				//case 0X62: case 0X72: case 0X92: case 0XB2: case 0XD2: case 0XF2: // JAM (2/2)
 					--M65XX_PC.w;
 					#ifdef DEBUG_HERE
 					{ _t_=0,session_signal|=SESSION_SIGNAL_DEBUG; } // throw!
 					#else
 					if (m65xx_t<_t_) m65xx_t=_t_; // waste all the ticks!
 					#endif
-					break;
 			}
 		}
 		#ifdef DEBUG_HERE
-		if (debug_point[M65XX_PC.w])
+		if (UNLIKELY(debug_point[M65XX_PC.w]))
 		{
 			if (debug_point[M65XX_PC.w]&8) // log byte?
 			{
@@ -1331,11 +1429,9 @@ void debug_fall(void) { debug_trap_sp=M65XX_S; session_signal&=~SESSION_SIGNAL_D
 void debug_drop(WORD w) { debug_point[debug_trap_pc=w]|=128,session_signal&=~SESSION_SIGNAL_DEBUG; }
 void debug_leap(void) // run UNTIL meeting the next operation
 {
-	int q=0; switch (PEEK(M65XX_PC.w))
-	{
-		case 0X00: q=2; break; // BRK #$NN
-		case 0X20: q=3; break; // JSR $NNNN
-	}
+	BYTE q=PEEK(M65XX_PC.w);
+	if (q==0X20) q=3; // JSR $NNNN
+	else q=q?0:2; // BRK #$NN
 	if (q)
 		debug_drop(M65XX_PC.w+q);
 	else
@@ -1363,7 +1459,7 @@ void debug_regs(char *t,int i) // prints register information #`i` onto the buff
 		case  4: sprintf(t,"X  =   %02X",M65XX_X); break;
 		case  5: sprintf(t,"Y  =   %02X",M65XX_Y); break;
 		case  6: sprintf(t,"S  =   %02X",M65XX_S); break;
-		case  7: sprintf(t,"NMI%c IRQ%c",(M65XX_IRQ&128)?'*':'-',(M65XX_IRQ&127)?'*':'-'); break;
+		case  7: sprintf(t,"NMI%c IRQ%c",(M65XX_N_T>=0)?'*':'-',(M65XX_I_T>=0)?'*':'-'); break;
 		default: *t=0;
 	}
 }
@@ -1521,11 +1617,12 @@ WORD debug_dasm(char *t,WORD p) // disassembles the code at address `p` onto the
 #undef M65XX_RESET
 #undef M65XX_START
 #undef M65XX_MAIN
-#undef M65XX_IRQ
-#undef M65XX_ACK
+#undef M65XX_I_T
+#undef M65XX_N_T
+#undef M65XX_IRQ_ACK
+#undef M65XX_NMI_ACK
 #undef M65XX_PC
 #undef M65XX_P
-#undef M65XX_I
 #undef M65XX_S
 #undef M65XX_A
 #undef M65XX_X
@@ -1544,26 +1641,31 @@ WORD debug_dasm(char *t,WORD p) // disassembles the code at address `p` onto the
 #undef M65XX_DUMBPEEKZERO
 #undef M65XX_DUMBPOKEZERO
 #undef M65XX_DUMBPULL
-#undef M65XX_WRITTEN
+#undef M65XX_TICK
+#undef M65XX_WAIT
 
 #undef M65XX_RDY
+#undef M65XX_SHW
 #undef M65XX_SHZ
 #undef M65XX_XEE
+#undef M65XX_XEF
 
 #undef M65XX_TRAP_0X00
 #undef M65XX_TRAP_0X10
 #undef M65XX_TRAP_0X20
 #undef M65XX_TRAP_0X30
 #undef M65XX_TRAP_0X40
+#undef M65XX_TRAP_0X4C
 #undef M65XX_TRAP_0X50
+#undef M65XX_TRAP_0X58
 #undef M65XX_TRAP_0X60
+#undef M65XX_TRAP_0X6C
 #undef M65XX_TRAP_0X70
+#undef M65XX_TRAP_0X78
 #undef M65XX_TRAP_0X90
 #undef M65XX_TRAP_0XB0
 #undef M65XX_TRAP_0XD0
 #undef M65XX_TRAP_0XF0
-#undef M65XX_TRAP_0X4C
-#undef M65XX_TRAP_0X6C
 
 #ifndef _M65XX_H_
 #define _M65XX_H_

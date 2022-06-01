@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20220412"//"2555"
+#define MY_VERSION "20220531"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2022 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -168,7 +168,7 @@ const unsigned char kbd_map_xlt[]=
 
 const VIDEO_UNIT video_table[][36]= // colour table, 0xRRGGBB style, followed by the 8-8-4 components of ULAPLUS
 {
-	// monochrome - black and white // =(b+r*3+g*9+13/2)/13;
+	// monochrome - black 'n white
 	{
 		0X000000,0X1B1B1B,0X373737,0X525252,
 		0X6E6E6E,0X898989,0XA5A5A5,0XC0C0C0,
@@ -380,34 +380,38 @@ BYTE ula_v1,ula_v2,ula_v3; // 48K, 128K and PLUS3 respectively
 #define ULA_V1_ISSUE2 24 // ditto, on Issue-2
 BYTE disc_disabled=0,psg_disabled=0,ula_v1_issue=ULA_V1_ISSUE3,ula_v1_cache=0; // auxiliar ULA variables
 BYTE *ula_screen; int ula_bitmap,ula_attrib; // VRAM pointers
-BYTE ula_clash[4][1<<16],*ula_clash_mreq[5],*ula_clash_iorq[5]; // the fifth entry stands for constant clashing
+BYTE ula_clash[2][1<<16],*ula_clash_mreq[5],*ula_clash_iorq[5]; // the fifth entry stands for constant clashing
 int ula_clash_z; // the in-frame T counter, a 17-bit cursor that follows the ULA clash map
 int ula_fix_chr,ula_fix_out; // ULA adjustment for attribute and border effects
 int ula_sixteen=0,ula_pentagon=0; // 16K mode, Pentagon memory contention and timing rules
 int ula_start_x,ula_limit_x,ula_start_y,ula_limit_y=312; // horizontal+vertical limits
-void ula_setup_clash(int i,int j,int l,int x0,int x1,int x2,int x3,int x4,int x5,int x6,int x7)
+void ula_setup_clash(int j,int l,int x0,int x1,int x2,int x3,int x4,int x5,int x6,int x7)
 {
+	MEMZERO(ula_clash); // non-contended areas lack clash
 	for (int y=0;y<192;++y,j+=l-128)
 		for (int x=0;x<16;++x)
-			ula_clash[i][j++]=x0,
-			ula_clash[i][j++]=x1,
-			ula_clash[i][j++]=x2,
-			ula_clash[i][j++]=x3,
-			ula_clash[i][j++]=x4,
-			ula_clash[i][j++]=x5,
-			ula_clash[i][j++]=x6,
-			ula_clash[i][j++]=x7;
+			ula_clash[1][j++]=x0,
+			ula_clash[1][j++]=x1,
+			ula_clash[1][j++]=x2,
+			ula_clash[1][j++]=x3,
+			ula_clash[1][j++]=x4,
+			ula_clash[1][j++]=x5,
+			ula_clash[1][j++]=x6,
+			ula_clash[1][j++]=x7;
 }
 void ula_setup(void)
 {
 	memset(mem_32k,-1,1<<14); // used by 16K models
-	MEMZERO(ula_clash); // non-contended areas lack clash
-	ula_setup_clash(1,14335,224,6,5,4,3,2,1,0,0); // ULA v1: 48K
-	ula_setup_clash(2,14361,228,6,5,4,3,2,1,0,0); // ULA v2: 128K,PLUS2
-	ula_setup_clash(3,14365,228,1,0,7,6,5,4,3,2); // ULA v3: PLUS3
 }
 void ula_update(void) // update ULA settings according to model
 {
+	// the non-Pentagon models' contention timing tables can be precalculated
+	if (type_id<1)
+		ula_setup_clash(14335,224,6,5,4,3,2,1,0,0); // ULA v1: 48K
+	else if (type_id<3)
+		ula_setup_clash(14361,228,6,5,4,3,2,1,0,0); // ULA v2: 128K,PLUS2
+	else
+		ula_setup_clash(14365,228,1,0,7,6,5,4,3,2); // ULA v3: PLUS3
 	// the Pentagon timings were measured with the beamracing-heavy demos "ACROSS THE EDGE" and "KPACKU DELUXE"
 	ula_fix_out=ula_pentagon?  7:type_id?  2:  0; // contention tests ULA48, ULA128, ULA128P3, FPGA48ALL and FPGA128
 	ula_fix_chr=ula_pentagon? 42:type_id?  1:  0; // NIRVANA games DREAMWALKER, MULTIDUDE, SUNBUCKET, STORMFINCH...
@@ -442,7 +446,7 @@ void mmu_update(void) // update the MMU tables with all the new offsets
 	}
 	else
 	{
-		ula_clash_mreq[4]=ula_clash[type_id<2?type_id+1:type_id]; // turn TYPE_ID (0, 1+2, 3) into ULA V (1, 2, 3)
+		ula_clash_mreq[4]=ula_clash[1];
 		ula_clash_mreq[0]=ula_clash_mreq[2]=(type_id==3&&(ula_v3&7)==1)?ula_clash_mreq[4]:ula_clash[0];
 		ula_clash_mreq[1]=(type_id<3||(ula_v3&7)!=1)?ula_clash_mreq[4]:ula_clash[0];
 		ula_clash_mreq[3]=type_id&&(type_id==3?ula_v3&1?(ula_v3&7)==3:ula_v2&4:ula_v2&1)?ula_clash_mreq[4]:ula_clash[0];
@@ -686,7 +690,7 @@ void ulaplus_table_send(int i)
 
 int z80_irq,z80_active=0; // IRQ length (0 = no IRQ) and internal HALT flag: <0 EXPECT NMI!, 0 IGNORE IRQS, >0 ACCEPT IRQS, >1 EXPECT IRQ!
 //#define z80_nmi_throw (z80_active=-1,z80_irq=96) // NMI has priority over IRQs and erases them!
-
+BYTE z80_power=1; // power-up boost flag
 void ula_reset(void) // reset the ULA
 {
 	ula_v1=ula_v2=ula_v3=ulaplus_index=ulaplus_table[64]=0;
@@ -737,6 +741,7 @@ void printer_line(void) // the 48K ZX Printer is completely graphical.
 // behind the ULA: TAPE --------------------------------------------- //
 
 int tape_enabled=0; // tape playback length, in frames
+#define tape_disabled (!tape_enabled) // the machine cannot disable the tape when we enable it
 #define TAPE_MAIN_TZX_STEP 70 // amount of T units per packet, must be a divisor of 3500000!
 #define TAPE_SPECTRUM_FORMATS // required for Spectrum!
 //#define TAPE_KANSAS_CITY // possibly useless outside MSX, are there any non-MSX protections using this method?
@@ -764,7 +769,7 @@ BYTE DISC_NEW_SECTOR_IDS[]={0xC1,0xC6,0xC2,0xC7,0xC3,0xC8,0xC4,0xC9,0xC5};
 
 // CPU-HARDWARE-VIDEO-AUDIO INTERFACE =============================== //
 
-int audio_dirty,audio_queue=0; // used to clump audio updates together to gain speed
+char audio_dirty; int audio_queue=0; // used to clump audio updates together to gain speed
 
 #define Z80_DNTR_0X3A(w,b) do{ if (w>=0X4000&&w<=0X7FFF) ula_bus3=b; }while(0) // this isn't Dandanator logic, but it operates the same way
 int ula_bus,ula_bus3; // floating bus: -1 if we're beyond the bitmap, latest ATTRIB otherwise; notice that PLUS3 uses a different contended bus
@@ -779,10 +784,10 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 	for (ula_clash_a+=t;ula_clash_a>=4;ula_clash_a-=4)
 	{
 		z80_irq=z80_irq<4?0:z80_irq-4;
-		if (ula_shown_x==ula_start_x) // HBLANK? (the Pentagon timings imply this test is done in advance)
+		if (UNLIKELY(ula_shown_x==ula_start_x)) // HBLANK? (the Pentagon timings imply this test is done in advance)
 		{
 			if (frame_pos_y>=VIDEO_OFFSET_Y&&frame_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y) video_drawscanline();
-			frame_pos_y+=2,video_pos_y+=2,video_target+=VIDEO_LENGTH_X*2-video_pos_x; video_pos_x=0; session_signal|=session_signal_scanlines; // scanline event!
+			video_nextscanline(0); // scanline event!
 		}
 		if ((video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y)&&(video_pos_x>VIDEO_OFFSET_X-16&&video_pos_x<VIDEO_OFFSET_X+VIDEO_PIXELS_X))
 		{
@@ -833,7 +838,7 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 		}
 		else
 			video_target+=16,video_pos_x+=16;
-		if (++ula_shown_x==ula_limit_x) // end of bitmap?
+		if (UNLIKELY(++ula_shown_x==ula_limit_x)) // end of bitmap?
 		{
 			ula_shown_x=0; ++ula_shown_y;
 			if (ula_shown_y>=0&&ula_shown_y<192)
@@ -843,7 +848,7 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 				ula_snow_z=z80_ir.b.l&ula_snow_a;
 			}
 		}
-		if (++ula_count_x>=ula_limit_x) // end of scanline?
+		if (UNLIKELY(++ula_count_x>=ula_limit_x)) // end of scanline?
 		{
 			ula_count_x=0;
 			// for lack of a more precise timer, the scanline is used to refresh the ULA's unstable input bit 6:
@@ -946,9 +951,10 @@ void z80_sync(int t) // the Z80 asks the hardware/video/audio to catch up
 			audio_dirty|=tape_loud,tape_main(t); // echo the tape signal thru sound!
 		if (tt>0)
 		{
-			audio_queue+=tt;
 			if (audio_dirty&&!audio_disabled)
-				audio_main(audio_queue),audio_dirty=audio_queue=0;
+				audio_main(audio_queue+tt),audio_dirty=audio_queue=0;
+			else
+				audio_queue+=tt;
 			video_main(tt);
 		}
 	}
@@ -1131,9 +1137,13 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 			if ((type_id!=3)?!(p&0x8000):((p&0xC000)==0x4000)) // 0x7FFD: ULA 128K
 			{
 				ula_v2_send(b);
-				session_dirty|=b&32; // show memory change on window
-				if (z80_pc.w==(type_id==3?0x0119:0x00D1)) // warm reset?
+				session_dirty|=b&32; // show memory mode change on window
+				if (b==7&&z80_pc.w==(type_id==3?0x0119:0x00D1)) // warm reset?
+				{
 					snap_done=0;
+					if (z80_power) // power-up boost (1/2)
+						z80_pc.w=type_id==3?0X0129:0X00ED;
+				}
 			}
 			if (type_id==3) // PLUS3 only!
 			{
@@ -1183,7 +1193,7 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 								printer_flush();
 					}
 					else
-						tape_song|=b,psg_table_send(b);
+						{ psg_table_send(b); if (psg_index<6) tape_song=(tape_disabled||(audio_disabled&1))?0:240; }
 				}
 			}
 	}
@@ -1319,7 +1329,7 @@ void z80_tape_trap(void)
 			tape_enabled|=8; // play tape and listen to decryption noises
 			break;
 	}
-	if (tape_fastload&tape_loud) switch (i) // handle tape analysis upon status
+	if (tape_fastload&&tape_loud) switch (i) // handle tape analysis upon status
 	{
 		case  0: // ZX SPECTRUM FIRMWARE, "ABU SIMBEL PROFANATION", SOFTLOCK ("ELITE 48K", "RASPUTIN 48K")
 		case  5: // "HYDROFOOL" (1/2)
@@ -1700,7 +1710,10 @@ void all_reset(void) // reset everything!
 	playcity_reset(),playcity_active=dac_level=0;
 	#endif
 	z80_reset();
-	z80_irq=0; debug_reset(); MEMFULL(z80_tape_index); snap_done=0; // avoid accidents!
+	if (z80_power) // power-up boost (2/2)
+		if (equalsmmmm(&mem_rom[5],0X78B120FB))
+			MEMZERO(mem_ram),z80_pc.w=9;
+	z80_irq=0; debug_clear(),debug_reset(); MEMFULL(z80_tape_index); snap_done=0; // avoid accidents!
 }
 
 // firmware ROM file handling operations ---------------------------- //
@@ -2155,7 +2168,6 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 							break;
 						default:
 							q=8; // dummy 16K
-							break;
 					}
 				if (i==0xFFFF) // uncompressed
 					fread1(&mem_ram[q<<14],1<<14,f);
@@ -2370,6 +2382,7 @@ char session_menudata[]=
 	"0x0602 2x CPU clock\n"
 	"0x0603 3x CPU clock\n"
 	"0x0604 4x CPU clock\n"
+	"0x0605 Power-up boost\n"
 	"0x8517 AY-Melodik audio\n"
 	#ifdef PSG_PLAYCITY
 	"0x8518 Turbosound audio\n"
@@ -2487,6 +2500,7 @@ void session_clean(void) // refresh options
 	session_menucheck(0x4900,tape_fastload);
 	session_menucheck(0x0400,session_key2joy);
 	session_menuradio(0x0601+multi_t-1,0x0601,0x0604);
+	session_menucheck(0x0605,z80_power);
 	session_menuradio(0x8521+joy1_type,0x8521,0x8525);
 	session_menucheck(0x4400,litegun);
 	session_menucheck(0x8590,!(disc_filemode&2));
@@ -2809,6 +2823,9 @@ void session_user(int k) // handle the user's commands
 		case 0x0603: // CPU x3
 		case 0x0604: // CPU x4
 			multi_t=k-0x0600;
+			break;
+		case 0x0605: // POWER-UP BOOST
+			z80_power=!z80_power;
 			break;
 		case 0x8701: // CREATE DISC..
 			if (!disc_disabled)
@@ -3260,7 +3277,7 @@ int main(int argc,char *argv[])
 						onscreen_byte(+4,-3,disc_track[1],q&&((disc_parmtr[1]&3)==1));
 					}
 				}
-				int q=tape_enabled?128:0;
+				int q=tape_disabled?0:128;
 				if (tape_skipping)
 					onscreen_char(+6,-3,(tape_skipping>0?'*':'+')+q);
 				if (tape_filesize<=0||tape_type<0)
@@ -3273,11 +3290,19 @@ int main(int argc,char *argv[])
 				}
 				if (session_stick|session_key2joy)
 				{
-					onscreen_bool(-5,-6,3,1,kbd_bit_tst(kbd_joy[0]));
-					onscreen_bool(-5,-2,3,1,kbd_bit_tst(kbd_joy[1]));
-					onscreen_bool(-6,-5,1,3,kbd_bit_tst(kbd_joy[2]));
-					onscreen_bool(-2,-5,1,3,kbd_bit_tst(kbd_joy[3]));
-					onscreen_bool(-4,-4,1,1,kbd_bit_tst(kbd_joy[4]));
+					if (autorun_mode)
+						onscreen_bool(-5,-7,3,1,autorun_t>1),
+						onscreen_bool(-5,-4,3,1,autorun_t>1),
+						onscreen_bool(-6,-6,1,5,autorun_t>1),
+						onscreen_bool(-2,-6,1,5,autorun_t>1);
+					else
+					{
+						onscreen_bool(-5,-6,3,1,kbd_bit_tst(kbd_joy[0]));
+						onscreen_bool(-5,-2,3,1,kbd_bit_tst(kbd_joy[1]));
+						onscreen_bool(-6,-5,1,3,kbd_bit_tst(kbd_joy[2]));
+						onscreen_bool(-2,-5,1,3,kbd_bit_tst(kbd_joy[3]));
+						onscreen_bool(-4,-4,1,1,kbd_bit_tst(kbd_joy[4]));
+					}
 				}
 				#ifdef DEBUG
 				onscreen_byte(+1,+1,ula_fix_out,0);
@@ -3308,21 +3333,16 @@ int main(int argc,char *argv[])
 				tape_enabled|=4;
 			else if (tape_enabled>0)
 				--tape_enabled; // tape is still busy?
-			static BYTE tape_loud_n=0; if (!tape_fastload)
-				tape_loud_n=0,tape_loud=1;
-			else if (tape_song||(((psg_table[ 8]*psg_tone_limit[0])&&(~psg_table[7]& 9))
-				||((psg_table[ 9]*psg_tone_limit[1])&&(~psg_table[7]&18))
-				||((psg_table[10]*psg_tone_limit[2])&&(~psg_table[7]&36))))
-				tape_loud_n|=16,tape_song=tape_loud=0; // expect song to play for several frames
-			else if (tape_loud_n) // no sound, slowly return to normal
-				if (!--tape_loud_n) tape_loud=1;
+			if (!tape_fastload) tape_song=0,tape_loud=1;
+			else if (tape_song) tape_loud=0,--tape_song;
+			else tape_loud=1; // expect song to play for several frames
 			if (tape_signal)
 			{
 				if ((tape_signal<2||(ula_v2&32))) tape_enabled=0; // stop tape if required
 				tape_signal=0,session_dirty=1; // update config
 			}
 			tape_skipping=audio_queue=0; // reset tape and audio flags
-			if (tape_filetell<tape_filesize&&tape_skipload&&!session_filmfile&&tape_enabled&&!tape_loud_n)
+			if (tape&&tape_filetell<tape_filesize&&tape_skipload&&!session_filmfile&&!tape_disabled&&tape_loud)
 				video_framelimit|=(MAIN_FRAMESKIP_MASK+1),session_fast|=2,video_interlaced|=2,audio_disabled|=2; // abuse binary logic to reduce activity
 			else
 				video_framelimit&=~(MAIN_FRAMESKIP_MASK+1),session_fast&=~2,video_interlaced&=~2,audio_disabled&=~2; // ditto, to restore normal activity

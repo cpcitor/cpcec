@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20220412"//"2555"
+#define MY_VERSION "20220531"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2022 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -163,7 +163,7 @@ const int video_asic_table[32]= // the 0GRB format used in ASIC PLUS
 };
 const VIDEO_UNIT video_table[][80]= // colour table, 0xRRGGBB style: the 32 original colours, followed by 16 levels of G, 16 of R and 16 of B
 {
-	// monochrome - black and white
+	// monochrome - black 'n white
 	{
 		0X808080,0X808080,0XBABABA,0XF5F5F5,
 		0X0A0A0A,0X454545,0X626262,0X9D9D9D,
@@ -700,7 +700,7 @@ BYTE irq_timer; // Winape `R52`: rises from 0 to 52, then launches an IRQ!
 int z80_irq; // Winape `ICSR`: B7 Raster (Gate Array / PRI), B6 DMA0, B5 DMA1, B4 DMA2 (top -- PRI DMA2 DMA1 DMA0 -- bottom)
 int z80_active=0; // internal HALT flag: <0 EXPECT NMI!, 0 IGNORE IRQS, >0 ACCEPT IRQS, >1 EXPECT IRQ!
 #define z80_nmi_throw (z80_active=-1,z80_irq|=256) // NMI has priority over IRQs but doesn't erase them!
-
+BYTE z80_power=1; // power-up boost flag
 void gate_reset(void) // reset the Gate Array
 {
 	gate_mcr=gate_ram=gate_rom=gate_index=irq_timer=irq_delay=0;
@@ -746,6 +746,7 @@ int dac_disabled=1; // Digiblaster DAC, disabled by default to avoid trouble wit
 // behind the PIO: TAPE --------------------------------------------- //
 
 #define tape_enabled (pio_port_c&16)
+#define tape_disabled tape_delay // the machine can disable the tape even when we enable it
 #define TAPE_MAIN_TZX_STEP 70 // amount of T units per packet // highest value before "MARMALADE" breaks down is 197, but remainder isn't 0
 //#define TAPE_SPECTRUM_FORMATS // useless outside Spectrum
 //#define TAPE_KANSAS_CITY // possibly useless outside MSX, are there any non-MSX protections using this method?
@@ -773,7 +774,7 @@ BYTE DISC_NEW_SECTOR_IDS[]={0xC1,0xC6,0xC2,0xC7,0xC3,0xC8,0xC4,0xC9,0xC5};
 
 // CPU-HARDWARE-VIDEO-AUDIO INTERFACE =============================== //
 
-int audio_dirty,audio_queue=0; // used to clump audio updates together to gain speed
+char audio_dirty; int audio_queue=0; // used to clump audio updates together to gain speed
 
 WORD gate_screen; // Gate Array's internal video address within the lowest 64K RAM, see below
 int crtc_screen,crtc_raster,crtc_backup,crtc_double; // CRTC's internal video addresses, active and backup
@@ -930,7 +931,6 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 						VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
 						VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p; VIDEO_NEXT=p;
 						*video_clut_index=video_clut_value; // slow update
-						break;
 				}
 			}
 			else // drawing, but not now
@@ -986,7 +986,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 
 		// GATE ARRAY slow reactions to CRTC events
 
-		if (crtc_before!=crtc_status) // speedup: no need to test nonextant events, this is true only 1 out of 6 times (more events should be moved here)
+		if (UNLIKELY(crtc_before!=crtc_status)) // speedup: no need to test nonextant events, this is true only 1 out of 6 times (more events should be moved here)
 		{
 			if (plus_pri==crtc_line&&plus_pri) // the PLUS ASIC handles the programmable raster interrupt (PRI) here:
 				if ((~crtc_before&crtc_status&CRTC_STATUS_HSYNC) // the IRQ triggers on CRTC_STATUS_HSYNC_SET (normal)
@@ -1017,7 +1017,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 
 		// ASIC hardware sprites and DMA
 
-		if (!--plus_dma_delay) // DMA CHANNELS
+		if (UNLIKELY(!--plus_dma_delay)) // DMA CHANNELS
 		{
 			int i; while (plus_dma_index<3) // reading phase?
 			{
@@ -1083,7 +1083,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 
 		// CRTC counters and triggers
 
-		if (crtc_status&CRTC_STATUS_R0_OK)
+		if (UNLIKELY(crtc_status&CRTC_STATUS_R0_OK))
 		{
 			if (crtc_table[0])
 				crtc_status&=~CRTC_STATUS_R0_OK;
@@ -1182,7 +1182,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 				crtc_screen+=crtc_double-2048; // go to next 16k
 		}
 
-		if (crtc_count_r0==crtc_table[1])
+		if (UNLIKELY(crtc_count_r0==crtc_table[1]))
 		{
 			// one of the few places where the PLUS ASIC adds a new parameter to the internal logic of the CRTC
 			if (plus_enabled?((crtc_count_r9+((plus_sscr&0x70)>>4))&31)==crtc_table[9]:crtc_status&CRTC_STATUS_R9_OK)
@@ -1192,10 +1192,10 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 				crtc_backup=crtc_screen; // recalculate new line!
 			}
 			if (plus_sssl==(BYTE)(crtc_line)&&plus_sssl) // the PLUS ASIC handles split screens with PLUS_SSSL and PLUS_SSSS
-				crtc_double=0,crtc_backup=(plus_ssss[0]&48)*1024+(plus_ssss[0]&3)*512+plus_ssss[1]*2;
+				crtc_backup=(plus_ssss[0]&48)*1024+(plus_ssss[0]&3)*512+plus_ssss[1]*2; // "SIMPLY THE BESTS" uses SSSL on a 32K screen, so no `crtc_double=0` here!
 			CRTC_STATUS_H_OFF_SET; // hide horizontal bitmap!
 		}
-		if (crtc_count_r0==crtc_table[2]&&!(crtc_status&CRTC_STATUS_HSYNC)) // don't set the HSYNC twice ("S&KOH" main part)
+		if (UNLIKELY(crtc_count_r0==crtc_table[2])&&!(crtc_status&CRTC_STATUS_HSYNC)) // don't set the HSYNC twice ("S&KOH" main part)
 			CRTC_STATUS_HSYNC_SET; // start horizontal sync!
 		if (crtc_status&CRTC_STATUS_HSYNC)
 		{
@@ -1213,7 +1213,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 				#endif
 				CRTC_STATUS_HSYNC_RES; // stop horizontal sync!
 			}
-			else if (!crtc_count_r3x++)
+			else if (UNLIKELY(!crtc_count_r3x++))
 			{
 				// HSYNC_SET calculates the PLUS ASIC horizontal skew and the DMA at once
 				plus_dma_index=0;
@@ -1230,14 +1230,14 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 
 		// Gate Array and IRQ timers
 
-		if (!--gate_count_r3x) // cancel secondary HSYNC
+		if (UNLIKELY(!--gate_count_r3x)) // cancel secondary HSYNC
 			gate_status=(gate_mcr&3) // update MODE/bitdepth: "IMPERIAL MAHJONG", "SCROLL FACTORY"...
 				+(gate_status&(--gate_count_r3y?~(3+CRTC_STATUS_HSYNC):~(3+CRTC_STATUS_HSYNC+CRTC_STATUS_VSYNC))); // cancel secondary VSYNC on timeout
-		else if (gate_count_r3x==-256) // launch secondary HSYNC
+		else if (UNLIKELY(gate_count_r3x==-256)) // launch secondary HSYNC
 			if (crtc_limit_r3x) // "MADNESS DEMO" (CRTC1) disables HSYNC with R3 = $X0
 				gate_status|=CRTC_STATUS_HSYNC,gate_count_r3x=crtc_limit_r3x<2?2:crtc_limit_r3x>7?7:crtc_limit_r3x; // length is 2 at least, 7 at most (not 6?)
 
-		if (!--irq_steps) // did the HSYNC end at last?
+		if (UNLIKELY(!--irq_steps)) // did the HSYNC end at last?
 			if (++irq_timer,irq_delay?++irq_delay>2:irq_timer>=52) // PDTMD0 implies "++irq_timer" even when DELAY takes priority
 			{
 				if (irq_timer>=32&&!plus_pri)
@@ -1247,7 +1247,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 
 		// HBLANK and VBLANK handling: the LA-7800 chip
 
-		if (hsync_count>=VIDEO_HSYNC_HI) // HBLANK?
+		if (UNLIKELY(hsync_count>=VIDEO_HSYNC_HI)) // HBLANK?
 		{
 			if (frame_pos_y>=VIDEO_OFFSET_Y&&frame_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y)
 			{
@@ -1266,12 +1266,10 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 				vsync_match=0;
 			}
 			vsync_count+=2; vsync_match+=2;
-			frame_pos_y+=2,video_pos_y+=2,video_target+=VIDEO_LENGTH_X*2-video_pos_x; session_signal|=session_signal_scanlines; // scanline event!
-
 			// "PREHISTORIK 2", "EDGE GRINDER" and the like perform smooth horizontal scrolling with the low nibble of REG3.
 			// However, "SCROLL FACTORY" (and to a lesser degree "ONESCREEN COLONIES") expect the REG3 low nibble to do nothing.
-			video_target+=video_pos_x=(hsync_count&15)+(VIDEO_LENGTH_X-hsync_limit)/2+((crtc_table[4]*crtc_double)?0: // kludge fingerprint: avoid 32k screens
-				((crtc_limit_r3x>=2&&crtc_limit_r3x<=6)?(6-crtc_limit_r3x)*8:0));
+			video_nextscanline((hsync_count&15)+(VIDEO_LENGTH_X-hsync_limit)/2+((crtc_table[4]*crtc_double)?0: // kludge fingerprint: avoid 32k screens
+				((crtc_limit_r3x>=2&&crtc_limit_r3x<=6)?(6-crtc_limit_r3x)*8:0))); // scanline event!
 			// the LA-7800 aligns the image in two ways: the second one is based on keeping the HSYNC_SET period steady.
 			if ((hsync_count-hsync_match)*2<hsync_limit)
 			{
@@ -1427,9 +1425,10 @@ void z80_sync(int t) // the Z80 asks the hardware/video/audio to catch up
 			audio_dirty|=tape_loud,tape_main(t); // echo the tape signal thru sound!
 		if (tt>0)
 		{
-			audio_queue+=tt;
 			if (audio_dirty&&!audio_disabled)
-				audio_main(audio_queue),audio_dirty=audio_queue=0;
+				audio_main(audio_queue+tt),audio_dirty=audio_queue=0;
+			else
+				audio_queue+=tt;
 			video_main(tt);
 		}
 	}
@@ -1471,7 +1470,11 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 							z80_irq&=~128,irq_timer=0;
 						gate_mcr=b&15; // 0x80-0xBF: MULTICONFIGURATION REGISTER
 						if (!(b&4)&&z80_pc.w==5) // warm reset?
-							gate_ram_dirty=64,snap_done=plus_8k_bug=0;
+						{
+							gate_ram_dirty=64,plus_8k_bug=snap_done=0;
+							if (z80_power) // power-up boost (1/2)
+								MEMZERO(mem_ram);
+						}
 					}
 				}
 			}
@@ -1530,7 +1533,7 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 						if (pio_port_c&0x40) // SELECT PSG REGISTER
 							psg_table_select(pio_port_a);
 						else // WRITE PSG REGISTER
-							tape_song|=pio_port_a,psg_table_send(pio_port_a);
+							{ psg_table_send(pio_port_a); if (psg_index<6) tape_song=(tape_disabled||(audio_disabled&1))?0:240; }
 					}
 				}
 			}
@@ -1549,7 +1552,7 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 					if (pio_port_c&0x40) // SELECT PSG REGISTER
 						psg_table_select(pio_port_a);
 					else // WRITE PSG REGISTER
-						tape_song|=pio_port_a,psg_table_send(pio_port_a);
+						{ psg_table_send(pio_port_a); if (psg_index<6) tape_song=(tape_disabled||(audio_disabled&1))?0:240; }
 				}
 				else if (pio_port_c&0x40)
 				{
@@ -1634,7 +1637,6 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 						playcity_ctc_limit[1]=playcity_ctc_count[1]=b?b:256; // zero is handled as 256
 					default: // no `break`!
 						playcity_ctc_state[1]=0;
-						break;
 				}
 			}
 			//else if (p==0xF882) cprintf("F882:%02X ",b); // *!* todo *!*
@@ -1692,7 +1694,7 @@ BYTE z80_tape_fastload[][32] = { // codes that read pulses : <offset, length, da
 	/* 34 */ {  -6,   5,0X04,0XC8,0X3E,0XF5,0XDB,  +1,   7,0X00,0XA9,0XD8,0XE6,0X80,0X28,0XF3 }, // "SUPERTRUX" (1/2)
 	/* 35 */ {  -6,   5,0X04,0XC8,0X3E,0XF5,0XDB,  +1,   6,0X00,0XA9,0XE6,0X80,0X28,0XF4 }, // "SUPERTRUX" (2/2)
 	/* 36 */ {  -4,   8,0X14,0XC8,0XED,0X78,0XE6,0X80,0XA9,0XCA,-128, -10 }, // "SPLIT PERSONALITIES"
-	/* 37 */ {  -6,  13,0X04,0XC8,0X3E,0XF5,0XDB,0XFF,0XB7,0XD8,0XA9,0XE6,0X80,0X28,0XF3 }, // "BIRDIE"
+	/* 37 */ {  -6,   5,0X04,0XC8,0X3E,0XF5,0XDB,  +2,   6,0XD8,0XA9,0XE6,0X80,0X28,0XF3 }, // "BIRDIE", "JOYAUX DE BABYLONE"
 	/* 38 */ {  -9,   5,0X79,0XC6,0X02,0X4F,0XDA,  +2,   6,0XED,0X78,0XAD,0XE6,0X80,0XC2,-128, -15 }, // "KORONIS RIFT" LEVELS
 };
 BYTE z80_tape_fastfeed[][32] = { // codes that build bytes
@@ -2039,8 +2041,11 @@ void z80_tape_trap(void)
 				fasttape_add8(z80_bc.b.l,16,&z80_bc.b.h,1); // z80_r7+=...*9;
 			break;
 		case 34: // "SUPERTRUX" (1/2)
-		case 37: // "BIRDIE" (btw, it requires 3223 pilots, not 3224: it cannot be BLOCK $10!)
-			fasttape_add8(z80_bc.b.l>>7,17,&z80_bc.b.h,1); // z80_r7+=...*9;
+		case 37: // "BIRDIE" (btw, it requires 3223 pilots, not 3224: it cannot be BLOCK $10!), "JOYAUX DE BABYLONE"
+			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==5)
+				k=fasttape_feed(z80_bc.b.l>>7,17),tape_skipping=z80_hl.b.l=128+(k>>1),z80_bc.b.h=-(k&1);
+			else
+				fasttape_add8(z80_bc.b.l>>7,17,&z80_bc.b.h,1); // z80_r7+=...*9;
 			break;
 		case 35: // "SUPERTRUX" (2/2)
 			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==5)
@@ -2099,7 +2104,7 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 				if ((pio_control&2)||plus_enabled) // PLUS ASIC CRTC3 has a PIO bug!
 				{
 					if (tape)//&&!z80_iff.b.l) // at least one tape loader enables interrupts: "INVASION OF THE ZOMBIE MONSTERS"
-						if (tape_fastload&tape_loud) z80_tape_trap(); // handle tape analysis upon status
+						if (tape_fastload&&tape_loud) z80_tape_trap(); // handle tape analysis upon status
 					b&=(crtc_status&CRTC_STATUS_VSYNC? // gate_status&CRTC_STATUS_VSYNC ???
 						(crtc_type!=2||crtc_table[2]+crtc_limit_r3x!=crtc_table[0]+1): // CRTC2 VSYNC fails if HSYNC sets and H_OFF resets at once!
 						((crtc_table[8]&2)&&irq_timer<3&&video_pos_y>=VIDEO_LENGTH_Y*5/12&&video_pos_y<VIDEO_LENGTH_Y*7/12)) // interlaced VSYNC
@@ -2548,7 +2553,7 @@ void all_reset(void) // reset everything!
 	z80_reset();
 	z80_sp.w=0xC000; // implicit in "No Exit" PLUS!
 	z80_imd=1; // implicit in "Pro Tennis Tour" PLUS!
-	z80_irq=0; debug_reset(); MEMFULL(z80_tape_index); snap_done=0; // avoid accidents!
+	z80_irq=0; debug_clear(),debug_reset(); MEMFULL(z80_tape_index); snap_done=0; // avoid accidents!
 }
 
 // firmware/cartridge ROM file handling operations ------------------ //
@@ -2878,7 +2883,7 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 	#if 1 // experimental
 	{
 		int j=0; for (i=0;i<length(debug_point);++i)
-			if (debug_point[i])
+			if (debug_point[i]==1)
 				++j;
 		if (j) // save the currently defined breakpoints, if any
 		{
@@ -3172,7 +3177,7 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 										k&=(c=(disc_buffer[i+j]&=127))>=32&&c!=34; // remove bit 7 (used to tag the file as READ ONLY, HIDDEN, etc) and accept all printable characters but quotes
 									if (k&&disc_buffer[i+1]>32) // all chars are valid; measure how good it is as a candidate
 									{
-										k=33-disc_buffer[i+15]/4; // the shortest files are often the most likely to be loaders, and BASIC the most likely, while BINARY goes next
+										k=33-disc_buffer[i+15]/4; // in most cases, loaders are the shortest files on the disc
 										if (!h)
 											k+=48; // visible files are better candidates
 										if (!memcmp(&disc_buffer[i+1],"DISC    ",8)||!memcmp(&disc_buffer[i+1],"DISK    ",8))
@@ -3278,6 +3283,7 @@ char session_menudata[]=
 	"0x0602 2x CPU clock\n"
 	"0x0603 3x CPU clock\n"
 	"0x0604 4x CPU clock\n"
+	"0x0605 Power-up boost\n"
 	#ifdef PSG_PLAYCITY
 	"0x8518 PlayCity audio\n"
 	"0x8519 Digiblaster audio\n"
@@ -3393,6 +3399,7 @@ void session_clean(void) // refresh options
 	session_menucheck(0x0400,session_key2joy);
 	session_menucheck(0x4400,key2joy_flag);
 	session_menuradio(0x0601+multi_t-1,0x0601,0x0604);
+	session_menucheck(0x0605,z80_power);
 	session_menuradio(0x8501+crtc_type,0x8501,0x8505);
 	session_menucheck(0x8508,!crtc_hold);
 	session_menucheck(0x8590,!(disc_filemode&2));
@@ -3714,6 +3721,9 @@ void session_user(int k) // handle the user's commands
 		case 0x0603: // CPU x3
 		case 0x0604: // CPU x4
 			multi_t=k-0x0600;
+			break;
+		case 0x0605: // POWER-UP BOOST
+			z80_power=!z80_power;
 			break;
 		case 0x8701: // CREATE DISC..
 			if (!disc_disabled)
@@ -4149,7 +4159,7 @@ int main(int argc,char *argv[])
 					onscreen_byte(+1,-3,disc_track[0],q&&((disc_parmtr[1]&3)==0));
 					onscreen_byte(+4,-3,disc_track[1],q&&((disc_parmtr[1]&3)==1));
 				}
-				int q=tape_enabled?128:0; // =!tape_delay;
+				int q=tape_disabled?0:128;
 				if (tape_skipping)
 					onscreen_char(+6,-3,(tape_skipping>0?'*':'+')+q);
 				if (tape_filesize<=0||tape_type<0)
@@ -4162,14 +4172,22 @@ int main(int argc,char *argv[])
 				}
 				if (session_stick|session_key2joy)
 				{
-					onscreen_bool(-4,-8,1,2,kbd_bit_tst(kbd_joy[0]));
-					onscreen_bool(-4,-5,1,2,kbd_bit_tst(kbd_joy[1]));
-					onscreen_bool(-6,-6,2,1,kbd_bit_tst(kbd_joy[2]));
-					onscreen_bool(-3,-6,2,1,kbd_bit_tst(kbd_joy[3]));
-					onscreen_bool(-6,-2,2,1,kbd_bit_tst(kbd_joy[4]));
-					onscreen_bool(-3,-2,2,1,kbd_bit_tst(kbd_joy[5]));
-					if (video_threshold>VIDEO_LENGTH_X/4)
-						onscreen_bool(-4,-6,1,1,0);
+					if (autorun_mode)
+						onscreen_bool(-5,-7,3,1,autorun_t>1),
+						onscreen_bool(-5,-4,3,1,autorun_t>1),
+						onscreen_bool(-6,-6,1,5,autorun_t>1),
+						onscreen_bool(-2,-6,1,5,autorun_t>1);
+					else
+					{
+						onscreen_bool(-4,-8,1,2,kbd_bit_tst(kbd_joy[0]));
+						onscreen_bool(-4,-5,1,2,kbd_bit_tst(kbd_joy[1]));
+						onscreen_bool(-6,-6,2,1,kbd_bit_tst(kbd_joy[2]));
+						onscreen_bool(-3,-6,2,1,kbd_bit_tst(kbd_joy[3]));
+						onscreen_bool(-6,-2,2,1,kbd_bit_tst(kbd_joy[4]));
+						onscreen_bool(-3,-2,2,1,kbd_bit_tst(kbd_joy[5]));
+						if (video_threshold>VIDEO_LENGTH_X/4)
+							onscreen_bool(-4,-6,1,1,0);
+					}
 				}
 				#ifdef DEBUG
 				onscreen_byte(+1,+1,plus_dma_delay1,0);
@@ -4214,25 +4232,24 @@ int main(int argc,char *argv[])
 				#endif
 			}
 			psg_writelog();
+			if (z80_power) // power-up boost (2/2)
+				if (z80_pc.w==(type_id?0XC154:0XC14D)&&equalsmm(&mmu_rom[3][z80_pc.w],0XEDB0)) // the right ROM?
+					if (!(gate_mcr&2)&&!gate_rom&&!gate_ram&&z80_bc.w>1&&z80_hl.w+1==z80_de.w) // the right values?
+						z80_hl.w+=z80_bc.w-1,z80_de.w+=z80_bc.w-1,z80_bc.w=1;
 			if (tape_enabled)
 				{ if (tape_delay>0) --tape_delay; } // handle tape delays
 			else if (tape_delay<3) // the tape is temporarily "deaf":
 				++tape_delay; // OPERA SOFT tapes need this delay! [3..]
-			static BYTE tape_loud_n=0; if (!tape_fastload)
-				tape_loud_n=0,tape_loud=1;
-			else if (tape_song||(((psg_table[ 8]*psg_tone_limit[0])&&(~psg_table[7]& 9))
-				||((psg_table[ 9]*psg_tone_limit[1])&&(~psg_table[7]&18))
-				||((psg_table[10]*psg_tone_limit[2])&&(~psg_table[7]&36))))
-				tape_loud_n|=16,tape_song=tape_loud=0; // expect song to play for several frames
-			else if (tape_loud_n) // no sound, slowly return to normal
-				if (!--tape_loud_n) tape_loud=1;
+			if (!tape_fastload) tape_song=0,tape_loud=1;
+			else if (tape_song) tape_loud=0,--tape_song;
+			else tape_loud=1; // expect song to play for several frames
 			if (tape_signal)
 			{
 				//if (tape_signal<2||!gate_ram_depth) pio_port_c&=~16; // stop tape if required
 				tape_signal=0,session_dirty=1; // update config
 			}
 			tape_skipping=audio_queue=0; // reset tape and audio flags
-			if (tape_filetell<tape_filesize&&tape_skipload&&!session_filmfile&&!tape_delay&&!tape_loud_n) // &&tape_enabled
+			if (tape&&tape_filetell<tape_filesize&&tape_skipload&&!session_filmfile&&!tape_disabled&&tape_loud) // &&tape_enabled
 				video_framelimit|=(MAIN_FRAMESKIP_MASK+1),session_fast|=2,video_interlaced|=2,audio_disabled|=2; // abuse binary logic to reduce activity
 			else
 				video_framelimit&=~(MAIN_FRAMESKIP_MASK+1),session_fast&=~2,video_interlaced&=~2,audio_disabled&=~2; // ditto, to restore normal activity

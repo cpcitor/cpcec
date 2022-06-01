@@ -1085,8 +1085,25 @@ VIC-II emulation is incomplete (no badline handling, no sprite contention); it
 can load PRG files and play T64 and TAP tape images, but it doesn't emulate the
 C1541 disc drive yet and thus cannot handle D64 disc images at all. New virtual
 joystick interface: the user can redefine the keys that simulate the virtual
-joystick instead of sticking to the keys Z and X and the cursors. Tape analysis
-can detect musical loaders: tape acceleration will be temporarily disabled to
-ensure that songs play normally. Fixed a bug in the Z80 (the internal timings of
-OUT (n),A were wrong) and the LA-7800's horizontal synchronisation (both
-reported by Hicks): the CPC demo "Onescreen Colonies #2" behaves properly.
+joystick instead of sticking to the keys Z and X and the cursors. Fixed a bug in
+the Z80 (the internal timings of OUT (n),A were wrong) and the LA-7800's
+horizontal synchronisation (both reported by Hicks): the CPC demo "Onescreen
+Colonies #2" behaves properly. Tape analysis can detect musical loaders: tape
+acceleration will be temporarily disabled so songs play normally.
+- 20220531 -- minor patch adding a new power-up boost option (enabled by
+default) that tells the emulators to trap boot procedures and speed them up.
+Printing a disassembly now includes the source bytes, ensuring that the binary
+can be always rebuilt even if the disassembly is ambiguous. The Z80 operations
+RETN and RETI are now identical; telling them apart is up to the NMI-issuing
+hardware. The Plus ASIC SSSL function is now 32k-compatible, as required by the
+intro "Simply the Bests". Simpler ZX ULA memory contention model: the timing
+buffer is now 128k long instead of 256k. The VIC-II chip is more accurate:
+slowdowns caused by badlines and sprite fetching are emulated (Extend's
+"Fellas", "HVSC 10 Years" intro...), effectively enabling badline manipulation
+(Archmage's "Data Zombies", Focus' "Ms. Pac Man", Excess' "Funny Rasters"...),
+DMA-delay horizontal scrolling ("Creatures", Tempest's "Rewind"...) and sprite
+stretching (Oxyron's "20 Years"). The default palette is now Community-Colors
+instead of Colodore. The CIA chips are more accurate too (TRSI's "4Krawall") but
+they don't pass the PC64 test suite yet. The internal SID filter is now
+partially emulated; the user can manually disable it. Minor optimisations
+through "likely/unlikely" branching hints.
