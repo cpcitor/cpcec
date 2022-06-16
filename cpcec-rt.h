@@ -204,8 +204,7 @@ VIDEO_UNIT video_litegun; // lightgun data
 #define VIDEO_FILTER_HALF(x,y) (x==y?x:((((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00))>>1) // 50:50, faster bur coarser: f(old,new) becomes f(0,0)=0, f(0,1)=1, f(1,0)=1 instead of 0, f(1,1)=1
 //#define VIDEO_FILTER_BLURDATA vzz
 //#define VIDEO_FILTER_BLUR0(z) vzz=z
-//#define VIDEO_FILTER_BLUR(r,z) (r=VIDEO_FILTER_HALF(vzz,z),vzz=z) // 50:50 particular
-//#define VIDEO_FILTER_BLUR(r,z) (r=VIDEO_FILTER_HALF(vzz,z),vzz=r) // 50:50 widespread
+//#define VIDEO_FILTER_BLUR(r,z) (r=VIDEO_FILTER_HALF(vzz,z),vzz=z) // 50:50
 //#define VIDEO_FILTER_BLURDATA v0h,v0l,vzh,vzl
 //#define VIDEO_FILTER_BLUR0(z) v0h=z&0XFF00FF,v0l=z&0XFF00
 //#define VIDEO_FILTER_BLUR(r,z) r=(((v0h+(vzh=z&0XFF00FF)+0X10001)&0X1FE01FE)+((v0l+(vzl=z&0XFF00)+0X100)&0x1FE00))>>1,v0h=vzh,v0l=vzl // 50:50
@@ -214,16 +213,20 @@ VIDEO_UNIT video_litegun; // lightgun data
 //#define VIDEO_FILTER_BLUR(r,z) r=(((v1h+v0h+(vzh=z&0XFF00FF)*2+0X20002)&0X3FC03FC)+((v1l+v0l+(vzl=z&0XFF00)*2+0X200)&0x3FC00))>>2,v1h=v0h,v1l=v0l,v0h=vzh,v0l=vzl // 25:25:50
 #define VIDEO_FILTER_BLURDATA v2h,v2l,v1h,v1l,v0h,v0l,vzh,vzl
 #define VIDEO_FILTER_BLUR0(z) v2h=v1h=v0h=z&0XFF00FF,v2l=v1l=v0l=z&0XFF00
-#define VIDEO_FILTER_BLUR(r,z) r=(((v2h+v1h+v0h+(vzh=z&0XFF00FF)+0X20002)&0X3FC03FC)+((v2l+v1l+v0l+(vzl=z&0XFF00)+0X200)&0x3FC00))>>2,v2h=v1h,v2l=v1l,v1h=v0h,v1l=v0l,v0h=vzh,v0l=vzl // 25:25:25:25
+#define VIDEO_FILTER_BLUR(r,z) r=(((v2h+v1h+v0h+(vzh=z&0XFF00FF)+0X20002)&0X3FC03FC)+((v2l+v1l+v0l+(vzl=z&0XFF00)+0X200)&0x3FC00))>>2,v2h=v1h,v1h=v0h,v0h=vzh,v2l=v1l,v1l=v0l,v0l=vzl // 25:25:25:25
+//#define VIDEO_FILTER_BLURDATA v0,v1
+//#define VIDEO_FILTER_BLUR0(z) v0=v1=z
+//#define VIDEO_FILTER_BLUR(r,z) r=(v0&0XFF0000)+(v1&0XFF00)+(z&0XFF),v0=v1,v1=z // chromatic aberration, 100:0
+//#define VIDEO_FILTER_BLUR(r,z) r=((((v0&0XFF0000)*3+(z&0XFF0000)+0X20000)>>2)&0XFF0000)+((((v1&0XFF00)*3+(z&0XFF00)+0X200)>>2)&0XFF00)+(z&0XFF),v0=v1,v1=z // chromatic aberration, 75:25
 //#define VIDEO_FILTER_X1(x) (((x>>1)&0X7F7F7F)+0X2B2B2B) // average
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)+0X404040) // heavier
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)*3+0X161616) // lighter
-#define VIDEO_FILTER_X1(x) (((x>>3)&0X1F1F1F)*5+0X323232) // practical
+#define VIDEO_FILTER_X1(x) (((x&0XF8F8F8)>>3)*5+0X323232) // practical
 //#define VIDEO_FILTER_X1(x) ((((((x&0XFF0000)*54)>>16)+(((x&0XFF00)*183)>>8)+(((x&0XFF)*19)))>>8)*0X10101) // monochrome (canonical)
 //#define VIDEO_FILTER_X1(x) ((((((x&0XFF0000)*7)>>13)+(((x&0XFF00)*45)>>6)+(((x&0XFF)*20)))>>8)*0X10101) // monochrome (56:180:20)
-//#define VIDEO_FILTER_SCAN(w,b) (((w>>1)&0X7F7F7F)+((b>>1)&0X7F7F7F)+0X010101) // 50:50
-//#define VIDEO_FILTER_SCAN(w,b) (((w>>2)&0X3F3F3F)+((b>>2)&0X3F3F3F)*3+0X020202) // 25:75
-#define VIDEO_FILTER_SCAN(w,b) (((w>>3)&0X1F1F1F)+((b>>3)&0X1F1F1F)*7+0X040404) // 13:87
+//#define VIDEO_FILTER_SCAN(w,b) (((b>>1)&0X7F7F7F)+((w>>1)&0X7F7F7F)+0X010101) // 50:50
+//#define VIDEO_FILTER_SCAN(w,b) (((b>>2)&0X3F3F3F)*3+((w>>2)&0X3F3F3F)+0X020202) // 25:75
+#define VIDEO_FILTER_SCAN(w,b) (((b>>3)&0X1F1F1F)*7+((w>>3)&0X1F1F1F)+0X040404) // 13:87
 
 #define MAIN_FRAMESKIP_MASK ((1<<MAIN_FRAMESKIP_BITS)-1)
 void video_resetscanline(void) // reset scanline filler values on new video options
@@ -248,16 +251,18 @@ INLINE void video_newscanlines(int x,int y) // call before each new frame: reset
 INLINE void video_drawscanline(void) // call after each drawn scanline; memory caching makes this more convenient than gathering all operations in video_endscanlines()
 {
 	VIDEO_UNIT vt,vs,VIDEO_FILTER_BLURDATA,*vi=video_target-video_pos_x+VIDEO_OFFSET_X,*vl=vi+VIDEO_PIXELS_X,
-		*vo=video_target-video_pos_x+VIDEO_OFFSET_X+VIDEO_LENGTH_X;
+		*vo=video_target-video_pos_x+VIDEO_OFFSET_X+VIDEO_LENGTH_X,*vp;
 	#ifdef MAUS_LIGHTGUNS
 	if (!(((session_maus_y+VIDEO_OFFSET_Y)^video_pos_y)&-2)) // does the lightgun aim at the current scanline?
 		video_litegun=session_maus_x>=0&&session_maus_x<VIDEO_PIXELS_X?vi[session_maus_x]|vi[session_maus_x^1]:0; // keep the colours BEFORE any filtering happens!
 	#endif
 	if (video_scanblend) // blend scanlines from previous and current frame!
 	{
-		VIDEO_UNIT *vp=&video_blend[(video_pos_y-VIDEO_OFFSET_Y)/2*VIDEO_PIXELS_X];
-		for (int x=VIDEO_PIXELS_X;x>0;--x)
+		//printf("%04d:%04d:%04d  ",video_pos_x,video_pos_y,frame_pos_y);
+		vp=&video_blend[(video_pos_y-VIDEO_OFFSET_Y)/2*VIDEO_PIXELS_X];
+		do
 			vt=*vp,vs=*vp++=*vi,*vi++=VIDEO_FILTER_HALF(vt,vs); // non-accumulative gigascreen
+		while (vi<vl);
 		vi-=VIDEO_PIXELS_X;
 	}
 	switch (video_filter+(video_scanlinez?0:8))
@@ -376,17 +381,17 @@ INLINE void video_drawscanline(void) // call after each drawn scanline; memory c
 	}
 	if (video_scanline>=4&&video_pos_y>VIDEO_OFFSET_Y+1) // fill all scanlines but one with 50:50 neighbours
 	{
-		VIDEO_UNIT *vp=(vi=vl-VIDEO_PIXELS_X)-VIDEO_LENGTH_X; vo=vp-VIDEO_LENGTH_X;
+		vo=(vp=(vi=vl-VIDEO_PIXELS_X)-VIDEO_LENGTH_X)-VIDEO_LENGTH_X;
 		if (video_filter&VIDEO_FILTER_MASK_Y) // we skipped the Y-mask above, so we must perform it here
 			if (video_filter&VIDEO_FILTER_MASK_X) // if both masks are enabled, we must replicate the pattern
 				if (video_pos_y&2)
 					do
 						vt=VIDEO_FILTER_HALF(*vi,*vo),*vp++=VIDEO_FILTER_X1(vt),++vi,++vo,
-						*vp++=VIDEO_FILTER_HALF(*vi,*vo),++vi,++vo;
+						*vp++=VIDEO_FILTER_HALF(*vi,*vo),++vi,++vo; // yes no yes no ...
 					while (vi<vl);
 				else
 					do
-						*vp++=VIDEO_FILTER_HALF(*vi,*vo),++vi,++vo,
+						*vp++=VIDEO_FILTER_HALF(*vi,*vo),++vi,++vo, // no yes no yes ...
 						vt=VIDEO_FILTER_HALF(*vi,*vo),*vp++=VIDEO_FILTER_X1(vt),++vi,++vo;
 					while (vi<vl);
 			else // no X-mask, just perform the Y-mask

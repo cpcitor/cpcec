@@ -30,16 +30,14 @@
 // void M65XX_POKE(WORD,BYTE) -- send byte to an address
 // BYTE M65XX_PEEKZERO(BYTE) -- receive byte from ZEROPAGE
 // void M65XX_POKEZERO(BYTE,BYTE) -- send byte to ZEROPAGE
-// BYTE M65XX_PULL(BYTE) -- receive byte from PAGE ONE
-// void M65XX_PUSH(BYTE,BYTE) -- send byte to PAGE ONE
+// BYTE M65XX_PULL(BYTE) -- receive byte from STACKPAGE
+// void M65XX_PUSH(BYTE,BYTE) -- send byte to STACKPAGE
 // void M65XX_DUMBPAGE(BYTE) -- "dumb" PEEK/POKE page setup
 // BYTE M65XX_DUMBPEEK(WORD) -- "dumb" receive from address
 // void M65XX_DUMBPOKE(WORD,BYTE) -- "dumb" send to address
-// BYTE M65XX_DUMBPEEKZERO(BYTE) -- "dumb" receive from ZEROPAGE
-// void M65XX_DUMBPOKEZERO(BYTE,BYTE) -- "dumb" send to ZEROPAGE
-// BYTE M65XX_DUMBPULL(BYTE) -- "dumb" receive from PAGE ONE
-// void M65XX_READING(void) -- spend one clock tick after reading
-// void M65XX_WRITING(void) -- spend one clock tick after writing
+
+// The old macros M65XX_DUMBPEEKZERO, M65XX_DUMBPOKEZERO,
+// M65XX_DUMBPULL and M65XX_DUMBPUSH have been dummied out.
 
 // Notice that M65XX_PEEK and M65XX_POKE must handle the special cases
 // $0000 and $0001 when they're emulating a 6510 instead of a 6502.
@@ -251,7 +249,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 					M65XX_TRAP_0X20;
 					#endif
 					M65XX_FETCH(o);
-					M65XX_WAIT; M65XX_DUMBPULL(M65XX_S);
+					M65XX_WAIT; //M65XX_DUMBPULL(M65XX_S);
 					M65XX_TICK; M65XX_PUSH(M65XX_S,M65XX_PC.b.h); --M65XX_S;
 					M65XX_TICK; M65XX_PUSH(M65XX_S,M65XX_PC.b.l); --M65XX_S;
 					M65XX_WAIT; M65XX_PAGE(M65XX_PC.b.h); M65XX_PC.b.h=M65XX_PEEK(M65XX_PC.w); M65XX_PC.b.l=o; // don't use M65XX_FETCH here!
@@ -307,7 +305,8 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 					M65XX_BADPC; M65XX_BADPC; // both dumb reads aim to PC+1!
 					M65XX_WAIT; ++M65XX_S; M65XX_PC.b.l=M65XX_PULL(M65XX_S);
 					M65XX_WAIT; ++M65XX_S; M65XX_PC.b.h=M65XX_PULL(M65XX_S);
-					M65XX_WAIT; M65XX_DUMBPULL(M65XX_S); ++M65XX_PC.w;
+					M65XX_WAIT; //M65XX_DUMBPULL(M65XX_S);
+					++M65XX_PC.w; // JSR $NNNN pushes PC-1
 					#ifdef DEBUG_HERE
 					if (M65XX_S>debug_trap_sp)
 						{ _t_=0,session_signal|=SESSION_SIGNAL_DEBUG; } // throw!
@@ -948,7 +947,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0X06: // ASL $NN
 					M65XX_ZPG;
 					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
-					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_TICK; //M65XX_DUMBPOKEZERO(a.w,o);
 					M65XX_ASL(q,o);
 					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
@@ -962,7 +961,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0X16: // ASL $NN,X
 					M65XX_ZPG_X_BADPC;
 					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
-					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_TICK; //M65XX_DUMBPOKEZERO(a.w,o);
 					M65XX_ASL(q,o);
 					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
@@ -976,7 +975,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0X26: // ROL $NN
 					M65XX_ZPG;
 					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
-					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_TICK; //M65XX_DUMBPOKEZERO(a.w,o);
 					M65XX_ROL(q,o);
 					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
@@ -990,7 +989,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0X36: // ROL $NN,X
 					M65XX_ZPG_X_BADPC;
 					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
-					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_TICK; //M65XX_DUMBPOKEZERO(a.w,o);
 					M65XX_ROL(q,o);
 					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
@@ -1004,7 +1003,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0X46: // LSR $NN
 					M65XX_ZPG;
 					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
-					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_TICK; //M65XX_DUMBPOKEZERO(a.w,o);
 					M65XX_LSR(q,o);
 					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
@@ -1018,7 +1017,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0X56: // LSR $NN,X
 					M65XX_ZPG_X_BADPC;
 					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
-					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_TICK; //M65XX_DUMBPOKEZERO(a.w,o);
 					M65XX_LSR(q,o);
 					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
@@ -1032,7 +1031,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0X66: // ROR $NN
 					M65XX_ZPG;
 					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
-					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_TICK; //M65XX_DUMBPOKEZERO(a.w,o);
 					M65XX_ROR(q,o);
 					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
@@ -1046,7 +1045,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0X76: // ROR $NN,X
 					M65XX_ZPG_X_BADPC;
 					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
-					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_TICK; //M65XX_DUMBPOKEZERO(a.w,o);
 					M65XX_ROR(q,o);
 					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
@@ -1093,7 +1092,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0XC6: // DEC $NN
 					M65XX_ZPG;
 					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
-					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_TICK; //M65XX_DUMBPOKEZERO(a.w,o);
 					M65XX_DEC(o);
 					M65XX_TICK; M65XX_POKEZERO(a.w,o);
 					break;
@@ -1107,7 +1106,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0XD6: // DEC $NN,X
 					M65XX_ZPG_X_BADPC;
 					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
-					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_TICK; //M65XX_DUMBPOKEZERO(a.w,o);
 					M65XX_DEC(o);
 					M65XX_TICK; M65XX_POKEZERO(a.w,o);
 					break;
@@ -1121,7 +1120,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0XE6: // INC $NN
 					M65XX_ZPG;
 					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
-					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_TICK; //M65XX_DUMBPOKEZERO(a.w,o);
 					M65XX_INC(o);
 					M65XX_TICK; M65XX_POKEZERO(a.w,o);
 					break;
@@ -1135,7 +1134,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0XF6: // INC $NN,X
 					M65XX_ZPG_X_BADPC;
 					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
-					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_TICK; //M65XX_DUMBPOKEZERO(a.w,o);
 					M65XX_INC(o);
 					M65XX_TICK; M65XX_POKEZERO(a.w,o);
 					break;
@@ -1150,7 +1149,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0X07: // SLO $NN
 					M65XX_ZPG;
 					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
-					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_TICK; //M65XX_DUMBPOKEZERO(a.w,o);
 					M65XX_SLO(q,o);
 					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
@@ -1164,7 +1163,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0X17: // SLO $NN,X
 					M65XX_ZPG_X_BADPC;
 					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
-					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_TICK; //M65XX_DUMBPOKEZERO(a.w,o);
 					M65XX_SLO(q,o);
 					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
@@ -1178,7 +1177,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0X27: // RLA $NN
 					M65XX_ZPG;
 					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
-					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_TICK; //M65XX_DUMBPOKEZERO(a.w,o);
 					M65XX_RLA(q,o);
 					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
@@ -1192,7 +1191,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0X37: // RLA $NN,X
 					M65XX_ZPG_X_BADPC;
 					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
-					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_TICK; //M65XX_DUMBPOKEZERO(a.w,o);
 					M65XX_RLA(q,o);
 					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
@@ -1206,7 +1205,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0X47: // SRE $NN
 					M65XX_ZPG;
 					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
-					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_TICK; //M65XX_DUMBPOKEZERO(a.w,o);
 					M65XX_SRE(q,o);
 					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
@@ -1220,7 +1219,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0X57: // SRE $NN,X
 					M65XX_ZPG_X_BADPC;
 					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
-					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_TICK; //M65XX_DUMBPOKEZERO(a.w,o);
 					M65XX_SRE(q,o);
 					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
@@ -1234,7 +1233,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0X67: // RRA $NN
 					M65XX_ZPG;
 					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
-					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_TICK; //M65XX_DUMBPOKEZERO(a.w,o);
 					M65XX_RRA(q,o);
 					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
@@ -1248,7 +1247,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0X77: // RRA $NN,X
 					M65XX_ZPG_X_BADPC;
 					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
-					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_TICK; //M65XX_DUMBPOKEZERO(a.w,o);
 					M65XX_RRA(q,o);
 					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
@@ -1295,7 +1294,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0XC7: // DCP $NN
 					M65XX_ZPG;
 					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
-					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_TICK; //M65XX_DUMBPOKEZERO(a.w,o);
 					M65XX_DCP(q,o);
 					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
@@ -1309,7 +1308,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0XD7: // DCP $NN,X
 					M65XX_ZPG_X_BADPC;
 					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
-					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_TICK; //M65XX_DUMBPOKEZERO(a.w,o);
 					M65XX_DCP(q,o);
 					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
@@ -1323,7 +1322,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0XE7: // ISB $NN
 					M65XX_ZPG;
 					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
-					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_TICK; //M65XX_DUMBPOKEZERO(a.w,o);
 					M65XX_ISB(q,o);
 					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
@@ -1337,7 +1336,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0XF7: // ISB $NN,X
 					M65XX_ZPG_X_BADPC;
 					M65XX_WAIT; o=M65XX_PEEKZERO(a.w);
-					M65XX_TICK; M65XX_DUMBPOKEZERO(a.w,o);
+					M65XX_TICK; //M65XX_DUMBPOKEZERO(a.w,o);
 					M65XX_ISB(q,o);
 					M65XX_TICK; M65XX_POKEZERO(a.w,q);
 					break;
@@ -1638,9 +1637,10 @@ WORD debug_dasm(char *t,WORD p) // disassembles the code at address `p` onto the
 #undef M65XX_DUMBPAGE
 #undef M65XX_DUMBPEEK
 #undef M65XX_DUMBPOKE
-#undef M65XX_DUMBPEEKZERO
-#undef M65XX_DUMBPOKEZERO
-#undef M65XX_DUMBPULL
+//#undef M65XX_DUMBPEEKZERO
+//#undef M65XX_DUMBPOKEZERO
+//#undef M65XX_DUMBPULL
+//#undef M65XX_DUMBPUSH
 #undef M65XX_TICK
 #undef M65XX_WAIT
 

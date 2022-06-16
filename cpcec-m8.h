@@ -22,8 +22,8 @@ const int sid_adsr_table[16]={1,4,8,12,19,28,34,40,50,125,250,400,500,1500,2500,
 #if AUDIO_CHANNELS > 1
 int sid_stereo[3][3][2]; // the three chips' three channels' LEFT and RIGHT weights
 #endif
-int sid_filters=1,sid_port_24[3]={-1,-1,-1},sid_filter_32k[3],sid_filter_old[3][3],sid_filter_new[3][3]; // experimental SID filters!
 
+BYTE sid_chips=1; // emulate just the first chip by default
 BYTE sid_nouveau=0; // MOS 8580:6581 flag, right now limited to the handling of mixer-based samples
 BYTE sid_shape_table[8][256]; // shapes: triangle +1 and sawtooth +2; pulse +4 and noise +8 go apart
 // the range [0..+128] gives us a reasonable margin, but we must remember to perform `>>7` in the mixer!
@@ -35,8 +35,8 @@ void sid_setup(void)
 	for (int i=0;i<256;++i)
 	{
 		sid_shape_table[0][i]=0; // silence!
-		sid_shape_table[5][i]=sid_shape_table[1][i]=i<128?i:256-i; // triangle (0..127,128..1)
-		sid_shape_table[6][i]=sid_shape_table[2][i]=i<128?i/2:i/2+1; // sawtooth (0..63,65..128)
+		sid_shape_table[5][i]=sid_shape_table[1][i]=i<128?i:256-i; // triangle (0..255,256..1)
+		sid_shape_table[6][i]=sid_shape_table[2][i]=i<128?i/2:i/2+1; // sawtooth (0..127,129..256)
 		sid_shape_table[7][i]=sid_shape_table[3][i]=(sid_shape_table[1][i]*sid_shape_table[2][i])>>7;
 		sid_shape_table[4][i]=128; // locked!
 	}
@@ -44,31 +44,9 @@ void sid_setup(void)
 
 int sid_mixer[3],sid_voice[3],sid_digis[3]; // the sampled speech and the digidrums go here!
 int sid_smash[3]={0,0,0}; // this must be public, unlike `crash` -- it can be requested thru register 27:
-// ((smash>>15)&128)+((smash>>14) &64)+((smash>>11) &32)+((smash>> 9) &16)+((smash>> 8) & 8)+((smash>> 5) & 4)+((smash>> 3) & 2)+((smash>> 2) & 1);
 
-void sid_filter_assign(int x) // assign filters to the three main voices of chip `x`
-{
-	for (int i=0,j=SID_TABLE[x][23];i<3;j>>=1,++i)
-		sid_filter_old[x][i]=32768-(sid_filter_new[x][i]=(j&1)?sid_filter_32k[x]:(32768/2));
-}
-void sid_filter_recalc(int x) // recalculate the general filter values of chip `x`
-{
-	if (!sid_filters) // global filter is off?
-		{ sid_filter_32k[x]=32768/2; return; }
-	int f=SID_TABLE[x][22]*256+SID_TABLE[x][21],z=0;
-	// the general idea is that `z` is the weight of the new sample versus the old sample;
-	// the higher is `z`, the more powerful high frequencies will be against low ones.
-	f=((f-65536/2)*(1+(SID_TABLE[x][23]>>4))+8)>>4; // top nibble of reg 23 sets the filter depth
-	if (SID_TABLE[x][24]&16) { z+=f; } // LOW  PASS
-	if (SID_TABLE[x][24]&64) { z-=f; } // HIGH PASS
-	if (SID_TABLE[x][24]&32) { z =(z-f)/2; } // BAND PASS
-	// we use >>15 later, so we must adjust the top and the bottom
-	z=(z+65536/2+1)>>1; //printf("%05d ",z);
-	if (z>32768) z=32768; else if (z<128) z=128; // the minimum cannot be zero, it would cancel all frequencies!
-	//z=32768-(((32768-z)*(32768-z)+16384)>>15); // turn the linear function into a curve favouring low over high
-	sid_filter_32k[x]=z; // this applies to the main voices; the 4th voice is set here
-	sid_filter_assign(x); // recalculations require reassignments
-}
+int sid_filters=1,sid_filterz[3],sid_filter_raw[3][3],sid_filter_flt[3][3];
+float sid_filter_lu[3],sid_filter_lv[3],sid_filter_hw[3]; // I absolutely hate mixing floats and ints...
 
 void sid_reg_update(int x,int i)
 {
@@ -76,7 +54,7 @@ void sid_reg_update(int x,int i)
 	{
 		case  0: case  7: case 14:
 		case  1: case  8: case 15:
-			sid_tone_limit[x][c]=SID_TABLE[x][c*7+0]+SID_TABLE[x][c*7+1]*256; sid_filter_assign(x); break; // voice frequency
+			sid_tone_limit[x][c]=SID_TABLE[x][c*7+0]+SID_TABLE[x][c*7+1]*256; break; // voice frequency
 		case  2: case  9: case 16:
 		case  3: case 10: case 17:
 			sid_tone_pulse[x][c]=(SID_TABLE[x][c*7+2]+(SID_TABLE[x][c*7+3]&15)*256)<<8; break; // voice duty cycle
@@ -104,13 +82,31 @@ void sid_reg_update(int x,int i)
 			break;
 		case 24: // how do the differences between the 8580 and the 6581 apply here?
 			i=SID_TABLE[x][24]&15; if (sid_nouveau) sid_mixer[x]=i*17; else sid_voice[x]=((15-i)*audio_channel+7)/15;
-			if (!((sid_port_24[x]^SID_TABLE[x][24])&240)) break; // don't clobber the filter
-			sid_port_24[x]=SID_TABLE[x][24]; // no `break` here!
+			static int v[3]={-1,-1,-1}; if (!((v[x]^SID_TABLE[x][24])&240)) break; // don't clobber the filter
+			v[x]=SID_TABLE[x][24]; // no `break` here!
 		case 21: // filter cutoff frequency: lo-byte
 		case 22: // filter cutoff frequency: hi-byte
-		case 23: // filter resonance control: experimental SID filters!
-			sid_filter_recalc(x); break;
-	}
+		case 23: // filter resonance control
+			i=SID_TABLE[x][22]*256+SID_TABLE[x][21]+1,c=SID_TABLE[x][23]/16+1;
+			sid_filter_lu[x]=0.00+(i*c*1.25)/(65536.0*16); // "1.25" is a personal guess...
+			sid_filter_hw[x]=1.00-(i*c*1.25)/(65536.0*16); // possibly bad algebra, too :-(
+			float hv,mv,mu=0.0+i/65536.0; // *!* maybe 1.0-...?
+			switch (SID_TABLE[x][24]&112) // +16 lo-pass, +32 bandpass, +64 hi-pass
+			{
+				case  0: hv=0.0/1; mv=0.0/1; sid_filter_lv[x]=0.0/1; break;
+				case 16: hv=0.0/1; mv=0.0/1; sid_filter_lv[x]=1.0/1; break;
+				case 32: hv=0.0/1; mv=1.0/1; sid_filter_lv[x]=0.0/1; break;
+				case 48: hv=0.0/1; mv=1.0/2; sid_filter_lv[x]=1.0/2; break;
+				case 64: hv=1.0/1; mv=0.0/1; sid_filter_lv[x]=0.0/1; break;
+				case 80: hv=1.0/2; mv=0.0/1; sid_filter_lv[x]=1.0/2; break;
+				case 96: hv=1.0/2; mv=1.0/2; sid_filter_lv[x]=0.0/1; break;
+				default: hv=1.0/3; mv=1.0/3; sid_filter_lv[x]=1.0/3; break;
+			}
+			sid_filter_lv[x]=sid_filter_lv[x]+(1.0-mu)*mv;
+			sid_filter_hw[x]=sid_filter_hw[x]*(hv+mu*mv); // precalc'd product
+			sid_filterz[x]=sid_filters&&sid_chips>x&&(SID_TABLE[x][24]&112)&&(SID_TABLE[x][23]&7);
+			for (c=0,i=(SID_TABLE[x][24]&112)&&sid_filters?SID_TABLE[x][23]:0;c<3;i>>=1,++c)
+				sid_filter_raw[x][c]=~(sid_filter_flt[x][c]=(i&1)?~0:0);	}
 }
 void sid_update(int x)
 {
@@ -126,8 +122,6 @@ void sid_all_reset(void)
 	{ for (int x=0;x<3;++x) sid_reset(x); }
 
 // audio output ----------------------------------------------------- //
-
-const int sid_main_1st=0,sid_main_inc=1; int sid_main_end=1; // emulate just the first chip by default
 
 void sid_main(int t/*,int d*/)
 {
@@ -157,7 +151,7 @@ void sid_main(int t/*,int d*/)
 			#if SID_MAIN_EXTRABITS
 			a=1<<SID_MAIN_EXTRABITS;
 			#endif
-			for (int x=sid_main_1st;x<sid_main_end;x+=sid_main_inc)
+			for (int x=sid_chips;x--;)
 			{
 				if (crash[x]&1) crash[x]+=0X840000; // update the white noise
 				sid_smash[x]^=(crash[x]>>=1); // LFSR x2
@@ -204,35 +198,84 @@ void sid_main(int t/*,int d*/)
 			}
 		}
 		// mix all channels' output together: +A -B +C -DIGI
-		for (int m,x=sid_main_1st;x<sid_main_end;x+=sid_main_inc)
-		{
-			static int g[3][3]={{0,0,0},{0,0,0},{0,0,0}}; // experimental SID filters!
-			#define SID_TRANSFORM_VALUE(x,c) ((m=(sid_tone_value[x][c]*sid_mixer[x])>>15),\
-				(g[x][c]=(g[x][c]*sid_filter_old[x][c]+m*sid_filter_new[x][c])>>15))
-			//#define SID_TRANSFORM_VALUE(x,c) ((sid_tone_value[x][c]*sid_mixer[x])>>15)
-			#if AUDIO_CHANNELS > 1
-			o0-=f[x][0];
-			o1-=f[x][1];
-			m=SID_TRANSFORM_VALUE(x,0);
-			o0+=m*sid_stereo[x][0][0],
-			o1+=m*sid_stereo[x][0][1];
-			m=SID_TRANSFORM_VALUE(x,1);
-			o0-=m*sid_stereo[x][1][0],
-			o1-=m*sid_stereo[x][1][1];
-			if (!(SID_TABLE[x][24]&128))
+		#define SID_TRANSFORM_VALUE(x,c) ((sid_tone_value[x][c]*sid_mixer[x])>>15)
+		#define SID_FILTER_N_UPDATE(o,p,l,q,x) ((o+=p[x]=(p[x]+l-q[x])*sid_filter_hw[x]+ \
+		((l-p[x])*sid_filter_lu[x]+p[x])*sid_filter_lv[x]+.5),q[x]=l)
+		for (int x=sid_chips;x--;)
+			if (sid_filterz[x])
 			{
-				m=SID_TRANSFORM_VALUE(x,2);
-				o0+=m*sid_stereo[x][2][0],
-				o1+=m*sid_stereo[x][2][1];
+				#if AUDIO_CHANNELS > 1
+				o0-=f[x][0];
+				o1-=f[x][1];
+				int m0,m1,l0,l1;
+				m1=SID_TRANSFORM_VALUE(x,0);
+				o0+=sid_filter_raw[x][0]&(m0=m1*sid_stereo[x][0][0]);
+				o1+=sid_filter_raw[x][0]&(  m1*=sid_stereo[x][0][1]);
+				l0 =sid_filter_flt[x][0]&m0;
+				l1 =sid_filter_flt[x][0]&m1;
+				m1=SID_TRANSFORM_VALUE(x,1);
+				o0-=sid_filter_raw[x][1]&(m0=m1*sid_stereo[x][1][0]);
+				o1-=sid_filter_raw[x][1]&(  m1*=sid_stereo[x][1][1]);
+				l0-=sid_filter_flt[x][1]&m0;
+				l1-=sid_filter_flt[x][1]&m1;
+				if (!(SID_TABLE[x][24]&128))
+				{
+					m1=SID_TRANSFORM_VALUE(x,2);
+					o0+=sid_filter_raw[x][2]&(m0=m1*sid_stereo[x][2][0]);
+					o1+=sid_filter_raw[x][2]&(  m1*=sid_stereo[x][2][1]);
+					l0+=sid_filter_flt[x][2]&m0;
+					l1+=sid_filter_flt[x][2]&m1;
+				}
+				static int p0[3]={0,0,0},p1[3]={0,0,0},q0[3]={0,0,0},q1[3]={0,0,0};
+				SID_FILTER_N_UPDATE(o0,p0,l0,q0,x);
+				SID_FILTER_N_UPDATE(o1,p1,l1,q1,x);
+				#else
+				o-=sid_voice[x];
+				int m,l;
+				SID_TRANSFORM_VALUE(m,x,0);
+				o+=sid_filter_raw[x][0]&m;
+				l =sid_filter_flt[x][0]&m;
+				SID_TRANSFORM_VALUE(m,x,1);
+				o-=sid_filter_raw[x][1]&m;
+				l-=sid_filter_flt[x][1]&m;
+				if (!(SID_TABLE[x][24]&128))
+				{
+					SID_TRANSFORM_VALUE(m,x,2);
+					o+=sid_filter_raw[x][2]&m;
+					l+=sid_filter_flt[x][2]&m;
+				}
+				static int p[3]={0,0,0},q[3]={0,0,0};
+				SID_FILTER_N_UPDATE(o,p,l,q,x);
+				#endif
 			}
-			#else
-			o-=sid_voice[x];
-			o+=SID_TRANSFORM_VALUE(x,0);
-			o-=SID_TRANSFORM_VALUE(x,1);
-			if (!(SID_TABLE[x][24]&128))
-				o+=SID_TRANSFORM_VALUE(x,2);
-			#endif
-		}
+			else
+			{
+				#if AUDIO_CHANNELS > 1
+				o0-=f[x][0];
+				o1-=f[x][1];
+				int m;
+				m=SID_TRANSFORM_VALUE(x,0);
+				o0+=m*sid_stereo[x][0][0];
+				o1+=m*sid_stereo[x][0][1];
+				m=SID_TRANSFORM_VALUE(x,1);
+				o0-=m*sid_stereo[x][1][0];
+				o1-=m*sid_stereo[x][1][1];
+				if (!(SID_TABLE[x][24]&128))
+				{
+					m=SID_TRANSFORM_VALUE(x,2);
+					o0+=m*sid_stereo[x][2][0];
+					o1+=m*sid_stereo[x][2][1];
+				}
+				#else
+				o-=sid_voice[x];
+				o+=SID_TRANSFORM_VALUE(x,0);
+				o-=SID_TRANSFORM_VALUE(x,1);
+				if (!(SID_TABLE[x][24]&128))
+				{
+					o+=SID_TRANSFORM_VALUE(m,x,2);
+				}
+				#endif
+			}
 		/*
 		#if AUDIO_CHANNELS > 1
 		o0+=d,
@@ -259,9 +302,25 @@ void sid_main(int t/*,int d*/)
 	while ((r-=SID_TICK_STEP)>=0);
 }
 
-void sid_frame(void) // avoid hissing: for example, "Stormlord" intro plays 3-bit samples ($35..$3C) but its menu just clobbers the mixer ($3F)
+// other operations ------------------------------------------------- //
+
+int sid_oscillator_t=0,sid_oscillator_v=0;
+void sid_oscillator_start(int t) // launches the oscillator
+	{ sid_oscillator_t=t; sid_oscillator_v=0; }
+BYTE sid_oscillator_check(int t) // looks at the oscillator
 {
-	for (int x=0,i;x<3;++x)
+	t-=sid_oscillator_t; sid_oscillator_t+=t;
+	int i=sid_tone_limit[0][2],j=sid_oscillator_v; if (!i) i=65536; // "REWIND" sets all the SID chip to zero and still expects something to happen... does 0 behave as 65536?
+	sid_oscillator_v+=t*i; // overflows aren't important, only the lowest 24 bits matter.
+	if (sid_tone_shape[0][2]&8) // is the signal noisy? "MAZEMANIA" uses it in $4E33, "REWIND" in $1167 and $12CF...
+		return t=sid_oscillator_v,((t>>15)&128)+((t>>14) &64)+((t>>11) &32)+((t>> 9) &16)+((t>> 8) & 8)+((t>> 5) & 4)+((t>> 3) & 2)+((t>> 2) & 1);
+	// assuming a sawtooth signal by default; "BOX CHECK TEST" relies on it in $C091
+	return (sid_nouveau?j:sid_oscillator_v)>>16; // 8580 copies the value before updating it, 6581 updates it before copying it
+}
+
+void sid_frame(void) // reduce hissing: for example "Stormlord", whose intro plays 3-bit samples ($35..$3C) but its menu just clobbers the mixer ($3F)
+{
+	for (int x=0;x<3;++x)
 	{
 		if (sid_nouveau)
 			sid_voice[x]>>=1;
@@ -269,7 +328,7 @@ void sid_frame(void) // avoid hissing: for example, "Stormlord" intro plays 3-bi
 			sid_voice[x]=(sid_voice[x]*7)>>3;
 		else // don't reduce hissing in "International Karate 1/2/Plus"
 		{
-			i=(SID_TABLE[x][24]&15)*17;
+			int i=(SID_TABLE[x][24]&15)*17;
 			sid_mixer[x]=(i+(sid_mixer[x]+(i>sid_mixer[x]))*7)>>3;
 		}
 		sid_digis[x]=0;

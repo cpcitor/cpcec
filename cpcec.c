@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20220531"//"2555"
+#define MY_VERSION "20220615"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2022 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -641,7 +641,7 @@ void dandanator_update(void)
 	//cprintf("DAN! %08X: %02X%02X,%02X,%02X\n",z80_pc.w,dandanator_cfg[4],dandanator_cfg[5],dandanator_cfg[6],dandanator_cfg[7]);
 	memcpy(&dandanator_cfg[4],&dandanator_cfg[0],4); mmu_update(); // update Dandanator state and MMU
 }
-#define Z80_DNTR_0XFD(w) (dandanator_trap=dandanator_temp,dandanator_temp=w+3)
+#define Z80_DNTR_0XFD(w) (dandanator_trap=dandanator_temp,dandanator_temp=w+4) // notice that `w` is the PC address with the extra 0XFD rather than PC+1!
 #define Z80_DNTR_0XFD70(w,b) do{ if (dandanator_trap==w&&!(dandanator_cfg[5]&32)) { dandanator_cfg[2]=b; if (!(dandanator_cfg[1]&64)) dandanator_update(); } }while(0)
 #define Z80_DNTR_0XFD71(w,b) do{ if (dandanator_trap==w&&!(dandanator_cfg[5]&32)) { dandanator_cfg[3]=b; if (!(dandanator_cfg[1]&64)) dandanator_update(); } }while(0)
 #define Z80_DNTR_0XFD77(w,b) do{ if (dandanator_trap==w&&!(dandanator_cfg[5]&32)) { if (b&128) dandanator_cfg[1]=b; else dandanator_cfg[0]=b; if (!(dandanator_cfg[1]&64)) dandanator_update(); } }while(0)
@@ -851,7 +851,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 
 		if (frame_pos_y>=VIDEO_OFFSET_Y&&frame_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y)
 		{
-			if (video_pos_x>VIDEO_OFFSET_X-16&&video_pos_x<VIDEO_OFFSET_X+VIDEO_PIXELS_X)
+			if ((video_pos_x+=16)>VIDEO_OFFSET_X&&video_pos_x<VIDEO_OFFSET_X+VIDEO_PIXELS_X+16)
 			{
 				switch (gate_status)
 				{
@@ -935,7 +935,6 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 			}
 			else // drawing, but not now
 				video_target+=16,*video_clut_index=video_clut_value; // slow update
-			video_pos_x+=16; // update the cursor regardless of activity
 
 			// special pixel rendering cases: start and end of bitmap rasterline
 
@@ -981,8 +980,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 		else // not drawing at all!!
 			video_pos_x+=16,video_target+=16,*video_clut_index=video_clut_value; // slow update
 
-		hsync_count+=16;
-		gate_screen=crtc_screen+crtc_raster;
+		gate_screen=crtc_screen+crtc_raster; hsync_count+=16; // GATE ARRAY offset, LA-7800 counter
 
 		// GATE ARRAY slow reactions to CRTC events
 
@@ -1249,7 +1247,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 
 		if (UNLIKELY(hsync_count>=VIDEO_HSYNC_HI)) // HBLANK?
 		{
-			if (frame_pos_y>=VIDEO_OFFSET_Y&&frame_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y)
+			if (frame_pos_y>=VIDEO_OFFSET_Y&&frame_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y&&frame_pos_y==video_pos_y)
 			{
 				if (plus_sprite_target) // just in case they weren't drawn yet!
 					if (video_pos_x>plus_sprite_latest) video_main_sprites();
@@ -2372,6 +2370,8 @@ BYTE z80_ack_delay=0; // unlike Z80_LOCAL it cannot be local, it must stick :-(
 #define Z80_PEEK1 Z80_PEEK
 #define Z80_PEEK2 Z80_PEEK
 #define Z80_PEEKZ Z80_PEEK // slow PEEK
+#define Z80_PRAE_PEEKXY PEEK // special DD/FD PEEK (1/2)
+#define Z80_POST_PEEKXY // special DD/FD PEEK (2/2)
 #define Z80_POKE(w,b) do{ BYTE z80_aux=(w)>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO, z80_t=0, z80_trap(w,b); else mmu_ram[z80_aux][w]=(b); }while(0) // trappable single write
 #define Z80_PEEKPOKE Z80_POKE // a POKE that follows a same-address PEEK, f.e. INC (HL)
 #define Z80_POKE0(w,b) (POKE(w)=(b)) // untrappable single write, use with care
@@ -2381,14 +2381,13 @@ BYTE z80_ack_delay=0; // unlike Z80_LOCAL it cannot be local, it must stick :-(
 #define Z80_POKE4 Z80_POKE // 2nd twin write from PUSH rr
 #define Z80_POKE5 Z80_PEEKPOKE // 1st twin write from EX rr,(SP)
 #define Z80_POKE6 Z80_POKE // 2nd twin write from EX rr,(SP)
-#define Z80_BEWARE
-#define Z80_REWIND
 // coarse timings
 #define Z80_STRIDE(o) z80_t+=z80_delays[o]
 #define Z80_STRIDE_0 z80_ack_delay=1 // default "slow ACK" behavior
 #define Z80_STRIDE_1 z80_ack_delay=0 // special "fast ACK" behavior
 #define Z80_STRIDE_ZZ(o) z80_t+=z80_delays[o]+z80_ack_delay
 #define Z80_STRIDE_IO(o) z80_t=z80_delays[o] // "z80_t=XXX" makes "z80_t=0" redundant in Z80_SYNC_IO
+#define Z80_LIST_PEEKXY(o) z80_delays[o] // defined, this makes the Z80 DD/FD boolean list redundant
 
 #define Z80_SLEEP(t) z80_t+=(t)
 #define Z80_HALT_STRIDE 1 // i.e. optimal HALT, can be handled a single go
@@ -2498,8 +2497,7 @@ WORD grafx_show(VIDEO_UNIT *t,int g,int n,BYTE m,WORD w,int o)
 }
 void grafx_info(VIDEO_UNIT *t,int g,int o) // draw the palette and the PLUS sprites
 {
-	t-=16*8;
-	if (plus_enabled)
+	t-=16*8; if (plus_enabled)
 	{
 		for (int y=0;y<2*12;++y)
 			for (int x=0;x<16*8;++x)
@@ -3080,7 +3078,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 		else if (k==0x42524B53&&!(l%5)) // breakpoint table "BRKS"
 		{
 			MEMZERO(debug_point);
-			for (;l;l-=5)
+			for (;l>0;l-=5)
 			{
 				k=fgetiiii(f); if (!fgetc(f)&&k>=0&&k<length(debug_point))
 					debug_point[k]=1; // stick to breakpoints without flags
@@ -4134,7 +4132,7 @@ int main(int argc,char *argv[])
 		return sprintf(session_scratch,"Cannot create session: %s!",s),printferror(session_scratch),1;
 	debug_setup(); session_kbdreset();
 	session_kbdsetup(kbd_map_xlt,length(kbd_map_xlt)/2);
-	video_target=&video_frame[video_pos_y*VIDEO_LENGTH_X+video_pos_y]; audio_target=audio_frame;
+	video_target=&video_frame[video_pos_y*VIDEO_LENGTH_X+video_pos_x]; audio_target=audio_frame;
 	audio_disabled=!session_audio;
 	video_clut_update(); onscreen_inks(0xAA0000,0x55FF55);
 	if (session_fullscreen) session_togglefullscreen();

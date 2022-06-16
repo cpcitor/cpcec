@@ -16,7 +16,7 @@
 
 // BEGINNING OF Z80 EMULATION ======================================= //
 
-WORD z80_wz; // internal register WZ/MEMPTR //,z80_wz2; // is there a WZ'?
+WORD z80_wz; // internal register WZ/MEMPTR //,z80_wz2; // is WZ dual?
 #if Z80_XCF_BUG
 BYTE z80_q; // internal register Q
 #define Z80_Q_SET(x) (z80_q=z80_af.b.l=(x))
@@ -1288,8 +1288,9 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					Z80_WAIT_IR1X(1); Z80_CALL2;
 					break;
 				case 0xCB: // PREFIX: CB SUBSET
-					o=Z80_FETCH; ++r7; ++z80_pc.w;
+					o=Z80_FETCH;
 					Z80_STRIDE(o+0x400);
+					++r7; ++z80_pc.w;
 					// the CB set is extremely repetitive and thus worth abridging
 					#define CASE_Z80_CB_OP1(xx,yy) \
 						case xx+0: yy(z80_bc.b.h); break; case xx+1: yy(z80_bc.b.l); break; \
@@ -1352,10 +1353,44 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 				case 0xDD: // PREFIX: XY SUBSET (IX)
 				case 0xFD: // PREFIX: XY SUBSET (IY)
 					{
-						Z80_BEWARE; // see default case
+						// detect whether the following DD/FD opcode is defined
 						Z80W *xy=(o&0x20)?&z80_iy:&z80_ix;
-						o=Z80_FETCH; ++r7; ++z80_pc.w;
+						o=Z80_PRAE_PEEKXY(z80_pc.w); // special DD/FD PEEK (1/2)
+						#ifdef Z80_LIST_PEEKXY
+						if (!Z80_LIST_PEEKXY(o+0x600))
+						#else
+						const BYTE zz[256]={ // defined DD/FD combinations
+							//1 2 3 4 5 6 7 8 9 A B C D E F //// +0x600 -
+							0,0,0,1,0,0,0,0,0,1,0,1,0,0,0,0, // 0x00-0x0F
+							0,0,0,1,0,0,0,0,0,1,0,1,0,0,0,0, // 0x10-0x1F
+							0,1,1,1,1,1,1,0,0,1,1,1,1,1,1,0, // 0x20-0x2F
+							0,0,0,1,1,1,1,0,0,1,0,1,0,0,0,0, // 0x30-0x3F
+							0,0,0,0,1,1,1,0,0,0,0,0,1,1,1,0, // 0x40-0x4F
+							0,0,0,0,1,1,1,0,0,0,0,0,1,1,1,0, // 0x50-0x5F
+							1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x60-0x6F
+							1,1,1,1,1,1,0,1,0,0,0,0,1,1,1,0, // 0x70-0x7F
+							0,0,0,0,1,1,1,0,0,0,0,0,1,1,1,0, // 0x80-0x8F
+							0,0,0,0,1,1,1,0,0,0,0,0,1,1,1,0, // 0x90-0x9F
+							0,0,0,0,1,1,1,0,0,0,0,0,1,1,1,0, // 0xA0-0xAF
+							0,0,0,0,1,1,1,0,0,0,0,0,1,1,1,0, // 0xB0-0xBF
+							1,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0, // 0xC0-0xCF
+							1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0, // 0xD0-0xDF
+							1,1,0,1,0,1,0,0,1,1,0,0,0,0,0,0, // 0xE0-0xEF
+							1,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0, // 0xF0-0xFF
+						}; if (!zz[o])
+						#endif
+						{
+							z80_active=0; // delay any interruptions
+							#ifdef Z80_DNTR_0XFD
+							if (o==0xFD) // detect "...FDFDFD..." used by DANDANATOR
+								if (xy==&z80_iy)
+									Z80_DNTR_0XFD(z80_pc.w);
+							#endif
+							break; // ILLEGAL DDXX/FDXX, stop here!
+						}
+						Z80_POST_PEEKXY; // special DD/FD PEEK (2/2)
 						Z80_STRIDE(o+0x600);
+						++r7; ++z80_pc.w;
 						switch (o)
 						{
 							// 0xDD00-0xDD3F
@@ -1810,22 +1845,13 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 									#undef CASE_Z80_XYCB_BIT
 									break;
 								}
-							#ifdef Z80_DNTR_0XFD
-							case 0xFD: // ILLEGAL FDXX used by DANDANATOR
-								if (xy==&z80_iy) Z80_DNTR_0XFD(z80_pc.w); // detect "...FDFDFD..."
-								// no `break`! it's still an ILLEGAL opcode!
-							#endif
-							default: // ILLEGAL DDXX/FDXX!
-								z80_active=0; // delay interruption (if any)
-								--r7; --z80_pc.w; // undo increases!!
-								// Z80_STRIDE(o) MUST BE ZERO if `o` is illegal!!
-								Z80_REWIND; // terrible hack to undo the opcode fetching!
 						}
 					}
 					break;
 				case 0xED: // PREFIX: ED SUBSET
-					o=Z80_FETCH; ++r7; ++z80_pc.w;
+					o=Z80_FETCH;
 					Z80_STRIDE(o+0x200);
+					++r7; ++z80_pc.w;
 					switch (o)
 					{
 						// 0xED00-0xED3F

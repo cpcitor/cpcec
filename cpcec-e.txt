@@ -1107,3 +1107,13 @@ instead of Colodore. The CIA chips are more accurate too (TRSI's "4Krawall") but
 they don't pass the PC64 test suite yet. The internal SID filter is now
 partially emulated; the user can manually disable it. Minor optimisations
 through "likely/unlikely" branching hints.
+- 20220615 -- minor patch fixing several glitches: the Win32 binaries use
+timeBeginPeriod and timeEndPeriod because of recent changes in Win10; the
+emulators ensure that 'frame_pos_y' and 'video_pos_y' match properly; the Z80
+module handles dummy IX/IY opcodes without the unreliable macros Z80_BEWARE and
+Z80_REWIND; the VIC-II chip avoids retriggering sprites ("Gothik", Booze
+Design's "Sprite Invaders") and clips them properly if they sit on screen edges
+(Singular's "Smooth and Wonders"). The filter of the SID chip is now more
+detailed, and its third voice's oscillator returns more realistic values:
+"Mazemania" no longer hangs at the beginning of a level. CSFEC can load extra
+colour palettes from VPL files, either old style "RR GG BB D" or new "RR GG BB".

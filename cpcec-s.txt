@@ -1188,3 +1188,14 @@ chips CIA también son más precisos ("4Krawall" de TRSI) pero aún no superan e
 paquete de pruebas PC64. El filtro interno del SID está emulado parcialmente; el
 usuario puede deshabilitarlo a mano. Optimizaciones menores mediante pistas de
 ramificación "likely/unlikely".
+- 20220615 -- parche menor que corrige varios bugs: los binarios de Win32 usan
+timeBeginPeriod y timeEndPeriod a raíz de cambios recientes en Win10; los
+emuladores aseguran que 'frame_pos_y' y 'video_pos_y' se corresponden; el módulo
+Z80 maneja los códigos IX/IY redundantes sin las poco fiables macros Z80_BEWARE
+y Z80_REWIND; el chip VIC-II chip evita reiniciar sprites ("Gothik", "Sprite
+Invaders" de Booze Design) y los recorta debidamente si están en los bordes de
+la pantalla ("Smooth and Wonders" de Singular). El filtro del chip SID es ahora
+más detallado, y el oscilador del tercer canal devuelve valores más realistas:
+"Mazemania" ya no se cuelga al empezar un nivel. CSFEC puede cargar paletas de
+color adicionales en ficheros VPL, del estilo viejo "RR GG BB D" o el nuevo "RR
+GG BB".

@@ -14,7 +14,7 @@
 // START OF SDL 2.0+ DEFINITIONS ==================================== //
 
 #ifndef SDL_MAIN_HANDLED
-#define SDL_MAIN_HANDLED // required!
+#define SDL_MAIN_HANDLED // required, see BOOTSTRAP
 #endif
 
 #include <SDL2/SDL.h>
@@ -1510,7 +1510,8 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 			#endif
 				break;
 			case SDL_KEYDOWN:
-				if (event.key.keysym.mod&KMOD_ALT) // ALT+RETURN toggles fullscreen
+				session_shift=!!(event.key.keysym.mod&KMOD_SHIFT);
+				if (event.key.keysym.mod&KMOD_ALT) // ALT+RETURN toggles fullscreen; reject other ALT-combinations
 				{
 					if (event.key.keysym.sym==SDLK_RETURN)
 						session_togglefullscreen();
@@ -1518,10 +1519,9 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 				}
 				if (event.key.keysym.sym==SDLK_F10)
 				{
-					session_event=0x8080; // F10 shows the popup menu
+					session_event=0x8080; // pressing F10 (not releasing) shows the popup menu
 					break;
 				}
-				session_shift=!!(event.key.keysym.mod&KMOD_SHIFT);
 				if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant inside debugger, see below
 					session_event=debug_xlat(event.key.keysym.scancode);
 				if ((k=session_key_n_joy(event.key.keysym.scancode))<128) // normal key

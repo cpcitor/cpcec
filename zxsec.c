@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20220531"//"2555"
+#define MY_VERSION "20220615"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2022 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -786,7 +786,7 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 		z80_irq=z80_irq<4?0:z80_irq-4;
 		if (UNLIKELY(ula_shown_x==ula_start_x)) // HBLANK? (the Pentagon timings imply this test is done in advance)
 		{
-			if (frame_pos_y>=VIDEO_OFFSET_Y&&frame_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y) video_drawscanline();
+			if (frame_pos_y>=VIDEO_OFFSET_Y&&frame_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y&&frame_pos_y==video_pos_y) video_drawscanline();
 			video_nextscanline(0); // scanline event!
 		}
 		if ((video_pos_y>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y)&&(video_pos_x>VIDEO_OFFSET_X-16&&video_pos_x<VIDEO_OFFSET_X+VIDEO_PIXELS_X))
@@ -837,7 +837,7 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 			}
 		}
 		else
-			video_target+=16,video_pos_x+=16;
+			video_pos_x+=16,video_target+=16;
 		if (UNLIKELY(++ula_shown_x==ula_limit_x)) // end of bitmap?
 		{
 			ula_shown_x=0; ++ula_shown_y;
@@ -1599,6 +1599,8 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 #define Z80_PEEK1 Z80_PEEK
 #define Z80_PEEK2 Z80_PEEK
 #define Z80_PEEKZ(w) ( Z80_MREQ(4,w), mmu_rom[z80_aux1][w] ) // slow PEEK
+#define Z80_PRAE_PEEKXY(w) (z80_aux1=((w)>>14),mmu_rom[z80_aux1][w]) // special DD/FD PEEK (1/2)
+#define Z80_POST_PEEKXY Z80_MREQ_NEXT(4) // special DD/FD PEEK (2/2)
 #define Z80_POKE(w,b) ( Z80_MREQ(3,w), mmu_ram[z80_aux1][w]=(b) ) // trappable single write
 #define Z80_PEEKPOKE(w,b) ( Z80_MREQ_NEXT(3), mmu_ram[z80_aux1][w]=(b) ) // a POKE that follows a same-address PEEK, f.e. INC (HL)
 #define Z80_POKE0 Z80_POKE // untrappable single write, use with care
@@ -1608,14 +1610,13 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 #define Z80_POKE4 Z80_POKE0 // 2nd twin write from PUSH rr; no ATTRIB effects seem to need it
 #define Z80_POKE5 Z80_PEEKPOKE // 1st twin write from EX rr,(SP)
 #define Z80_POKE6 Z80_POKE0 // 2nd twin write from EX rr,(SP)
-#define Z80_BEWARE int z80_t_=z80_t,ula_clash_z_=ula_clash_z
-#define Z80_REWIND z80_t=z80_t_,ula_clash_z=ula_clash_z_
 // coarse timings
 #define Z80_STRIDE(o)
 #define Z80_STRIDE_0
 #define Z80_STRIDE_1
 #define Z80_STRIDE_ZZ(o)
 #define Z80_STRIDE_IO(o)
+//#define Z80_LIST_PEEKXY(o) z80_delays[o] // undef'd, the Z80 will use its own Z80 DD/FD boolean list
 
 #define Z80_SLEEP(t) Z80_WAIT(t)
 #define Z80_HALT_STRIDE 0 // i.e. careful HALT, requires gradual emulation
@@ -1636,7 +1637,8 @@ void z80_trdos_leave(void) { trdos_mapped=0,mmu_update(); } // always allow exit
 void debug_info(int q)
 {
 	sprintf(DEBUG_INFOZ(0),"ULA:       (%05d:%d)",ula_clash_z,ula_clash_mreq[1][(WORD)ula_clash_z]);
-	sprintf(DEBUG_INFOZ(1)+4,"%04X:%02X %02X:%02X:%02X",ula_bitmap,ula_bus&255,ula_v1,ula_v2,ula_v3);
+	sprintf(DEBUG_INFOZ(1)+4,type_id<1?"%04X:%02X %02X:--:--":type_id<3?"%04X:%02X %02X:%02X:--":"%04X:%02X %02X:%02X:%02X",
+		ula_bitmap,ula_bus&255,ula_v1,ula_v2,ula_v3); // hide 128K and PLUS3 fields on 48K, hide PLUS3 field on 128K
 	sprintf(DEBUG_INFOZ(2)+4,"MEM:%c%c%c%c IO:%c%c%c%c",
 		debug_info_mreq(0),debug_info_mreq(1),debug_info_mreq(2),debug_info_mreq(3),
 		debug_info_iorq(0),debug_info_iorq(1),debug_info_iorq(2),debug_info_iorq(3));
@@ -2149,7 +2151,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 			}
 			else if (header[37]&128) // 48K system!
 				ula_sixteen=1; // 16K
-			while ((i=fgetii(f))&&(q=fgetc(f))>=0) // q<0 = feof
+			while ((i=fgetii(f))>0&&(q=fgetc(f))>=0) // q<0 = feof
 			{
 				cprintf("%05d:%03d ",i,q);
 				if ((q-=3)<0||q>7) // ignore ROM copies
@@ -3242,7 +3244,7 @@ int main(int argc,char *argv[])
 		return sprintf(session_scratch,"Cannot create session: %s!",s),printferror(session_scratch),1;
 	debug_setup(); session_kbdreset();
 	session_kbdsetup(kbd_map_xlt,length(kbd_map_xlt)/2);
-	video_target=&video_frame[video_pos_y*VIDEO_LENGTH_X+video_pos_y]; audio_target=audio_frame;
+	video_target=&video_frame[video_pos_y*VIDEO_LENGTH_X+video_pos_x]; audio_target=audio_frame;
 	audio_disabled=!session_audio;
 	video_clut_update(); onscreen_inks(0xAA0000,0x55FF55);
 	if (session_fullscreen) session_togglefullscreen();

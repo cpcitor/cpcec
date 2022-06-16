@@ -39,14 +39,14 @@ INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 #define ONSCREEN_SIZE 12 //(sizeof(onscreen_chrs)/95)
 #define ONSCREEN_CEIL 256
 
-#ifndef SDL2
-#if defined(SDL_MAIN_HANDLED)||!defined(_WIN32)
-#define SDL2 // fallback!
-#endif
-#endif
-
+#ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN 1 // reduce dependencies
+#endif
+#else
+#ifndef SDL2
+#define SDL2 // non-Win32 machines always fall back to SDL2!
+#endif
 #endif
 
 #ifdef DEBUG
@@ -277,7 +277,7 @@ BYTE kbd_bit[16],joy_bit[16]; // up to 128 keys in 16 rows of 8 bits
 #define	KBCODE_X_SUB	0x4A
 #define	KBCODE_X_MUL	0x37
 #define	KBCODE_X_DIV	0xB5
-BYTE native_usbkey[]={ // WIN32-USB keyboard translation table; CONTROL, SHIFT, ALT and the like aren't included
+BYTE native_usbkey[]={ // WIN32-USB keyboard translation table; CONTROL, SHIFT, ALT and other modifiers are excluded
 	0,		0,		0,		0,
 	KBCODE_A,	KBCODE_B,	KBCODE_C,	KBCODE_D,
 	KBCODE_E,	KBCODE_F,	KBCODE_G,	KBCODE_H,
@@ -305,7 +305,7 @@ BYTE native_usbkey[]={ // WIN32-USB keyboard translation table; CONTROL, SHIFT, 
 	KBCODE_X_8,	KBCODE_X_9,	KBCODE_X_0,	KBCODE_X_DOT,
 	KBCODE_CHR4_5	};//=100
 void usbkey2native(BYTE *t,BYTE *s,int n) { while (n) { int k=*s++; *t++=k<sizeof(native_usbkey)?native_usbkey[k]:0; --n; } }
-void native2usbkey(BYTE *t,BYTE *s,int n) { while (n) { int k=0; while (k<sizeof(native_usbkey)) if (*s!=native_usbkey[k]) ++k; else break; *t++=k<sizeof(native_usbkey)?k:0; s++; --n; } }
+void native2usbkey(BYTE *t,BYTE *s,int n) { while (n) { int k=0; while (k<sizeof(native_usbkey)&&*s!=native_usbkey[k]) ++k; *t++=k<sizeof(native_usbkey)?k:0; s++; --n; } }
 BYTE kbd_k2j[]= // these keys can simulate a 4-button joystick
 	{ KBCODE_UP, KBCODE_DOWN, KBCODE_LEFT, KBCODE_RIGHT, KBCODE_Z, KBCODE_X, KBCODE_C, KBCODE_V };
 
@@ -552,9 +552,9 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 				kbd_bit_res(k);
 			break;
 		case WM_DROPFILES:
+			session_shift=GetKeyState(VK_SHIFT)<0,session_event=0x8000;
 			DragQueryFile((HDROP)wparam,0,(LPTSTR)session_parmtr,STRMAX);
 			DragFinish((HDROP)wparam);
-			session_shift=GetKeyState(VK_SHIFT)<0,session_event=0x8000;
 			break;
 		//case WM_ENTERIDLE: // pause before showing dialogboxes or menus
 		case WM_ENTERSIZEMOVE: // pause before moving the window
@@ -734,6 +734,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 			session_timer=waveOutWrite(session_wo,&session_wh,sizeof(WAVEHDR)); // should be zero!
 		}
 	}
+	timeBeginPeriod(8); // WIN10 sets this value too high by default; 8 is recommended in multiple sources
 	session_clean(); session_please();
 	return NULL;
 }
@@ -859,7 +860,11 @@ INLINE void session_render(void) // update video, audio and timers
 			if ((i=((session_timer+=(j/VIDEO_PLAYBACK))-i))>0)
 			{
 				if ((i=(1000*i/j))>0) // avoid zero and negative values!
-					Sleep(i>1000/VIDEO_PLAYBACK?1+1000/VIDEO_PLAYBACK:i);
+				{
+					Sleep(i>1000/VIDEO_PLAYBACK?1+1000/VIDEO_PLAYBACK:i); // assume normalised Sleep()
+					//static int skew=0; int k=GetTickCount(),l=i>1000/VIDEO_PLAYBACK?1+1000/VIDEO_PLAYBACK:i;
+					//l-=skew; if (l>0) Sleep(l); skew=GetTickCount()-k-l; // normalise Sleep(), cfr. WIN10
+				}
 			}
 			else if (i<0&&!session_filmfile)//&&!video_framecount)
 				video_framecount=video_framelimit+2; // frameskip on timeout!
@@ -911,6 +916,7 @@ INLINE void session_byebye(void) // delete video+audio devices
 	if (session_dib) DeleteObject(session_dib);
 	ReleaseDC(session_hwnd,session_dc1);
 	free(video_blend);
+	timeEndPeriod(8); // possibly unnecessary even on WIN10, as the programme is ending
 }
 
 // menu item functions ---------------------------------------------- //
