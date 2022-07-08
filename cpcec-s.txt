@@ -99,11 +99,12 @@ muestra una breve explicación de las opciones disponibles.
 * -C3 : mostrar la imagen a color claro;
 * -C4 : mostrar la imagen en fósforo verde;
 * -c0 : elegir el modo de "scanlines" medios;
-* -c1 : elegir el modo de "scanlines" normales (por defecto);
-* -c2 : elegir el modo de entrelazado simple;
-* -c3 : elegir el modo de entrelazado doble;
-* -c4, -c5, -c6, -c7 : elegir los modos de "scanlines" y entrelazado como en
--c0...-c3, más "blending";
+* -c2 : elegir el modo de "scanlines" normales (por defecto);
+* -c4 : elegir el modo de entrelazado simple;
+* -c6 : elegir el modo de entrelazado doble;
+* -c8 : elegir el modo de "scanlines" aproximados;
+* -c1, -c3, -c5, -c7, -c9 : elegir los modos de "scanlines" y entrelazado como
+en -c0...-c8, más "blending" entre "frames";
 * -d : iniciar la emulación con el "debugger" activo (por defecto inactivo);
 * -g0, -g1, -g2, -g3, -g4 : elegir el tipo de CRTC de 0 a 4 (tipo 1 por
 defecto);
@@ -138,7 +139,9 @@ sonido);
 adelante);
 * -z : habilitar la aceleración de cinta;
 * -Z : deshabilitar la aceleración de cinta (por defecto habilitada);
-* -! : deshabilitar la aceleración por hardware de vídeo y audio.
+* -! : deshabilitar la aceleración por hardware de vídeo y audio;
+* -+ : forzar el modo de ventana (en lugar de pantalla completa) con zoom de
+100%;
 * -$ : cambiar el menú de normal (siempre visible) a contextual (botón derecho)
 en Win32; cambiar el interfaz de usuario negro de sobre blanco a blanco sobre
 negro en SDL2.
@@ -1124,7 +1127,7 @@ interrupción surge antes del final del bloque. Nuevas opciones de línea de
 comando `-o`, `-t`, `-y` y `-z` con las funciones opuestas de `-O`, `-T`, `-Y` y
 `-Z`. ¡Feliz año nuevo 2022!
 - 20220104 -- parche menor que mejora las banderas de interrupción de
-INIR/INDR/OTIR/OTDR (segñun pruebas nuevas de Ped7g) y los tiempos de
+INIR/INDR/OTIR/OTDR (según pruebas nuevas de Ped7g) y los tiempos de
 LDI/LDD/LDIR/LDDR en CPC (las pruebas octava y novena de SPLIT.CPR de Roudoudou
 por fin funcionan) y que corrige un error en la lógica de CRTC1 (R5 no es cero
 en las cracktros NPS de Chany y Grees: avisado por Norecess464) y otro en los
@@ -1199,3 +1202,15 @@ más detallado, y el oscilador del tercer canal devuelve valores más realistas:
 "Mazemania" ya no se cuelga al empezar un nivel. CSFEC puede cargar paletas de
 color adicionales en ficheros VPL, del estilo viejo "RR GG BB D" o el nuevo "RR
 GG BB".
+- 20220707 -- parche menor que sustituye la vieja opción "Zoom by integer" por
+un nuevo submenú "Window" con opciones para elegir el tamaño de la ventana,
+desde 100% hasta 300%, que además se mantiene entre sesiones (sugerido por
+Xyphoe), y que convierte las dos opciones "Pixel filter" y "Blend scanlines" en
+"X-blending", "Y-blending" y "Frame blending", que respectivamente suavizan la
+imagen horizontalmente, verticalmente y dinámicamente. Varias mejoras en el
+VIC-II (aplastamiento de sprites: "Heraklion" de Carrion y Crest, "Merswiny" de
+Arise; aplastamiento de líneas: "Ukiyo" de Samar) y el SID (puertos 27 y 28:
+detección del segundo chip en "To Norah", efectos sonoros de "Cloud Kingdoms";
+formas de onda: canción de "HVSC 10 Years"; nuevo filtro basado en el algoritmo
+de Chamberlin). El parámetro de línea de comandos `-c0..-c7` es ahora `-c0..c9`
+e incluye el quinto modo, "scanlines" aproximados.

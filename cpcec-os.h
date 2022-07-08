@@ -12,8 +12,8 @@
 // knowledge of the emulation's intrinsic properties.
 
 // To compile the emulator for Windows 5.0+, the default platform, type
-// "$(CC) -xc cpcec.c -luser32 -lgdi32 -lcomdlg32 -lshell32 -lwinmm"
-// or the equivalent options as defined by your preferred compiler.
+// "gcc cpcec.res -xc cpcec.c -luser32 -lgdi32 -lcomdlg32 -lshell32
+// -lwinmm" or the equivalent options from your preferred C compiler.
 // Optional DirectDraw support is enabled by appending "-DDDRAW -lddraw"
 // Succesfully tested compilers: GCC 4.6.3 (-std=gnu99), 4.9.2, 5.1.0,
 // 8.3.0 ; TCC 0.9.27; CLANG 3.7.1, 7.0.1 ; Pelles C 4.50.113 ; etc.
@@ -71,8 +71,8 @@ INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 #include <shellapi.h> // SHELL32.DLL: DragQueryFile()...
 
 #define STRMAX 288 // widespread in Windows
-#define PATHCHAR '\\' // '/' in POSIX
-#define strcasecmp _stricmp
+#define PATHCHAR '\\' // unlike '/' (POSIX)
+#define strcasecmp _stricmp // from MSVCRT!
 #define fsetsize(f,l) _chsize(_fileno(f),(l))
 #include <io.h> // _chsize(),_fileno()...
 
@@ -112,7 +112,7 @@ int session_maus_x=0,session_maus_y=0; // mouse coordinates (UI + optional emula
 int session_maus_z=0; // optional mouse
 #endif
 BYTE video_filter=0,audio_filter=0; // filter flags
-BYTE session_intzoom=0,session_focused=0;
+BYTE session_fullblit=0,session_zoomblit=0,session_focused=0;
 FILE *session_wavefile=NULL; // audio recording is done on each session update
 
 RECT session_ideal; // ideal rectangle where the window fits perfectly
@@ -120,7 +120,7 @@ JOYINFOEX session_joy; // joystick+mouse buffers
 HWND session_hwnd,session_hdlg=NULL; // window handle
 HMENU session_menu=NULL; // menu handle
 BYTE session_hidemenu=0; // normal or pop-up menu
-HDC session_dc1,session_dc2=NULL; HGDIOBJ session_dib=NULL; // video structs
+HDC session_dc1=NULL,session_dc2=NULL; HGDIOBJ session_dib=NULL; // video structs
 HWAVEOUT session_wo; WAVEHDR session_wh; MMTIME session_mmtime; // audio structs
 
 VIDEO_UNIT *debug_frame; BYTE debug_dirty; // !0 (new redraw required) or 0 (redraw not required)
@@ -354,26 +354,63 @@ int session_key_n_joy(int k) // handle some keys as joystick motions
 	return kbd_map[k];
 }
 
+#define session_clrscr() InvalidateRect(session_hwnd,NULL,1)
 int session_r_x,session_r_y,session_r_w,session_r_h; // actual location and size of the bitmap
+int session_resize(void) // dunno why, but one 100% render must happen before the resizing; performance falls otherwise :-/
+{
+	static char z=1; if (session_fullblit)
+	{
+		if (z)
+		{
+			SetWindowLong(session_hwnd,GWL_STYLE,(GetWindowLong(session_hwnd,GWL_STYLE)&~WS_CAPTION));
+				//|WS_POPUP|WS_CLIPCHILDREN // hide caption and buttons
+			/*if (!session_hidemenu)*/ SetMenu(session_hwnd,NULL); // hide menu
+			ShowWindow(session_hwnd,SW_MAXIMIZE); // adjust to entire screen
+			z=0; session_clrscr(),session_dirty=1; // clean up and update options
+		}
+	}
+	else if (z!=session_zoomblit+1)
+	{
+		if (!z)
+		{
+			SetWindowLong(session_hwnd,GWL_STYLE,(GetWindowLong(session_hwnd,GWL_STYLE)|WS_CAPTION));
+				//&~WS_POPUP&~WS_CLIPCHILDREN // show caption and buttons
+			if (!session_hidemenu) SetMenu(session_hwnd,session_menu); // show menu
+		}
+		RECT r; // GetWindowRect(session_hwnd,&r); // adjust to screen center
+		SystemParametersInfo(SPI_GETWORKAREA,0,&r,0); ShowWindow(session_hwnd,SW_RESTORE);
+		int x,y; r.right-=r.left,r.bottom-=r.top; // i.e. width and height
+		while ((x=VIDEO_PIXELS_X*(session_zoomblit+2)/2,y=VIDEO_PIXELS_Y*(session_zoomblit+2)/2),
+			session_zoomblit>0&&(x*16>r.right*17||y*16>r.bottom*17)) // shrink if too big!
+			--session_zoomblit;
+		r.left+=(r.right-(x+=session_ideal.right-VIDEO_PIXELS_X))/2;
+		r.top+=(r.bottom-(y+=session_ideal.bottom-VIDEO_PIXELS_Y))/2;
+		MoveWindow(session_hwnd,r.left,r.top,x,y,1); // resize AND center!
+		z=session_zoomblit+1; session_clrscr(),session_dirty=1; // clean up and update options
+	}
+	return z;
+}
 void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 {
-	int ox,oy; if (session_signal&SESSION_SIGNAL_DEBUG)
-		ox=0,oy=0;
-	else
-		ox=VIDEO_OFFSET_X,oy=VIDEO_OFFSET_Y;
 	RECT r; GetClientRect(hwnd,&r); // calculate window area
 	if ((session_r_w=(r.right-=r.left))>0&&(session_r_h=(r.bottom-=r.top))>0) // divisions by zero happen on WM_PAINT during window resizing!
 	{
+		int ox,oy; if (session_signal&SESSION_SIGNAL_DEBUG)
+			ox=0,oy=0;
+		else
+			ox=VIDEO_OFFSET_X,oy=VIDEO_OFFSET_Y;
 		if (session_r_w>session_r_h*VIDEO_PIXELS_X/VIDEO_PIXELS_Y) // window area is too wide?
 			session_r_w=session_r_h*VIDEO_PIXELS_X/VIDEO_PIXELS_Y;
 		if (session_r_h>session_r_w*VIDEO_PIXELS_Y/VIDEO_PIXELS_X) // window area is too tall?
 			session_r_h=session_r_w*VIDEO_PIXELS_Y/VIDEO_PIXELS_X;
-		if (session_intzoom) // integer zoom? (100%, 150%, 200%, 250%, 300%...)
+		#if 0
+		if (session_fullblit) // maximum integer zoom: 100%, 150%, 200%...
+		#endif
 			session_r_w=((session_r_w*17)/VIDEO_PIXELS_X/8)*VIDEO_PIXELS_X/2, // "*17../16../1"
 			session_r_h=((session_r_h*17)/VIDEO_PIXELS_Y/8)*VIDEO_PIXELS_Y/2; // forbids N+50%
 		if (session_r_w<VIDEO_PIXELS_X||session_r_h<VIDEO_PIXELS_Y)
 			session_r_w=VIDEO_PIXELS_X,session_r_h=VIDEO_PIXELS_Y; // window area is too small!
-		session_r_x=(r.right-session_r_w)/2,session_r_y=(r.bottom-session_r_h)/2; // locate bitmap on window center
+		session_r_x=(r.right-session_r_w)>>1,session_r_y=(r.bottom-session_r_h)>>1; // locate bitmap on window center
 
 		#ifdef DDRAW
 		if (lpddback)
@@ -391,7 +428,7 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 
 			if (q) // not sure if we can redraw even when !q ...
 			{
-				POINT p; p.x=0; p.y=0;
+				POINT p={.x=0,.y=0};
 				if (ClientToScreen(hwnd,&p)) // can this ever fail!?
 				{
 					RECT rr;
@@ -420,39 +457,13 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 			HGDIOBJ session_oldselect; if (session_oldselect=SelectObject(session_dc2,session_signal&SESSION_SIGNAL_DEBUG?session_dbg:session_dib))
 			{
 				if (session_hardblit=(session_r_w<=VIDEO_PIXELS_X||session_r_h<=VIDEO_PIXELS_Y)) // window area is a perfect fit?
-					BitBlt(h,session_r_x,session_r_y,session_r_w=VIDEO_PIXELS_X,session_r_h=VIDEO_PIXELS_Y,session_dc2,ox,oy,SRCCOPY); // fast :-)
+					BitBlt(h,session_r_x,session_r_y,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,session_dc2,ox,oy,SRCCOPY); // fast :-)
 				else
 					StretchBlt(h,session_r_x,session_r_y,session_r_w,session_r_h,session_dc2,ox,oy,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,SRCCOPY); // slow :-(
 				SelectObject(session_dc2,session_oldselect);
 			}
 		}
 	}
-}
-#define session_clrscr() InvalidateRect(session_hwnd,NULL,1)
-int session_fullscreen=0;
-void session_togglefullscreen(void)
-{
-	if (IsZoomed(session_hwnd))
-	{
-		SetWindowLong(session_hwnd,GWL_STYLE,(GetWindowLong(session_hwnd,GWL_STYLE)|WS_CAPTION));
-			//&~WS_POPUP&~WS_CLIPCHILDREN // show caption and buttons
-		if (!session_hidemenu) SetMenu(session_hwnd,session_menu); // show menu
-		RECT r; // GetWindowRect(session_hwnd,&r); // adjust to screen center
-		SystemParametersInfo(SPI_GETWORKAREA,0,&r,0); ShowWindow(session_hwnd,SW_RESTORE);
-		r.left+=((r.right-r.left)-session_ideal.right)/2;
-		r.top+=((r.bottom-r.top)-session_ideal.bottom)/2;
-		MoveWindow(session_hwnd,r.left,r.top,session_ideal.right,session_ideal.bottom,1);
-		session_fullscreen=0;
-	}
-	else
-	{
-		SetWindowLong(session_hwnd,GWL_STYLE,(GetWindowLong(session_hwnd,GWL_STYLE)&~WS_CAPTION));
-			//|WS_POPUP|WS_CLIPCHILDREN // hide caption and buttons
-		/*if (!session_hidemenu)*/ SetMenu(session_hwnd,NULL); // hide menu
-		ShowWindow(session_hwnd,SW_MAXIMIZE); // adjust to entire screen
-		session_fullscreen=1;
-	}
-	session_dirty=1; // update "Full screen" option (if any)
 }
 int session_contextmenu(void) // used only when the normal menu is disabled
 {
@@ -566,8 +577,8 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 			if (msg==WM_SYSKEYDOWN)
 			{
 				if (wparam==VK_RETURN) // ALT+RETURN toggles fullscreen
-					return session_togglefullscreen(),0; // skip OS
-				else if (wparam==VK_F10&&session_contextmenu()) // F10 shows the popup menu
+					return session_fullblit=!session_fullblit,session_resize(),0; // skip OS
+				/*else*/ if (wparam==VK_F10&&session_contextmenu()) // F10 shows the popup menu
 					return 0; // skip OS if the popup menu is allowed
 			}
 			else if (msg==WM_KILLFOCUS)
@@ -582,7 +593,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	OSVERSIONINFO win32_version; HMENU session_submenu=NULL;
 	win32_version.dwOSVersionInfoSize=sizeof(win32_version); GetVersionEx(&win32_version);
 	sprintf(session_version,"%lu.%lu",win32_version.dwMajorVersion,win32_version.dwMinorVersion);
-	char c,*t; int i;
+	char c,*t; int i,j;
 	/*if (!session_softblit)*/ while (c=*s++)
 	{
 		if (c=='=') // separator?
@@ -641,9 +652,8 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 		return "cannot create window";
 	DragAcceptFiles(session_hwnd,1);
 
-	// hardware-able DirectDraw
 	#ifdef DDRAW
-	if (!session_softblit)
+	if (!session_softblit) // hardware-able DirectDraw
 	{
 		session_softblit=1; // fallback!
 		if (DirectDrawCreate(NULL,&lpdd,NULL)>=0)
@@ -679,8 +689,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 			}
 		}
 	}
-	// software-only GDI bitmap
-	if (session_softblit)
+	if (session_softblit) // software-only GDI bitmap
 	#endif
 	{
 		BITMAPINFO bmi;
@@ -691,9 +700,9 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 		bmi.bmiHeader.biPlanes=1;
 		bmi.bmiHeader.biBitCount=32; // cfr. VIDEO_UNIT
 		bmi.bmiHeader.biCompression=BI_RGB;
-		session_dc1=GetDC(session_hwnd); // caution: we assume that if CreateWindow() succeeds all other USER and GDI calls will succeed too
-		session_dc2=CreateCompatibleDC(session_dc1); // ditto
-		session_dib=CreateDIBSection(session_dc1,&bmi,DIB_RGB_COLORS,(void**)&video_frame,NULL,0); // ditto
+		session_dc1=GetDC(session_hwnd); // beware, we're assuming that if CreateWindow() succeeds all other USER and GDI calls will succeed too
+		session_dc2=CreateCompatibleDC(session_dc1);
+		session_dib=CreateDIBSection(session_dc1,&bmi,DIB_RGB_COLORS,(void**)&video_frame,NULL,0);
 		bmi.bmiHeader.biWidth=VIDEO_PIXELS_X;
 		bmi.bmiHeader.biHeight=-VIDEO_PIXELS_Y;
 		session_dbg=CreateDIBSection(session_dc1,&bmi,DIB_RGB_COLORS,(void**)&debug_frame,NULL,0);
@@ -706,7 +715,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	session_joy.dwFlags=JOY_RETURNALL;
 	if (session_stick)
 	{
-		JOYCAPS jc; int i=joyGetNumDevs(),j=0;
+		JOYCAPS jc; i=joyGetNumDevs(),j=0;
 		cprintf("Detected %d joystick[s]: ",i);
 		while (j<i&&(!joyGetDevCaps(j,&jc,sizeof(jc))&&cprintf("Joystick/controller #%d = '%s'. ",j,jc.szPname),joyGetPosEx(j,&session_joy))) // scan joysticks until we run out or one is OK
 			++j;
@@ -735,13 +744,14 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 		}
 	}
 	timeBeginPeriod(8); // WIN10 sets this value too high by default; 8 is recommended in multiple sources
+	session_redraw(session_hwnd,session_dc1); // dummy first redraw, session_resize() hinges on it
 	session_clean(); session_please();
 	return NULL;
 }
 
 INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 {
-	static int s=0; if (s!=session_signal) // catch DEBUG and PAUSE
+	static int s=-1; if (s!=session_signal) // catch DEBUG and PAUSE
 		s=session_signal,session_dirty=debug_dirty=2;
 	if (session_signal&(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE))
 	{
@@ -840,7 +850,8 @@ INLINE void session_render(void) // update video, audio and timers
 					memset(audio_memory,AUDIO_ZERO,sizeof(audio_memory));
 			static BYTE o=1; if (o!=(session_fast|audio_disabled)) // sound needs higher priority, but only on realtime
 			{
-				SetPriorityClass(GetCurrentProcess(),(o=session_fast|audio_disabled)?BELOW_NORMAL_PRIORITY_CLASS:ABOVE_NORMAL_PRIORITY_CLASS);
+				//BELOW_NORMAL_PRIORITY_CLASS was overkill and caused trouble on busy systems :-(
+				SetPriorityClass(GetCurrentProcess(),(o=session_fast|audio_disabled)?NORMAL_PRIORITY_CLASS:ABOVE_NORMAL_PRIORITY_CLASS);
 				//SetThreadPriority(GetCurrentThread(),(o=session_fast|audio_disabled)?THREAD_PRIORITY_NORMAL:THREAD_PRIORITY_ABOVE_NORMAL);
 			}
 			waveOutGetPosition(session_wo,&session_mmtime,sizeof(MMTIME));
@@ -1105,7 +1116,8 @@ int session_filedialog(char *r,char *s,char *t,int q,int f) // auxiliar function
 		strcpy(session_tmpstr,r); // copy path, if required
 	int i=strlen(session_tmpstr); // sanitize path
 	if (i&&session_tmpstr[--i]=='\\') // pure path?
-		session_tmpstr[i]=0;
+		//if (i&&session_tmpstr[i-1]!=':') // special case "X:\"
+			session_tmpstr[i]=0;
 	*session_parmtr=0; // no file by default
 	if ((i=getftype(session_tmpstr))<0)
 		strcpy(session_tmpstr,"."); // invalid path: no path, no file

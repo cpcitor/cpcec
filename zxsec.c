@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20220615"//"2555"
+#define MY_VERSION "20220707"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2022 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -207,7 +207,7 @@ const VIDEO_UNIT video_table[][36]= // colour table, 0xRRGGBB style, followed by
 		0X920000,0XB60000,0XDB0000,0XFF0000,
 		0X000000,0X00006D,0X0000B6,0X0000FF,
 	},
-	// bright colour
+	// light colour
 	{
 		0X000000,0X0000E0,0XE00000,0XE000E0,
 		0X00E000,0X00E0E0,0XE0E000,0XE0E0E0,
@@ -902,7 +902,7 @@ INLINE void autorun_next(void)
 			if (trdos_ram[0])
 			{
 				BYTE *t=NULL,s[]={249,192,'1','5','6','1','9',58,234,58,247,34,'b','o','o','t',32,32,32,32,34,13,128};
-				memcpy(&POKE(0X5CCC),s,sizeof(s)); POKE(0X5C61)=0XCC+sizeof(s);
+				MEMSAVE(&POKE(0X5CCC),s); POKE(0X5C61)=0XCC+sizeof(s);
 				for (int i=0;i<0x0800;i+=16)
 					if (trdos_ram[0][i+8]=='B') // found a BASIC file?
 					{
@@ -916,7 +916,7 @@ INLINE void autorun_next(void)
 			else
 			{
 				BYTE s[]={239,34,34,13,128};
-				memcpy(&POKE(0X5CCC),s,sizeof(s)); POKE(0X5C61)=0XCC+sizeof(s);
+				MEMSAVE(&POKE(0X5CCC),s); POKE(0X5C61)=0XCC+sizeof(s);
 			}
 			// no `break`!
 		case 3: // menu-ready 128K: hit RETURN
@@ -1340,7 +1340,7 @@ void z80_tape_trap(void)
 						z80_hl.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de.w;
 				k=fasttape_feed(z80_bc.b.l>>5,59),tape_skipping=z80_hl.b.l=128+(k>>1),z80_bc.b.h=-(k&1);
 			}
-			else if (z80_hl.b.l==0x80&&FASTTAPE_CAN_FEED&&z80_tape_testfeed(z80_tape_spystack(0))==15) // SOFTLOCK
+			else if (z80_hl.b.l==0x80&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==15) // SOFTLOCK
 			{
 				if (z80_af2.b.l&0x40) if (z80_tape_testdump(z80_tape_spystack(0))==0)
 					while (FASTTAPE_CAN_DUMP()&&z80_de.b.l>1&&((WORD)(z80_ix.w-z80_sp.w)>2))
@@ -2421,41 +2421,6 @@ char session_menudata[]=
 	"0x4900 Tape analysis\tCtrl+Shift+F9\n"
 	//"0x4901 Tape analysis+cheating\n"
 	"0x0901 Tape auto-rewind\n"
-	"Video\n"
-	"0x8A00 Full screen\tAlt+Return\n"
-	"0x8A02 Video acceleration*\n"
-	"0x8A01 Zoom to integer\n"
-	"0x8901 Onscreen status\tShift+F9\n"
-	"=\n"
-	"0x8B01 Monochrome\n"
-	"0x8B02 Dark palette\n"
-	"0x8B03 Normal palette\n"
-	"0x8B04 Bright palette\n"
-	"0x8B05 Green screen\n"
-	//"0x8B00 Next palette\tF11\n"
-	//"0xCB00 Prev. palette\tShift+F11\n"
-	"=\n"
-	"0x8903 X-masking\n"
-	"0x8902 Y-masking\n"
-	"0x8904 Pixel filter\n"
-	//"0x0B00 Next scanline\tCtrl+F11\n"
-	//"0x4B00 Prev. scanline\tCtrl+Shift+F11\n"
-	"0x0B01 All scanlines\n"
-	"0x0B02 Half scanlines\n"
-	"0x0B03 Simple interlace\n"
-	"0x0B04 Double interlace\n"
-	"0x0B05 Average scanlines\n"
-	"0x0B08 Blend scanlines\n"
-	"=\n"
-	"0x9100 Raise frameskip\tNum.+\n"
-	"0x9200 Lower frameskip\tNum.-\n"
-	"0x9300 Full frameskip\tNum.*\n"
-	"0x9400 No frameskip\tNum./\n"
-	"=\n"
-	"0x8C00 Save BMP screenshot\tF12\n"
-	"0xCC00 Record XRF film\tShift+F12\n"
-	"0x8C01 High resolution\n"
-	"0x8C02 High framerate\n"
 	"Audio\n"
 	"0x8400 Sound playback\tF4\n"
 	"0x8A04 Audio acceleration*\n"
@@ -2473,6 +2438,46 @@ char session_menudata[]=
 	"=\n"
 	"0x0C00 Record WAV file\tCtrl+F12\n"
 	"0x4C00 Record YM file\tCtrl+Shift+F12\n"
+	"Video\n"
+	"0x8901 Onscreen status\tShift+F9\n"
+	"0x8A02 Video acceleration*\n"
+	"0x8B01 Monochrome\n"
+	"0x8B02 Dark palette\n"
+	"0x8B03 Normal palette\n"
+	"0x8B04 Light palette\n"
+	"0x8B05 Green screen\n"
+	//"0x8B00 Next palette\tF11\n"
+	//"0xCB00 Prev. palette\tShift+F11\n"
+	"=\n"
+	"0x8903 X-masking\n"
+	"0x8902 Y-masking\n"
+	//"0x0B00 Next scanline\tCtrl+F11\n"
+	//"0x4B00 Prev. scanline\tCtrl+Shift+F11\n"
+	"0x0B01 All scanlines\n"
+	"0x0B02 Half scanlines\n"
+	"0x0B03 Simple interlace\n"
+	"0x0B04 Double interlace\n"
+	"0x0B05 Average scanlines\n"
+	"0x8904 X-blending\n"
+	"0x8905 Y-blending\n"
+	"0x8906 Frame blending\n"
+	"=\n"
+	"0x9100 Raise frameskip\tNum.+\n"
+	"0x9200 Lower frameskip\tNum.-\n"
+	"0x9300 Full frameskip\tNum.*\n"
+	"0x9400 No frameskip\tNum./\n"
+	"=\n"
+	"0x8C00 Save BMP screenshot\tF12\n"
+	"0xCC00 Record XRF film\tShift+F12\n"
+	"0x8C01 High resolution\n"
+	"0x8C02 High framerate\n"
+	"Window\n"
+	"0x8A10 Full screen\tAlt+Return\n"
+	"0x8A11 100% zoom\n"
+	"0x8A12 150% zoom\n"
+	"0x8A13 200% zoom\n"
+	"0x8A14 250% zoom\n"
+	"0x8A15 300% zoom\n"
 	"Help\n"
 	"0x8100 Help..\tF1\n"
 	"0x0100 About..\tCtrl+F1\n"
@@ -2526,16 +2531,16 @@ void session_clean(void) // refresh options
 	session_menucheck(0x851F,!(snap_extended));
 	session_menucheck(0x852F,(size_t)printer);
 	session_menucheck(0x8901,onscreen_flag);
-	session_menucheck(0x8A00,session_fullscreen);
-	session_menucheck(0x8A01,session_intzoom);
+	session_menucheck(0x8902,video_filter&VIDEO_FILTER_MASK_Y);
+	session_menucheck(0x8903,video_filter&VIDEO_FILTER_MASK_X);
+	session_menucheck(0x8904,video_filter&VIDEO_FILTER_MASK_Z);
+	session_menucheck(0x8905,video_lineblend);
+	session_menucheck(0x8906,video_pageblend);
+	session_menuradio(0x8A10+(session_fullblit?0:1+session_zoomblit),0X8A10,0X8A15);
 	session_menucheck(0x8A02,!session_softblit);
 	session_menucheck(0x8A04,!session_softplay);
 	session_menuradio(0x8B01+video_type,0x8B01,0x8B05);
 	session_menuradio(0x0B01+video_scanline,0x0B01,0x0B05);
-	session_menucheck(0x0B08,video_scanblend);
-	session_menucheck(0x8902,video_filter&VIDEO_FILTER_MASK_Y);
-	session_menucheck(0x8903,video_filter&VIDEO_FILTER_MASK_X);
-	session_menucheck(0x8904,video_filter&VIDEO_FILTER_MASK_Z);
 	MEMLOAD(kbd_joy,joy1_types[joy1_type]);
 	#if AUDIO_CHANNELS > 1
 	session_menuradio(0xC401+audio_mixmode,0xC401,0xC404);
@@ -2804,8 +2809,8 @@ void session_user(int k) // handle the user's commands
 			break;
 		case 0x8600: // F6: TOGGLE REALTIME
 			if (!session_shift)
-				session_fast^=1;
-			else //case 0xC600: // PENTAGON TIMINGS
+				{ session_fast^=1; break; }
+			//case 0xC600: // SHIFT+F6: PENTAGON TIMINGS
 			{
 				ula_pentagon=!ula_pentagon;
 				ula_update(),mmu_update();
@@ -2887,21 +2892,25 @@ void session_user(int k) // handle the user's commands
 			break;
 		case 0x8900: // F9: DEBUG
 			if (!session_shift)
-			{
-				session_signal=SESSION_SIGNAL_DEBUG^(session_signal&~SESSION_SIGNAL_PAUSE);
-				break;
-			}
+				{ session_signal=SESSION_SIGNAL_DEBUG^(session_signal&~SESSION_SIGNAL_PAUSE); break; }
+			// no `break´!
 		case 0x8901:
 			onscreen_flag=!onscreen_flag;
 			break;
-		case 0x8902:
+		case 0x8902: // Y-MASKING
 			video_filter^=VIDEO_FILTER_MASK_Y;
 			break;
-		case 0x8903:
+		case 0x8903: // X-MASKING
 			video_filter^=VIDEO_FILTER_MASK_X;
 			break;
-		case 0x8904:
+		case 0x8904: // X-BLENDING
 			video_filter^=VIDEO_FILTER_MASK_Z;
+			break;
+		case 0x8905: // Y-BLENDING
+			video_lineblend=!video_lineblend;
+			break;
+		case 0x8906: // FRAME BLENDING
+			video_pageblend=!video_pageblend;
 			break;
 		/*case 0x8910: // NMI
 			z80_nmi_throw;
@@ -2915,11 +2924,13 @@ void session_user(int k) // handle the user's commands
 		case 0x0901:
 			tape_rewind=!tape_rewind;
 			break;
-		case 0x8A00: // FULL SCREEN
-			session_togglefullscreen();
+		case 0x8A10: // FULL SCREEN
+			session_fullblit=!session_fullblit; session_resize();
 			break;
-		case 0x8A01: // ZOOM TO INTEGER
-			session_intzoom=!session_intzoom; session_clrscr();
+		case 0x8A11: // WINDOW SIZE 100%, etc
+		case 0x8A12: case 0x8A14:
+		case 0x8A13: case 0x8A15:
+			session_fullblit=0,session_zoomblit=k-0x8A11; session_resize();
 			break;
 		case 0x8A02: // VIDEO ACCELERATION / SOFTWARE RENDER (*needs restart)
 			session_softblit=!session_softblit;
@@ -2930,7 +2941,7 @@ void session_user(int k) // handle the user's commands
 		case 0x8B01: // MONOCHROME
 		case 0x8B02: // DARK PALETTE
 		case 0x8B03: // NORMAL PALETTE
-		case 0x8B04: // BRIGHT PALETTE
+		case 0x8B04: // LIGHT PALETTE
 		case 0x8B05: // GREEN SCREEN
 			video_type=k-0x8B01;
 			video_clut_update();
@@ -2946,14 +2957,11 @@ void session_user(int k) // handle the user's commands
 		case 0x0B05: // AVG. SCANLINES
 			video_scanline=k-0x0B01;
 			break;
-		case 0x0B08: // BLEND SCANLINES
-			video_scanblend=!video_scanblend;
-			break;
 		case 0x0B00: // ^F11: SCANLINES
 			if (session_shift)
-				video_filter=(video_filter+1)&7;
+				{ if (!(video_filter=(video_filter+1)&7)) video_lineblend=!video_lineblend; }
 			else if ((video_scanline=video_scanline+1)>4)
-				video_scanblend=!video_scanblend,video_scanline=0;
+				video_pageblend=!video_pageblend,video_scanline=0;
 			break;
 		case 0x8C01:
 			if (!session_filmfile)
@@ -3022,10 +3030,10 @@ void session_user(int k) // handle the user's commands
 void session_configreadmore(char *s)
 {
 	int i; if (!s||!*s||!session_parmtr[0]) ; // ignore if empty or internal!
-	else if (!strcasecmp(session_parmtr,"type")) { if ((i=*s&15)<length(bios_system)) type_id=i; }
+	else if (!strcasecmp(session_parmtr,"type")) { if ((i=*s&7)<length(bios_system)) type_id=i; }
 	else if (!strcasecmp(session_parmtr,"xsna")) snap_extended=*s&1,ula_pentagon=!!(*s&2);
-	else if (!strcasecmp(session_parmtr,"joy1")) { if ((i=*s&15)<length(joy1_types)) joy1_type=i; }
 	else if (!strcasecmp(session_parmtr,"fdcw")) disc_filemode=*s&3;
+	else if (!strcasecmp(session_parmtr,"joy1")) { if ((i=*s&7)<length(joy1_types)) joy1_type=i; }
 	#ifdef PSG_PLAYCITY
 	else if (!strcasecmp(session_parmtr,"plct")) playcity_disabled=!(*s&1),dac_disabled=!(*s&2);
 	#endif
@@ -3035,11 +3043,11 @@ void session_configreadmore(char *s)
 	else if (!strcasecmp(session_parmtr,"tape")) strcpy(tape_path,s);
 	else if (!strcasecmp(session_parmtr,"disc")) strcpy(disc_path,s),strcpy(trdos_path,s);
 	else if (!strcasecmp(session_parmtr,"card")) strcpy(bios_path,s);
-	else if (!strcasecmp(session_parmtr,"vjoy")) { if (!hexa2byte(session_parmtr,s,5)) usbkey2native(kbd_k2j,session_parmtr,5); }
 	#ifdef Z80_DANDANATOR
 	else if (!strcasecmp(session_parmtr,"dntr")) strcpy(dandanator_path,s);
 	#endif
-	else if (!strcasecmp(session_parmtr,"palette")) { if ((i=*s&15)<length(video_table)) video_type=i; }
+	else if (!strcasecmp(session_parmtr,"vjoy")) { if (!hexa2byte(session_parmtr,s,5)) usbkey2native(kbd_k2j,session_parmtr,5); }
+	else if (!strcasecmp(session_parmtr,"palette")) { if ((i=*s&7)<length(video_table)) video_type=i; }
 	else if (!strcasecmp(session_parmtr,"casette")) tape_rewind=*s&1,tape_skipload=!!(*s&2),tape_fastload=!!(*s&4);
 	else if (!strcasecmp(session_parmtr,"debug")) debug_configread(strtol(s,NULL,10));
 }
@@ -3099,10 +3107,10 @@ int main(int argc,char *argv[])
 				{
 					case 'c':
 						video_scanline=(BYTE)(argv[i][j++]-'0');
-						if (video_scanline<0||video_scanline>7)
+						if (video_scanline<0||video_scanline>9)
 							i=argc; // help!
 						else
-							video_scanblend=video_scanline&4,video_scanline&=3;
+							video_pageblend=video_scanline&1,video_scanline>>=1;
 						break;
 					case 'C':
 						video_type=(BYTE)(argv[i][j++]-'0');
@@ -3164,7 +3172,7 @@ int main(int argc,char *argv[])
 						audio_mixmode=0;
 						break;
 					case 'W':
-						session_fullscreen=1;
+						session_fullblit=1;
 						break;
 					case 'X':
 						disc_disabled=1;
@@ -3182,7 +3190,7 @@ int main(int argc,char *argv[])
 						tape_skipload=0;
 						break;
 					case '+':
-						session_intzoom=1;
+						session_zoomblit=0;
 						break;
 					case '$':
 						session_hidemenu=1;
@@ -3204,7 +3212,7 @@ int main(int argc,char *argv[])
 		return
 			printfusage("usage: " my_caption
 			" [option..] [file..]\n"
-			"\t-cN\tscanline type (0..7)\n"
+			"\t-cN\tscanline type (0..9)\n"
 			"\t-CN\tcolour palette (0..4)\n"
 			"\t-d\tdebug\n"
 			"\t-g0\tset Kempston joystick\n"
@@ -3236,7 +3244,8 @@ int main(int argc,char *argv[])
 			"\t-z\tenable tape speed-up\n"
 			"\t-Z\tdisable tape speed-up\n"
 			"\t-!\tforce software render\n"
-			"\t-$\talternative user interface\n"
+			"\t-+\tdefault window size\n"
+			//"\t-$\talternative user interface\n"
 			),1;
 	if (trdos_load("trdos.rom"),bios_reload())
 		return printferror(txt_error_bios),1;
@@ -3245,9 +3254,8 @@ int main(int argc,char *argv[])
 	debug_setup(); session_kbdreset();
 	session_kbdsetup(kbd_map_xlt,length(kbd_map_xlt)/2);
 	video_target=&video_frame[video_pos_y*VIDEO_LENGTH_X+video_pos_x]; audio_target=audio_frame;
+	video_clut_update(); onscreen_inks(0xAA0000,0x55FF55); session_resize();
 	audio_disabled=!session_audio;
-	video_clut_update(); onscreen_inks(0xAA0000,0x55FF55);
-	if (session_fullscreen) session_togglefullscreen();
 	// it begins, "alea jacta est!"
 	while (!session_listen())
 	{

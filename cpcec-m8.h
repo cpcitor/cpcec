@@ -6,47 +6,205 @@
 //  ##  ##  ##      ##  ##  ##   #  ##  ##  since 2018-12-01 till now //
  //  ####  ####      ####  #######   ####  ------------------------- //
 
-// The MOS Technology 8580 sound chip and its antecessor 6581 are
+// The MOS Technology 6581 sound chip and its updated 8580 version are
 // better known as the SID chips that gave the Commodore 64 its famed
 // acoustics and made it the most powerful musical chip of 1982.
 
 // This module can emulate up to three SID chips at the same time;
 // it can also generate a pseudo YM channel log (cfr. cpcec-ay.h).
 
-// BEGINNING OF MOS 8580/6581 EMULATION ============================== //
+// BEGINNING OF MOS 6581/8580 EMULATION ============================== //
 
-BYTE sid_tone_shape[3][3],sid_tone_noisy[3][3],sid_tone_stage[3][3]; // oscillator + ADSR short values
+char sid_tone_shape[3][3],sid_tone_noisy[3][3],sid_tone_stage[3][3]; // oscillator + ADSR short values
 int sid_tone_count[3][4],sid_tone_limit[3][3],sid_tone_pulse[3][3],sid_tone_value[3][3],sid_tone_power[3][3]; // oscillator long values
 int sid_tone_cycle[3][3],sid_tone_adsr[3][4][3],*sid_tone_syncc[3][3],*sid_tone_ringg[3][3]; // ADSR long values, counters and pointers
 const int sid_adsr_table[16]={1,4,8,12,19,28,34,40,50,125,250,400,500,1500,2500,4000}; // official milliseconds >>1
 #if AUDIO_CHANNELS > 1
 int sid_stereo[3][3][2]; // the three chips' three channels' LEFT and RIGHT weights
 #endif
+char sid_chips=1; // emulate just the first chip by default; up to three chips are supported
+char sid_nouveau=0; // MOS 8580:6581 flag: wave shape tables and filters are slighly different
 
-BYTE sid_chips=1; // emulate just the first chip by default
-BYTE sid_nouveau=0; // MOS 8580:6581 flag, right now limited to the handling of mixer-based samples
-BYTE sid_shape_table[8][256]; // shapes: triangle +1 and sawtooth +2; pulse +4 and noise +8 go apart
-// the range [0..+128] gives us a reasonable margin, but we must remember to perform `>>7` in the mixer!
+// the normalised range [-128..+127] is a reasonable margin, but the mixer must remember to shift right!
+const char sid_shape_model[2][4][256]={ // crudely adapted from several tables: FRODO 4.1, SIDPLAYER 4.4...
+{ // MOS 6581
+	{ // 3: hybrid
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-120,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-112,- 68,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-120,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-112,- 68,
+	},
+	{ // 5: pulse + triangle
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,+  0,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,+  0,
+		-128,-128,-128,-128,-128,-128,+  0,+ 64,-128,+  0,+  0,+ 96,+  0,+ 96,+112,+124,
+		+127,+124,+122,+112,+118,+ 96,+ 96,+  0,+110,+ 96,+ 96,+  0,+ 64,-128,-128,-128,
+		+ 94,+ 64,+ 64,-128,+  0,-128,-128,-128,+  0,-128,-128,-128,-128,-128,-128,-128,
+		+ 62,+  0,+  0,-128,+  0,-128,-128,-128,+  0,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-  2,- 64,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+	},
+	{ // 6: pulse + sawtooth
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-  8,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-  8,
+	},
+	{ // 7: pulse + hybrid
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+	},
+},
+{ // MOS 8580
+	{ // 3: hybrid
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-120,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-104,- 68,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-100,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,+  0,-128,+  0,+  0,
+		+ 64,+ 64,+ 64,+ 64,+ 64,+ 64,+ 64,+ 96,+112,+112,+112,+112,+120,+120,+124,+126,
+	},
+	{ // 5: pulse + triangle
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		+127,+124,+120,+112,+116,+112,+112,+ 96,+108,+ 96,+ 96,+ 64,+ 96,+ 64,+ 64,+ 64,
+		+ 92,+ 64,+ 64,+ 64,+ 64,+ 64,+  0,+  0,+ 64,+  0,+  0,+  0,+  0,+  0,-128,-128,
+		+ 62,+ 32,+  0,+  0,+  0,+  0,+  0,-128,+  0,+  0,-128,-128,-128,-128,-128,-128,
+		+  0,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-  2,- 16,- 32,-128,- 64,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+	},
+	{ // 6: pulse + sawtooth
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,+  0,
+		-128,-128,-128,-128,-128,-128,+  0,+  0,-128,+  0,+  0,+  0,+  0,+  0,+ 48,+ 62,
+		-128,-128,-128,-128,-128,-128,-128,+  0,-128,-128,-128,+  0,+  0,+  0,+  0,+ 64,
+		-128,+  0,+  0,+  0,+  0,+  0,+  0,+ 64,+  0,+  0,+ 64,+ 64,+ 64,+ 64,+ 64,+ 92,
+		+  0,+  0,+  0,+ 64,+ 64,+ 64,+ 64,+ 64,+ 64,+ 64,+ 64,+ 96,+ 96,+ 96,+ 96,+108,
+		+ 64,+ 96,+ 96,+ 96,+ 96,+112,+112,+116,+112,+112,+120,+120,+120,+124,+126,+127,
+	},
+	{ // 7: pulse + hybrid
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
+		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,+  0,+  0,
+		+  0,+  0,+  0,+  0,+  0,+  0,+ 64,+ 64,+ 64,+ 64,+ 96,+ 96,+ 96,+112,+120,+124,
+	},
+},
+};
+char sid_shape_table[8][512]; // shapes: +1 TRIANGLE +2 SAWTOOTH +4 PULSE; +8 NOISE goes elsewhere
+void sid_shape_setup(void)
+{
+	sid_nouveau&=1; for (int i=0;i<512;++i)
+	{
+		sid_shape_table[0][i]=+0; // 0: none (all +0)
+		sid_shape_table[1][i]=i<256?i-128:255-i+128; // 1: triangle (-128..+127,+127..-128)
+		sid_shape_table[2][i]=i/2-128; // 2: sawtooth (-128..+127)
+		sid_shape_table[3][i]=sid_shape_model[sid_nouveau][0][i>>1];
+		sid_shape_table[4][i]=+127; // 4: pulse + none (all +127)
+		sid_shape_table[5][i]=sid_shape_model[sid_nouveau][1][i>>1];
+		sid_shape_table[6][i]=sid_shape_model[sid_nouveau][2][i>>1];
+		sid_shape_table[7][i]=sid_shape_model[sid_nouveau][3][i>>1];
+	}
+}
+
 void sid_setup(void)
 {
 	MEMZERO(sid_tone_power); MEMZERO(sid_tone_count); // the fourth channel is the dummy reference when flag bits 1 and 2 are not used
 	for (int x=0;x<3;++x)
 		sid_tone_syncc[x][0]=sid_tone_syncc[x][1]=sid_tone_syncc[x][2]=sid_tone_ringg[x][0]=sid_tone_ringg[x][1]=sid_tone_ringg[x][2]=&sid_tone_count[x][3]; // ditto
-	for (int i=0;i<256;++i)
-	{
-		sid_shape_table[0][i]=0; // silence!
-		sid_shape_table[5][i]=sid_shape_table[1][i]=i<128?i:256-i; // triangle (0..255,256..1)
-		sid_shape_table[6][i]=sid_shape_table[2][i]=i<128?i/2:i/2+1; // sawtooth (0..127,129..256)
-		sid_shape_table[7][i]=sid_shape_table[3][i]=(sid_shape_table[1][i]*sid_shape_table[2][i])>>7;
-		sid_shape_table[4][i]=128; // locked!
-	}
+	sid_shape_setup();
 }
 
 int sid_mixer[3],sid_voice[3],sid_digis[3]; // the sampled speech and the digidrums go here!
-int sid_smash[3]={0,0,0}; // this must be public, unlike `crash` -- it can be requested thru register 27:
 
-int sid_filters=1,sid_filterz[3],sid_filter_raw[3][3],sid_filter_flt[3][3];
-float sid_filter_lu[3],sid_filter_lv[3],sid_filter_hw[3]; // I absolutely hate mixing floats and ints...
+int sid_filters=1,sid_samples=1,sid_filterz[3],sid_filter_raw[3][3],sid_filter_flt[3][3]; // filter states and mixing bitmasks
+int sid_filter_hw[3],sid_filter_bw[3],sid_filter_lw[3]; // I hate mixing ints and floats...
+float sid_filter_qu[3],sid_filter_fu[3]; // Chamberlin filter parameters
 
 void sid_reg_update(int x,int i)
 {
@@ -66,9 +224,9 @@ void sid_reg_update(int x,int i)
 			sid_tone_syncc[x][c>0?c-1:2]=&sid_tone_count[x][(i&2)?c:3]; // SYNC target (bit 1)
 			sid_tone_ringg[x][c]=&sid_tone_count[x][(i&4)?c>0?c-1:2:3]; // RING source (bit 2)
 			if (i&8) // TEST mode (bit 3) locks the channel! (f.e. "CHIMERA": Spectrum-like speech)
-				sid_tone_shape[x][c]=16,sid_tone_count[x][c]=0,sid_tone_value[x][c]=sid_tone_power[x][c]<<7;
+				sid_tone_shape[x][c]=/*16,*/sid_tone_count[x][c]=sid_tone_value[x][c]=0;
 			else
-				sid_tone_shape[x][c]=i>>4; // +1+2 TRIANGLE/SAWTOOTH/BOTH/NEITHER, +4 PULSE, +8 NOISE
+				if (!(sid_tone_shape[x][c]=i>>4)) sid_tone_value[x][c]=0; // 0..3 NONE/TRIANGLE/SAWTOOTH/HYBRID, +4 PULSE, +8 NOISE
 			break;
 		case  5: case 12: case 19:
 			sid_tone_adsr[x][0][c]=sid_adsr_table[SID_TABLE[x][i]>>4], // attack delay (high nibble)
@@ -81,32 +239,26 @@ void sid_reg_update(int x,int i)
 			if (sid_tone_stage[x][c]==2&&sid_tone_cycle[x][c]>sid_tone_adsr[x][3][c]) sid_tone_cycle[x][c]=sid_tone_adsr[x][3][c]; // catch overflow!
 			break;
 		case 24: // how do the differences between the 8580 and the 6581 apply here?
-			i=SID_TABLE[x][24]&15; if (sid_nouveau) sid_mixer[x]=i*17; else sid_voice[x]=((15-i)*audio_channel+7)/15;
+			i=SID_TABLE[x][24]&15; if (!sid_samples) sid_mixer[x]=i*17; else sid_voice[x]=((15-i)*audio_channel+7)/15;
 			static int v[3]={-1,-1,-1}; if (!((v[x]^SID_TABLE[x][24])&240)) break; // don't clobber the filter
 			v[x]=SID_TABLE[x][24]; // no `break` here!
 		case 21: // filter cutoff frequency: lo-byte
 		case 22: // filter cutoff frequency: hi-byte
 		case 23: // filter resonance control
-			i=SID_TABLE[x][22]*256+SID_TABLE[x][21]+1,c=SID_TABLE[x][23]/16+1;
-			sid_filter_lu[x]=0.00+(i*c*1.25)/(65536.0*16); // "1.25" is a personal guess...
-			sid_filter_hw[x]=1.00-(i*c*1.25)/(65536.0*16); // possibly bad algebra, too :-(
-			float hv,mv,mu=0.0+i/65536.0; // *!* maybe 1.0-...?
-			switch (SID_TABLE[x][24]&112) // +16 lo-pass, +32 bandpass, +64 hi-pass
-			{
-				case  0: hv=0.0/1; mv=0.0/1; sid_filter_lv[x]=0.0/1; break;
-				case 16: hv=0.0/1; mv=0.0/1; sid_filter_lv[x]=1.0/1; break;
-				case 32: hv=0.0/1; mv=1.0/1; sid_filter_lv[x]=0.0/1; break;
-				case 48: hv=0.0/1; mv=1.0/2; sid_filter_lv[x]=1.0/2; break;
-				case 64: hv=1.0/1; mv=0.0/1; sid_filter_lv[x]=0.0/1; break;
-				case 80: hv=1.0/2; mv=0.0/1; sid_filter_lv[x]=1.0/2; break;
-				case 96: hv=1.0/2; mv=1.0/2; sid_filter_lv[x]=0.0/1; break;
-				default: hv=1.0/3; mv=1.0/3; sid_filter_lv[x]=1.0/3; break;
-			}
-			sid_filter_lv[x]=sid_filter_lv[x]+(1.0-mu)*mv;
-			sid_filter_hw[x]=sid_filter_hw[x]*(hv+mu*mv); // precalc'd product
 			sid_filterz[x]=sid_filters&&sid_chips>x&&(SID_TABLE[x][24]&112)&&(SID_TABLE[x][23]&7);
 			for (c=0,i=(SID_TABLE[x][24]&112)&&sid_filters?SID_TABLE[x][23]:0;c<3;i>>=1,++c)
-				sid_filter_raw[x][c]=~(sid_filter_flt[x][c]=(i&1)?~0:0);	}
+				sid_filter_raw[x][c]=(i&1)-1,sid_filter_flt[x][c]=0-(i&1); // channel output masks
+			i=SID_TABLE[x][22]*256+SID_TABLE[x][21],c=SID_TABLE[x][23]/16;
+			sid_filter_hw[x]=(SID_TABLE[x][24]&64)?~0:0;
+			sid_filter_bw[x]=(SID_TABLE[x][24]&32)?~0:0;
+			sid_filter_lw[x]=(SID_TABLE[x][24]&16)?~0:0;
+			// the following values are just a guess :-(
+			sid_filter_qu[x]=2.0-1.0/(16-c);
+			if (sid_nouveau)
+				sid_filter_fu[x]=(i+1)*0.800/65536.0;
+			else
+				sid_filter_fu[x]=(i+1)*0.400/65536.0;
+	}
 }
 void sid_update(int x)
 {
@@ -138,7 +290,7 @@ void sid_main(int t/*,int d*/)
 	#endif
 	do
 	{
-		static int crash[3]={1,1,1};
+		static int crash[3]={1,1,1},smash[3];
 		#if AUDIO_CHANNELS > 1
 		static int n=0,o0=0,o1=0; // output averaging variables
 		#else
@@ -154,53 +306,60 @@ void sid_main(int t/*,int d*/)
 			for (int x=sid_chips;x--;)
 			{
 				if (crash[x]&1) crash[x]+=0X840000; // update the white noise
-				sid_smash[x]^=(crash[x]>>=1); // LFSR x2
+				smash[x]^=(crash[x]>>=1); // LFSR x2
 				const int x3=(audio_channel+5*8)/(5*16),x1=(audio_channel+15*8)/(15*16); // 16 sub-levels per level every step
 				for (int c=0,u,v;c<3;++c)
 				{
 					if (--sid_tone_cycle[x][c]<=0) // update the channels' ADSR?
 						switch (sid_tone_stage[x][c]) // assuming a purely linear model of 0-15 levels
 						{
-							case 0: sid_tone_cycle[x][c]=sid_tone_adsr[x][0][c];
+							case 0: // ATTACK
+								sid_tone_cycle[x][c]=sid_tone_adsr[x][0][c];
 								if ((sid_tone_power[x][c]+=x3)>=audio_channel)
 									sid_tone_stage[x][c]=1,sid_tone_power[x][c]=audio_channel;
-								break; // ATTACK
-							case 1: sid_tone_cycle[x][c]=sid_tone_adsr[x][1][c]; // float towards the right volume
+								break;
+							case 1: // DECAY + SUSTAIN
+								sid_tone_cycle[x][c]=sid_tone_adsr[x][1][c]; // float towards the right volume
 								if ((u=(v=sid_tone_adsr[x][2][c])-sid_tone_power[x][c])<0)
 									{ if ((sid_tone_power[x][c]-=x1)<v) sid_tone_power[x][c]=v; }
 								else if (u>0)
 									{ if ((sid_tone_power[x][c]+=x1)>v) sid_tone_power[x][c]=v; }
 								else
 									sid_tone_cycle[x][c]=1<<9;
-								break; // DECAY + SUSTAIN
-							case 2: sid_tone_cycle[x][c]=sid_tone_adsr[x][3][c];
-								if ((sid_tone_power[x][c]-=x1)<=0)
-									sid_tone_stage[x][c]=3,sid_tone_power[x][c]=0;
-								break; // RELEASE
-							default: sid_tone_cycle[x][c]=1<<9; // SILENCE
+								break;
+							case 2: // RELEASE
+								sid_tone_cycle[x][c]=sid_tone_adsr[x][3][c];
+								if ((sid_tone_power[x][c]-=x1)>0) break;
+								sid_tone_stage[x][c]=3; // no `break`!
+							default: // SILENCE
+								sid_tone_power[x][c]=0,sid_tone_cycle[x][c]=1<<9;
 						}
-					if ((u=sid_tone_shape[x][c])<16) // update the channels' wave generators?
+					// update the channels' wave generators?
+					if ((sid_tone_count[x][c]=(v=sid_tone_count[x][c])+sid_tone_limit[x][c])&~0XFFFFF) // OVERFLOW?
+						*sid_tone_syncc[x][c]=sid_tone_count[x][c]&=0XFFFFF;
+					if ((u=sid_tone_shape[x][c])<4)
 					{
-						if ((sid_tone_count[x][c]=(v=sid_tone_count[x][c])+sid_tone_limit[x][c])&~0XFFFFF) // OVERFLOW?
-							*sid_tone_syncc[x][c]=sid_tone_count[x][c]&=0XFFFFF;
-						if (u<4) // TRIANGLE/SAWTOOTH/BOTH/NEITHER?
-							sid_tone_value[x][c]=sid_shape_table[u][((*sid_tone_ringg[x][c]&0X80000)^sid_tone_count[x][c])>>12]*sid_tone_power[x][c];
-						else if (u<8) // PULSE? (plus TRIANGLE)
-							sid_tone_value[x][c]=sid_tone_count[x][c]<sid_tone_pulse[x][c]?0:sid_shape_table[u][sid_tone_count[x][c]>>12]*sid_tone_power[x][c];
-						else // NOISE?
-						{
-							// beware! when a noisy channel is the target of "ringg" we cannot do `sid_tone_count[x][c]&=0XFFFF`! ("Rasputin", "Swingers"...)
-							if ((v^sid_tone_count[x][c])&~0XFFFF) sid_tone_noisy[x][c]=sid_smash[x]&127;
-							sid_tone_value[x][c]=sid_tone_noisy[x][c]*sid_tone_power[x][c];
-						}
+						//if (u) // TRIANGLE/SAWTOOTH/HYBRID?
+							sid_tone_value[x][c]=sid_shape_table[u][((*sid_tone_ringg[x][c]&0X80000)^sid_tone_count[x][c])>>11]*sid_tone_power[x][c];
+						//else // NONE? (already set to zero by sid_reg_update)
+							//sid_tone_value[x][c]=0;
+					}
+					else if (u<8) // PULSE? (plus TRIANGLE)
+						sid_tone_value[x][c]=(sid_tone_count[x][c]<sid_tone_pulse[x][c]?-128:sid_shape_table[u][sid_tone_count[x][c]>>11])*sid_tone_power[x][c];
+					else // NOISE? beware, a noisy channel pointed by "ringg" cannot do `sid_tone_count[x][c]&=0XFFFF`: "Rasputin", "Swingers"...
+					{
+						if ((v^sid_tone_count[x][c])&~0XFFFF) sid_tone_noisy[x][c]=(smash[x]&255)-128;
+						sid_tone_value[x][c]=sid_tone_noisy[x][c]*sid_tone_power[x][c];
 					}
 				}
 			}
 		}
+		// the Chamberlin expressions merged in a single big block!
+		#define SID_FILTER_N_UPDATE(o,l,x,_h,_b,_l,_m) (\
+			(_b[x]=_b[x]+sid_filter_fu[x]*(_h[x]=(_m[x]=l-sid_filter_qu[x]*_b[x]+.5)-(_l[x]=_l[x]+sid_filter_fu[x]*_b[x]+.5)+.5)+.5),\
+			(o+=(_h[x]&sid_filter_hw[x])+(_b[x]&sid_filter_bw[x])+(_l[x]&sid_filter_lw[x])))
 		// mix all channels' output together: +A -B +C -DIGI
-		#define SID_TRANSFORM_VALUE(x,c) ((sid_tone_value[x][c]*sid_mixer[x])>>15)
-		#define SID_FILTER_N_UPDATE(o,p,l,q,x) ((o+=p[x]=(p[x]+l-q[x])*sid_filter_hw[x]+ \
-		((l-p[x])*sid_filter_lu[x]+p[x])*sid_filter_lv[x]+.5),q[x]=l)
+		#define SID_TRANSFORM_VALUE(x,c) ((sid_tone_value[x][c]*sid_mixer[x])>>16)
 		for (int x=sid_chips;x--;)
 			if (sid_filterz[x])
 			{
@@ -226,9 +385,10 @@ void sid_main(int t/*,int d*/)
 					l0+=sid_filter_flt[x][2]&m0;
 					l1+=sid_filter_flt[x][2]&m1;
 				}
-				static int p0[3]={0,0,0},p1[3]={0,0,0},q0[3]={0,0,0},q1[3]={0,0,0};
-				SID_FILTER_N_UPDATE(o0,p0,l0,q0,x);
-				SID_FILTER_N_UPDATE(o1,p1,l1,q1,x);
+				static int _h0[3],_b0[3],_l0[3],_m0[3];
+				static int _h1[3],_b1[3],_l1[3],_m1[3];
+				SID_FILTER_N_UPDATE(o0,l0,x,_h0,_b0,_l0,_m0);
+				SID_FILTER_N_UPDATE(o1,l1,x,_h1,_b1,_l1,_m1);
 				#else
 				o-=sid_voice[x];
 				int m,l;
@@ -244,8 +404,8 @@ void sid_main(int t/*,int d*/)
 					o+=sid_filter_raw[x][2]&m;
 					l+=sid_filter_flt[x][2]&m;
 				}
-				static int p[3]={0,0,0},q[3]={0,0,0};
-				SID_FILTER_N_UPDATE(o,p,l,q,x);
+				static int _h[3],_b[3],_l[3],_m[3];
+				SID_FILTER_N_UPDATE(o,l,x,_h,_b,_l,_m);
 				#endif
 			}
 			else
@@ -304,25 +464,68 @@ void sid_main(int t/*,int d*/)
 
 // other operations ------------------------------------------------- //
 
-int sid_oscillator_t=0,sid_oscillator_v=0;
-void sid_oscillator_start(int t) // launches the oscillator
-	{ sid_oscillator_t=t; sid_oscillator_v=0; }
-BYTE sid_oscillator_check(int t) // looks at the oscillator
+int sid_port_27_t[3],sid_port_27_u[3],sid_port_27_v[3];
+void sid_port_27_start(int x,int t) // launches the oscillator from chip `x` at time `t`
+	{ sid_port_27_t[x]=t; sid_port_27_u[x]=sid_port_27_v[x]=0; }
+BYTE sid_port_27_check(int x,int t) // looks at the oscillator from chip `x` at time `t`
 {
-	t-=sid_oscillator_t; sid_oscillator_t+=t;
-	int i=sid_tone_limit[0][2],j=sid_oscillator_v; if (!i) i=65536; // "REWIND" sets all the SID chip to zero and still expects something to happen... does 0 behave as 65536?
-	sid_oscillator_v+=t*i; // overflows aren't important, only the lowest 24 bits matter.
-	if (sid_tone_shape[0][2]&8) // is the signal noisy? "MAZEMANIA" uses it in $4E33, "REWIND" in $1167 and $12CF...
-		return t=sid_oscillator_v,((t>>15)&128)+((t>>14) &64)+((t>>11) &32)+((t>> 9) &16)+((t>> 8) & 8)+((t>> 5) & 4)+((t>> 3) & 2)+((t>> 2) & 1);
-	// assuming a sawtooth signal by default; "BOX CHECK TEST" relies on it in $C091
-	return (sid_nouveau?j:sid_oscillator_v)>>16; // 8580 copies the value before updating it, 6581 updates it before copying it
+	//return (sid_tone_count[x][2])>>12; // this only works if sound is enabled, so we must calculate it separately
+	t-=sid_port_27_t[x]; sid_port_27_t[x]+=t;
+	int i=sid_tone_limit[x][2]; if (!i) i=65536; // "REWIND" sets all the SID chip to zero and still expects something to happen... does 0 behave as 65536?
+	i=i*t; i+=sid_port_27_u[x]; sid_port_27_u[x]=i%SID_TICK_STEP; i/=SID_TICK_STEP;
+	sid_port_27_v[x]+=i; // overflows aren't important, only the lowest twenty bits matter.
+	if ((i=sid_tone_shape[x][2])>=8) // is the signal noisy? "MAZEMANIA" uses it in $4E33, "REWIND" in $1167 and $12CF...
+		return t=sid_port_27_v[x],((t>>15)&128)+((t>>14) &64)+((t>>11) &32)+((t>> 9) &16)+((t>> 8) & 8)+((t>> 5) & 4)+((t>> 3) & 2)+((t>> 2) & 1);
+	// handle the non-noisy signals here; "BOX CHECK TEST" relies on it in $C091; "TO NORAH" expects valid SID chips to return zero when BYTE +18 is completely empty
+	return SID_TABLE[x][18]?128+sid_shape_table[i][((sid_port_27_v[x]-(sid_nouveau<<6))>>11)&511]:0; // 8580 copies the value before updating it, 6581 updates it before copying it
 }
+
+int sid_port_28_t[3],sid_port_28_u[3]; BYTE sid_port_28_v[3],sid_port_28_w[3];
+void sid_port_28_start(int x,int t) // launches the envelope from chip `x` at time `t`
+	{ sid_port_28_t[x]=t; sid_port_28_u[x]=sid_port_28_w[x]=0; }
+BYTE sid_port_28_check(int x,int t) // looks at the envelope from chip `x` at time `t`
+{
+	//return (sid_tone_power[x][2]*255+audio_channel/2)/audio_channel; // this only works if sound is enabled, so we must calculate it separately
+	t-=sid_port_28_t[x]; sid_port_28_t[x]+=t;
+	t=t*6+sid_port_28_u[x]; // `attack` is three times quicker than `decay` and `release`
+	int i,j,k; do
+	{
+		if (SID_TABLE[x][18]&1) // attack or decay?
+		{
+			if (!sid_port_28_w[x]) // attack?
+				i=SID_TABLE[x][19]>>4,j=1*SID_TICK_STEP,k=255;
+			else // decay!
+				i=SID_TABLE[x][19]&15,j=3*SID_TICK_STEP,k=(SID_TABLE[x][20]>>4)*17;
+		}
+		else // release or silence!
+			i=SID_TABLE[x][20]&15,j=3*SID_TICK_STEP,k=0;
+		i=sid_adsr_table[i]*j;
+		if (j=sid_port_28_v[x]-k) // still something to do?
+		{
+			k=t/i; // better than doing t-=i many times
+			if (j<0)
+				{ if (k>-j) k=-j; sid_port_28_v[x]-=k; }
+			else
+				{ if (k>+j) k=+j; sid_port_28_v[x]+=k; }
+			t-=k*i;
+		}
+		else if (sid_port_28_w[x]<2)
+			++sid_port_28_w[x]; // attack or release? decay or silence!
+		else
+			t%=i; // release or silence? waste all cycles!
+	}
+	while (t>=i);
+	sid_port_28_u[x]=t; return sid_port_28_v[x];
+}
+
+void sid_port_18_start(int x,int b,int t) { if ((b^SID_TABLE[x][18])&1) sid_port_27_start(x,main_t),sid_port_28_start(x,main_t); }
+void sid_port_18_check(int x,int t) { sid_port_28_check(x,t); sid_port_27_check(x,t); } // just to keep the counters up to date...
 
 void sid_frame(void) // reduce hissing: for example "Stormlord", whose intro plays 3-bit samples ($35..$3C) but its menu just clobbers the mixer ($3F)
 {
 	for (int x=0;x<3;++x)
 	{
-		if (sid_nouveau)
+		if (!sid_samples)
 			sid_voice[x]>>=1;
 		else if (sid_digis[x]<4)
 			sid_voice[x]=(sid_voice[x]*7)>>3;
@@ -406,4 +609,4 @@ void psg_writelog(void)
 	}
 }
 
-// =================================== END OF MOS 8580/6581 EMULATION //
+// =================================== END OF MOS 6581/8580 EMULATION //

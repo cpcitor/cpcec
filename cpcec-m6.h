@@ -15,15 +15,15 @@
 // M65XX_START -- expression of PC on RESET
 // M65XX_MAIN -- name of the interpreter
 // Z80W M65XX_PC -- the Program Counter
-// BYTE M65XX_P -- the Processor status
 // BYTE M65XX_I_T -- the IRQ delay, -2..+inf
 // BYTE M65XX_N_T -- the NMI delay, -2..+inf
 // void M65XX_IRQ_ACK -- the IRQ acknowledger
 // void M65XX_NMI_ACK -- the NMI acknowledger
-// BYTE M65XX_S -- the Stack pointer
+// BYTE M65XX_P -- the Processor status
 // BYTE M65XX_A -- the Accumulator
 // BYTE M65XX_X -- the X Register
 // BYTE M65XX_Y -- the Y Register
+// BYTE M65XX_S -- the Stack pointer
 // void M65XX_SYNC(int) -- sync hardware `n` clock ticks
 // void M65XX_PAGE(BYTE) -- setup PEEK/POKE address page
 // BYTE M65XX_PEEK(WORD) -- receive byte from an address
@@ -123,11 +123,7 @@ void m65xx_setup(void) // unlike in the Z80, precalc'd tables are limited to the
 // the operation macros!
 
 #define M65XX_CARRY(r) ((r)?(M65XX_P|=1):(M65XX_P&=~1))
-#ifdef M65XX_NMI_ACK
-	#define M65XX_BRANCH(r) do{ M65XX_FETCH(o); if (r) { M65XX_BADPC; q=M65XX_PC.b.h; M65XX_PC.w+=(signed char)o; if (q!=M65XX_PC.b.h) { a.b.l=M65XX_PC.b.l; M65XX_BADXY; } else --M65XX_I_T,--M65XX_N_T; } }while(0)
-#else
-	#define M65XX_BRANCH(r) do{ M65XX_FETCH(o); if (r) { M65XX_BADPC; q=M65XX_PC.b.h; M65XX_PC.w+=(signed char)o; if (q!=M65XX_PC.b.h) { a.b.l=M65XX_PC.b.l; M65XX_BADXY; } else --M65XX_I_T; } }while(0)
-#endif
+#define M65XX_BRANCH(r) do{ M65XX_FETCH(o); if (r) { M65XX_BADPC; q=M65XX_PC.b.h; M65XX_PC.w+=(signed char)o; if (q!=M65XX_PC.b.h) { a.b.l=M65XX_PC.b.l; M65XX_BADXY; } else M65XX_CRUNCH; } }while(0)
 #define M65XX_SAX (M65XX_A&M65XX_X) // a.k.a. AXS; it appears in multiple operations
 #define M65XX_DEC(r) (z=n=--r)
 #define M65XX_INC(r) (z=n=++r)
@@ -171,9 +167,16 @@ void m65xx_setup(void) // unlike in the Z80, precalc'd tables are limited to the
 
 #ifdef M65XX_SHW
 	#define M65XX_SHZ(t,r) do{ i=(q+1)&(o=r); if (M65XX_SHW) o=i; if (q!=a.b.h) a.b.h=i; t=o; }while(0)
-#else // simpler version if quirks don't matter
+#else // simpler version if these quirks don't matter
 	#define M65XX_SHZ(t,r) (t=r)
 #endif
+
+#ifdef M65XX_NMI_ACK
+	#define M65XX_CRUNCH --M65XX_I_T,--M65XX_N_T
+#else // simpler version without NMI handling
+	#define M65XX_CRUNCH --M65XX_I_T
+#endif
+
 
 // M65XX interpreter ------------------------------------------------ //
 
@@ -1599,8 +1602,9 @@ WORD debug_dasm(char *t,WORD p) // disassembles the code at address `p` onto the
 		case 0X80: case 0X82: case 0X89: case 0XC2: case 0XE2: // NOP #$NN
 			sprintf(t,"NOP  #$%02X",DEBUG_DASM_BYTE); break;
 		case 0X1A: case 0X3A: case 0X5A: case 0X7A: case 0XDA: case 0XFA: // NOP (illegal!)
+			//sprintf(t,"*NOP"); break;
 		case 0XEA: // NOP
-			sprintf(t,"NOP"); break;
+			sprintf(t,opcode3[0]); break;
 		case 0X02: case 0X12: case 0X22: case 0X32: case 0X42: case 0X52: // JAM (1/2)
 		case 0X62: case 0X72: case 0X92: case 0XB2: case 0XD2: case 0XF2: // JAM (2/2)
 			sprintf(t,"JAM"); break;
@@ -1622,10 +1626,10 @@ WORD debug_dasm(char *t,WORD p) // disassembles the code at address `p` onto the
 #undef M65XX_NMI_ACK
 #undef M65XX_PC
 #undef M65XX_P
-#undef M65XX_S
 #undef M65XX_A
 #undef M65XX_X
 #undef M65XX_Y
+#undef M65XX_S
 #undef M65XX_SYNC
 #undef M65XX_PAGE
 #undef M65XX_PEEK
@@ -1649,7 +1653,7 @@ WORD debug_dasm(char *t,WORD p) // disassembles the code at address `p` onto the
 #undef M65XX_SHZ
 #undef M65XX_XEE
 #undef M65XX_XEF
-
+#undef M65XX_CRUNCH
 #undef M65XX_TRAP_0X00
 #undef M65XX_TRAP_0X10
 #undef M65XX_TRAP_0X20

@@ -192,7 +192,7 @@ int sortedsearch(char *t,int z,char *s) // look for string `s` in an alphabetica
 #define VIDEO_FILTER_MASK_Y 2
 #define VIDEO_FILTER_MASK_Z 4
 int video_pos_z=0; // for timekeeping, statistics and debugging
-BYTE video_scanblend=0,audio_mixmode=1; // 0 = pure mono, 1 = pure stereo, 2 = 50%, 3 = 25%
+BYTE video_lineblend=0,video_pageblend=0,audio_mixmode=1; // 0 = pure mono, 1 = pure stereo, 2 = 50%, 3 = 25%
 BYTE video_scanline=0,video_scanlinez=8; // 0 = all scanlines, 1 = half scanlines, 2 = full interlace, 3 = half interlace, 4 = average scanlines
 VIDEO_UNIT video_lastscanline,video_halfscanline; // the fillers used in video_endscanlines() and the lightgun buffer
 #ifdef MAUS_LIGHTGUNS
@@ -218,21 +218,23 @@ VIDEO_UNIT video_litegun; // lightgun data
 //#define VIDEO_FILTER_BLUR0(z) v0=v1=z
 //#define VIDEO_FILTER_BLUR(r,z) r=(v0&0XFF0000)+(v1&0XFF00)+(z&0XFF),v0=v1,v1=z // chromatic aberration, 100:0
 //#define VIDEO_FILTER_BLUR(r,z) r=((((v0&0XFF0000)*3+(z&0XFF0000)+0X20000)>>2)&0XFF0000)+((((v1&0XFF00)*3+(z&0XFF00)+0X200)>>2)&0XFF00)+(z&0XFF),v0=v1,v1=z // chromatic aberration, 75:25
-//#define VIDEO_FILTER_X1(x) (((x>>1)&0X7F7F7F)+0X2B2B2B) // average
+#define VIDEO_FILTER_X1(x) (((x>>1)&0X7F7F7F)+0X2B2B2B) // average
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)+0X404040) // heavier
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)*3+0X161616) // lighter
-#define VIDEO_FILTER_X1(x) (((x&0XF8F8F8)>>3)*5+0X323232) // practical
+//#define VIDEO_FILTER_X1(x) (((x&0XF8F8F8)>>3)*5+0X323232) // practical
 //#define VIDEO_FILTER_X1(x) ((((((x&0XFF0000)*54)>>16)+(((x&0XFF00)*183)>>8)+(((x&0XFF)*19)))>>8)*0X10101) // monochrome (canonical)
 //#define VIDEO_FILTER_X1(x) ((((((x&0XFF0000)*7)>>13)+(((x&0XFF00)*45)>>6)+(((x&0XFF)*20)))>>8)*0X10101) // monochrome (56:180:20)
 //#define VIDEO_FILTER_SCAN(w,b) (((b>>1)&0X7F7F7F)+((w>>1)&0X7F7F7F)+0X010101) // 50:50
 //#define VIDEO_FILTER_SCAN(w,b) (((b>>2)&0X3F3F3F)*3+((w>>2)&0X3F3F3F)+0X020202) // 25:75
 #define VIDEO_FILTER_SCAN(w,b) (((b>>3)&0X1F1F1F)*7+((w>>3)&0X1F1F1F)+0X040404) // 13:87
+//#define VIDEO_FILTER_LINE(x,y) (((((x&0XFF00FF)*3+(y&0XFF00FF)+0X20002)&0X3FC03FC)+(((x&0XFF00)*3+(y&0XFF00)+0X200)&0X3FC00))>>2) // 75:25
+#define VIDEO_FILTER_LINE(x,y) (((((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00))>>1) // 50:50
 
 #define MAIN_FRAMESKIP_MASK ((1<<MAIN_FRAMESKIP_BITS)-1)
 void video_resetscanline(void) // reset scanline filler values on new video options
 {
-	static int b=-1; if (b!=video_scanblend) // do we need to reset the blending buffer?
-		if (b=video_scanblend)
+	static int b=-1; if (b!=video_pageblend) // do we need to reset the blending buffer?
+		if (b=video_pageblend)
 			for (int y=0;y<VIDEO_PIXELS_Y/2;++y)
 				MEMNCPY(&video_blend[y*VIDEO_PIXELS_X],&video_frame[(VIDEO_OFFSET_Y+y*2)*VIDEO_LENGTH_X+VIDEO_OFFSET_X],VIDEO_PIXELS_X);
 }
@@ -250,21 +252,35 @@ INLINE void video_newscanlines(int x,int y) // call before each new frame: reset
 // do not manually unroll the following operations, GCC is smart enough to do a better job on its own: 1820% > 1780%!
 INLINE void video_drawscanline(void) // call after each drawn scanline; memory caching makes this more convenient than gathering all operations in video_endscanlines()
 {
-	VIDEO_UNIT vt,vs,VIDEO_FILTER_BLURDATA,*vi=video_target-video_pos_x+VIDEO_OFFSET_X,*vl=vi+VIDEO_PIXELS_X,
-		*vo=video_target-video_pos_x+VIDEO_OFFSET_X+VIDEO_LENGTH_X,*vp;
+	VIDEO_UNIT vt,vs,VIDEO_FILTER_BLURDATA,*vi=video_target-video_pos_x+VIDEO_OFFSET_X,*vl=vi+VIDEO_PIXELS_X,*vo,*vp;
 	#ifdef MAUS_LIGHTGUNS
 	if (!(((session_maus_y+VIDEO_OFFSET_Y)^video_pos_y)&-2)) // does the lightgun aim at the current scanline?
 		video_litegun=session_maus_x>=0&&session_maus_x<VIDEO_PIXELS_X?vi[session_maus_x]|vi[session_maus_x^1]:0; // keep the colours BEFORE any filtering happens!
 	#endif
-	if (video_scanblend) // blend scanlines from previous and current frame!
+	if (video_lineblend) // blend current and previous scanline together!
 	{
-		//printf("%04d:%04d:%04d  ",video_pos_x,video_pos_y,frame_pos_y);
-		vp=&video_blend[(video_pos_y-VIDEO_OFFSET_Y)/2*VIDEO_PIXELS_X];
+		static VIDEO_UNIT zzz[VIDEO_PIXELS_X];
+		if (video_pos_y<VIDEO_OFFSET_Y+2)
+			MEMLOAD(zzz,vi); // 1st line, backup only
+		else
+		{
+			vo=zzz;
+			do
+				if ((vs=*vi)!=(vt=*vo)) *vo=vs,*vi=VIDEO_FILTER_LINE(vs,vt); // vertical blur
+			while (++vo,++vi<vl);
+			vi-=VIDEO_PIXELS_X;
+		}
+	}
+	if (video_pageblend) // blend scanlines from previous and current frame!
+	{
+		vo=&video_blend[(video_pos_y-VIDEO_OFFSET_Y)/2*VIDEO_PIXELS_X];
 		do
-			vt=*vp,vs=*vp++=*vi,*vi++=VIDEO_FILTER_HALF(vt,vs); // non-accumulative gigascreen
-		while (vi<vl);
+			if ((vs=*vi)!=(vt=*vo)) *vo=vs,*vi=VIDEO_FILTER_LINE(vs,vt); // non-accumulative gigascreen
+		while (++vo,++vi<vl);
 		vi-=VIDEO_PIXELS_X;
 	}
+	// the order is important: doing PAGEBLEND before LINEBLEND is slow :-(
+	vo=video_target-video_pos_x+VIDEO_OFFSET_X+VIDEO_LENGTH_X;
 	switch (video_filter+(video_scanlinez?0:8))
 	{
 		case 8: // nothing (full)
@@ -578,8 +594,7 @@ int puff_expand(struct puff_huff *puff_lcode,struct puff_huff *puff_ocode) // de
 // block type handling
 INLINE int puff_stored(void) // copies raw uncompressed byte block from source to target; !0 ERROR
 {
-	if (puff_srco+4>puff_srcl)
-		return -1; // source overrun!
+	if (puff_srco+4>puff_srcl) return -1; // source overrun!
 	int l=puff_src[puff_srco++]; l+=puff_src[puff_srco++]<<8;
 	int k=puff_src[puff_srco++]; k+=puff_src[puff_srco++]<<8;
 	if (!l||l+k!=0xFFFF) return -1; // invalid value!
@@ -615,9 +630,8 @@ INLINE int puff_dynamic(void) // generates custom Huffman codes and expands bloc
 		return -1; // invalid value!
 	static const short hh[19]={ 16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15 }; // Huffman constants
 	while (i<h) t[hh[i++]]=puff_read(3); // read bit counts for the Huffman-encoded header
-	while (i<19) t[hh[i++]]=0; // padding
-	if (puff_tables(&puff_lcode,t,19)) // clear the remainder of this header
-		return -1; // invalid table!
+	while (i<19) t[hh[i++]]=0; // padding: clear the remainder of this header
+	if (puff_tables(&puff_lcode,t,19)) return -1; // invalid table!
 	for (i=0;i<l+o;)
 	{
 		int a; if ((a=puff_decode(&puff_lcode))<16) // literal?
@@ -650,7 +664,7 @@ int puff_main(void) // inflates deflated source into target; !0 ERROR
 			case 0: e=puff_stored(); break; // uncompressed raw bytes
 			case 1: e=puff_static(); break; // default Huffman coding
 			case 2: e=puff_dynamic(); break; // custom Huffman coding
-			default: e=1; // invalid value!
+			default: e=1; // invalid value, either -1 or 3!
 		}
 	while (!(q|e)); // is this the last block? did something go wrong?
 	return e;
@@ -658,7 +672,7 @@ int puff_main(void) // inflates deflated source into target; !0 ERROR
 #ifdef INFLATE_RFC1950
 // RFC1950 standard data decoder
 DWORD puff_adler32(BYTE *t,int o) // calculates Adler32 checksum of a block `t` of size `o`
-	{ int j=1,k=0; do if ((k+=(j+=*t++))>=65521) k%=65521,j%=65521; while (--o); return (k<<16)+j; }
+	{ int j=1,k=0; do if ((k+=(j+=*t++))>=65521) j%=65521,k%=65521; while (--o); return (k<<16)+j; }
 int puff_zlib(BYTE *t,int o,BYTE *s,int i) // decodes a RFC1950 standard ZLIB object; !0 ERROR
 {
 	if (!s||!t||o<=0||i<=6) return -1; // NULL or empty source or target!
@@ -850,7 +864,7 @@ int puff_body(int q) // loads (!0) or skips (0) a ZIP file body; !0 ERROR
 {
 	if (!puff_file) return -1;
 	if (puff_tgtl<1) q=0; // no data, can safely skip the source
-	if (q)
+	else if (q)
 	{
 		if (puff_srcl<1||puff_tgtl<0)
 			return -1; // cannot get data from nothing! cannot write negative data!
@@ -882,10 +896,6 @@ unsigned int puff_dohash(unsigned int k,unsigned char *s,int l)
 // ZIP-aware fopen()
 char puff_pattern[]="*.zip;*.gz",PUFF_STR[]={PATHCHAR,PATHCHAR,PATHCHAR,0},puff_path[STRMAX]; // i.e. "TREE/PATH///ARCHIVE/FILE"
 FILE *puff_ffile=NULL; int puff_fshut=0; // used to know whether to keep a file that gets repeatedly open
-#ifdef __MSVCRT__ // the MSVCRT.DLL version of tmpfile() is unreliable, see below
-char puff_fbase[STRMAX]="",puff_fpath[STRMAX];
-#endif
-
 FILE *puff_fopen(char *s,char *m) // mimics fopen(), so NULL on error, *FILE otherwise
 {
 	if (!s||!m)
@@ -912,8 +922,8 @@ FILE *puff_fopen(char *s,char *m) // mimics fopen(), so NULL on error, *FILE oth
 		//#endif
 		{
 			#ifdef __MSVCRT__ // MSVCRT.DLL: tmpfile() ignores the TEMP variable and fails on read-only drives, but fopen() gives us the flags "TD"
-			if (!*puff_fbase) GetTempPath(STRMAX,puff_fbase); // do it just once
-			if (!(puff_ffile=GetTempFileName(puff_fbase,"zip",0,puff_fpath)?fopen(puff_fpath,"wb+TD"):NULL)) // "TD" = _O_SHORTLIVED | _O_TEMPORARY
+			static char f[STRMAX]="",g[STRMAX]; if (!*f) GetTempPath(STRMAX,f); // do it just once
+			if (!(puff_ffile=GetTempFileName(f,"zip",0,g)?fopen(g,"wb+TD"):NULL)) // "TD" = _O_SHORTLIVED | _O_TEMPORARY
 			#else
 			if (!(puff_ffile=tmpfile()))
 			#endif
@@ -938,13 +948,9 @@ FILE *puff_fopen(char *s,char *m) // mimics fopen(), so NULL on error, *FILE oth
 	return NULL;
 }
 int puff_fclose(FILE *f)
-{
-	return (f==puff_ffile)?(puff_fshut=1),0:fclose(f); // delay closing to allow recycling
-}
+	{ return (f==puff_ffile)?(puff_fshut=1),0:fclose(f); } // delay closing to allow same-file recycling
 void puff_byebye(void)
-{
-	if (puff_ffile) fclose(puff_ffile),puff_ffile=NULL; // cleanup of tmpfile() is done by the runtime
-}
+	{ if (puff_ffile) fclose(puff_ffile),puff_ffile=NULL; } // cleanup of tmpfile() is done by the runtime
 
 // ZIP-aware user interfaces
 char *puff_session_subdialog(char *r,char *s,char *t,char *zz,int qq) // let the user pick a file within a ZIP archive ('r' ZIP path, 's' pattern, 't' title, 'zz' default file or NULL); NULL for cancel, 'r' (with full path) for OK
@@ -961,10 +967,7 @@ char *puff_session_subdialog(char *r,char *s,char *t,char *zz,int qq) // let the
 				++l,z=&session_scratch[sortedinsert(session_scratch,z-session_scratch,puff_name)];
 		puff_body(0);
 		if (z>=&session_scratch[length(session_scratch)-STRMAX])
-		{
-			z+=1+sprintf(z,"...");
-			break; // too many files :-(
-		}
+			{ z+=1+sprintf(z,"..."); break; } // too many files :-(
 	}
 	puff_close();
 	if (!l) // no matching files?
@@ -973,17 +976,16 @@ char *puff_session_subdialog(char *r,char *s,char *t,char *zz,int qq) // let the
 	if (l==1) // a matching file?
 		return qq?strcpy(session_parmtr,strcat(strcat(rr,PUFF_STR),session_scratch)):NULL; // 'qq' enables automatic OK
 	i=sortedsearch(session_scratch,z-session_scratch,zz);
-	*z++=0; // END OF LIST
-	sprintf(z,"Archive %s",rr);
-	return session_list(i,session_scratch,z)<0?NULL:strcpy(session_parmtr,strcat(strcat(rr,PUFF_STR),session_parmtr));
+	*z++=0; //sprintf(z,"Archive %s",rr); // END OF LIST: use it to store the window caption
+	return session_list(i,session_scratch,rr)<0?NULL:strcpy(session_parmtr,strcat(strcat(rr,PUFF_STR),session_parmtr));
 }
 #define puff_session_zipdialog(r,s,t) puff_session_subdialog(r,s,t,NULL,1)
 
 char *puff_session_filedialog(char *r,char *s,char *t,int q,int f) // ZIP archive wrapper for session_getfile
 {
-	unsigned char rr[STRMAX],ss[STRMAX],*z,*zz; int qq=0;
-	strcpy(rr,r); sprintf(ss,"%s;%s",puff_pattern,s);
-	for (;;) // try either a file list or the file dialog until the user either chooses a file or quits
+	unsigned char rr[STRMAX],ss[STRMAX],*z,*zz;
+	sprintf(ss,"%s;%s",puff_pattern,s); if (!r) r=session_path; strcpy(rr,r); // NULL path = default!
+	for (int qq=0;;) // try either a file list or the file dialog until the user either chooses a file or quits
 	{
 		if (zz=strrstr(rr,PUFF_STR)) // 'rr' holds the path, does it contain the separator already?
 		{
@@ -1117,14 +1119,12 @@ int debug_logbyte(BYTE z) // log a byte, if possible; !0 ERROR, 0 OK
 		char *s; if (s=session_newfile(NULL,"*","Register log file"))
 			debug_logfile=fopen(s,"wb"),debug_logsize=0;
 	}
-	if (debug_logfile) // do we have a valid file?
-	{
-		debug_logtemp[debug_logsize]=z;
-		if (++debug_logsize>=length(debug_logtemp))
-			fwrite1(debug_logtemp,sizeof(debug_logtemp),debug_logfile),debug_logsize=0;
-		return 0; // OK
-	}
-	return 1; // ERROR!
+	if (!debug_logfile) // do we have a valid file?
+		return 1; // ERROR!
+	debug_logtemp[debug_logsize]=z;
+	if (++debug_logsize>=length(debug_logtemp))
+		fwrite1(debug_logtemp,sizeof(debug_logtemp),debug_logfile),debug_logsize=0;
+	return 0; // OK
 }
 void debug_close(void) // debugger cleanup: flush logfile if open
 {
@@ -1188,7 +1188,7 @@ WORD debug_longdasm(char *t,WORD p) // disassemble code and include its hexadeci
 }
 int session_debug_eval(char *s) // parse very simple expressions till an unknown character appears
 {
-	int t=0,k='+',c; for (;;)
+	int t=0,k='+',c; do
 	{
 		while (*s==' ') ++s; // trim spaces
 		int i=0; if (*s=='.') // decimal?
@@ -1197,20 +1197,18 @@ int session_debug_eval(char *s) // parse very simple expressions till an unknown
 		else
 			while ((c=eval_hex(*s))>=0)
 				i=(i<<4)+c,++s;
-		if (k=='+')
-			t+=i;
-		else if (k=='-')
-			t-=i;
-		else if (k=='&')
-			t&=i;
-		else if (k=='|')
-			t|=i;
-		else if (k=='^')
-			t^=i;
 		while (*s==' ') ++s; // trim spaces
-		if (!(k=*s++)||!strchr("+-&|^",k))
-			break;
+		switch (k)
+		{
+			case '+': t+=i; break;
+			case '-': t-=i; break;
+			case '&': t&=i; break;
+			case '|': t|=i; break;
+			case '^': t^=i; break;
+			default: return t;
+		}
 	}
+	while ((k=*s++)>' ');
 	return t;
 }
 void session_debug_print(char *t,int x,int y,int n) // print a line of `n` characters of debug text
@@ -1219,7 +1217,7 @@ void session_debug_print(char *t,int x,int y,int n) // print a line of `n` chara
 		switch (((config=debug_config&=15)>>2)&3)
 		{
 			case 0: for (int i=0,j=0;i<sizeof(debug_chrs);++i) j=onscreen_chrs[i],debug_chrs[i]=j|(j>>1); break; // NORMAL
-			case 1: memcpy(debug_chrs,onscreen_chrs,sizeof(debug_chrs)); break; // THIN
+			case 1: MEMLOAD(debug_chrs,onscreen_chrs); break; // THIN
 			case 2: for (int i=0,j=0;i<sizeof(debug_chrs);++i) j=onscreen_chrs[i],debug_chrs[i]=j|(((i/(ONSCREEN_SIZE/2))&1)?j<<1:j>>1); break; // ITALIC
 			case 3: for (int i=0,j=0;i<sizeof(debug_chrs);++i) j=onscreen_chrs[i],debug_chrs[i]=(j<<1)|j|(j>>1); break; // BOLD
 		}
@@ -1236,7 +1234,7 @@ void session_debug_print(char *t,int x,int y,int n) // print a line of `n` chara
 					if (xx&ww)
 						*p=p1/*,p[1]=p0,p[VIDEO_PIXELS_X]=p0*/,p[VIDEO_PIXELS_X+1]=p0;
 					else
-						*p=VIDEO_FILTER_HALF(*p,p0);
+						if (*p!=p0) *p=VIDEO_FILTER_LINE(*p,p0);
 			}
 			else
 				for (int xx=128,ww=w^*zz++;xx;xx>>=1,++p)
@@ -1477,7 +1475,7 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 				if (++debug_panel3_x>3) debug_panel3_x=0,debug_panel3_w+=2;
 				break;
 		}
-		k=1; // just in case it's zero
+		k=1; // nonzero!
 	}
 	else switch (k)
 	{
@@ -1492,7 +1490,7 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 						else if (x>=DEBUG_LENGTH_X-9) // registers
 							debug_panel=1,debug_panel1_w=y,debug_panel1_x=x-(DEBUG_LENGTH_X-4);
 						else
-							k=0;
+							k=0; // default!
 					}
 					else // bottom half
 					{
@@ -1501,11 +1499,11 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 						else if (x>=DEBUG_LENGTH_X-9) // stack
 							debug_panel=3,debug_panel3_w+=2*(y-(DEBUG_LENGTH_Y/2)),debug_panel3_x=x-(DEBUG_LENGTH_X-4),x=x<0?0:x;
 						else
-							k=0;
+							k=0; // default!
 					}
 				}
 				else
-					k=0;
+					k=0; // default!
 			}
 			break;
 		case KBDBG_TAB:
@@ -1604,7 +1602,7 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 			if (!(debug_panel&1))
 			{
 				char *s; FILE *f; WORD w=i=debug_panel?debug_panel2_w:debug_panel0_w;
-				if (s=session_getfile(NULL,"*","Input file"))
+				if (s=puff_session_getfile(NULL,"*","Input file"))
 					if (f=puff_fopen(s,"rb"))
 					{
 						while (i=fread1(session_substr,256,f)) // better than fgetc()
@@ -1670,7 +1668,7 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 									while (--i>0);
 									if (k)
 										fprintf(f,"%s\n",session_substr);
-									k=1; // just in case it's zero
+									k=1; // nonzero!
 								}
 								else // DISASSEMBLY
 									do // WRAP!
@@ -1720,7 +1718,7 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 		case 'Z': // DELETE BREAKPOINTS
 			MEMZERO(debug_point); break;
 		case '.': // TOGGLE BREAKPOINT
-			if (debug_panel==0) debug_point[debug_panel0_w]=!debug_point[debug_panel0_w]; break;
+			if (debug_panel==0) { debug_point[debug_panel0_w]=!debug_point[debug_panel0_w]; break; }
 		default: k=0;
 	}
 	return k&&(debug_dirty=1);
@@ -1730,8 +1728,7 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 
 unsigned int session_savenext(char *z,unsigned int i) // scans for available filenames; `z` is "%s%u.ext" and `i` is the current index; returns 0 on error, or a new index
 {
-	FILE *f;
-	while (i)
+	FILE *f; while (i)
 	{
 		sprintf(session_parmtr,z,session_path,i);
 		if (!(f=fopen(session_parmtr,"rb"))) // does the file exist?
@@ -1743,7 +1740,7 @@ unsigned int session_savenext(char *z,unsigned int i) // scans for available fil
 
 // multimedia: audio file output ------------------------------------ //
 
-unsigned char waveheader[44]="RIFF____WAVEfmt \020\000\000\000\001\000\000\000________\000\000\000\000data";
+unsigned char waveheader[44]="RIFF\000\000\000\000WAVEfmt \020\000\000\000\001\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000data"; // zero-padded
 unsigned int session_nextwave=1,session_wavesize;
 int session_createwave(void) // create a wave file; !0 ERROR
 {
@@ -1967,14 +1964,13 @@ int session_closefilm(void) // stop recording video and audio; !0 ERROR
 // multimedia: screenshot output ------------------------------------ //
 // warning: the following code assumes that VIDEO_UNIT is DWORD 0X00RRGGBB!
 
-unsigned char bitmapheader[54]="BM\000\000\000\000\000\000\000\000\066\000\000\000\050\000\000\000\000\000\000\000\000\000\000\000\001\000\030\000";
+unsigned char bitmapheader[54]="BM\000\000\000\000\000\000\000\000\066\000\000\000\050\000\000\000\000\000\000\000\000\000\000\000\001\000\030\000"; // zero-padded
 unsigned int session_nextbitmap=1;
 INLINE int session_savebitmap(void) // save a RGB888 bitmap file; !0 ERROR
 {
 	if (!(session_nextbitmap=session_savenext("%s%08u.bmp",session_nextbitmap)))
 		return 1; // too many files!
-	FILE *f;
-	if (!(f=fopen(session_parmtr,"wb")))
+	FILE *f; if (!(f=fopen(session_parmtr,"wb")))
 		return 1; // cannot create file!
 	int i=VIDEO_PIXELS_X*VIDEO_PIXELS_Y*3>>(2*session_filmscale);
 	mputiiii(&bitmapheader[0x02],sizeof(bitmapheader)+i);
@@ -2030,7 +2026,6 @@ FILE *session_configfile(int q) // returns handle to configuration file, `q`?rea
 	#endif
 	),q?"r":"w");
 }
-
 char *session_configread(unsigned char *t) // reads configuration file; t points to the current line; returns NULL if handled, a string otherwise
 {
 	unsigned char *s=t; while (*s) ++s; // go to trail
@@ -2042,9 +2037,9 @@ char *session_configread(unsigned char *t) // reads configuration file; t points
 	{
 		if (!strcasecmp(t,"polyphony")) return audio_mixmode=*s&3,NULL;
 		if (!strcasecmp(t,"softaudio")) return audio_filter=*s&3,NULL;
-		if (!strcasecmp(t,"scanlines")) return video_scanline=(*s&14)>>1,video_scanline=video_scanline>4?4:video_scanline,video_scanblend=*s&1,NULL;
+		if (!strcasecmp(t,"scanlines")) return video_scanline=(*s>>1)&7,video_scanline=video_scanline>4?4:video_scanline,video_pageblend=*s&1,NULL;
 		if (!strcasecmp(t,"softvideo")) return video_filter=*s&7,NULL;
-		if (!strcasecmp(t,"zoomvideo")) return session_intzoom=*s&1,NULL;
+		if (!strcasecmp(t,"zoomvideo")) return session_zoomblit=(*s>>1)&7,session_zoomblit=session_zoomblit>4?4:session_zoomblit,video_lineblend=*s&1,NULL;
 		if (!strcasecmp(t,"safevideo")) return session_softblit=*s&1,NULL;
 		if (!strcasecmp(t,"safeaudio")) return session_softplay=*s&1,NULL;
 		if (!strcasecmp(t,"film")) return session_filmscale=*s&1,session_filmtimer=(*s>>1)&1,NULL;
@@ -2056,9 +2051,9 @@ void session_configwrite(FILE *f) // save common parameters
 {
 	fprintf(f,
 		"film %d\ninfo %d\n"
-		"polyphony %d\nsoftaudio %d\nscanlines %d\nsoftvideo %d\nzoomvideo %d\nsafevideo %d\nsafeaudio %d\n"
-		,session_filmscale+(session_filmtimer<<1),onscreen_flag
-		,audio_mixmode,audio_filter,(video_scanline<<1)+(video_scanblend?1:0),video_filter,(session_intzoom?1:0),session_softblit,session_softplay
+		"polyphony %d\nsoftaudio %d\nscanlines %d\nsoftvideo %X\nzoomvideo %d\nsafevideo %d\nsafeaudio %d\n"
+		,(session_filmscale?1:0)+(session_filmtimer?2:0),onscreen_flag
+		,audio_mixmode,audio_filter,(video_scanline<<1)+(video_pageblend?1:0),video_filter,(video_lineblend?1:0)+(session_zoomblit<<1),session_softblit,session_softplay
 		);
 }
 

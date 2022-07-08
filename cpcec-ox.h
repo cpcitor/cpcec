@@ -1,9 +1,9 @@
  //  ####  ######    ####  #######   ####  ------------------------- //
-//  ##	##  ##	##  ##	##  ##	 #  ##	##  CPCEC, plain text Amstrad //
-// ##	    ##	## ##	    ## #   ##	    CPC emulator written in C //
-// ##	    #####  ##	    ####   ##	    as a postgraduate project //
-// ##	    ##	   ##	    ## #   ##	    by Cesar Nicolas-Gonzalez //
-//  ##	##  ##	    ##	##  ##	 #  ##	##  since 2018-12-01 till now //
+//  ##  ##  ##  ##  ##  ##  ##   #  ##  ##  CPCEC, plain text Amstrad //
+// ##       ##  ## ##       ## #   ##       CPC emulator written in C //
+// ##       #####  ##       ####   ##       as a postgraduate project //
+// ##       ##     ##       ## #   ##       by Cesar Nicolas-Gonzalez //
+//  ##  ##  ##      ##  ##  ##   #  ##  ##  since 2018-12-01 till now //
  //  ####  ####      ####  #######   ####  ------------------------- //
 
 // SDL2 is the second supported platform; to compile the emulator type
@@ -79,7 +79,7 @@ int session_maus_x=0,session_maus_y=0; // mouse coordinates (UI + optional emula
 int session_maus_z=0; // optional mouse emulation
 #endif
 BYTE video_filter=0,audio_filter=0; // filter flags
-BYTE session_intzoom=0; int session_joybits=0;
+BYTE session_fullblit=0,session_zoomblit=0; int session_joybits=0;
 FILE *session_wavefile=NULL; // audio recording is done on each session update
 
 BYTE session_paused=0,session_signal=0,session_signal_frames=0,session_signal_scanlines=0,session_version[8];
@@ -274,8 +274,34 @@ BYTE session_hidemenu=0; // positive or negative UI
 SDL_Texture *session_dib=NULL,*session_gui_dib=NULL; SDL_Renderer *session_blitter=NULL;
 SDL_Rect session_ideal; // used for calculations, see below
 
+#ifdef __TINYC__
+#define session_clrscr() 0 // TCC causes a segmentation fault (!?)
+#else
+#define session_clrscr() SDL_RenderClear(session_blitter) // defaults to black
+#endif
 void session_backupvideo(VIDEO_UNIT *t); // make a clipped copy of the current screen. Must be defined later on!
 int session_r_x,session_r_y,session_r_w,session_r_h; // actual location and size of the bitmap
+int session_resize(void) // SDL2 handles almost everything, but we still have to keep a cache of the past state
+{
+	static char z=1; if (session_fullblit)
+	{
+		if (z)
+		{
+			SDL_SetWindowFullscreen(session_hwnd,SDL_WINDOW_FULLSCREEN_DESKTOP);
+			z=0; session_clrscr(),session_dirty=1; // clean up and update options
+		}
+	}
+	else if (z!=session_zoomblit+1)
+	{
+		if (!z)
+			SDL_SetWindowFullscreen(session_hwnd,0);
+		int x=VIDEO_PIXELS_X*(session_zoomblit+2)/2,y=VIDEO_PIXELS_Y*(session_zoomblit+2)/2;
+		SDL_SetWindowSize(session_hwnd,x,y); // SDL2 adds the window borders on its own!
+		SDL_SetWindowPosition(session_hwnd,SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED); // SDL2 won't resize AND center windows in one operation
+		z=session_zoomblit+1; session_clrscr(),session_dirty=1; // clean up and update options
+	}
+	return z;
+}
 void session_redraw(int q) // redraw main canvas (!0) or user interface (0)
 {
 	SDL_GetRendererOutputSize(session_blitter,&session_ideal.w,&session_ideal.h);
@@ -285,13 +311,15 @@ void session_redraw(int q) // redraw main canvas (!0) or user interface (0)
 			session_r_w=session_r_h*VIDEO_PIXELS_X/VIDEO_PIXELS_Y;
 		if (session_r_h>session_r_w*VIDEO_PIXELS_Y/VIDEO_PIXELS_X) // window area is too tall?
 			session_r_h=session_r_w*VIDEO_PIXELS_Y/VIDEO_PIXELS_X;
-		if (session_intzoom) // integer zoom? (100%, 150%, 200%, 250%, 300%...)
+		#if 0
+		if (session_fullblit) // maximum integer zoom: 100%, 150%, 200%...
+		#endif
 			session_r_w=((session_r_w*17)/VIDEO_PIXELS_X/8)*VIDEO_PIXELS_X/2, // "*17../16../1"
 			session_r_h=((session_r_h*17)/VIDEO_PIXELS_Y/8)*VIDEO_PIXELS_Y/2; // forbids N+50%
 		if (session_r_w<VIDEO_PIXELS_X||session_r_h<VIDEO_PIXELS_Y)
 			session_r_w=VIDEO_PIXELS_X,session_r_h=VIDEO_PIXELS_Y; // window area is too small!
-		session_ideal.x=session_r_x=(session_ideal.w-session_r_w)/2; session_ideal.w=session_r_w;
-		session_ideal.y=session_r_y=(session_ideal.h-session_r_h)/2; session_ideal.h=session_r_h;
+		session_ideal.x=session_r_x=(session_ideal.w-session_r_w)>>1; session_ideal.w=session_r_w;
+		session_ideal.y=session_r_y=(session_ideal.h-session_r_h)>>1; session_ideal.h=session_r_h;
 		SDL_Texture *s; VIDEO_UNIT *t; int ox,oy;
 		if (!q)
 			s=session_gui_dib,ox=0,oy=0;
@@ -299,9 +327,7 @@ void session_redraw(int q) // redraw main canvas (!0) or user interface (0)
 			s=session_dbg,ox=0,oy=0;
 		else
 			s=session_dib,ox=VIDEO_OFFSET_X,oy=VIDEO_OFFSET_Y;
-		SDL_Rect r;
-		r.x=ox; r.w=VIDEO_PIXELS_X;
-		r.y=oy; r.h=VIDEO_PIXELS_Y;
+		SDL_Rect r={.x=ox,.w=VIDEO_PIXELS_X,.y=oy,.h=VIDEO_PIXELS_Y};
 		SDL_UnlockTexture(s); // prepare for sending
 		if (SDL_RenderCopy(session_blitter,s,&r,&session_ideal)>=0) // send! (warning: this operation has a memory leak on several SDL2 versions)
 			SDL_RenderPresent(session_blitter); // update window!
@@ -317,19 +343,6 @@ void session_redraw(int q) // redraw main canvas (!0) or user interface (0)
 			video_target=video_frame+dummy; // ...may need to move!
 		}
 	}
-}
-
-#ifdef __TINYC__
-#define session_clrscr() 0 // TCC causes a segmentation fault (!?)
-#else
-#define session_clrscr() SDL_RenderClear(session_blitter) // defaults to black
-#endif
-int session_fullscreen=0;
-void session_togglefullscreen(void)
-{
-	SDL_SetWindowFullscreen(session_hwnd,session_fullscreen=((SDL_GetWindowFlags(session_hwnd)&SDL_WINDOW_FULLSCREEN_DESKTOP)?0:SDL_WINDOW_FULLSCREEN_DESKTOP));
-	session_clrscr(); // SDL2 cleans up, but not on all systems
-	session_dirty=1; // update "Full screen" option (if any)
 }
 
 #ifdef SDL2_UTF8
@@ -501,7 +514,9 @@ int session_ui_exchange(void) // wait for a keystroke or a mouse motion
 			case SDL_WINDOWEVENT:
 				if (event.window.event==SDL_WINDOWEVENT_EXPOSED)
 					SDL_RenderPresent(session_blitter);//SDL_UpdateWindowSurface(session_hwnd); // fast redraw
-				//else if (event.window.event==SDL_WINDOWEVENT_FOCUS_LOST&&session_ui_focusing) return KBCODE_ESCAPE;
+				#if 1 // *!* some users expect the menus to vanish on focus loss, others don't... what do?
+				else if (event.window.event==SDL_WINDOWEVENT_FOCUS_LOST&&session_ui_focusing) return KBCODE_ESCAPE;
+				#endif
 				break;
 			case SDL_MOUSEWHEEL:
 				if (event.wheel.direction==SDL_MOUSEWHEEL_FLIPPED) event.wheel.y=-event.wheel.y;
@@ -1100,7 +1115,7 @@ int session_ui_scan(char *s,char *t) // see session_scan
 int multiglobbing(char *w,char *t,int q); // multi-pattern globbing; must be defined later on!
 int sortedinsert(char *t,int z,char *s); // ordered list inserting; must be defined later on!
 int sortedsearch(char *t,int z,char *s); // ordered list searching; must be defined later on!
-int session_ui_fileflags;
+int session_ui_fileflags; // see below for the `readonly` flag and others
 char *session_ui_filedialog_sanitizepath(char *s) // restore PATHCHAR at the end of a path name
 {
 	if (s&&*s)
@@ -1117,8 +1132,7 @@ void session_ui_filedialog_tabkey(void)
 {
 	char *l={"Read/Write\000Read-Only\000"};
 	int i=session_ui_list(session_ui_fileflags&1,l,"File access",NULL,1);
-	if (i>=0)
-		session_ui_fileflags=i;
+	if (i>=0) session_ui_fileflags=i;
 }
 int getftype(char *s) // <0 = not exist, 0 = file, >0 = directory
 {
@@ -1310,22 +1324,22 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	session_gui_dib=SDL_CreateTexture(session_blitter,SDL_PIXELFORMAT_ARGB8888,SDL_TEXTUREACCESS_STREAMING,VIDEO_PIXELS_X,VIDEO_PIXELS_Y);
 	SDL_SetTextureBlendMode(session_dib,SDL_BLENDMODE_NONE);
 	SDL_SetTextureBlendMode(session_gui_dib,SDL_BLENDMODE_NONE); // ignore alpha!
-	int dummy; SDL_LockTexture(session_dib,NULL,(void*)&video_frame,&dummy); // pitch must always equal VIDEO_LENGTH_X*4 !!!
-	if (dummy!=4*VIDEO_LENGTH_X) return SDL_Quit(),"pitch mismatch"; // can this EVER happen!?!?
-	SDL_LockTexture(session_gui_dib,NULL,(void*)&menus_frame,&dummy); // ditto, pitch must always equal VIDEO_PIXELS_X*4 !!!
+	int i; SDL_LockTexture(session_dib,NULL,(void*)&video_frame,&i); // pitch must always equal VIDEO_LENGTH_X*4 !!!
+	if (i!=4*VIDEO_LENGTH_X) return SDL_Quit(),"pitch mismatch"; // can this EVER happen!?!?
+	SDL_LockTexture(session_gui_dib,NULL,(void*)&menus_frame,&i); // ditto, pitch must always equal VIDEO_PIXELS_X*4 !!!
 
 	session_dbg=SDL_CreateTexture(session_blitter,SDL_PIXELFORMAT_ARGB8888,SDL_TEXTUREACCESS_STREAMING,VIDEO_PIXELS_X,VIDEO_PIXELS_Y);
 	SDL_SetTextureBlendMode(session_dbg,SDL_BLENDMODE_NONE);
-	SDL_LockTexture(session_dbg,NULL,(void*)&debug_frame,&dummy);
+	SDL_LockTexture(session_dbg,NULL,(void*)&debug_frame,&i);
 
 	if (session_hidemenu) // user interface style
 	{
-		int i=SESSION_UI_000; SESSION_UI_000=SESSION_UI_100; SESSION_UI_100=i;
+		i=SESSION_UI_000; SESSION_UI_000=SESSION_UI_100; SESSION_UI_100=i;
 		i=SESSION_UI_025; SESSION_UI_025=SESSION_UI_075; SESSION_UI_075=i;
 	}
 	if (session_stick)
 	{
-		int i=SDL_NumJoysticks();
+		i=SDL_NumJoysticks();
 		cprintf("Detected %d joystick[s]: ",i);
 		while (--i>=0&&!((session_pad=SDL_IsGameController(i)),(cprintf("%s #%d = '%s'. ",session_pad?"Controller":"Joystick",i,session_pad?SDL_GameControllerNameForIndex(i):SDL_JoystickNameForIndex(i))),
 			session_joy=(session_pad?(void*)SDL_GameControllerOpen(i):(void*)SDL_JoystickOpen(i)))) // scan joysticks and game controllers until we run out or one is OK
@@ -1422,7 +1436,6 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	session_clean(); session_please();
 	return NULL;
 }
-
 int session_pad2bit(int i) // translate motions and buttons into codes
 {
 	switch (i)
@@ -1453,7 +1466,7 @@ int session_pad2bit(int i) // translate motions and buttons into codes
 }
 INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 {
-	static int s=0;	if (s!=session_signal) // catch DEBUG and PAUSE
+	static int s=-1; if (s!=session_signal) // catch DEBUG and PAUSE
 		s=session_signal,session_dirty=debug_dirty=2;
 	if (session_signal&(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE))
 	{
@@ -1514,7 +1527,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 				if (event.key.keysym.mod&KMOD_ALT) // ALT+RETURN toggles fullscreen; reject other ALT-combinations
 				{
 					if (event.key.keysym.sym==SDLK_RETURN)
-						session_togglefullscreen();
+						session_fullblit=!session_fullblit,session_resize();
 					break;
 				}
 				if (event.key.keysym.sym==SDLK_F10)
@@ -1544,7 +1557,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 					kbd_bit_res(k);
 				break;
 			case SDL_JOYAXISMOTION:
-				if (!session_pad)
+				//if (!session_pad) // redundant
 					switch (event.jaxis.axis) // warning, there can be more than two axes
 					{
 						case SDL_CONTROLLER_AXIS_LEFTX: // safe
@@ -1556,7 +1569,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 					}
 				break;
 			case SDL_CONTROLLERAXISMOTION:
-				if (session_pad)
+				//if (session_pad) // redundant
 					switch (event.caxis.axis) // only the first two axes (X and Y) are safe
 					{
 						case 0: session_joybits=(session_joybits&~(4+8))+(event.caxis.value<-0x4000?4:event.caxis.value>=0x4000?8:0); break;
@@ -1564,19 +1577,19 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 					}
 				break;
 			case SDL_JOYBUTTONDOWN:
-				if (!session_pad)
+				if (!session_pad) // required!
 					session_joybits|=16<<event.jbutton.button;
 				break;
 			case SDL_JOYBUTTONUP:
-				if (!session_pad)
+				if (!session_pad) // required!
 					session_joybits&=~(16<<event.jbutton.button);
 				break;
 			case SDL_CONTROLLERBUTTONDOWN:
-				if (session_pad)
+				//if (session_pad) // redundant
 					session_joybits|=session_pad2bit(event.cbutton.button);
 				break;
 			case SDL_CONTROLLERBUTTONUP:
-				if (session_pad)
+				//if (session_pad) // redundant
 					session_joybits&=~session_pad2bit(event.cbutton.button);
 				break;
 			case SDL_DROPFILE:
