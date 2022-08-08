@@ -54,9 +54,9 @@ INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 #define cputchar(x) fputc(x,stdout)
 #define cputs(x) fputs(x,stdout)
 #else // warning: parameters won't be eval'd!
-#define cprintf(...) 0
-#define cputchar(x) 0
-#define cputs(x) 0
+#define cprintf(...) (0)
+#define cputchar(x) (0)
+#define cputs(x) (0)
 #endif
 
 #ifdef SDL2 // SDL2 is mandatory outside Win32 and optional inside Win32
@@ -77,6 +77,7 @@ INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 #include <io.h> // _chsize(),_fileno()...
 
 #define MESSAGEBOX_WIDETAB "\t" // expect proportional font
+#define GPL_3_LF " " // Windows provides its own line feeds
 
 // general engine constants and variables --------------------------- //
 
@@ -417,18 +418,16 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 		{
 			LPDIRECTDRAWSURFACE l=(session_signal&SESSION_SIGNAL_DEBUG)?lpdd_dbg:lpddback;
 			IDirectDrawSurface_Unlock(l,0);
-
-			int q=1; // don't redraw if something went wrong
+			//int q=1; // don't redraw if something went wrong
 			if (IDirectDrawSurface_IsLost(lpddfore))
-				q=0,IDirectDrawSurface_Restore(lpddfore);
-			if (IDirectDrawSurface_IsLost(lpddback))
-				q=0,IDirectDrawSurface_Restore(lpddback);
-			if (IDirectDrawSurface_IsLost(lpdd_dbg))
-				q=0,IDirectDrawSurface_Restore(lpdd_dbg);
-
-			if (q) // not sure if we can redraw even when !q ...
+				/*q=0,*/IDirectDrawSurface_Restore(lpddfore);
+			else if (IDirectDrawSurface_IsLost(lpddback))
+				/*q=0,*/IDirectDrawSurface_Restore(lpddback);
+			else if (IDirectDrawSurface_IsLost(lpdd_dbg))
+				/*q=0,*/IDirectDrawSurface_Restore(lpdd_dbg);
+			else //if (q) // not sure if we can redraw even when !q ...
 			{
-				POINT p={.x=0,.y=0};
+				POINT p; p.x=p.y=0; // some C compilers dislike `POINT p={.x=0,.y=0}`... see also SDL_Rect in CPCEC-OX.H :-(
 				if (ClientToScreen(hwnd,&p)) // can this ever fail!?
 				{
 					RECT rr;
@@ -439,16 +438,14 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 					IDirectDrawSurface_Blt(lpddfore,&r,l,&rr,DDBLT_WAIT,0);
 				}
 			}
-
 			ddsd.dwSize=sizeof(ddsd);
 			IDirectDrawSurface_Lock(l,0,&ddsd,DDLOCK_SURFACEMEMORYPTR|DDLOCK_WAIT,0);
 			if (session_signal&SESSION_SIGNAL_DEBUG)
 				debug_frame=ddsd.lpSurface;
 			else
 			{
-				int dummy=video_target-video_frame; // the old cursor...
-				video_frame=ddsd.lpSurface;
-				video_target=video_frame+dummy; // ...may need to move!
+				size_t z=video_target-video_frame; // the video target pointer...
+				video_target=(video_frame=ddsd.lpSurface)+z; // ...must follow the frame!
 			}
 		}
 		else
@@ -578,6 +575,10 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 			{
 				if (wparam==VK_RETURN) // ALT+RETURN toggles fullscreen
 					return session_fullblit=!session_fullblit,session_resize(),0; // skip OS
+				/*else*/ if (wparam==VK_UP) // ALT+UP raises the zoom
+					return (!session_fullblit&&session_zoomblit<4&&(++session_zoomblit,session_resize())),0;
+				/*else*/ if (wparam==VK_DOWN) // ALT+DOWN lowers it
+					return (!session_fullblit&&session_zoomblit>0&&(--session_zoomblit,session_resize())),0;
 				/*else*/ if (wparam==VK_F10&&session_contextmenu()) // F10 shows the popup menu
 					return 0; // skip OS if the popup menu is allowed
 			}
@@ -598,7 +599,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	{
 		if (c=='=') // separator?
 		{
-			while (*s++!='\n') ; // ignore remainder
+			while (*s++!='\n') {} // ignore remainder
 			AppendMenu(session_submenu,MF_SEPARATOR,0,0);
 		}
 		else if (c=='0') // menu item?
@@ -659,9 +660,8 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 		if (DirectDrawCreate(NULL,&lpdd,NULL)>=0)
 		{
 			IDirectDraw_SetCooperativeLevel(lpdd,session_hwnd,DDSCL_NORMAL);
-			//ZeroMemory(&ddsd,sizeof(ddsd));
-			ddsd.dwSize=sizeof(ddsd);
-			ddsd.dwFlags=DDSD_CAPS;
+			//memset(&ddsd,0,sizeof(ddsd));//ZeroMemory(&ddsd,sizeof(ddsd));
+			ddsd.dwSize=sizeof(ddsd); ddsd.dwFlags=DDSD_CAPS;
 			ddsd.ddsCaps.dwCaps=DDSCAPS_PRIMARYSURFACE;
 			IDirectDraw_CreateSurface(lpdd,&ddsd,&lpddfore,NULL);
 
@@ -692,13 +692,11 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	if (session_softblit) // software-only GDI bitmap
 	#endif
 	{
-		BITMAPINFO bmi;
-		memset(&bmi,0,sizeof(bmi));
+		BITMAPINFO bmi; memset(&bmi,0,sizeof(bmi));
 		bmi.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
 		bmi.bmiHeader.biWidth=VIDEO_LENGTH_X;
 		bmi.bmiHeader.biHeight=-VIDEO_LENGTH_Y; // negative values make a top-to-bottom bitmap; Windows' default bitmap is bottom-to-top
-		bmi.bmiHeader.biPlanes=1;
-		bmi.bmiHeader.biBitCount=32; // cfr. VIDEO_UNIT
+		bmi.bmiHeader.biPlanes=1; bmi.bmiHeader.biBitCount=32; // cfr. VIDEO_UNIT
 		bmi.bmiHeader.biCompression=BI_RGB;
 		session_dc1=GetDC(session_hwnd); // beware, we're assuming that if CreateWindow() succeeds all other USER and GDI calls will succeed too
 		session_dc2=CreateCompatibleDC(session_dc1);
@@ -1013,7 +1011,7 @@ LRESULT CALLBACK listproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // dia
 			char *l=(char*)lparam; while (*l)
 			{
 				SendDlgItemMessage(hwnd,12345,LB_ADDSTRING,0,(LPARAM)l);
-				while (*l++) ;
+				while (*l++) {}
 			}
 			SendDlgItemMessage(hwnd,12345,LB_SETCURSEL,session_dialog_return,0); // select item
 			session_dialog_return=-1;
@@ -1118,15 +1116,21 @@ int session_filedialog(char *r,char *s,char *t,int q,int f) // auxiliar function
 	if (i&&session_tmpstr[--i]=='\\') // pure path?
 		//if (i&&session_tmpstr[i-1]!=':') // special case "X:\"
 			session_tmpstr[i]=0;
+	r=strrchr(session_tmpstr,'\\');
 	*session_parmtr=0; // no file by default
-	if ((i=getftype(session_tmpstr))<0)
-		strcpy(session_tmpstr,"."); // invalid path: no path, no file
-	else if (i>0)
-		; // directory: path only
-	else if (r=strrchr(session_tmpstr,'\\'))
-		strcpy(session_parmtr,++r),*r=0; // file with path
-	else
-		strcpy(session_parmtr,session_tmpstr),strcpy(session_tmpstr,"."); // file without path
+	if (!(i=getftype(session_tmpstr))) // valid file?
+	{
+		if (r)
+			strcpy(session_parmtr,++r),*r=0; // file with path
+		else
+			strcpy(session_parmtr,session_tmpstr),strcpy(session_tmpstr,"."); // file without path
+	}
+	else if (i<0&&r) // invalid file; valid path?
+	{
+		r[1]=0; // remove invalid file, keep path
+		if (getftype(session_tmpstr)<=0)
+			strcpy(session_tmpstr,"."); // invalid path = default!
+	}
 	strcpy(session_substr,s);
 	strcpy(&session_substr[strlen(s)+1],s); // one NULL char between two copies of the same string
 	session_substr[strlen(s)*2+2]=session_substr[strlen(s)*2+3]=0;
@@ -1156,7 +1160,16 @@ char *session_getfilereadonly(char *r,char *s,char *t,int q) // "Open a File" wi
 #define SDL_LIL_ENDIAN 1234
 #define SDL_BIG_ENDIAN 4321
 #define SDL_BYTEORDER SDL_LIL_ENDIAN
-#define SDL_UTF8_CHARS 0
+
+// unlike SDL2, Win32 doesn't implicitly include "math.h" or its functions :-/
+#include <math.h>
+#ifndef M_PI // old MSVCRT versions lack M_PI!
+#define M_PI 3.14159265358979323846264338327950288 // used by SDL2
+#endif
+#define SDL_cos cos
+#define SDL_pow pow
+#define SDL_sin sin
+#define SDL_sqrt sqrt
 
 // main-WinMain bootstrap
 #ifdef DEBUG

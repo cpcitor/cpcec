@@ -1088,7 +1088,7 @@ can load PRG files and play T64 and TAP tape images, but it doesn't emulate the
 C1541 disc drive yet and thus cannot handle D64 disc images at all. New virtual
 joystick interface: the user can redefine the keys that simulate the virtual
 joystick instead of sticking to the keys Z and X and the cursors. Fixed a bug in
-the Z80 (the internal timings of OUT (n),A were wrong) and the LA-7800's
+the Z80 (the internal timings of `OUT (n),A` were wrong) and the LA-7800's
 horizontal synchronisation (both reported by Hicks): the CPC demo "Onescreen
 Colonies #2" behaves properly. Tape analysis can detect musical loaders: tape
 acceleration will be temporarily disabled so songs play normally.
@@ -1130,3 +1130,16 @@ the SID (ports 27 and 28: second chip detection in "To Norah", sound effects of
 "Cloud Kingdoms"; wave shapes: song of "HVSC 10 Years"; filter based on the
 Chamberlin algorithm). The command line parameter `-c0..-c7` is now `-c0..c9`
 and includes the fifth mode, average scanlines.
+- 20220806 -- minor patch fixing glitches in the VIC-II (the ending of
+"Creatures II" requires precise sprite priority), the CIA (the protection of
+"Druid 2" modifies and freezes the day-of-time clock, but "Island of
+Dr.Destructo" expects said clock to stay active after modifying it), the SID
+6581 (Maniacs of Noise's "Echofied" scans channel 3 to generate a sampled echo),
+the C64 idle bus (the protection of "Barry McGuigan's Boxing" checks the
+$DE00-$DFFF area: reported by Neville) and the Z80 and MOS 6510 disassemblers.
+ZXSEC can save Dandanator information in SZX snapshots thanks to a new block
+type, "DNTR". The YM file generation is now in a new file, `cpcec-ym.h`. The
+SDL2 audio buffer is now the library's choice (suggested by Kawe). The keyboard
+shortcuts Alt+Up and Alt+Down zoom the window up and down. Enabling both
+X-masking and Y-masking shows a new dot matrix. Minor optimisations in XRF film
+logic.

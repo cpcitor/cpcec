@@ -13,8 +13,8 @@
 // START OF OS-INDEPENDENT ROUTINES ================================= //
 
 #define GPL_3_INFO \
-	"This program comes with ABSOLUTELY NO WARRANTY; for more details" "\n" \
-	"please read the GNU General Public License. This is free software" "\n" \
+	"This program comes with ABSOLUTELY NO WARRANTY; for more details" GPL_3_LF \
+	"please see the GNU General Public License. This is free software" GPL_3_LF \
 	"and you are welcome to redistribute it under certain conditions."
 
 #define MEMZERO(x) memset((x),0,sizeof(x))
@@ -177,7 +177,7 @@ int sortedsearch(char *t,int z,char *s) // look for string `s` in an alphabetica
 	if (!s||!*s) return -1; // invalid `s` is never within `t`!
 	char *r=&t[z]; int i=0,l=1+strlen(s); while (t<r)
 	{
-		char *u=t; while (*u++) ;
+		char *u=t; while (*u++) {}
 		if (u-t==l&&!strcasecmp(s,t)) // minor optimisation: don't compare if lengths don't match
 			return i;
 		t=u; ++i;
@@ -208,24 +208,27 @@ VIDEO_UNIT video_litegun; // lightgun data
 //#define VIDEO_FILTER_BLURDATA v0h,v0l,vzh,vzl
 //#define VIDEO_FILTER_BLUR0(z) v0h=z&0XFF00FF,v0l=z&0XFF00
 //#define VIDEO_FILTER_BLUR(r,z) r=(((v0h+(vzh=z&0XFF00FF)+0X10001)&0X1FE01FE)+((v0l+(vzl=z&0XFF00)+0X100)&0x1FE00))>>1,v0h=vzh,v0l=vzl // 50:50
-//#define VIDEO_FILTER_BLURDATA v1h,v1l,v0h,v0l,vzh,vzl
-//#define VIDEO_FILTER_BLUR0(z) v1h=v0h=z&0XFF00FF,v1l=v0l=z&0XFF00
-//#define VIDEO_FILTER_BLUR(r,z) r=(((v1h+v0h+(vzh=z&0XFF00FF)*2+0X20002)&0X3FC03FC)+((v1l+v0l+(vzl=z&0XFF00)*2+0X200)&0x3FC00))>>2,v1h=v0h,v1l=v0l,v0h=vzh,v0l=vzl // 25:25:50
-#define VIDEO_FILTER_BLURDATA v2h,v2l,v1h,v1l,v0h,v0l,vzh,vzl
+#define VIDEO_FILTER_BLURDATA v3h,v3l,v2h,v2l,v1h,v1l,v0h,v0l
 #define VIDEO_FILTER_BLUR0(z) v2h=v1h=v0h=z&0XFF00FF,v2l=v1l=v0l=z&0XFF00
-#define VIDEO_FILTER_BLUR(r,z) r=(((v2h+v1h+v0h+(vzh=z&0XFF00FF)+0X20002)&0X3FC03FC)+((v2l+v1l+v0l+(vzl=z&0XFF00)+0X200)&0x3FC00))>>2,v2h=v1h,v1h=v0h,v0h=vzh,v2l=v1l,v1l=v0l,v0l=vzl // 25:25:25:25
+//#define VIDEO_FILTER_BLUR(r,z) r=((((v3h=z&0XFF00FF)+v2h+v1h+v0h+0X20002)&0X3FC03FC)+(((v3l=z&0XFF00)+v2l+v1l+v0l+0X200)&0x3FC00))>>2,v0h=v1h,v1h=v2h,v2h=v3h,v0l=v1l,v1l=v2l,v2l=v3l // 25:25:25:25 (slow!)
+#define VIDEO_FILTER_BLUR1(r,z) r=((((v3h=z&0XFF00FF)+v2h+v1h+v0h+0X20002)&0X3FC03FC)+(((v3l=z&0XFF00)+v2l+v1l+v0l+0X200)&0x3FC00))>>2 // 25:25:25:25 (fast! 1/4)
+#define VIDEO_FILTER_BLUR2(r,z) r=((((v2h=z&0XFF00FF)+v1h+v0h+v3h+0X20002)&0X3FC03FC)+(((v2l=z&0XFF00)+v1l+v0l+v3l+0X200)&0x3FC00))>>2 // 25:25:25:25 (fast! 2/4)
+#define VIDEO_FILTER_BLUR3(r,z) r=((((v1h=z&0XFF00FF)+v0h+v3h+v2h+0X20002)&0X3FC03FC)+(((v1l=z&0XFF00)+v0l+v3l+v2l+0X200)&0x3FC00))>>2 // 25:25:25:25 (fast! 3/4)
+#define VIDEO_FILTER_BLUR4(r,z) r=((((v0h=z&0XFF00FF)+v3h+v2h+v1h+0X20002)&0X3FC03FC)+(((v0l=z&0XFF00)+v3l+v2l+v1l+0X200)&0x3FC00))>>2 // 25:25:25:25 (fast! 4/4)
+#define VIDEO_FILTER_BLUR0_SKIP() v3h=v2h,v3l=v2l
 //#define VIDEO_FILTER_BLURDATA v0,v1
 //#define VIDEO_FILTER_BLUR0(z) v0=v1=z
 //#define VIDEO_FILTER_BLUR(r,z) r=(v0&0XFF0000)+(v1&0XFF00)+(z&0XFF),v0=v1,v1=z // chromatic aberration, 100:0
 //#define VIDEO_FILTER_BLUR(r,z) r=((((v0&0XFF0000)*3+(z&0XFF0000)+0X20000)>>2)&0XFF0000)+((((v1&0XFF00)*3+(z&0XFF00)+0X200)>>2)&0XFF00)+(z&0XFF),v0=v1,v1=z // chromatic aberration, 75:25
-#define VIDEO_FILTER_X1(x) (((x>>1)&0X7F7F7F)+0X2B2B2B) // average
+//#define VIDEO_FILTER_X1(x) (((x>>1)&0X7F7F7F)+0X2B2B2B) // average
 //#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)+0X404040) // heavier
-//#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)*3+0X161616) // lighter
+#define VIDEO_FILTER_X1(x) (((x>>2)&0X3F3F3F)*3+0X161616) // lighter
 //#define VIDEO_FILTER_X1(x) (((x&0XF8F8F8)>>3)*5+0X323232) // practical
 //#define VIDEO_FILTER_X1(x) ((((((x&0XFF0000)*54)>>16)+(((x&0XFF00)*183)>>8)+(((x&0XFF)*19)))>>8)*0X10101) // monochrome (canonical)
 //#define VIDEO_FILTER_X1(x) ((((((x&0XFF0000)*7)>>13)+(((x&0XFF00)*45)>>6)+(((x&0XFF)*20)))>>8)*0X10101) // monochrome (56:180:20)
 //#define VIDEO_FILTER_SCAN(w,b) (((b>>1)&0X7F7F7F)+((w>>1)&0X7F7F7F)+0X010101) // 50:50
 //#define VIDEO_FILTER_SCAN(w,b) (((b>>2)&0X3F3F3F)*3+((w>>2)&0X3F3F3F)+0X020202) // 25:75
+#define VIDEO_FILTER_X2(x) VIDEO_FILTER_X1(x)
 #define VIDEO_FILTER_SCAN(w,b) (((b>>3)&0X1F1F1F)*7+((w>>3)&0X1F1F1F)+0X040404) // 13:87
 //#define VIDEO_FILTER_LINE(x,y) (((((x&0XFF00FF)*3+(y&0XFF00FF)+0X20002)&0X3FC03FC)+(((x&0XFF00)*3+(y&0XFF00)+0X200)&0X3FC00))>>2) // 75:25
 #define VIDEO_FILTER_LINE(x,y) (((((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00))>>1) // 50:50
@@ -285,7 +288,7 @@ INLINE void video_drawscanline(void) // call after each drawn scanline; memory c
 	{
 		case 8: // nothing (full)
 			MEMNCPY(vo,vi,VIDEO_PIXELS_X);
-			// no `break` here!
+			// no `break`!
 		case 0: // nothing (half)
 			break;
 		case 0+VIDEO_FILTER_MASK_Y:
@@ -308,10 +311,12 @@ INLINE void video_drawscanline(void) // call after each drawn scanline; memory c
 		case 0+VIDEO_FILTER_MASK_Y+VIDEO_FILTER_MASK_X:
 			if (video_pos_y&1)
 			{
-				if (video_pos_y&2)
-					++vi;
+				if (video_pos_y&2) vi+=2;
 				do
-					vt=*vi,*vi++=VIDEO_FILTER_X1(vt),++vi;
+					vt=*vi,*vi++=VIDEO_FILTER_X2(vt),
+					vt=*vi,*vi++=VIDEO_FILTER_X2(vt),
+					++vi,
+					++vi;
 				while (vi<vl);
 			}
 			break;
@@ -322,15 +327,26 @@ INLINE void video_drawscanline(void) // call after each drawn scanline; memory c
 			break;
 		case 8+VIDEO_FILTER_MASK_Y+VIDEO_FILTER_MASK_X:
 			if (video_pos_y&2)
+				*vo++=*vi++,
 				*vo++=*vi++;
 			do
-				vt=*vi++,*vo++=VIDEO_FILTER_X1(vt),*vo++=*vi++;
+				vt=*vi++,*vo++=VIDEO_FILTER_X2(vt),
+				vt=*vi++,*vo++=VIDEO_FILTER_X2(vt),
+				*vo++=*vi++,
+				*vo++=*vi++;
 			while (vi<vl);
 			break;
 		case 8+VIDEO_FILTER_MASK_Z:
 			vt=*vo++=*vi++,VIDEO_FILTER_BLUR0(vt);
 			do
+				#ifdef VIDEO_FILTER_BLUR4
+				vs=*vi,VIDEO_FILTER_BLUR1(vt,vs),*vo++=*vi++=vt,
+				vs=*vi,VIDEO_FILTER_BLUR2(vt,vs),*vo++=*vi++=vt,
+				vs=*vi,VIDEO_FILTER_BLUR3(vt,vs),*vo++=*vi++=vt,
+				vs=*vi,VIDEO_FILTER_BLUR4(vt,vs),*vo++=*vi++=vt;
+				#else
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vo++=*vi++=vt;
+				#endif
 			while (vi<vl);
 			break;
 		case 0+VIDEO_FILTER_MASK_Y+VIDEO_FILTER_MASK_Z:
@@ -338,83 +354,155 @@ INLINE void video_drawscanline(void) // call after each drawn scanline; memory c
 			{
 				vt=*vi,*vi++=VIDEO_FILTER_X1(vt),VIDEO_FILTER_BLUR0(vt);
 				do
+					#ifdef VIDEO_FILTER_BLUR4
+					vs=*vi,VIDEO_FILTER_BLUR1(vt,vs),*vi++=VIDEO_FILTER_X1(vt),
+					vs=*vi,VIDEO_FILTER_BLUR2(vt,vs),*vi++=VIDEO_FILTER_X1(vt),
+					vs=*vi,VIDEO_FILTER_BLUR3(vt,vs),*vi++=VIDEO_FILTER_X1(vt),
+					vs=*vi,VIDEO_FILTER_BLUR4(vt,vs),*vi++=VIDEO_FILTER_X1(vt);
+					#else
 					vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=VIDEO_FILTER_X1(vt);
+					#endif
 				while (vi<vl);
 				break;
 			}
-			// no `break` here!
+			// no `break`!
 		case 0+VIDEO_FILTER_MASK_Z:
+			mask_xyz_null: // `goto` target, see below; compare with "no `break`!"
 			vt=*vi++,VIDEO_FILTER_BLUR0(vt);
 			do
+				#ifdef VIDEO_FILTER_BLUR4
+				vs=*vi,VIDEO_FILTER_BLUR1(vt,vs),*vi++=vt,
+				vs=*vi,VIDEO_FILTER_BLUR2(vt,vs),*vi++=vt,
+				vs=*vi,VIDEO_FILTER_BLUR3(vt,vs),*vi++=vt,
+				vs=*vi,VIDEO_FILTER_BLUR4(vt,vs),*vi++=vt;
+				#else
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt;
+				#endif
 			while (vi<vl);
 			break;
 		case 8+VIDEO_FILTER_MASK_Y+VIDEO_FILTER_MASK_Z:
 			vt=*vi++,*vo++=VIDEO_FILTER_X1(vt),VIDEO_FILTER_BLUR0(vt);
 			do
+				#ifdef VIDEO_FILTER_BLUR4
+				vs=*vi,VIDEO_FILTER_BLUR1(vt,vs),*vi++=vt,*vo++=VIDEO_FILTER_X1(vt),
+				vs=*vi,VIDEO_FILTER_BLUR2(vt,vs),*vi++=vt,*vo++=VIDEO_FILTER_X1(vt),
+				vs=*vi,VIDEO_FILTER_BLUR3(vt,vs),*vi++=vt,*vo++=VIDEO_FILTER_X1(vt),
+				vs=*vi,VIDEO_FILTER_BLUR4(vt,vs),*vi++=vt,*vo++=VIDEO_FILTER_X1(vt);
+				#else
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt,*vo++=VIDEO_FILTER_X1(vt);
+				#endif
 			while (vi<vl);
 			break;
 		case 8+VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Z:
 			vt=*vi,VIDEO_FILTER_BLUR0(vt);
 			do
+				#ifdef VIDEO_FILTER_BLUR4
+				vs=*vi,VIDEO_FILTER_BLUR1(vt,vs),*vo++=*vi++=vt,
+				vs=*vi,VIDEO_FILTER_BLUR2(vt,vs),*vo++=*vi++=VIDEO_FILTER_X1(vt),
+				vs=*vi,VIDEO_FILTER_BLUR3(vt,vs),*vo++=*vi++=vt,
+				vs=*vi,VIDEO_FILTER_BLUR4(vt,vs),*vo++=*vi++=VIDEO_FILTER_X1(vt);
+				#else
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vo++=*vi++=vt,
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vo++=*vi++=VIDEO_FILTER_X1(vt);
+				#endif
 			while (vi<vl);
 			break;
 		case 0+VIDEO_FILTER_MASK_Y+VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Z:
+			if (!(video_pos_y&1))
+				goto mask_xyz_null; // I dislike `goto` but it's very useful here!
 			vt=*vi,VIDEO_FILTER_BLUR0(vt);
-			if (video_pos_y&1)
+			if (video_pos_y&2)
 			{
-				if (video_pos_y&2)
-					vi++;
-				do
-					vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=VIDEO_FILTER_X1(vt),
-					vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt;
-				while (vi<vl);
-				break;
+				#ifdef VIDEO_FILTER_BLUR4
+				VIDEO_FILTER_BLUR0_SKIP();
+				vs=*vi,VIDEO_FILTER_BLUR3(vt,vs),*vi++=vt,
+				vs=*vi,VIDEO_FILTER_BLUR4(vt,vs),*vi++=vt;
+				#else
+				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt,
+				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt;
+				#endif
 			}
 			do
+				#ifdef VIDEO_FILTER_BLUR4
+				vs=*vi,VIDEO_FILTER_BLUR1(vt,vs),*vi++=VIDEO_FILTER_X2(vt),
+				vs=*vi,VIDEO_FILTER_BLUR2(vt,vs),*vi++=VIDEO_FILTER_X2(vt),
+				vs=*vi,VIDEO_FILTER_BLUR3(vt,vs),*vi++=vt,
+				vs=*vi,VIDEO_FILTER_BLUR4(vt,vs),*vi++=vt;
+				#else
+				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=VIDEO_FILTER_X2(vt),
+				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=VIDEO_FILTER_X2(vt),
+				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt,
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt;
+				#endif
 			while (vi<vl);
 			break;
 		case 0+VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Z:
 			vt=*vi,VIDEO_FILTER_BLUR0(vt);
 			do
+				#ifdef VIDEO_FILTER_BLUR4
+				vs=*vi,VIDEO_FILTER_BLUR1(vt,vs),*vi++=vt,
+				vs=*vi,VIDEO_FILTER_BLUR2(vt,vs),*vi++=VIDEO_FILTER_X1(vt),
+				vs=*vi,VIDEO_FILTER_BLUR3(vt,vs),*vi++=vt,
+				vs=*vi,VIDEO_FILTER_BLUR4(vt,vs),*vi++=VIDEO_FILTER_X1(vt);
+				#else
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt,
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=VIDEO_FILTER_X1(vt);
+				#endif
 			while (vi<vl);
 			break;
 		case 8+VIDEO_FILTER_MASK_Y+VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Z:
 			vt=*vi,VIDEO_FILTER_BLUR0(vt);
 			if (video_pos_y&2)
-				*vo++=*vi++;
-			do
-				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt,*vo++=VIDEO_FILTER_X1(vt),
+			{
+				#ifdef VIDEO_FILTER_BLUR4
+				VIDEO_FILTER_BLUR0_SKIP();
+				vs=*vi,VIDEO_FILTER_BLUR3(vt,vs),*vo++=*vi++=vt,
+				vs=*vi,VIDEO_FILTER_BLUR4(vt,vs),*vo++=*vi++=vt;
+				#else
+				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vo++=*vi++=vt,
 				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vo++=*vi++=vt;
+				#endif
+			}
+			do
+				#ifdef VIDEO_FILTER_BLUR4
+				vs=*vi,VIDEO_FILTER_BLUR1(vt,vs),*vi++=vt,*vo++=VIDEO_FILTER_X2(vt),
+				vs=*vi,VIDEO_FILTER_BLUR2(vt,vs),*vi++=vt,*vo++=VIDEO_FILTER_X2(vt),
+				vs=*vi,VIDEO_FILTER_BLUR3(vt,vs),*vo++=*vi++=vt,
+				vs=*vi,VIDEO_FILTER_BLUR4(vt,vs),*vo++=*vi++=vt;
+				#else
+				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt,*vo++=VIDEO_FILTER_X2(vt),
+				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vi++=vt,*vo++=VIDEO_FILTER_X2(vt),
+				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vo++=*vi++=vt,
+				vs=*vi,VIDEO_FILTER_BLUR(vt,vs),*vo++=*vi++=vt;
+				#endif
 			while (vi<vl);
 			break;
 	}
 	if (video_scanline>=4&&video_pos_y>VIDEO_OFFSET_Y+1) // fill all scanlines but one with 50:50 neighbours
 	{
 		vo=(vp=(vi=vl-VIDEO_PIXELS_X)-VIDEO_LENGTH_X)-VIDEO_LENGTH_X;
-		if (video_filter&VIDEO_FILTER_MASK_Y) // we skipped the Y-mask above, so we must perform it here
-			if (video_filter&VIDEO_FILTER_MASK_X) // if both masks are enabled, we must replicate the pattern
-				if (video_pos_y&2)
-					do
-						vt=VIDEO_FILTER_HALF(*vi,*vo),*vp++=VIDEO_FILTER_X1(vt),++vi,++vo,
-						*vp++=VIDEO_FILTER_HALF(*vi,*vo),++vi,++vo; // yes no yes no ...
-					while (vi<vl);
-				else
-					do
-						*vp++=VIDEO_FILTER_HALF(*vi,*vo),++vi,++vo, // no yes no yes ...
-						vt=VIDEO_FILTER_HALF(*vi,*vo),*vp++=VIDEO_FILTER_X1(vt),++vi,++vo;
-					while (vi<vl);
-			else // no X-mask, just perform the Y-mask
+		if (video_filter&VIDEO_FILTER_MASK_Y) // Y mask on?
+		{
+			if (video_filter&VIDEO_FILTER_MASK_X) // X on, too?
+			{
+				if (!(video_pos_y&2)) // notice we're working with the "other" scanline
+				{
+					vt=VIDEO_FILTER_HALF(*vi,*vo),*vp++=vt,++vi,++vo,
+					vt=VIDEO_FILTER_HALF(*vi,*vo),*vp++=vt,++vi,++vo;
+				}
+				do
+					vt=VIDEO_FILTER_HALF(*vi,*vo),*vp++=VIDEO_FILTER_X2(vt),++vi,++vo,
+					vt=VIDEO_FILTER_HALF(*vi,*vo),*vp++=VIDEO_FILTER_X2(vt),++vi,++vo,
+					vt=VIDEO_FILTER_HALF(*vi,*vo),*vp++=vt,++vi,++vo,
+					vt=VIDEO_FILTER_HALF(*vi,*vo),*vp++=vt,++vi,++vo;
+				while (vi<vl);
+			}
+			else // Y without X
 				do
 					vt=VIDEO_FILTER_HALF(*vi,*vo),*vp++=VIDEO_FILTER_X1(vt),++vi,++vo;
 				while (vi<vl);
-		else // no masks, just blur the scanlines
+		}
+		else // the remaining combinations (none and X without Y) boil down to blending
 			do
 				*vp++=VIDEO_FILTER_HALF(*vi,*vo),++vi,++vo;
 			while (vi<vl);
@@ -449,6 +537,17 @@ INLINE void video_endscanlines(void) // call after each drawn frame: end the cur
 		else // no masks, just copy the scanline
 			MEMNCPY(vo,vi,VIDEO_PIXELS_X);
 	}
+	/*for (int y=0;y<VIDEO_PIXELS_Y;y+=2) // FUSE-like "Dot matrix" effect
+	{
+		VIDEO_UNIT *vv=video_frame+VIDEO_OFFSET_X+(VIDEO_OFFSET_Y+y)*VIDEO_LENGTH_X;
+		if (y&2) --vv; else ++vv;
+		for (int x=0;x<VIDEO_PIXELS_X;vv+=4,x+=4)
+			vv[  0]-=(vv[  0]&0X00FC00)>>2,
+			vv[  1]-=(vv[  1]&0XFC0000)>>2,
+			vv[  2]-=(vv[  2]&0X0000FC)>>2,
+			vv[VIDEO_LENGTH_X+0]-=(vv[VIDEO_LENGTH_X+0]&0XFCFCFC)>>2,
+			vv[VIDEO_LENGTH_X+2]-=(vv[VIDEO_LENGTH_X+2]&0XFCFCFC)>>2;
+	}*/
 }
 
 INLINE void audio_playframe(int q,AUDIO_UNIT *ao) // call between frames by the OS wrapper
@@ -804,9 +903,9 @@ int puff_open(char *s) // opens a new ZIP archive; !0 ERROR
 		if (session_scratch[3]&4)
 			fseek(puff_file,fgetii(puff_file),SEEK_SET); // skip infos
 		if (session_scratch[3]&8)
-			while (fgetc(puff_file)>0) ; // skip filename
+			while (fgetc(puff_file)>0) {} // skip filename
 		if (session_scratch[3]&16)
-			while (fgetc(puff_file)>0) ; // skip comment
+			while (fgetc(puff_file)>0) {} // skip comment
 		if (session_scratch[3]&2)
 			fgetii(puff_file); // skip CRC16
 		puff_skip=ftell(puff_file); fseek(puff_file,-8,SEEK_END); puff_srcl=ftell(puff_file)-puff_skip;
@@ -1104,7 +1203,7 @@ int debug_xlat(int k) // turns non-alphanumeric keypresses (-1 for mouse click) 
 BYTE debug_point[1<<16]; // the breakpoint table; 0 = nothing, <8 = stop execution, >=8 = record a byte
 BYTE debug_break,debug_inter=0; // do special opcodes trigger the debugger? (f.e. $EDFF on Z80 and $12 on 6502/6510)
 BYTE debug_config; // store the general debugger options here; the CPU-specific ones go elsewhere
-DWORD main_t=0; // the global tick counter, used by the debugger, and optionally by the emulator
+DWORD main_t=0,stop_t=0; // the global tick counter, used by the debugger, and optionally by the emulator
 
 FILE *debug_logfile; int debug_logsize; BYTE debug_logtemp[1<<9]; // the byte recorder datas
 
@@ -1216,9 +1315,9 @@ void session_debug_print(char *t,int x,int y,int n) // print a line of `n` chara
 	static BYTE debug_chrs[128*ONSCREEN_SIZE],config=16; if (config!=debug_config) // redo font?
 		switch (((config=debug_config&=15)>>2)&3)
 		{
+			case 2: //for (int i=0,j=0;i<sizeof(debug_chrs);++i) j=onscreen_chrs[i],debug_chrs[i]=j|(((i/(ONSCREEN_SIZE/2))&1)?j<<1:j>>1); break; // ITALIC
 			case 0: for (int i=0,j=0;i<sizeof(debug_chrs);++i) j=onscreen_chrs[i],debug_chrs[i]=j|(j>>1); break; // NORMAL
 			case 1: MEMLOAD(debug_chrs,onscreen_chrs); break; // THIN
-			case 2: for (int i=0,j=0;i<sizeof(debug_chrs);++i) j=onscreen_chrs[i],debug_chrs[i]=j|(((i/(ONSCREEN_SIZE/2))&1)?j<<1:j>>1); break; // ITALIC
 			case 3: for (int i=0,j=0;i<sizeof(debug_chrs);++i) j=onscreen_chrs[i],debug_chrs[i]=(j<<1)|j|(j>>1); break; // BOLD
 		}
 	for (;n>0;++x,--n)
@@ -1321,7 +1420,7 @@ void session_debug_show(int redo) // shows the current debugger
 				*t++=hexa1[b>>4],*t++=hexa1[b&15],++p;
 		}
 		// the status bar (BREAK, timer, X:Y, help) and the cursors
-		sprintf(DEBUG_LOCATE(4,DEBUG_LENGTH_Y/2-1),"\177. BREAK%c  Timer: %010d  (%04d,%03d) -- H:help",debug_break?'*':'-',main_t,video_pos_x,video_pos_y);
+		sprintf(DEBUG_LOCATE(4,DEBUG_LENGTH_Y/2-1),"\177. BREAK%c  Timer: %010d  (%04d,%03d) -- H:help",debug_break?'*':'-',main_t-stop_t,video_pos_x,video_pos_y);
 		switch (debug_panel&=3)
 		{
 			case 0: *DEBUG_LOCATE(6+(debug_panel0_x&=1),0)|=128; break;
@@ -1699,7 +1798,7 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 				}
 			break;
 		case 'T': // RESET CLOCK
-			main_t=0; break;
+			stop_t=main_t; break; // avoid trouble if the emulation needs a stable `main_t`
 		case 'X': // SHOW MORE HARDWARE INFO
 			++debug_page; break;
 		case 'Y': // FILL BYTES WITH BYTE
@@ -1802,30 +1901,32 @@ int xrf_encode(BYTE *t,BYTE *s,int l,int x) // terribly hacky encoder based on a
 	do
 	{
 		BYTE *r=s,c=*r;
-		do
-			s+=x;
-		while (--l&&c==*s);
+		do s+=x; while (--l&&c==*s);
 		int n=(s-r)/x; c^=q;
-		while (n>=1+66047) // i.e. 0x101FF = 512+65535
+		while (n>66047) // i.e. 512+65535; can this ever happen?
 			xrf_encode1(c),xrf_encode1(c),xrf_encode1(255),xrf_encode1(255),xrf_encode1(255),n-=66047;
 		xrf_encode1(c); if (n>1)
 		{
-			xrf_encode1(c); if (n>=512)
-				xrf_encode1(255),n-=512,xrf_encode1(n>>8),xrf_encode1(n&255); // 512..66047 -> 0xFF 0x0000..0xFFFF
-			else if (n>=256)
-				xrf_encode1(254),xrf_encode1(n&255); // 256..511 -> 0xFE 0x00..0xFF
+			xrf_encode1(c); if (n>=256)
+			{
+				if (n>=512)
+					xrf_encode1(255),n-=512,xrf_encode1(n>>8); // 512..66047 -> 0xFF 0x0000..0xFFFF (0..65535)
+				else
+					xrf_encode1(254); // 256..511 -> 0xFE 0x00..0xFF (0..255)
+				n&=255;
+			}
 			else
-				xrf_encode1(n-2); // 2..256 -> 0x00..0xFE
+				n-=2; // 2..255 -> 0x00..0xFD
+			xrf_encode1(n);
 		}
 	}
 	while (l);
-	return *y=a+b,*z++=0,z-t; // EOF: "100000000"
+	return *y=a+b,*z++=0,z-t; // EOF is the special case "100000000"!
 }
 
 int session_createfilm(void) // start recording video and audio; !0 ERROR
 {
 	if (session_filmfile) return 1; // file already open!
-
 	if (!session_filmvideo&&!(session_filmvideo=malloc(sizeof(VIDEO_UNIT)*SESSION_FILMVIDEO_LENGTH)))
 		return 1; // cannot allocate buffer!
 	if (!xrf_chunk&&!(xrf_chunk=malloc((sizeof(VIDEO_UNIT)*SESSION_FILMVIDEO_LENGTH+SESSION_FILMAUDIO_LENGTH*AUDIO_BITDEPTH/8)*9/8+4*8))) // maximum pathological length!
@@ -1953,9 +2054,9 @@ void session_writefilm(void) // record one frame of video and audio
 }
 int session_closefilm(void) // stop recording video and audio; !0 ERROR
 {
-	if (session_filmvideo) free(session_filmvideo),session_filmvideo=NULL;
+	if (!session_filmfile) return 1; // file not open!
 	if (xrf_chunk) free(xrf_chunk),xrf_chunk=NULL;
-	if (!session_filmfile) return 1;
+	if (session_filmvideo) free(session_filmvideo),session_filmvideo=NULL;
 	fseek(session_filmfile,16,SEEK_SET);
 	fputmmmm(session_filmcount>>session_filmtimer,session_filmfile); // number of frames
 	return fclose(session_filmfile),session_filmfile=NULL,0;
@@ -2028,16 +2129,15 @@ FILE *session_configfile(int q) // returns handle to configuration file, `q`?rea
 }
 char *session_configread(unsigned char *t) // reads configuration file; t points to the current line; returns NULL if handled, a string otherwise
 {
-	unsigned char *s=t; while (*s) ++s; // go to trail
-	while (*--s<=' ') *s=0; // clean trail up
-	s=t=UTF8_BOM(t);
-	while (*s>' ') ++s; *s++=0; // divide name and data
+	unsigned char *s=t=UTF8_BOM(t); while (*s) ++s; // go to trail
+	while (s>t&&*--s<=' ') *s=0; // clean trail up
+	s=t; while (*s>' ') ++s; *s++=0; // divide name and data
 	while (*s==' ') ++s; // skip spaces between both
 	if (*s) // handle common parameters, unless empty
 	{
-		if (!strcasecmp(t,"polyphony")) return audio_mixmode=*s&3,NULL;
+		if (!strcasecmp(t,"hardaudio")) return audio_mixmode=*s&3,NULL;
 		if (!strcasecmp(t,"softaudio")) return audio_filter=*s&3,NULL;
-		if (!strcasecmp(t,"scanlines")) return video_scanline=(*s>>1)&7,video_scanline=video_scanline>4?4:video_scanline,video_pageblend=*s&1,NULL;
+		if (!strcasecmp(t,"hardvideo")) return video_scanline=(*s>>1)&7,video_scanline=video_scanline>4?4:video_scanline,video_pageblend=*s&1,NULL;
 		if (!strcasecmp(t,"softvideo")) return video_filter=*s&7,NULL;
 		if (!strcasecmp(t,"zoomvideo")) return session_zoomblit=(*s>>1)&7,session_zoomblit=session_zoomblit>4?4:session_zoomblit,video_lineblend=*s&1,NULL;
 		if (!strcasecmp(t,"safevideo")) return session_softblit=*s&1,NULL;
@@ -2051,7 +2151,7 @@ void session_configwrite(FILE *f) // save common parameters
 {
 	fprintf(f,
 		"film %d\ninfo %d\n"
-		"polyphony %d\nsoftaudio %d\nscanlines %d\nsoftvideo %X\nzoomvideo %d\nsafevideo %d\nsafeaudio %d\n"
+		"hardaudio %d\nsoftaudio %d\nhardvideo %d\nsoftvideo %X\nzoomvideo %d\nsafevideo %d\nsafeaudio %d\n"
 		,(session_filmscale?1:0)+(session_filmtimer?2:0),onscreen_flag
 		,audio_mixmode,audio_filter,(video_scanline<<1)+(video_pageblend?1:0),video_filter,(video_lineblend?1:0)+(session_zoomblit<<1),session_softblit,session_softplay
 		);

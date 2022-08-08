@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20220707"//"2555"
+#define MY_VERSION "20220806"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2022 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -594,14 +594,12 @@ void mmu_update(void) // update the MMU tables with all the new offsets
 	}
 	else
 		mmu_bit[1]=0; // hide PLUS ASIC bank
-
 #ifdef Z80_DANDANATOR // Dandanator is always the last part of the MMU update
 	if (mem_dandanator) // emulate the Dandanator (and more exactly its CPC-only memory map) only when a card is loaded
 	{
-		if (!(dandanator_cfg[5]&32)) // enabled?
+		if (!(dandanator_cfg[5]&32)) // Dandanator memory map?
 		{
-			if (!(dandanator_cfg[6]&32))
-			{
+			if (!(dandanator_cfg[6]&32)) // ZONE_0?
 				if (dandanator_cfg[5]&4) // the order is important; checking bit 0 first breaks "THE SWORD OF IANNA" when the first level begins
 				{
 					mmu_rom[2]=&mem_dandanator[((dandanator_cfg[6]&31)<<14)-0x8000];
@@ -612,11 +610,9 @@ void mmu_update(void) // update the MMU tables with all the new offsets
 					mmu_rom[0]=&mem_dandanator[((dandanator_cfg[6]&31)<<14)-0x0000];
 					if ((dandanator_cfg[4]&2)&&(dandanator_cfg[6]&30)&&dandanator_canwrite) // forbid writing on sectors 0 and 1 (!?)
 						//cprintf("R/W %02X%02X%02X%02X\n",dandanator_cfg[4],dandanator_cfg[5],dandanator_cfg[6],dandanator_cfg[7]),
-						mmu_ram[0]=mmu_rom[0],dandanator_dirty=1;
+						mmu_ram[0]=mmu_rom[0],dandanator_dirty=1; // the emulated EEPROM checks nothing: pure magic!
 				}
-			}
-			if (!(dandanator_cfg[7]&32))
-			{
+			if (!(dandanator_cfg[7]&32)) // ZONE_1?
 				if (dandanator_cfg[5]&8) // the order is important again: checking bit 1 first breaks "MOJON TWINS ROMSET" and other snapshot packs
 				{
 					mmu_rom[3]=&mem_dandanator[((dandanator_cfg[7]&31)<<14)-0xC000];
@@ -627,7 +623,6 @@ void mmu_update(void) // update the MMU tables with all the new offsets
 					mmu_rom[1]=&mem_dandanator[((dandanator_cfg[7]&31)<<14)-0x4000];
 					//if ((dandanator_cfg[4]&2)&&(dandanator_cfg[6]&30)&&dandanator_canwrite) mmu_ram[1]=mmu_rom[1],dandanator_dirty=1;
 				}
-			}
 		}
 		else if (dandanator_cfg[5]&16) // "poor-man" rombox: "CPCSOCCER" overrides the current firmware with its own copy
 		{
@@ -743,6 +738,9 @@ int dac_disabled=1; // Digiblaster DAC, disabled by default to avoid trouble wit
 
 #include "cpcec-ay.h"
 
+#include "cpcec-ym.h"
+void ym3_write(void) { ym3_write_ay(psg_table,&psg_hard_log,PSG_KHZ_CLOCK); }
+
 // behind the PIO: TAPE --------------------------------------------- //
 
 #define tape_enabled (pio_port_c&16)
@@ -760,6 +758,7 @@ int dac_disabled=1; // Digiblaster DAC, disabled by default to avoid trouble wit
 #define DISC_TIMER_BYTE ( 2<<6) // rough approximation, too: the HEXAGON-protected "SWIV" needs at least 1<<6 and becomes very slow at 1<<8.
 #define DISC_WIRED_MODE 0 // the CPC lacks the End-Of-Operation wire
 #define DISC_PER_FRAME (312<<6) // = 1 MHz / 50 Hz ; compare with TICKS_PER_FRAME
+#define DISC_R_P_M 300 // revolutions/minute
 #define DISC_CURRENT_PC (z80_pc.w)
 
 #define DISC_NEW_SIDES 1
@@ -1745,7 +1744,7 @@ int z80_tape_testfeed(WORD p)
 {
 	int i; if ((i=z80_tape_index[p])>length(z80_tape_fastfeed))
 	{
-		for (i=0;i<length(z80_tape_fastfeed)&&!fasttape_test(z80_tape_fastfeed[i],p);++i) ;
+		for (i=0;i<length(z80_tape_fastfeed)&&!fasttape_test(z80_tape_fastfeed[i],p);++i) {}
 		z80_tape_index[p]=i; cprintf("FASTFEED: %04X=%02d\n",p,(i<length(z80_tape_fastfeed))?i:-1);
 	}
 	return i;
@@ -1754,7 +1753,7 @@ int z80_tape_testdump(WORD p)
 {
 	int i; if ((i=z80_tape_index[p-1])>length(z80_tape_fastdump)) // the offset avoid conflicts with TABLE2
 	{
-		for (i=0;i<length(z80_tape_fastdump)&&!fasttape_test(z80_tape_fastdump[i],p);++i) ;
+		for (i=0;i<length(z80_tape_fastdump)&&!fasttape_test(z80_tape_fastdump[i],p);++i) {}
 		z80_tape_index[p-1]=i; cprintf("FASTDUMP: %04X=%02d\n",p,(i<length(z80_tape_fastdump))?i:-1);
 	}
 	return i;
@@ -1772,7 +1771,7 @@ void z80_tape_trap(void)
 {
 	int i,j,k; if ((i=z80_tape_index[z80_pc.w])>length(z80_tape_fastload))
 	{
-		for (i=0;i<length(z80_tape_fastload)&&!fasttape_test(z80_tape_fastload[i],z80_pc.w);++i) ;
+		for (i=0;i<length(z80_tape_fastload)&&!fasttape_test(z80_tape_fastload[i],z80_pc.w);++i) {}
 		z80_tape_index[z80_pc.w]=i; cprintf("FASTLOAD: %04X=%02d\n",z80_pc.w,(i<length(z80_tape_fastload))?i:-1);
 	}
 	if (i>=length(z80_tape_fastload)) return; // only known methods can reach here!
@@ -2387,7 +2386,7 @@ BYTE z80_ack_delay=0; // unlike Z80_LOCAL it cannot be local, it must stick :-(
 #define Z80_STRIDE_1 z80_ack_delay=0 // special "fast ACK" behavior
 #define Z80_STRIDE_ZZ(o) z80_t+=z80_delays[o]+z80_ack_delay
 #define Z80_STRIDE_IO(o) z80_t=z80_delays[o] // "z80_t=XXX" makes "z80_t=0" redundant in Z80_SYNC_IO
-#define Z80_LIST_PEEKXY(o) z80_delays[o] // defined, this makes the Z80 DD/FD boolean list redundant
+#define Z80_LIST_PEEKXY(o) z80_delays[o+0x600] // defined, this makes the Z80 DD/FD boolean list redundant
 
 #define Z80_SLEEP(t) z80_t+=(t)
 #define Z80_HALT_STRIDE 1 // i.e. optimal HALT, can be handled a single go
@@ -2403,7 +2402,7 @@ void debug_info(int q)
 {
 	if (!(q&1))
 	{
-		sprintf(DEBUG_INFOZ(0),"GATE:               ");
+		strcpy (DEBUG_INFOZ(0),"GATE:");
 		sprintf(DEBUG_INFOZ(1),"%02X: ",gate_index);
 		byte2hexa(DEBUG_INFOZ(1)+4,&gate_table[0],8);
 		byte2hexa(DEBUG_INFOZ(2)+4,&gate_table[8],8);
@@ -2422,14 +2421,14 @@ void debug_info(int q)
 		if (crtc_status&CRTC_STATUS_R9_OK) debug_hilight2(DEBUG_INFOZ(8)+ 4);
 		if (crtc_status&CRTC_STATUS_VSYNC) debug_hilight2(DEBUG_INFOZ(8)+ 7);
 		if (crtc_status&CRTC_STATUS_HSYNC) debug_hilight2(DEBUG_INFOZ(8)+13);
-		sprintf(DEBUG_INFOZ(9),"PSG:");
+		strcpy (DEBUG_INFOZ(9),"PSG:");
 		sprintf(DEBUG_INFOZ(10),"%02X: ",psg_index);
 		byte2hexa(DEBUG_INFOZ(10)+4,&psg_table[0],8);
 		byte2hexa(DEBUG_INFOZ(11)+4,&psg_table[8],8);
 		debug_hilight2(DEBUG_INFOZ(10+(psg_index&15)/8)+4+(psg_index&7)*2);
 		sprintf(DEBUG_INFOZ(12)+4,"PIO: %02X:%02X:%02X:%02X",pio_port_a,pio_port_b,pio_port_c,pio_control);
 		#ifdef Z80_DANDANATOR
-		sprintf(DEBUG_INFOZ(13),"DANDANATOR:");
+		sprintf(DEBUG_INFOZ(13),"DANDANATOR%c",mem_dandanator?'*':'-');
 		sprintf(DEBUG_INFOZ(14)+4,"%02X:%02X:%02X:%02X %c%c%c%c",dandanator_cfg[4],dandanator_cfg[5],dandanator_cfg[6],dandanator_cfg[7]
 			,mmu_rom[0]>=mem_dandanator&&mmu_rom[0]<mem_dandanator+0X80000?'*':'-'
 			,mmu_rom[1]>=mem_dandanator&&mmu_rom[1]<mem_dandanator+0X80000?'*':'-'
@@ -2597,8 +2596,8 @@ int bios_load(char *s) // load a cartridge file or a firmware ROM file. 0 OK, !0
 				while ((*tt=*ss)>=' ') ++tt,++ss; *tt=0; // trim right
 				if (*t>' '&&(tt=strchr(t,'='))&&tt[1]) // "name[blank]=[blank]value"?
 				{
-					BYTE *rr=tt; while (*++rr==' ') ; strcpy(uu,rr); // trim right, copy
-					while (*--tt==' ') ; tt[1]=0; // trim left, keep the name
+					BYTE *rr=tt; while (*++rr==' ') {} strcpy(uu,rr); // trim right, copy
+					while (*--tt==' ') {} tt[1]=0; // trim left, keep the name
 					if (!strcasecmp("lowest",t))
 					{
 						if (ff=puff_fopen(u,"rb"))
@@ -2878,7 +2877,7 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 		fwrite1(dandanator_cfg,sizeof(dandanator_cfg),f);
 	}
 	#endif
-	#if 1 // experimental
+	#if 0//1 // experimental
 	{
 		int j=0; for (i=0;i<length(debug_point);++i)
 			if (debug_point[i]==1)
@@ -3107,8 +3106,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 	if (dumpsize>(gate_ram_dirty=64))
 	{
 		q=0; // look for lowest RAM limit that fits
-		while ((gate_ram_dirty=gate_ram_kbyte[++q])<dumpsize&&q<length(gate_ram_kbyte))
-			;
+		while ((gate_ram_dirty=gate_ram_kbyte[++q])<dumpsize&&q<length(gate_ram_kbyte)) {}
 		if (gate_ram_depth<q)
 			gate_ram_depth=q; // expand RAM limit if required
 	}
@@ -3387,11 +3385,11 @@ void session_clean(void) // refresh options
 	session_menuradio((session_fast&1)?0x8600:0x8601+session_rhythm,0x8600,0x8604);
 	session_menucheck(0x8C01,!session_filmscale);
 	session_menucheck(0x8C02,!session_filmtimer);
-	session_menucheck(0xCC00,(size_t)session_filmfile);
-	session_menucheck(0x0C00,(size_t)session_wavefile);
-	session_menucheck(0x4C00,(size_t)psg_logfile);
-	session_menucheck(0x8700,(size_t)disc[0]);
-	session_menucheck(0xC700,(size_t)disc[1]);
+	session_menucheck(0xCC00,!!session_filmfile);
+	session_menucheck(0x0C00,!!session_wavefile);
+	session_menucheck(0x4C00,!!ym3_file);
+	session_menucheck(0x8700,!!disc[0]);
+	session_menucheck(0xC700,!!disc[1]);
 	session_menucheck(0x0701,disc_flip[0]);
 	session_menucheck(0x4701,disc_flip[1]);
 	session_menucheck(0x8800,tape_type>=0&&tape);
@@ -3409,7 +3407,7 @@ void session_clean(void) // refresh options
 	session_menucheck(0x8591,disc_filemode&1);
 	session_menucheck(0x8510,!(disc_disabled&1));
 	#ifdef Z80_DANDANATOR
-	session_menucheck(0xC500,(size_t)mem_dandanator);
+	session_menucheck(0xC500,!!mem_dandanator);
 	session_menucheck(0x0510,dandanator_canwrite);
 	#endif
 	#ifdef PSG_PLAYCITY
@@ -3419,7 +3417,7 @@ void session_clean(void) // refresh options
 	session_menuradio(0x8521+litegun,0x8521,0x8524);
 	session_menuradio(0x8511+gate_ram_depth,0x8511,0x8515);
 	session_menucheck(0x851F,!snap_extended);
-	session_menucheck(0x852F,(size_t)printer);
+	session_menucheck(0x852F,!!printer);
 	session_menucheck(0x8901,onscreen_flag);
 	session_menucheck(0x8902,video_filter&VIDEO_FILTER_MASK_Y);
 	session_menucheck(0x8903,video_filter&VIDEO_FILTER_MASK_X);
@@ -3537,8 +3535,8 @@ void session_user(int k) // handle the user's commands
 		case 0x0100: // ^F1: ABOUT..
 			session_aboutme(
 				"Amstrad CPC emulator written by Cesar Nicolas-Gonzalez\n"
-				"for the UNED 2019 Master's Degree in Computer Engineering.\n"
-				"\nhome page, news and updates: http://cngsoft.no-ip.org/cpcec.htm"
+				"(UNED 2019 Master's Degree in Computer Engineering)\n"
+				"\nnews and updates: http://cngsoft.no-ip.org/cpcec.htm"
 				"\n\n" MY_LICENSE "\n\n" GPL_3_INFO
 			,session_caption);
 			break;
@@ -3588,10 +3586,7 @@ void session_user(int k) // handle the user's commands
 			audio_filter=k-0x8401;
 			break;
 		case 0x0400: // ^F4: TOGGLE JOYSTICK
-			if (session_shift)
-				key2joy_flag=!key2joy_flag; // FLIP JOYSTICK BUTTONS
-			else
-				session_key2joy=!session_key2joy;
+			session_shift?(key2joy_flag=!key2joy_flag):(session_key2joy=!session_key2joy); // FLIP JOYSTICK BUTTONS
 			break;
 		case 0x0401: // REDEFINE VIRTUAL JOYSTICK
 			s="Press a key or ESCAPE"; int t[6];
@@ -3802,10 +3797,7 @@ void session_user(int k) // handle the user's commands
 			z80_nmi_throw;
 			break;*/
 		case 0x0900: // ^F9: TOGGLE FAST LOAD OR FAST TAPE
-			if (session_shift)
-				tape_fastload=!tape_fastload;
-			else
-				tape_skipload=!tape_skipload;
+			session_shift?(tape_fastload=!tape_fastload):(tape_skipload=!tape_skipload);
 			break;
 		case 0x0901:
 			tape_rewind=!tape_rewind;
@@ -3866,9 +3858,9 @@ void session_user(int k) // handle the user's commands
 		case 0x0C00: // ^F12: RECORD WAVEFILE OR YM FILE
 			if (session_shift)
 			{
-				if (psg_closelog()) // toggles recording
-					if (psg_nextlog=session_savenext("%s%08u.ym",psg_nextlog))
-						psg_createlog(session_parmtr);
+				if (ym3_close()) // toggles recording
+					if (ym3_nextfile=session_savenext("%s%08u.ym",ym3_nextfile))
+						ym3_create(session_parmtr);
 			}
 			else if (session_closewave()) // toggles recording
 				session_createwave();
@@ -3915,7 +3907,7 @@ void session_user(int k) // handle the user's commands
 
 void session_configreadmore(char *s)
 {
-	int i; if (!s||!*s||!session_parmtr[0]) ; // ignore if empty or internal!
+	int i; if (!s||!*s||!session_parmtr[0]) {} // ignore if empty or internal!
 	else if (!strcasecmp(session_parmtr,"type")) { if ((i=*s&7)<length(bios_system)) type_id=i; }
 	else if (!strcasecmp(session_parmtr,"crtc")) { if ((i=*s&7)<5) crtc_type=i; }
 	else if (!strcasecmp(session_parmtr,"bank")) { if ((i=*s&7)<length(gate_ram_kbyte)) gate_ram_depth=i; }
@@ -4111,7 +4103,7 @@ int main(int argc,char *argv[])
 			"\t-k2\t192k RAM\n"
 			"\t-k3\t320k RAM\n"
 			"\t-k4\t576k RAM\n"
-			"\t-K\t(-k0) 64k RAM\n"
+			//"\t-K\t(-k0) 64k RAM\n"
 			"\t-m0\tload 464 firmware\n"
 			"\t-m1\tload 664 firmware\n"
 			"\t-m2\tload 6128 firmware\n"
@@ -4237,7 +4229,7 @@ int main(int argc,char *argv[])
 				}
 				#endif
 			}
-			psg_writelog();
+			if (ym3_file) { ym3_write(); ym3_flush(); }
 			if (z80_power) // power-up boost (2/2)
 				if (z80_pc.w==(type_id?0XC154:0XC14D)&&equalsmm(&mmu_rom[3][z80_pc.w],0XEDB0)) // the right ROM?
 					if (!(gate_mcr&2)&&!gate_rom&&!gate_ram&&z80_bc.w>1&&z80_hl.w+1==z80_de.w) // the right values?
@@ -4265,9 +4257,8 @@ int main(int argc,char *argv[])
 	}
 	// it's over, "acta est fabula"
 	z80_close(); if (mem_xtr) free(mem_xtr);
-	tape_close();
 	disc_closeall();
-	psg_closelog(); if (printer) printer_close();
+	tape_close(); ym3_close(); if (printer) printer_close();
 	if ((f=session_configfile(0)))
 		session_configwritemore(f),session_configwrite(f),fclose(f);
 	return session_byebye(),0;

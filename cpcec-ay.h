@@ -11,8 +11,7 @@
 // the Amstrad CPC machines was popular in arcade games of the 1980s,
 // as well in home computers: Spectrum 128, +2 and +3, Atari ST, etc.
 
-// This module includes functions to export the sound chip registers
-// into a YM3 file that can be read by platform-independent players.
+// YM3 format output can be shared with other chips (cfr. cpcec-ym.h)
 
 // BEGINNING OF PSG AY-3-8910 EMULATION ============================== //
 
@@ -380,72 +379,5 @@ void playcity_main(AUDIO_UNIT *t,int l)
 	}
 }
 #endif
-
-// YM3 file logging ------------------------------------------------- //
-
-char psg_tmpname[STRMAX]="";
-FILE *psg_logfile=NULL,*psg_tmpfile;
-int psg_nextlog=1,psg_tmpsize;
-unsigned char psg_tmp[14<<9],psg_log[1<<9]; // `psg_tmp` must be 14 times as big as `psg_log`!
-int psg_closelog(void)
-{
-	if (!psg_logfile)
-		return 1; // nothing to do!
-	fwrite("YM3!",1,4,psg_logfile);
-	fwrite1(psg_tmp,psg_tmpsize,psg_tmpfile);
-	fclose(psg_tmpfile);
-	if (psg_tmpfile=fopen(psg_tmpname,"rb"))
-	{
-		for (int c=0,l,o;c<14;++c) // arrange byte dumps into long byte channels
-		{
-			fseek(psg_tmpfile,0,SEEK_SET);
-			while (l=fread1(psg_tmp,sizeof(psg_log)*14,psg_tmpfile))
-			{
-				o=0; for (int i=c;i<l;i+=14)
-					psg_log[o++]=psg_tmp[i];
-				fwrite1(psg_log,o,psg_logfile);
-			}
-		}
-		fclose(psg_tmpfile);
-	}
-	remove(psg_tmpname); // destroy temporary file
-	fclose(psg_logfile);
-	psg_logfile=NULL;
-	return 0;
-}
-int psg_createlog(char *s)
-{
-	if (psg_logfile)
-		return 1; // already busy!
-	if (!(psg_tmpfile=fopen(strcat(strcpy(psg_tmpname,s),"$"),"wb")))
-		return 1; // cannot create temporary file!
-	if (!(psg_logfile=fopen(s,"wb")))
-		return fclose(psg_tmpfile),1; // cannot create file!
-	return psg_tmpsize=0;
-}
-void psg_writelog(void)
-{
-	if (psg_logfile)
-	{
-		int i; // we must adjust YM values to a 2 MHz clock.
-		i=((psg_table[0]+psg_table[1]*256)*2000+PSG_KHZ_CLOCK/2)/PSG_KHZ_CLOCK; // channel 1 wavelength
-		psg_tmp[psg_tmpsize++]=i; psg_tmp[psg_tmpsize++]=i>>8;
-		i=((psg_table[2]+psg_table[3]*256)*2000+PSG_KHZ_CLOCK/2)/PSG_KHZ_CLOCK; // channel 2 wavelength
-		psg_tmp[psg_tmpsize++]=i; psg_tmp[psg_tmpsize++]=i>>8;
-		i=((psg_table[4]+psg_table[5]*256)*2000+PSG_KHZ_CLOCK/2)/PSG_KHZ_CLOCK; // channel 3 wavelength
-		psg_tmp[psg_tmpsize++]=i; psg_tmp[psg_tmpsize++]=i>>8;
-		psg_tmp[psg_tmpsize++]=psg_table[6]; // noise wavelength
-		psg_tmp[psg_tmpsize++]=psg_table[7]; // mixer
-		psg_tmp[psg_tmpsize++]=psg_table[8]; // channel 1 amplitude
-		psg_tmp[psg_tmpsize++]=psg_table[9]; // channel 2 amplitude
-		psg_tmp[psg_tmpsize++]=psg_table[10]; // channel 3 amplitude
-		i=((psg_table[11]+psg_table[12]*256)*2000+PSG_KHZ_CLOCK/2)/PSG_KHZ_CLOCK; // hard envelope wavelength
-		psg_tmp[psg_tmpsize++]=i; psg_tmp[psg_tmpsize++]=i>>8;
-		psg_tmp[psg_tmpsize++]=psg_hard_log; // hard envelope type
-		psg_hard_log=0xFF; // 0xFF means the hard envelope doesn't change
-		if (psg_tmpsize>=sizeof(psg_tmp))
-			fwrite1(psg_tmp,sizeof(psg_tmp),psg_tmpfile),psg_tmpsize=0;
-	}
-}
 
 // =================================== END OF PSG AY-3-8910 EMULATION //

@@ -887,9 +887,9 @@ operaciones "LD (IY+n),A/B/C" deben funcionar con cualquier valor de "n", en
 lugar de solamente 0: gracias a Spirax por informarme) y otro en el CRTC (el
 contador HCC es de 8 bits: "Camembert Meeting 4 Demo" deja de mostrar una línea
 de basuras entre el panel superior y el central), añade SDL2_DOUBLE_QUEUE como
-una opción de compilación de SDL2 (algunos sistemas necesitan un de audio mayor
-que los 8 frames por defecto) y emplea un patrón de píxeles distinto cuando
-X-Masking y Y-Masking están activos a la vez.
+una opción de compilación de SDL2 (algunos sistemas necesitan un búfer de audio
+mayor que los 8 frames por defecto) y emplea un patrón de píxeles distinto
+cuando X-Masking y Y-Masking están activos a la vez.
 - 20201022 -- parche menor que añade soporte de la rueda de ratón al interfaz de
 usuario de SDL2 y una opción para elegir en CPCEC y ZXSEC entre conflictos de
 escritura de disco estrictos (provocan errores) o relajados (no hacen nada).
@@ -1167,7 +1167,7 @@ imágenes de cinta T64 y TAP, pero no emula la unidad de disco C1541 y en
 consecuencia no es capaz de abrir imágenes de disco D64. Nuevo interfaz de
 joystick virtual: el usuario puede redefinir las teclas que simulan el joystick
 virtual en lugar de limitarse a las teclas Z y X y los cursores. Corregido un
-error en el Z80 (los tiempos internos de OUT (n),A estaban mal) y la
+error en el Z80 (los tiempos internos de `OUT (n),A` estaban mal) y la
 sincronización horizontal del LA-7800 (ambos avisados por Hicks): la demo de CPC
 "Onescreen Colonies #2" se comporta debidamente. El análisis de cinta puede
 detectar cargadores musicales: la aceleración de cinta se suspenderá
@@ -1214,3 +1214,16 @@ detección del segundo chip en "To Norah", efectos sonoros de "Cloud Kingdoms";
 formas de onda: canción de "HVSC 10 Years"; nuevo filtro basado en el algoritmo
 de Chamberlin). El parámetro de línea de comandos `-c0..-c7` es ahora `-c0..c9`
 e incluye el quinto modo, "scanlines" aproximados.
+- 20220806 -- parche menor que corrige varios bugs en el VIC-II (el final de
+"Creatures II" necesita prioridad de sprites exacta), el CIA (la protección de
+"Druid 2" modifica y detiene la hora del reloj , pero "Island of Dr.Destructo"
+espera que dicho reloj siga activo tras modificarlo), el SID 6581 ("Echofied" de
+Maniacs of Noise examina el canal 3 para generar un eco digitalizado), el bus
+vacío del C64 (la protección de "Barry McGuigan's Boxing" examina el área
+$DE00-$DFFF: avisado por Neville) y los desensambladores del Z80 y el MOS 6510.
+ZXSEC puede grabar la información de Dandanator en snapshots SZX gracias a un
+tipo de bloque nuevo, "DNTR". La generación de ficheros YM tiene su propio
+fichero, `cpcec-ym.h`. El búfer de audio SDL2 es ahora elección de la librería
+(sugerido por Kawe). Los atajos de teclado Alt+Arriba y Alt+Abajo amplían y
+reducen la ventana. Activar "X-masking" y "Y-masking" juntos muestra una matriz
+de píxeles nueva. Optimizaciones menores en la lógica de vídeos XRF.

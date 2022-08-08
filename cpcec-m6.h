@@ -65,6 +65,7 @@ void debug_reset(void) // sets the debugger's PC and SP
 #endif
 
 #ifndef _M65XX_H_
+#define _M65XX_H_
 
 BYTE m65xx_p_adc[512],m65xx_p_sbc[512]; // Carry and oVerflow
 
@@ -165,12 +166,13 @@ void m65xx_setup(void) // unlike in the Z80, precalc'd tables are limited to the
 
 #endif
 
+// the past definitions are shared by all 6510/6502 chips; the following ones are individual
+
 #ifdef M65XX_SHW
 	#define M65XX_SHZ(t,r) do{ i=(q+1)&(o=r); if (M65XX_SHW) o=i; if (q!=a.b.h) a.b.h=i; t=o; }while(0)
-#else // simpler version if these quirks don't matter
+#else // simpler version without RDY handling
 	#define M65XX_SHZ(t,r) (t=r)
 #endif
-
 #ifdef M65XX_NMI_ACK
 	#define M65XX_CRUNCH --M65XX_I_T,--M65XX_N_T
 #else // simpler version without NMI handling
@@ -1382,11 +1384,10 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				default: // ILLEGAL CODE!
 				//case 0X02: case 0X12: case 0X22: case 0X32: case 0X42: case 0X52: // JAM (1/2)
 				//case 0X62: case 0X72: case 0X92: case 0XB2: case 0XD2: case 0XF2: // JAM (2/2)
-					--M65XX_PC.w;
 					#ifdef DEBUG_HERE
-					{ _t_=0,session_signal|=SESSION_SIGNAL_DEBUG; } // throw!
+					{ --M65XX_PC.w; _t_=0,session_signal|=SESSION_SIGNAL_DEBUG; } // throw!
 					#else
-					if (m65xx_t<_t_) m65xx_t=_t_; // waste all the ticks!
+					M65XX_WAIT; M65XX_WAIT; M65XX_RESET(); //if (m65xx_t<_t_) m65xx_t=_t_; // waste all the ticks!
 					#endif
 			}
 		}
@@ -1497,29 +1498,29 @@ WORD debug_dasm(char *t,WORD p) // disassembles the code at address `p` onto the
 	{
 		// opcodes N*8+0 ------------------------------------ //
 		case 0X00: sprintf(t,"BRK  $%02X",DEBUG_DASM_BYTE); break;
-		case 0X08: sprintf(t,"PHP"); break;
+		case 0X08: strcpy (t,"PHP"); break;
 		case 0X10: case 0X30: case 0X50: case 0X70: case 0X90: case 0XB0: case 0XD0: case 0XF0:
 			sprintf(t,"%s  $%04X",opcode0[o>>5],DEBUG_DASM_REL8); break;
-		case 0X18: sprintf(t,"CLC"); break;
+		case 0X18: strcpy (t,"CLC"); break;
 		case 0X20: sprintf(t,"JSR  $%04X",DEBUG_DASM_WORD); break;
-		case 0X28: sprintf(t,"PLP"); break;
-		case 0X38: sprintf(t,"SEC"); break;
-		case 0X40: sprintf(t,"RTI"); break;
-		case 0X48: sprintf(t,"PHA"); break;
-		case 0X58: sprintf(t,"CLI"); break;
-		case 0X60: sprintf(t,"RTS"); break;
-		case 0X68: sprintf(t,"PLA"); break;
-		case 0X78: sprintf(t,"SEI"); break;
-		case 0X88: sprintf(t,"DEY"); break;
-		case 0X98: sprintf(t,"TYA"); break;
+		case 0X28: strcpy (t,"PLP"); break;
+		case 0X38: strcpy (t,"SEC"); break;
+		case 0X40: strcpy (t,"RTI"); break;
+		case 0X48: strcpy (t,"PHA"); break;
+		case 0X58: strcpy (t,"CLI"); break;
+		case 0X60: strcpy (t,"RTS"); break;
+		case 0X68: strcpy (t,"PLA"); break;
+		case 0X78: strcpy (t,"SEI"); break;
+		case 0X88: strcpy (t,"DEY"); break;
+		case 0X98: strcpy (t,"TYA"); break;
 		case 0XA0: case 0XC0: case 0XE0:
 			sprintf(t,"%s  #$%02X",opcode3[o>>5],DEBUG_DASM_BYTE); break;
-		case 0XA8: sprintf(t,"TAY"); break;
-		case 0XB8: sprintf(t,"CLV"); break;
-		case 0XC8: sprintf(t,"INY"); break;
-		case 0XD8: sprintf(t,"CLD"); break;
-		case 0XE8: sprintf(t,"INX"); break;
-		case 0XF8: sprintf(t,"SED"); break;
+		case 0XA8: strcpy (t,"TAY"); break;
+		case 0XB8: strcpy (t,"CLV"); break;
+		case 0XC8: strcpy (t,"INY"); break;
+		case 0XD8: strcpy (t,"CLD"); break;
+		case 0XE8: strcpy (t,"INX"); break;
+		case 0XF8: strcpy (t,"SED"); break;
 		// opcodes N*8+1 ------------------------------------ //
 		case 0X01: case 0X21: case 0X41: case 0X61: case 0X81: case 0XA1: case 0XC1: case 0XE1:
 			sprintf(t,"%s  ($%02X,X)",opcode1[o>>5],DEBUG_DASM_BYTE); break;
@@ -1530,13 +1531,13 @@ WORD debug_dasm(char *t,WORD p) // disassembles the code at address `p` onto the
 		case 0X19: case 0X39: case 0X59: case 0X79: case 0X99: case 0XB9: case 0XD9: case 0XF9:
 			sprintf(t,"%s  $%04X,Y",opcode1[o>>5],DEBUG_DASM_WORD); break;
 		// opcodes N*8+2 ------------------------------------ //
-		case 0X0A: case 0X2A: case 0X4A: case 0X6A: sprintf(t,opcode2[o>>5]); break;
-		case 0X8A: sprintf(t,"TXA"); break;
-		case 0X9A: sprintf(t,"TXS"); break;
+		case 0X0A: case 0X2A: case 0X4A: case 0X6A: strcpy (t,opcode2[o>>5]); break;
+		case 0X8A: strcpy (t,"TXA"); break;
+		case 0X9A: strcpy (t,"TXS"); break;
 		case 0XA2: sprintf(t,"LDX  #$%02X",DEBUG_DASM_BYTE); break;
-		case 0XAA: sprintf(t,"TAX"); break;
-		case 0XBA: sprintf(t,"TSX"); break;
-		case 0XCA: sprintf(t,"DEX"); break;
+		case 0XAA: strcpy (t,"TAX"); break;
+		case 0XBA: strcpy (t,"TSX"); break;
+		case 0XCA: strcpy (t,"DEX"); break;
 		// opcodes N*8+3 ------------------------------------ //
 		case 0X03: case 0X23: case 0X43: case 0X63: case 0X83: case 0XA3: case 0XC3: case 0XE3:
 			sprintf(t,"%s  ($%02X,X)",opcode4[o>>5],DEBUG_DASM_BYTE); break;
@@ -1602,12 +1603,12 @@ WORD debug_dasm(char *t,WORD p) // disassembles the code at address `p` onto the
 		case 0X80: case 0X82: case 0X89: case 0XC2: case 0XE2: // NOP #$NN
 			sprintf(t,"NOP  #$%02X",DEBUG_DASM_BYTE); break;
 		case 0X1A: case 0X3A: case 0X5A: case 0X7A: case 0XDA: case 0XFA: // NOP (illegal!)
-			//sprintf(t,"*NOP"); break;
+			//strcpy (t,"*NOP"); break;
 		case 0XEA: // NOP
-			sprintf(t,opcode3[0]); break;
+			strcpy (t,opcode3[0]); break;
 		case 0X02: case 0X12: case 0X22: case 0X32: case 0X42: case 0X52: // JAM (1/2)
 		case 0X62: case 0X72: case 0X92: case 0XB2: case 0XD2: case 0XF2: // JAM (2/2)
-			sprintf(t,"JAM"); break;
+			strcpy (t,"JAM"); break;
 	}
 	return p;
 }
@@ -1641,10 +1642,6 @@ WORD debug_dasm(char *t,WORD p) // disassembles the code at address `p` onto the
 #undef M65XX_DUMBPAGE
 #undef M65XX_DUMBPEEK
 #undef M65XX_DUMBPOKE
-//#undef M65XX_DUMBPEEKZERO
-//#undef M65XX_DUMBPOKEZERO
-//#undef M65XX_DUMBPULL
-//#undef M65XX_DUMBPUSH
 #undef M65XX_TICK
 #undef M65XX_WAIT
 
@@ -1670,9 +1667,5 @@ WORD debug_dasm(char *t,WORD p) // disassembles the code at address `p` onto the
 #undef M65XX_TRAP_0XB0
 #undef M65XX_TRAP_0XD0
 #undef M65XX_TRAP_0XF0
-
-#ifndef _M65XX_H_
-#define _M65XX_H_
-#endif
 
 // =================================== END OF MOS 6510/6502 EMULATION //

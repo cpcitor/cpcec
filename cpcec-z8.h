@@ -1357,7 +1357,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 						Z80W *xy=(o&0x20)?&z80_iy:&z80_ix;
 						o=Z80_PRAE_PEEKXY(z80_pc.w); // special DD/FD PEEK (1/2)
 						#ifdef Z80_LIST_PEEKXY
-						if (!Z80_LIST_PEEKXY(o+0x600))
+						if (!Z80_LIST_PEEKXY(o))
 						#else
 						const BYTE zz[256]={ // defined DD/FD combinations
 							//1 2 3 4 5 6 7 8 9 A B C D E F //// +0x600 -
@@ -2303,11 +2303,12 @@ WORD debug_dasm(char *t,WORD p) // disassembles the code at address `p` onto the
 	const char regs[8][5]={"B","C","D","E","H","L","(HL)","A"};
 	const char alus[8][4]={"ADD","ADC","SUB","SBC","AND","XOR","OR ","CP "};
 	const char cbxs[8][4]={"RLC","RRC","RL ","RR ","SLA","SRA","SLL","SRL"};
+	const char blks[4][4][5]={{"LDI", "LDD" ,"LDIR","LDDR"},{"CPI", "CPD" ,"CPIR","CPDR"},{"INI", "IND" ,"INIR","INDR"},{"OUTI","OUTD","OTIR","OTDR"}};
 	const char flgs[8][3]={"NZ","Z","NC","C","NV","V","NS","S"};
 	debug_match=p==z80_pc.w; WORD w; char x,y,*z; BYTE o=PEEK(p); switch (++p,o)
 	{
-		case 0X00: sprintf(t,"NOP"); break;
-		case 0X08: sprintf(t,"EX   AF,AF'"); break;
+		case 0X00: strcpy (t,"NOP"); break;
+		case 0X08: strcpy (t,"EX   AF,AF'"); break;
 		case 0X10: sprintf(t,"DJNZ $%04X",DEBUG_DASM_REL8); break;
 		case 0X18: sprintf(t,"JR   $%04X",DEBUG_DASM_REL8); break;
 		case 0X20: case 0X28: case 0X30: case 0X38:
@@ -2324,7 +2325,7 @@ WORD debug_dasm(char *t,WORD p) // disassembles the code at address `p` onto the
 			sprintf(t,"INC  %s",regs[o>>3]); break;
 		case 0X05: case 0X0D: case 0X15: case 0X1D: case 0X25: case 0X2D: case 0X35: case 0X3D:
 			sprintf(t,"DEC  %s",regs[o>>3]); break;
-		case 0X76: sprintf(t,"HALT"); break;
+		case 0X76: strcpy (t,"HALT"); break;
 		case 0X40: case 0X41: case 0X42: case 0X43: case 0X44: case 0X45: case 0X46: case 0X47:
 		case 0X48: case 0X49: case 0X4A: case 0X4B: case 0X4C: case 0X4D: case 0X4E: case 0X4F:
 		case 0X50: case 0X51: case 0X52: case 0X53: case 0X54: case 0X55: case 0X56: case 0X57:
@@ -2347,28 +2348,28 @@ WORD debug_dasm(char *t,WORD p) // disassembles the code at address `p` onto the
 			sprintf(t,"%s  $%02X",alus[(o-0XC0)>>3],DEBUG_DASM_BYTE); break;
 		case 0XC7: case 0XCF: case 0XD7: case 0XDF: case 0XE7: case 0XEF: case 0XF7: case 0XFF:
 			sprintf(t,"RST  %d",(o-0XC0)>>3); break;
-		case 0XC9: sprintf(t,"RET"); break;
-		case 0XF3: sprintf(t,"DI"); break;
-		case 0XFB: sprintf(t,"EI"); break;
+		case 0XC9: strcpy (t,"RET"); break;
+		case 0XF3: strcpy (t,"DI"); break;
+		case 0XFB: strcpy (t,"EI"); break;
 		case 0X02: case 0X12: sprintf(t,"LD   (%s),A",twos[o>>4]); break;
 		case 0X22: case 0X32: sprintf(t,"LD   ($%04X),%s",DEBUG_DASM_WORD,o&16?"A":"HL"); break;
 		case 0X0A: case 0X1A: sprintf(t,"LD   A,(%s)",twos[o>>4]); break;
 		case 0X2A: case 0X3A: sprintf(t,"LD   %s,($%04X)",o&16?"A":"HL",DEBUG_DASM_WORD); break;
 		case 0X09: case 0X19: case 0X29: case 0X39: sprintf(t,"ADD  HL,%s",twos[o>>4]); break;
-		case 0X07: sprintf(t,"RLCA"); break;
-		case 0X0F: sprintf(t,"RRCA"); break;
-		case 0X17: sprintf(t,"RLA"); break;
-		case 0X1F: sprintf(t,"RRA"); break;
-		case 0X27: sprintf(t,"DAA"); break;
-		case 0X2F: sprintf(t,"CPL"); break;
-		case 0X37: sprintf(t,"SCF"); break;
-		case 0X3F: sprintf(t,"CCF"); break;
+		case 0X07: strcpy (t,"RLCA"); break;
+		case 0X0F: strcpy (t,"RRCA"); break;
+		case 0X17: strcpy (t,"RLA"); break;
+		case 0X1F: strcpy (t,"RRA"); break;
+		case 0X27: strcpy (t,"DAA"); break;
+		case 0X2F: strcpy (t,"CPL"); break;
+		case 0X37: strcpy (t,"SCF"); break;
+		case 0X3F: strcpy (t,"CCF"); break;
 		case 0XC0: case 0XC8: case 0XD0: case 0XD8: case 0XE0: case 0XE8: case 0XF0: case 0XF8:
 			sprintf(t,"RET  %s",flgs[(o-0XC0)>>3]); break;
 		case 0XC1: case 0XD1: case 0XE1: sprintf(t,"POP  %s",twos[(o-0XC0)>>4]); break;
-		case 0XF1: sprintf(t,"POP  AF"); break;
+		case 0XF1: strcpy (t,"POP  AF"); break;
 		case 0XC5: case 0XD5: case 0XE5: sprintf(t,"PUSH %s",twos[(o-0XC0)>>4]); break;
-		case 0XF5: sprintf(t,"PUSH AF"); break;
+		case 0XF5: strcpy (t,"PUSH AF"); break;
 		case 0XC2: case 0XCA: case 0XD2: case 0XDA: case 0XE2: case 0XEA: case 0XF2: case 0XFA:
 			sprintf(t,"JP   %s,$%04X",flgs[(o-0XC0)>>3],DEBUG_DASM_WORD); break;
 		case 0XC4: case 0XCC: case 0XD4: case 0XDC: case 0XE4: case 0XEC: case 0XF4: case 0XFC:
@@ -2377,11 +2378,11 @@ WORD debug_dasm(char *t,WORD p) // disassembles the code at address `p` onto the
 		case 0XCD: sprintf(t,"CALL $%04X",DEBUG_DASM_WORD); break;
 		case 0XD3: sprintf(t,"OUT  ($%02X),A",DEBUG_DASM_BYTE); break;
 		case 0XDB: sprintf(t,"IN   A,($%02X)",DEBUG_DASM_BYTE); break;
-		case 0XD9: sprintf(t,"EXX"); break;
-		case 0XE3: sprintf(t,"EX   HL,(SP)"); break;
-		case 0XE9: sprintf(t,"JP   HL"); break;
-		case 0XEB: sprintf(t,"EX   DE,HL"); break;
-		case 0XF9: sprintf(t,"LD   SP,HL"); break;
+		case 0XD9: strcpy (t,"EXX"); break;
+		case 0XE3: strcpy (t,"EX   HL,(SP)"); break;
+		case 0XE9: strcpy (t,"JP   HL"); break;
+		case 0XEB: strcpy (t,"EX   DE,HL"); break;
+		case 0XF9: strcpy (t,"LD   SP,HL"); break;
 		case 0XCB: switch (o=PEEK(p),++p,o)
 			{
 				case 0X00: case 0X01: case 0X02: case 0X03: case 0X04: case 0X05: case 0X06: case 0X07:
@@ -2426,10 +2427,10 @@ WORD debug_dasm(char *t,WORD p) // disassembles the code at address `p` onto the
 			{
 				case 0X40: case 0X48: case 0X50: case 0X58: case 0X60: case 0X68: case 0X78:
 					sprintf(t,"IN   %s,(C)",regs[(o-0X40)>>3]); break;
-				case 0X70: sprintf(t,"IN   (C)"); break;
+				case 0X70: strcpy (t,"IN   (C)"); break;
 				case 0X41: case 0X49: case 0X51: case 0X59: case 0X61: case 0X69: case 0X79:
 					sprintf(t,"OUT  (C),%s",regs[(o-0X40)>>3]); break;
-				case 0X71: sprintf(t,"OUT  (C)"); break;
+				case 0X71: strcpy (t,"OUT  (C)"); break;
 				case 0X42: case 0X52: case 0X62: case 0X72:
 					sprintf(t,"SBC  HL,%s",twos[(o-0X40)>>4]); break;
 				case 0X4A: case 0X5A: case 0X6A: case 0X7A:
@@ -2439,35 +2440,24 @@ WORD debug_dasm(char *t,WORD p) // disassembles the code at address `p` onto the
 				case 0X4B: case 0X5B: case 0X6B: case 0X7B:
 					sprintf(t,"LD   %s,($%04X)",twos[(o-0X40)>>4],DEBUG_DASM_WORD); break;
 				case 0X44: case 0X4C: case 0X54: case 0X5C: case 0X64: case 0X6C: case 0X74: case 0X7C:
-					sprintf(t,"NEG"); break;
-				case 0X45: case 0X55: case 0X65: case 0X75: sprintf(t,"RETN"); break;
-				case 0X4D: case 0X5D: case 0X6D: case 0X7D: sprintf(t,"RETI"); break;
-				case 0X46: case 0X4E: case 0X66: case 0X6E: sprintf(t,"IM   0"); break;
-				case 0X56: case 0X76: sprintf(t,"IM   1"); break;
-				case 0X5E: case 0X7E: sprintf(t,"IM   2"); break;
-				case 0X47: sprintf(t,"LD   I,A"); break;
-				case 0X4F: sprintf(t,"LD   R,A"); break;
-				case 0X57: sprintf(t,"LD   A,I"); break;
-				case 0X5F: sprintf(t,"LD   A,R"); break;
-				case 0X67: sprintf(t,"RRD"); break;
-				case 0X6F: sprintf(t,"RLD"); break;
-				case 0XA0: sprintf(t,"LDI"); break;
-				case 0XA8: sprintf(t,"LDD"); break;
-				case 0XB0: sprintf(t,"LDIR"); break;
-				case 0XB8: sprintf(t,"LDDR"); break;
-				case 0XA1: sprintf(t,"CPI"); break;
-				case 0XA9: sprintf(t,"CPD"); break;
-				case 0XB1: sprintf(t,"CPIR"); break;
-				case 0XB9: sprintf(t,"CPDR"); break;
-				case 0XA2: sprintf(t,"INI"); break;
-				case 0XAA: sprintf(t,"IND"); break;
-				case 0XB2: sprintf(t,"INIR"); break;
-				case 0XBA: sprintf(t,"INDR"); break;
-				case 0XA3: sprintf(t,"OUTI"); break;
-				case 0XAB: sprintf(t,"OUTD"); break;
-				case 0XB3: sprintf(t,"OTIR"); break;
-				case 0XBB: sprintf(t,"OTDR"); break;
-				default: sprintf(t,"*NOP");
+					strcpy (t,"NEG"); break;
+				case 0X45: case 0X55: case 0X65: case 0X75: strcpy (t,"RETN"); break;
+				case 0X4D: case 0X5D: case 0X6D: case 0X7D: strcpy (t,"RETI"); break;
+				case 0X46: case 0X4E: case 0X66: case 0X6E: strcpy (t,"IM   0"); break;
+				case 0X56: case 0X76: strcpy (t,"IM   1"); break;
+				case 0X5E: case 0X7E: strcpy (t,"IM   2"); break;
+				case 0X47: strcpy (t,"LD   I,A"); break;
+				case 0X4F: strcpy (t,"LD   R,A"); break;
+				case 0X57: strcpy (t,"LD   A,I"); break;
+				case 0X5F: strcpy (t,"LD   A,R"); break;
+				case 0X67: strcpy (t,"RRD"); break;
+				case 0X6F: strcpy (t,"RLD"); break;
+				case 0XA0: case 0XA8: case 0XB0: case 0XB8:
+				case 0XA1: case 0XA9: case 0XB1: case 0XB9:
+				case 0XA2: case 0XAA: case 0XB2: case 0XBA:
+				case 0XA3: case 0XAB: case 0XB3: case 0XBB:
+					strcpy (t,blks[o&3][(o-0XA0)>>3]); break;
+				default: strcpy (t,"*NOP");
 			}
 			break;
 		case 0XDD: case 0XFD:
@@ -2562,7 +2552,7 @@ WORD debug_dasm(char *t,WORD p) // disassembles the code at address `p` onto the
 							sprintf(t,"SET  %d,(%s%c$%02X)",(o-0XC0)>>3,z,y,x); break;
 					}
 					break;
-				default: sprintf(t,"*NOP"); --p;
+				default: strcpy (t,"*NOP"); --p;
 			}
 			break;
 	}

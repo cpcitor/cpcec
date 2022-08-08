@@ -7,12 +7,12 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "XRF"
-#define MY_VERSION "20211217"//"1555"
+#define MY_VERSION "20220806"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
 
 #define GPL_3_INFO \
 	"This program comes with ABSOLUTELY NO WARRANTY; for more details" "\n" \
-	"please read the GNU General Public License. This is free software" "\n" \
+	"please see the GNU General Public License. This is free software" "\n" \
 	"and you are welcome to redistribute it under certain conditions."
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -80,14 +80,11 @@ int xrf_decode(BYTE *t,BYTE *s,int *l,int x) // equally hacky decoder based on a
 	BYTE *w=s,*z=t,a=0,b=0; int m=-1,n;
 	for (;;)
 	{
-		xrf_decode0(); if (b&a) // special case of xrf_decode1(): we must catch "100000000"
-		{
-			if (!(n=*w++))
-				break; // EOF!
-		}
+		xrf_decode0(); if (b&a) // special case of xrf_decode1()
+			{ if (!(n=*w++)) return *l=(z-t)/x,w-s; } // "100000000" is EOF!
 		else
 			n=0;
-		*z=n,z+=x; if (n==m)
+		*z=n,z+=x; if (n==m) // string?
 		{
 			if ((n=xrf_decode1())==255)
 				n=510+(xrf_decode1()<<8);
@@ -98,9 +95,8 @@ int xrf_decode(BYTE *t,BYTE *s,int *l,int x) // equally hacky decoder based on a
 			m=-1; // avoid accidental repetitions
 		}
 		else
-			m=n;
+			m=n; // literal
 	}
-	return *l=(z-t)/x,w-s;
 }
 
 #define xrf_fgetc() fgetc(xrf_file)
