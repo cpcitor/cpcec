@@ -44,7 +44,6 @@ BYTE disc_trueunit,disc_trueunithead; // current unit+head after flipping sides 
 int disc_delay; // several operations need a short delay between command and action.
 int disc_timer; // overrun timer: if nonzero, it decreases.
 int disc_overrun; // set if disc_timer dropped to zero!
-int disc_filemode=1; // +1 = read-only by default instead of read-write; +2 = relaxed disc write errors instead of strict
 
 // disc file handling operations ------------------------------------ //
 
@@ -76,12 +75,12 @@ int disc_open(char *s,int drive,int canwrite) // open a disc file. `s` path, `dr
 	disc_track_reset(drive);
 	if (q)
 		disc_close(drive); // unknown disc format!
-	else if (disc_path!=s) strcpy(disc_path,s); // valid format
+	else STRCOPY(disc_path,s); // valid format
 	return q;
 }
 
 BYTE disc_scratch[256]; // we don't want to touch buffers that might be active
-char disc_header_text[]="EXTENDED Disk-File\015\012" MY_CAPTION " " MY_VERSION "\015\012\032";
+char disc_header_text[]="EXTENDED Disk-File\015\012%s\015\012\032";
 char disc_tracks_text[]="Track-Info\015\012";
 
 int disc_create(char *s) // create a clean formatted disc; 0 OK, !0 ERROR
@@ -90,7 +89,7 @@ int disc_create(char *s) // create a clean formatted disc; 0 OK, !0 ERROR
 	if (!(f=puff_fopen(s,"wb")))
 		return 1; // cannot create disc!
 	MEMZERO(disc_scratch);
-	strcpy(disc_scratch,disc_header_text);
+	sprintf(disc_scratch,disc_header_text,session_caption);
 	disc_scratch[0x30]=DISC_NEW_TRACKS;
 	disc_scratch[0x31]=DISC_NEW_SIDES;
 	memset(&disc_scratch[0x34],((DISC_NEW_SECTORS<<DISC_NEW_SECTOR_SIZE_FDC)+3)/2,DISC_NEW_SIDES*DISC_NEW_TRACKS);
@@ -380,8 +379,8 @@ void disc_track_format_old2new(BYTE *t) // converts a single track from MV - CPC
 }
 void disc_track_format(void)
 {
-	int j=0,l128=0; // length of new track (header and data) in 128-byte chunks
-	for (int i=0;i<disc_parmtr[3];++i) // disc_parmtr[2] is useless to calculate the REAL length of the track!
+	int i,j=0,l128=0; // length of new track (header and data) in 128-byte chunks
+	for (i=0;i<disc_parmtr[3];++i) // disc_parmtr[2] is useless to calculate the REAL length of the track!
 	{
 		cprintf("%02X%02X%02X%02X ",disc_buffer[0+i*4],disc_buffer[1+i*4],disc_buffer[2+i*4],disc_buffer[3+i*4]);
 		//if (disc_buffer[0+i*4]|disc_buffer[1+i*4]|disc_buffer[2+i*4]|disc_buffer[3+i*4]) // skip dummy sectors? (Rubi's self-copier for "The Demo")
@@ -425,7 +424,7 @@ void disc_track_format(void)
 		disc_track_table[disc_trueunithead][0x10]=disc_track[disc_trueunit];
 		disc_track_table[disc_trueunithead][0x11]=(DISC_PARMTR_UNITHEAD&4)/4; // not disc_trueunithead!
 		memcpy(&disc_track_table[disc_trueunithead][0x14],&disc_parmtr[2],4); // formatting parameters
-		for (int i=0;i<disc_parmtr[3];++i)
+		for (i=0;i<disc_parmtr[3];++i)
 		{
 			memcpy(&disc_track_table[disc_trueunithead][i*8+0x18],&disc_buffer[0+i*4],4); // CHRN
 			int l=128<<disc_buffer[3+i*4]; //disc_parmtr[2] is useless, again; we use N here
@@ -434,9 +433,9 @@ void disc_track_format(void)
 		}
 	}
 
-	int i=0,new_offset=256,old_offset=0,old_length=0;
-	while (i<j)
-		new_offset+=disc_index_table[disc_trueunit][0x34+i++]<<8;
+	int new_offset=256,old_offset=0,old_length=0;
+	for (i=0;i<j;++i)
+		new_offset+=disc_index_table[disc_trueunit][0x34+i]<<8;
 	old_offset=new_offset+(q<<8);
 	if (q-=disc_index_table[disc_trueunit][j+0x34]||m) // will the file size change? did the style change? backup if required!
 		while (++i<disc_index_table[disc_trueunit][0x30]*disc_index_table[disc_trueunit][0x31])
@@ -452,7 +451,7 @@ void disc_track_format(void)
 	fseek(disc[disc_trueunit],0,SEEK_SET);
 	fwrite1(disc_index_table[disc_trueunit],256,disc[disc_trueunit]);
 	if (m)
-		for (int i=0;i<j;++i)
+		for (i=0;i<j;++i)
 		{
 			fread1(disc_scratch,256,disc[disc_trueunit]); // load the header
 			fseek(disc[disc_trueunit],-256,SEEK_CUR); // rewind
@@ -471,14 +470,11 @@ void disc_track_format(void)
 	if (old_length)
 	{
 		if (m)
-		{
-			int i=j,k=0;
-			while (++i<disc_index_table[disc_trueunit][0x30]*disc_index_table[disc_trueunit][0x31])
+			for (i=j,m=0;++i<disc_index_table[disc_trueunit][0x30]*disc_index_table[disc_trueunit][0x31];)
 			{
-				disc_track_format_old2new(&disc_backup[k]); // update header
-				k+=disc_index_table[disc_trueunit][0x34+i]<<8; // next track
+				disc_track_format_old2new(&disc_backup[m]); // update header
+				m+=disc_index_table[disc_trueunit][0x34+i]<<8; // next track
 			}
-		}
 		fwrite1(disc_backup,old_length,disc[disc_trueunit]);
 		free(disc_backup);
 	}
@@ -656,7 +652,8 @@ void disc_data_send(BYTE b) // DATA I/O
 					}
 					else // disc is ready, track is valid
 					{
-						disc_sector_last=equalsii(&disc_track_table[disc_trueunithead][0x20],0x0401),disc_sector_loadgaps(); // kludge: "Le Necromancien" expects READ TRACK to begin at the second sector in track 0
+						// kludge: "Le Necromancien" expects READ TRACK to begin at the second sector in track 0
+						disc_sector_last=equalsii(&disc_track_table[disc_trueunithead][0x20],0x0401),disc_sector_loadgaps();
 					}
 					break;
 				case 0x06: // READ DATA
@@ -763,15 +760,13 @@ void disc_data_send(BYTE b) // DATA I/O
 						if (disc_canwrite[disc_trueunit])
 						{
 							fwrite(disc_buffer,1,disc_length,disc[disc_trueunit]); // warning: this silently fails if the file mode is "rb" instead of "rb+"
-							// WRITE DATA (05) and WRITE DELETED DATA (09) reset and set the DELETED flag:
-							// we check whether the track header needs updating
-							int oldtag=disc_track_table[disc_trueunithead][disc_sector_last*8+0x1D],
-								newtag=disc_parmtr[0]&8?oldtag|0x40:oldtag&~0x40;
-							if (oldtag!=newtag)
+							// WRITE DATA (05) and WRITE DELETED DATA (09) reset and set the DELETED flag: is the track header in need of an update?
+							if ((((disc_parmtr[0]&8)<<3)^disc_track_table[disc_trueunithead][disc_sector_last*8+0x1D])&64)
 							{
-								disc_track_table[disc_trueunithead][disc_sector_last*8+0x1D]=newtag;
+								disc_track_table[disc_trueunithead][disc_sector_last*8+0x1D]^=64;
 								fseek(disc[disc_trueunit],disc_track_offset[disc_trueunithead],SEEK_SET);
-								fwrite(disc_track_table[disc_trueunithead],1,disc_track_table[disc_trueunithead][0x15]>29?512:256,disc[disc_trueunit]); // warning: this silently fails if the file mode is "rb" instead of "rb+" (again!)
+								// warning: this silently fails if the file mode is "rb" instead of "rb+" (again!)
+								fwrite(disc_track_table[disc_trueunithead],1,disc_track_table[disc_trueunithead][0x15]>29?512:256,disc[disc_trueunit]);
 							}
 						}
 						else if (!(disc_filemode&2))

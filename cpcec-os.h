@@ -6,64 +6,15 @@
 //  ##  ##  ##      ##  ##  ##   #  ##  ##  since 2018-12-01 till now //
  //  ####  ####      ####  #######   ####  ------------------------- //
 
-// Because the goal of the emulation itself is to be OS-independent,
-// the interactions between the emulator and the OS are kept behind an
-// interface of variables and procedures that don't require particular
-// knowledge of the emulation's intrinsic properties.
-
 // To compile the emulator for Windows 5.0+, the default platform, type
 // "gcc cpcec.res -xc cpcec.c -luser32 -lgdi32 -lcomdlg32 -lshell32
 // -lwinmm" or the equivalent options from your preferred C compiler.
 // Optional DirectDraw support is enabled by appending "-DDDRAW -lddraw"
+
 // Succesfully tested compilers: GCC 4.6.3 (-std=gnu99), 4.9.2, 5.1.0,
-// 8.3.0 ; TCC 0.9.27; CLANG 3.7.1, 7.0.1 ; Pelles C 4.50.113 ; etc.
+// 8.3.0 ; TCC 0.9.27 ; CLANG 3.7.1, 7.0.1 ; Pelles C 4.50.113 ; etc.
 
-char session_caption[]=MY_CAPTION " " MY_VERSION;
-unsigned char session_scratch[1<<18]; // at least 256k!
-
-#define INLINE // 'inline' is useless in TCC and GCC4, and harmful in GCC5!
-#define UNUSED // '__attribute__((unused))' isn't always ready outside GCC.
-#if __GNUC__ >= 4 // optional branch prediction hints
-#define LIKELY(x) __builtin_expect(!!(x),1) // see 'likely' from Linux
-#define UNLIKELY(x) __builtin_expect((x),0) // see 'unlikely'
-#else // branch prediction hints are unreliable outside GCC
-#define LIKELY(x) (x) // not ready, fall back
-#define UNLIKELY(x) (x) // ditto
-#endif
-
-INLINE int ucase(int i) { return i>='a'&&i<='z'?i-32:i; }
-INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
-#define length(x) (sizeof(x)/sizeof(*(x)))
-
-#include "cpcec-a8.h" //unsigned char *onscreen_chrs;
-#define ONSCREEN_SIZE 12 //(sizeof(onscreen_chrs)/95)
-#define ONSCREEN_CEIL 256
-
-#ifdef _WIN32
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN 1 // reduce dependencies
-#endif
-#else
-#ifndef SDL2
-#define SDL2 // non-Win32 machines always fall back to SDL2!
-#endif
-#endif
-
-#ifdef DEBUG
-#define cprintf(...) fprintf(stdout,__VA_ARGS__)
-#define cputchar(x) fputc(x,stdout)
-#define cputs(x) fputs(x,stdout)
-#else // warning: parameters won't be eval'd!
-#define cprintf(...) (0)
-#define cputchar(x) (0)
-#define cputs(x) (0)
-#endif
-
-#ifdef SDL2 // SDL2 is mandatory outside Win32 and optional inside Win32
-
-#include "cpcec-ox.h"
-
-#else // START OF WINDOWS 5.0+ DEFINITIONS ========================== //
+// START OF WINDOWS 5.0+ DEFINITIONS ================================ //
 
 #include <windows.h> // KERNEL32.DLL, USER32.DLL, GDI32.DLL, WINMM.DLL, COMDLG32.DLL, SHELL32.DLL
 #include <commdlg.h> // COMDLG32.DLL: getOpenFileName()...
@@ -75,48 +26,35 @@ INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 #define strcasecmp _stricmp // from MSVCRT!
 #define fsetsize(f,l) _chsize(_fileno(f),(l))
 #include <io.h> // _chsize(),_fileno()...
+// WIN32 is never UTF-8; it's either ANSI (...A) or UNICODE (...W)
+#define I18N_MULTIPLY "\327"
+#define I18N_DIVISION "\367"
+#define I18N_L_AQUOTE "\042"//"\253"
+#define I18N_R_AQUOTE "\042"//"\273"
 
 #define MESSAGEBOX_WIDETAB "\t" // expect proportional font
 #define GPL_3_LF " " // Windows provides its own line feeds
 
 // general engine constants and variables --------------------------- //
 
-#define VIDEO_UNIT DWORD // 0x00RRGGBB style
+//#define AUDIO_UNIT unsigned char // obsolete 8-bit audio
+//#define AUDIO_BITDEPTH 8
+//#define AUDIO_ZERO 128
+#define AUDIO_UNIT signed short // standard 16-bit audio
+#define AUDIO_BITDEPTH 16
+#define AUDIO_ZERO 0
+#define AUDIO_BYTESTEP (AUDIO_CHANNELS*AUDIO_BITDEPTH/8) // i.e. 1, 2 or 4 bytes
+#define VIDEO_UNIT DWORD // the pixel style must be 0X00RRGGBB and nothing else!
 
-#if 0 // 8 bits
-	#define AUDIO_UNIT unsigned char
-	#define AUDIO_BITDEPTH 8
-	#define AUDIO_ZERO 128
-#else // 16 bits
-	#define AUDIO_UNIT signed short
-	#define AUDIO_BITDEPTH 16
-	#define AUDIO_ZERO 0
-#endif // bitsize
-#define AUDIO_CHANNELS 2 // 1 for mono, 2 for stereo
-#define AUDIO_N_FRAMES 16 // safe on all machines, but slow; must be even!
-
-VIDEO_UNIT *video_frame,*video_blend; // video frame, allocated on runtime
-AUDIO_UNIT *audio_frame,audio_buffer[AUDIO_LENGTH_Z*AUDIO_CHANNELS],audio_memory[AUDIO_N_FRAMES*AUDIO_LENGTH_Z*AUDIO_CHANNELS]; // audio frame, cycles during playback
+BYTE audio_memory[AUDIO_BYTESTEP<<AUDIO_L2BUFFER]; // audio buffer
+VIDEO_UNIT *video_frame,*video_blend; // video + blend frames, allocated on runtime
+AUDIO_UNIT audio_frame[AUDIO_PLAYBACK/50*AUDIO_CHANNELS]; // audio frame; 50 is the lowest legal framerate
 VIDEO_UNIT *video_target; // pointer to current video pixel
 AUDIO_UNIT *audio_target; // pointer to current audio sample
-int video_pos_x,video_pos_y,frame_pos_y,audio_pos_z; // counters to keep pointers within range
-BYTE video_interlaced=0,video_interlaces=0; // video scanline status
-char video_framelimit=0,video_framecount=0; // video frameskip counters; must be signed!
-BYTE audio_disabled=0,audio_session=0; // audio status and counter
+unsigned char session_focused=0; // ignore joysticks when unfocused
 unsigned char session_path[STRMAX],session_parmtr[STRMAX],session_tmpstr[STRMAX],session_substr[STRMAX],session_info[STRMAX]="";
 
-int session_timer,session_event=0; // timing synchronisation and user command
-BYTE session_fast=0,session_rhythm=0,session_wait=0,session_softblit=1,session_hardblit,session_softplay=0,session_hardplay; // software blitting enabled by default
-BYTE session_audio=1,session_stick=1,session_shift=0,session_key2joy=0; // keyboard, joystick
-int session_maus_x=0,session_maus_y=0; // mouse coordinates (UI + optional emulation)
-#ifdef MAUS_EMULATION
-int session_maus_z=0; // optional mouse
-#endif
-BYTE video_filter=0,audio_filter=0; // filter flags
-BYTE session_fullblit=0,session_zoomblit=0,session_focused=0;
-FILE *session_wavefile=NULL; // audio recording is done on each session update
-
-RECT session_ideal; // ideal rectangle where the window fits perfectly
+RECT session_ideal; // ideal rectangle where the window fits perfectly; `right` and `bottom` are actually width and height
 JOYINFOEX session_joy; // joystick+mouse buffers
 HWND session_hwnd,session_hdlg=NULL; // window handle
 HMENU session_menu=NULL; // menu handle
@@ -125,7 +63,7 @@ HDC session_dc1=NULL,session_dc2=NULL; HGDIOBJ session_dib=NULL; // video struct
 HWAVEOUT session_wo; WAVEHDR session_wh; MMTIME session_mmtime; // audio structs
 
 VIDEO_UNIT *debug_frame; BYTE debug_dirty; // !0 (new redraw required) or 0 (redraw not required)
-HGDIOBJ session_dbg=NULL;
+HGDIOBJ session_dbg=NULL; // the debug screen's own bitmap
 
 #ifdef DDRAW
 	#include <ddraw.h>
@@ -135,19 +73,6 @@ HGDIOBJ session_dbg=NULL;
 	DDSURFACEDESC ddsd;
 	LPDIRECTDRAWSURFACE lpdd_dbg=NULL;
 #endif
-
-BYTE session_paused=0,session_signal=0,session_signal_frames=0,session_signal_scanlines=0,session_version[8];
-#define SESSION_SIGNAL_FRAME 1
-#define SESSION_SIGNAL_DEBUG 2
-#define SESSION_SIGNAL_PAUSE 4
-BYTE session_dirty=0; // cfr session_clean()
-
-#define kbd_bit_set(k) (kbd_bit[k>>3]|=1<<(k&7))
-#define kbd_bit_res(k) (kbd_bit[k>>3]&=~(1<<(k&7)))
-#define joy_bit_set(k) (joy_bit[k>>3]|=1<<(k&7))
-#define joy_bit_res(k) (joy_bit[k>>3]&=~(1<<(k&7)))
-#define kbd_bit_tst(k) ((kbd_bit[k>>3]|joy_bit[k>>3])&(1<<(k&7)))
-BYTE kbd_bit[16],joy_bit[16]; // up to 128 keys in 16 rows of 8 bits
 
 // A modern keyboard as seen by Windows through WM_KEYDOWN and WK_KEYUP; extended keys are shown here with bit 7 on.
 // +----+   +-------------------+ +-------------------+ +-------------------+ +--------------+ *1 = trapped by Win32
@@ -168,116 +93,117 @@ BYTE kbd_bit[16],joy_bit[16]; // up to 128 keys in 16 rows of 8 bits
 // to ensure that the emulator works regardless of the operating system language!
 
 // function keys
-#define	KBCODE_F1	0x3B
-#define	KBCODE_F2	0x3C
-#define	KBCODE_F3	0x3D
-#define	KBCODE_F4	0x3E
-#define	KBCODE_F5	0x3F
-#define	KBCODE_F6	0x40
-#define	KBCODE_F7	0x41
-#define	KBCODE_F8	0x42
-#define	KBCODE_F9	0x43
-#define	KBCODE_F10	0x44
-#define	KBCODE_F11	0x57
-#define	KBCODE_F12	0x58
+#define	KBCODE_F1	0X3B
+#define	KBCODE_F2	0X3C
+#define	KBCODE_F3	0X3D
+#define	KBCODE_F4	0X3E
+#define	KBCODE_F5	0X3F
+#define	KBCODE_F6	0X40
+#define	KBCODE_F7	0X41
+#define	KBCODE_F8	0X42
+#define	KBCODE_F9	0X43
+#define	KBCODE_F10	0X44
+#define	KBCODE_F11	0X57
+#define	KBCODE_F12	0X58
 // leftmost keys
-#define	KBCODE_ESCAPE	0x01
-#define	KBCODE_TAB	0x0F
-#define	KBCODE_CAPSLOCK	0x3A
-#define	KBCODE_L_SHIFT	0x2A
-#define	KBCODE_L_CTRL	0x1D
-//#define KBCODE_L_ALT	0x38 // trapped by Win32
+#define	KBCODE_ESCAPE	0X01
+#define	KBCODE_TAB	0X0F
+#define	KBCODE_CAPSLOCK	0X3A
+#define	KBCODE_L_SHIFT	0X2A
+#define	KBCODE_L_CTRL	0X1D
+//#define KBCODE_L_ALT	0X38 // trapped by Win32
 // alphanumeric row 1
-#define	KBCODE_1	0x02
-#define	KBCODE_2	0x03
-#define	KBCODE_3	0x04
-#define	KBCODE_4	0x05
-#define	KBCODE_5	0x06
-#define	KBCODE_6	0x07
-#define	KBCODE_7	0x08
-#define	KBCODE_8	0x09
-#define	KBCODE_9	0x0A
-#define	KBCODE_0	0x0B
-#define	KBCODE_CHR1_1	0x0C
-#define	KBCODE_CHR1_2	0x0D
+#define	KBCODE_1	0X02
+#define	KBCODE_2	0X03
+#define	KBCODE_3	0X04
+#define	KBCODE_4	0X05
+#define	KBCODE_5	0X06
+#define	KBCODE_6	0X07
+#define	KBCODE_7	0X08
+#define	KBCODE_8	0X09
+#define	KBCODE_9	0X0A
+#define	KBCODE_0	0X0B
+#define	KBCODE_CHR1_1	0X0C
+#define	KBCODE_CHR1_2	0X0D
+#define	KBCODE_CHR4_5	0X29 // this is the key before "1" in modern keyboards
 // alphanumeric row 2
-#define	KBCODE_Q	0x10
-#define	KBCODE_W	0x11
-#define	KBCODE_E	0x12
-#define	KBCODE_R	0x13
-#define	KBCODE_T	0x14
-#define	KBCODE_Y	0x15
-#define	KBCODE_U	0x16
-#define	KBCODE_I	0x17
-#define	KBCODE_O	0x18
-#define	KBCODE_P	0x19
-#define	KBCODE_CHR2_1	0x1A
-#define	KBCODE_CHR2_2	0x1B
+#define	KBCODE_Q	0X10
+#define	KBCODE_W	0X11
+#define	KBCODE_E	0X12
+#define	KBCODE_R	0X13
+#define	KBCODE_T	0X14
+#define	KBCODE_Y	0X15
+#define	KBCODE_U	0X16
+#define	KBCODE_I	0X17
+#define	KBCODE_O	0X18
+#define	KBCODE_P	0X19
+#define	KBCODE_CHR2_1	0X1A
+#define	KBCODE_CHR2_2	0X1B
 // alphanumeric row 3
-#define	KBCODE_A	0x1E
-#define	KBCODE_S	0x1F
-#define	KBCODE_D	0x20
-#define	KBCODE_F	0x21
-#define	KBCODE_G	0x22
-#define	KBCODE_H	0x23
-#define	KBCODE_J	0x24
-#define	KBCODE_K	0x25
-#define	KBCODE_L	0x26
-#define	KBCODE_CHR3_1	0x27
-#define	KBCODE_CHR3_2	0x28
-#define	KBCODE_CHR3_3	0x2B
+#define	KBCODE_A	0X1E
+#define	KBCODE_S	0X1F
+#define	KBCODE_D	0X20
+#define	KBCODE_F	0X21
+#define	KBCODE_G	0X22
+#define	KBCODE_H	0X23
+#define	KBCODE_J	0X24
+#define	KBCODE_K	0X25
+#define	KBCODE_L	0X26
+#define	KBCODE_CHR3_1	0X27
+#define	KBCODE_CHR3_2	0X28
+#define	KBCODE_CHR3_3	0X2B
 // alphanumeric row 4
-#define	KBCODE_Z	0x2C
-#define	KBCODE_X	0x2D
-#define	KBCODE_C	0x2E
-#define	KBCODE_V	0x2F
-#define	KBCODE_B	0x30
-#define	KBCODE_N	0x31
-#define	KBCODE_M	0x32
-#define	KBCODE_CHR4_1	0x33
-#define	KBCODE_CHR4_2	0x34
-#define	KBCODE_CHR4_3	0x35
-#define	KBCODE_CHR4_4	0x56
-#define	KBCODE_CHR4_5	0x29
+#define	KBCODE_Z	0X2C
+#define	KBCODE_X	0X2D
+#define	KBCODE_C	0X2E
+#define	KBCODE_V	0X2F
+#define	KBCODE_B	0X30
+#define	KBCODE_N	0X31
+#define	KBCODE_M	0X32
+#define	KBCODE_CHR4_1	0X33
+#define	KBCODE_CHR4_2	0X34
+#define	KBCODE_CHR4_3	0X35
+#define	KBCODE_CHR4_4	0X56 // this is the key before "Z" in 105-key modern keyboards; missing in 104-key layouts!
 // rightmost keys
-#define	KBCODE_SPACE	0x39
-#define	KBCODE_BKSPACE	0x0E
-#define	KBCODE_ENTER	0x1C
-#define	KBCODE_R_SHIFT	0x36
-#define	KBCODE_R_CTRL	0x9D
-//#define KBCODE_R_ALT	0xB8 // trapped by Win32
+#define	KBCODE_SPACE	0X39
+#define	KBCODE_BKSPACE	0X0E
+#define	KBCODE_ENTER	0X1C
+#define	KBCODE_R_SHIFT	0X36
+#define	KBCODE_R_CTRL	0X9D
+//#define KBCODE_R_ALT	0XB8 // trapped by Win32
 // extended keys
-//#define KBCODE_PRINT	0x54 // trapped by Win32
-#define	KBCODE_SCR_LOCK	0x46
-#define	KBCODE_HOLD	0x45
-#define	KBCODE_INSERT	0xD2
-#define	KBCODE_DELETE	0xD3
-#define	KBCODE_HOME	0xC7
-#define	KBCODE_END	0xCF
-#define	KBCODE_PRIOR	0xC9
-#define	KBCODE_NEXT	0xD1
-#define	KBCODE_UP	0xC8
-#define	KBCODE_DOWN	0xD0
-#define	KBCODE_LEFT	0xCB
-#define	KBCODE_RIGHT	0xCD
+//#define KBCODE_PRINT	0X54 // trapped by Win32
+#define	KBCODE_SCR_LOCK	0X46
+#define	KBCODE_HOLD	0X45
+#define	KBCODE_INSERT	0XD2
+#define	KBCODE_DELETE	0XD3
+#define	KBCODE_HOME	0XC7
+#define	KBCODE_END	0XCF
+#define	KBCODE_PRIOR	0XC9
+#define	KBCODE_NEXT	0XD1
+#define	KBCODE_UP	0XC8
+#define	KBCODE_DOWN	0XD0
+#define	KBCODE_LEFT	0XCB
+#define	KBCODE_RIGHT	0XCD
+#define KBCODE_APPS	0XDD // 0X5D in docs!?
 // numeric keypad
-#define	KBCODE_NUM_LOCK	0xC5
-#define	KBCODE_X_7	0x47
-#define	KBCODE_X_8	0x48
-#define	KBCODE_X_9	0x49
-#define	KBCODE_X_4	0x4B
-#define	KBCODE_X_5	0x4C
-#define	KBCODE_X_6	0x4D
-#define	KBCODE_X_1	0x4F
-#define	KBCODE_X_2	0x50
-#define	KBCODE_X_3	0x51
-#define	KBCODE_X_0	0x52
-#define	KBCODE_X_DOT	0x53
-#define	KBCODE_X_ENTER	0x9C
-#define	KBCODE_X_ADD	0x4E
-#define	KBCODE_X_SUB	0x4A
-#define	KBCODE_X_MUL	0x37
-#define	KBCODE_X_DIV	0xB5
+#define	KBCODE_NUM_LOCK	0XC5
+#define	KBCODE_X_7	0X47
+#define	KBCODE_X_8	0X48
+#define	KBCODE_X_9	0X49
+#define	KBCODE_X_4	0X4B
+#define	KBCODE_X_5	0X4C
+#define	KBCODE_X_6	0X4D
+#define	KBCODE_X_1	0X4F
+#define	KBCODE_X_2	0X50
+#define	KBCODE_X_3	0X51
+#define	KBCODE_X_0	0X52
+#define	KBCODE_X_DOT	0X53
+#define	KBCODE_X_ENTER	0X9C
+#define	KBCODE_X_ADD	0X4E
+#define	KBCODE_X_SUB	0X4A
+#define	KBCODE_X_MUL	0X37
+#define	KBCODE_X_DIV	0XB5
 BYTE native_usbkey[]={ // WIN32-USB keyboard translation table; CONTROL, SHIFT, ALT and other modifiers are excluded
 	0,		0,		0,		0,
 	KBCODE_A,	KBCODE_B,	KBCODE_C,	KBCODE_D,
@@ -304,9 +230,9 @@ BYTE native_usbkey[]={ // WIN32-USB keyboard translation table; CONTROL, SHIFT, 
 	KBCODE_X_ENTER,	KBCODE_X_1,	KBCODE_X_2,	KBCODE_X_3,
 	KBCODE_X_4,	KBCODE_X_5,	KBCODE_X_6,	KBCODE_X_7,
 	KBCODE_X_8,	KBCODE_X_9,	KBCODE_X_0,	KBCODE_X_DOT,
-	KBCODE_CHR4_5	};//=100
-void usbkey2native(BYTE *t,BYTE *s,int n) { while (n) { int k=*s++; *t++=k<sizeof(native_usbkey)?native_usbkey[k]:0; --n; } }
-void native2usbkey(BYTE *t,BYTE *s,int n) { while (n) { int k=0; while (k<sizeof(native_usbkey)&&*s!=native_usbkey[k]) ++k; *t++=k<sizeof(native_usbkey)?k:0; s++; --n; } }
+	KBCODE_CHR4_5,	KBCODE_APPS};//=101
+void usbkey2native(BYTE *t,const BYTE *s,int n) { while (n) { int k=*s++; *t++=k<sizeof(native_usbkey)?native_usbkey[k]:0; --n; } }
+void native2usbkey(BYTE *t,const BYTE *s,int n) { while (n) { int k=0; while (k<sizeof(native_usbkey)&&*s!=native_usbkey[k]) ++k; *t++=k<sizeof(native_usbkey)?k:0; s++; --n; } }
 BYTE kbd_k2j[]= // these keys can simulate a 4-button joystick
 	{ KBCODE_UP, KBCODE_DOWN, KBCODE_LEFT, KBCODE_RIGHT, KBCODE_Z, KBCODE_X, KBCODE_C, KBCODE_V };
 
@@ -314,29 +240,17 @@ unsigned char kbd_map[256]; // key-to-key translation map
 
 // general engine functions and procedures -------------------------- //
 
-void session_clean(void); // "clean" dirty settings. Must be defined later on!
-void session_user(int); // handle the user's commands; must be defined later on!
-void session_debug_show(int); // redraw the debugger text; must be defined later on, too!
-int session_debug_user(int); // debug logic is a bit different: 0 UNKNOWN COMMAND, !0 OK
-int debug_xlat(int); // translate debug keys into codes. Must be defined later on!
-INLINE void audio_playframe(int,AUDIO_UNIT*); // handle the sound filtering; is defined in CPCEC-RT.H!
-
 void session_please(void) // stop activity for a short while
 {
-	if (!session_wait)
-	{
-		if (session_audio)
-			waveOutPause(session_wo);
-		session_wait=1; //video_framecount=1;
-	}
+	if (!session_wait) //video_framecount=1;
+		if (session_wait=1,session_audio) waveOutPause(session_wo);
 }
 
 void session_kbdclear(void)
 {
-	memset(kbd_bit,0,sizeof(kbd_bit));
-	memset(joy_bit,0,sizeof(joy_bit));
+	MEMZERO(kbd_bit); MEMZERO(joy_bit);
 }
-#define session_kbdreset() memset(kbd_map,~~~0,sizeof(kbd_map)) // init and clean key map up
+#define session_kbdreset() MEMBYTE(kbd_map,~~~0) // init and clean key map up
 void session_kbdsetup(const unsigned char *s,char l) // maps a series of virtual keys to the real ones
 {
 	session_kbdclear();
@@ -357,6 +271,7 @@ int session_key_n_joy(int k) // handle some keys as joystick motions
 
 #define session_clrscr() InvalidateRect(session_hwnd,NULL,1)
 int session_r_x,session_r_y,session_r_w,session_r_h; // actual location and size of the bitmap
+void session_desktop(RECT *r) { SystemParametersInfo(SPI_GETWORKAREA,0,r,0); r->right-=r->left,r->bottom-=r->top; } // i.e. width and height
 int session_resize(void) // dunno why, but one 100% render must happen before the resizing; performance falls otherwise :-/
 {
 	static char z=1; if (session_fullblit)
@@ -378,14 +293,12 @@ int session_resize(void) // dunno why, but one 100% render must happen before th
 				//&~WS_POPUP&~WS_CLIPCHILDREN // show caption and buttons
 			if (!session_hidemenu) SetMenu(session_hwnd,session_menu); // show menu
 		}
-		RECT r; // GetWindowRect(session_hwnd,&r); // adjust to screen center
-		SystemParametersInfo(SPI_GETWORKAREA,0,&r,0); ShowWindow(session_hwnd,SW_RESTORE);
-		int x,y; r.right-=r.left,r.bottom-=r.top; // i.e. width and height
-		while ((x=VIDEO_PIXELS_X*(session_zoomblit+2)/2,y=VIDEO_PIXELS_Y*(session_zoomblit+2)/2),
+		RECT r; session_desktop(&r); ShowWindow(session_hwnd,SW_RESTORE); // pseudo CW_CENTERED logic here :-(
+		int x,y; while ((x=(VIDEO_PIXELS_X>>1)*(session_zoomblit+2),y=(VIDEO_PIXELS_Y>>1)*(session_zoomblit+2)),
 			session_zoomblit>0&&(x*16>r.right*17||y*16>r.bottom*17)) // shrink if too big!
 			--session_zoomblit;
-		r.left+=(r.right-(x+=session_ideal.right-VIDEO_PIXELS_X))/2;
-		r.top+=(r.bottom-(y+=session_ideal.bottom-VIDEO_PIXELS_Y))/2;
+		r.left+=(r.right-(x+=session_ideal.right-VIDEO_PIXELS_X))>>1;
+		r.top+=(r.bottom-(y+=session_ideal.bottom-VIDEO_PIXELS_Y))>>1;
 		MoveWindow(session_hwnd,r.left,r.top,x,y,1); // resize AND center!
 		z=session_zoomblit+1; session_clrscr(),session_dirty=1; // clean up and update options
 	}
@@ -404,15 +317,12 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 			session_r_w=session_r_h*VIDEO_PIXELS_X/VIDEO_PIXELS_Y;
 		if (session_r_h>session_r_w*VIDEO_PIXELS_Y/VIDEO_PIXELS_X) // window area is too tall?
 			session_r_h=session_r_w*VIDEO_PIXELS_Y/VIDEO_PIXELS_X;
-		#if 0
-		if (session_fullblit) // maximum integer zoom: 100%, 150%, 200%...
-		#endif
+		//if (session_fullblit) // maximum integer zoom: 100%, 150%, 200%...
 			session_r_w=((session_r_w*17)/VIDEO_PIXELS_X/8)*VIDEO_PIXELS_X/2, // "*17../16../1"
 			session_r_h=((session_r_h*17)/VIDEO_PIXELS_Y/8)*VIDEO_PIXELS_Y/2; // forbids N+50%
 		if (session_r_w<VIDEO_PIXELS_X||session_r_h<VIDEO_PIXELS_Y)
 			session_r_w=VIDEO_PIXELS_X,session_r_h=VIDEO_PIXELS_Y; // window area is too small!
 		session_r_x=(r.right-session_r_w)>>1,session_r_y=(r.bottom-session_r_h)>>1; // locate bitmap on window center
-
 		#ifdef DDRAW
 		if (lpddback)
 		{
@@ -438,14 +348,13 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 					IDirectDrawSurface_Blt(lpddfore,&r,l,&rr,DDBLT_WAIT,0);
 				}
 			}
-			ddsd.dwSize=sizeof(ddsd);
-			IDirectDrawSurface_Lock(l,0,&ddsd,DDLOCK_SURFACEMEMORYPTR|DDLOCK_WAIT,0);
+			ddsd.dwSize=sizeof(ddsd); IDirectDrawSurface_Lock(l,0,&ddsd,DDLOCK_SURFACEMEMORYPTR|DDLOCK_WAIT,0);
 			if (session_signal&SESSION_SIGNAL_DEBUG)
 				debug_frame=ddsd.lpSurface;
 			else
 			{
-				size_t z=video_target-video_frame; // the video target pointer...
-				video_target=(video_frame=ddsd.lpSurface)+z; // ...must follow the frame!
+				ox=video_target-video_frame; // the video target pointer...
+				video_target=(video_frame=ddsd.lpSurface)+ox; // ...must follow the frame!
 			}
 		}
 		else
@@ -512,12 +421,12 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 			}
 			break;
 		case WM_COMMAND:
-			if (0x0080==(WORD)wparam) // Exit
+			if (0X0080==(WORD)wparam) // Exit
 				PostMessage(hwnd,WM_CLOSE,0,0);
 			else
 			{
-				session_shift=!!(wparam&0x4000); // bit 6 means SHIFT KEY ON
-				session_event=wparam&0xBFFF; // cfr infra: bit 7 means CONTROL KEY OFF
+				session_shift=!!(wparam&0X4000); // bit 6 means SHIFT KEY ON
+				session_event=wparam&0XBFFF; // cfr infra: bit 7 means CONTROL KEY OFF
 			}
 			break;
 		case WM_MBUTTONDBLCLK+1: // workaround: WINUSER.H sometimes lacks WM_MOUSEWHEEL
@@ -560,7 +469,7 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 				kbd_bit_res(k);
 			break;
 		case WM_DROPFILES:
-			session_shift=GetKeyState(VK_SHIFT)<0,session_event=0x8000;
+			session_shift=GetKeyState(VK_SHIFT)<0,session_event=0X8000;
 			DragQueryFile((HDROP)wparam,0,(LPTSTR)session_parmtr,STRMAX);
 			DragFinish((HDROP)wparam);
 			break;
@@ -572,16 +481,17 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 			session_kbdclear(); // loss of focus: no keys!
 		default: // no `break`!
 			if (msg==WM_SYSKEYDOWN)
-			{
-				if (wparam==VK_RETURN) // ALT+RETURN toggles fullscreen
-					return session_fullblit=!session_fullblit,session_resize(),0; // skip OS
-				/*else*/ if (wparam==VK_UP) // ALT+UP raises the zoom
-					return (!session_fullblit&&session_zoomblit<4&&(++session_zoomblit,session_resize())),0;
-				/*else*/ if (wparam==VK_DOWN) // ALT+DOWN lowers it
-					return (!session_fullblit&&session_zoomblit>0&&(--session_zoomblit,session_resize())),0;
-				/*else*/ if (wparam==VK_F10&&session_contextmenu()) // F10 shows the popup menu
-					return 0; // skip OS if the popup menu is allowed
-			}
+				switch (wparam)
+				{
+					case VK_F10: // F10 shows the popup menu
+						if (session_contextmenu()) return 0; break; // skip OS if the popup menu is allowed
+					case VK_RETURN: // ALT+RETURN toggles fullscreen
+						return session_fullblit=!session_fullblit,session_resize(),0; // skip OS
+					case VK_UP: //case VK_ADD: case 0XBB: // ALT+UP raises the zoom
+						return (!session_fullblit&&session_zoomblit<4&&(++session_zoomblit,session_resize())),0;
+					case VK_DOWN: //case VK_SUBTRACT: case 0XBD: // ALT+DOWN lowers it
+						return (!session_fullblit&&session_zoomblit>0&&(--session_zoomblit,session_resize())),0;
+				}
 			else if (msg==WM_KILLFOCUS)
 				session_focused=0;
 			return DefWindowProc(hwnd,msg,wparam,lparam);
@@ -633,24 +543,30 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	WNDCLASS wc; memset(&wc,0,sizeof(wc));
 	wc.lpfnWndProc=mainproc;
 	wc.hInstance=GetModuleHandle(0);
-	wc.hIcon=LoadIcon(wc.hInstance,MAKEINTRESOURCE(34002));//IDI_APPLICATION
+	wc.hIcon=LoadIcon(wc.hInstance,MAKEINTRESOURCE(34002)); // value from RC file
 	wc.hCursor=LoadCursor(NULL,IDC_ARROW); // cannot be zero!!
 	wc.hbrBackground=(HBRUSH)(1+COLOR_WINDOWTEXT);//(COLOR_WINDOW+2);//0;//
 	//wc.lpszMenuName=NULL;
 	wc.lpszClassName=MY_CAPTION;
 	RegisterClass(&wc);
-	session_ideal.left=session_ideal.top=0; // calculate ideal size
+	session_ideal.left=session_ideal.top=0;
 	session_ideal.right=VIDEO_PIXELS_X;
 	session_ideal.bottom=VIDEO_PIXELS_Y;
 	if (!session_submenu)
 		session_hidemenu=1,session_menu=NULL;
-	AdjustWindowRect(&session_ideal,i=WS_OVERLAPPEDWINDOW,!session_hidemenu);
+	AdjustWindowRect(&session_ideal,i=WS_OVERLAPPEDWINDOW,!session_hidemenu); // calculate ideal size
 	session_ideal.right-=session_ideal.left;
 	session_ideal.bottom-=session_ideal.top;
-	session_ideal.left=session_ideal.top=0; // ensure that the ideal area is defined as (0,0,WIDTH,HEIGHT)
-	if (!(session_hwnd=CreateWindow(wc.lpszClassName,NULL,i,CW_USEDEFAULT,CW_USEDEFAULT,session_ideal.right,session_ideal.bottom,NULL,session_hidemenu?NULL:session_menu,wc.hInstance,NULL))
-		||!(video_blend=malloc(sizeof(VIDEO_UNIT)*VIDEO_PIXELS_Y/2*VIDEO_PIXELS_X)))
-		return "cannot create window";
+	//session_ideal.left=session_ideal.top=0; // ensure that the ideal area is defined as (0,0,WIDTH,HEIGHT)
+	RECT r; session_desktop(&r); // unlike SDL2, we lack a true CW_CENTERED option and we must calculate everything :-(
+	if (!(session_hwnd=CreateWindow(wc.lpszClassName,NULL,i,(r.right-session_ideal.right)>>1,(r.bottom-session_ideal.bottom)>>1,
+		session_ideal.right,session_ideal.bottom,NULL,session_hidemenu?NULL:session_menu,wc.hInstance,NULL))||
+		#ifdef VIDEO_HI_Y_RES
+		!(video_blend=malloc(sizeof(VIDEO_UNIT[VIDEO_PIXELS_Y*VIDEO_PIXELS_X])))
+		#else
+		!(video_blend=malloc(sizeof(VIDEO_UNIT[VIDEO_PIXELS_Y/2*VIDEO_PIXELS_X])))
+		#endif
+		) return "cannot create window"; // the OS will do DestroyWindow(session_hwnd) ...will it? :-/
 	DragAcceptFiles(session_hwnd,1);
 
 	#ifdef DDRAW
@@ -664,7 +580,6 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 			ddsd.dwSize=sizeof(ddsd); ddsd.dwFlags=DDSD_CAPS;
 			ddsd.ddsCaps.dwCaps=DDSCAPS_PRIMARYSURFACE;
 			IDirectDraw_CreateSurface(lpdd,&ddsd,&lpddfore,NULL);
-
 			DDPIXELFORMAT ddpf; ddpf.dwSize=sizeof(ddpf);
 			IDirectDrawSurface_GetPixelFormat(lpddfore,&ddpf);
 			if (ddpf.dwRGBBitCount!=32) // lazy check, translating ARGB8888 to other bitdepths is a task better left to GDI
@@ -693,7 +608,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	#endif
 	{
 		BITMAPINFO bmi; memset(&bmi,0,sizeof(bmi));
-		bmi.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
+		bmi.bmiHeader.biSize=sizeof(bmi.bmiHeader); // not `sizeof(bmi)`!
 		bmi.bmiHeader.biWidth=VIDEO_LENGTH_X;
 		bmi.bmiHeader.biHeight=-VIDEO_LENGTH_Y; // negative values make a top-to-bottom bitmap; Windows' default bitmap is bottom-to-top
 		bmi.bmiHeader.biPlanes=1; bmi.bmiHeader.biBitCount=32; // cfr. VIDEO_UNIT
@@ -708,20 +623,19 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 
 	// cleanup, joystick and sound
 	ShowWindow(session_hwnd,SW_SHOWDEFAULT); //UpdateWindow(session_hwnd);
-	session_timer=GetTickCount();
 	session_joy.dwSize=sizeof(session_joy);
 	session_joy.dwFlags=JOY_RETURNALL;
 	if (session_stick)
 	{
 		JOYCAPS jc; i=joyGetNumDevs(),j=0;
 		cprintf("Detected %d joystick[s]: ",i);
-		while (j<i&&(!joyGetDevCaps(j,&jc,sizeof(jc))&&cprintf("Joystick/controller #%d = '%s'. ",j,jc.szPname),joyGetPosEx(j,&session_joy))) // scan joysticks until we run out or one is OK
-			++j;
-		session_stick=(j<i)?j+1:0; // ID+1 if available, 0 if missing
-		cprintf(session_stick?"Joystick enabled!\n":"No joystick!\n");
+		while (j<i&&(joyGetDevCaps(j,&jc,sizeof(jc))||(cprintf("Joystick/controller #%d '%s' ",j,jc.szPname),joyGetPosEx(j,&session_joy))))
+			++j; // scan joysticks until we run out or one is OK
+		session_stick=(j<i)?j+1:0; cprintf(session_stick?"Joystick enabled!\n":"No joystick!\n"); // ID+1 if available, 0 if missing
 	}
-	session_wo=0; // no audio unless device is detected
-	if (session_hardplay=!session_softplay,session_audio)
+	//session_timer=GetTickCount(); // millisecond timer by default
+	session_wo=0; // no audio unless device is detected and enabled
+	if (session_audio)
 	{
 		memset(&session_mmtime,0,sizeof(session_mmtime));
 		session_mmtime.wType=TIME_SAMPLES; // Windows doesn't always provide TIME_MS!
@@ -731,22 +645,21 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 		wfex.nAvgBytesPerSec=wfex.nBlockAlign*(wfex.nSamplesPerSec=AUDIO_PLAYBACK);
 		if (session_audio=!waveOutOpen(&session_wo,WAVE_MAPPER,&wfex,0,0,0))
 		{
-			memset(&session_wh,0,sizeof(WAVEHDR));
-			memset(audio_frame=audio_memory,AUDIO_ZERO,sizeof(audio_memory));
+			memset(&session_wh,0,sizeof(session_wh));
+			MEMBYTE(audio_memory,AUDIO_ZERO);
 			session_wh.lpData=(BYTE*)audio_memory;
-			session_wh.dwBufferLength=AUDIO_N_FRAMES*AUDIO_LENGTH_Z*wfex.nBlockAlign;
+			session_wh.dwBufferLength=wfex.nBlockAlign<<AUDIO_L2BUFFER;
 			session_wh.dwFlags=WHDR_BEGINLOOP|WHDR_ENDLOOP; // circular buffer
 			session_wh.dwLoops=-1; // loop forever!
-			waveOutPrepareHeader(session_wo,&session_wh,sizeof(WAVEHDR));
-			session_timer=waveOutWrite(session_wo,&session_wh,sizeof(WAVEHDR)); // should be zero!
+			waveOutPrepareHeader(session_wo,&session_wh,sizeof(session_wh));
+			waveOutWrite(session_wo,&session_wh,sizeof(session_wh)); // should be zero!
 		}
 	}
-	timeBeginPeriod(8); // WIN10 sets this value too high by default; 8 is recommended in multiple sources
+	session_preset(); session_clean(); session_please();
 	session_redraw(session_hwnd,session_dc1); // dummy first redraw, session_resize() hinges on it
-	session_clean(); session_please();
+	timeBeginPeriod(8); // WIN10 sets this value too high by default; 8 is recommended in multiple sources
 	return NULL;
 }
-
 INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 {
 	static int s=-1; if (s!=session_signal) // catch DEBUG and PAUSE
@@ -778,137 +691,120 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 		if (session_event)
 		{
 			if (!((session_signal&SESSION_SIGNAL_DEBUG)&&session_debug_user(session_event)))
-				session_user(session_event),session_dirty=1;
-			session_event=0;
+				session_dirty=1,session_user(session_event);
+			session_event=0; //if (session_paused) ...?
 		}
 	}
-	if (session_dirty)
-		session_dirty=0,session_clean();
+	if (session_dirty) session_dirty=0,session_clean();
 	return 0;
 }
 
-#define session_getscanline(i) (&video_frame[i*VIDEO_LENGTH_X+VIDEO_OFFSET_X]) // pointer to scanline `i`
-void session_writewave(AUDIO_UNIT *t); // save the current sample frame. Must be defined later on!
-FILE *session_filmfile=NULL; void session_writefilm(void); // must be defined later on, too!
 INLINE void session_render(void) // update video, audio and timers
 {
-	int i,j; static int performance_t=-9999,performance_f=0,performance_b=0; ++performance_f;
+	int i,j; static int performance_t=0,performance_f=0,performance_b=0; ++performance_f;
 	static BYTE r=0,q=0; if (++r>session_rhythm||session_wait) r=0; // force update after wait
 	if (!video_framecount) // do we need to hurry up?
 	{
-		if ((video_interlaces=!video_interlaces)||!video_interlaced)
-		{
-			++performance_b; if (q) session_redraw(session_hwnd,session_dc1),q=0; // redraw once between two pauses
-		}
+		if (++performance_b,((video_interlaces=!video_interlaces)||!video_interlaced))
+			if (q) session_redraw(session_hwnd,session_dc1),q=0; // redraw once between two pauses
 		if (session_stick&&!session_key2joy) // do we need to check the joystick?
 		{
 			session_joy.dwSize=sizeof(session_joy);
 			session_joy.dwFlags=JOY_RETURNBUTTONS|JOY_RETURNPOVCTS|JOY_RETURNX|JOY_RETURNY|JOY_RETURNZ|JOY_RETURNR|JOY_RETURNCENTERED;
 			if (session_focused&&!joyGetPosEx(session_stick-1,&session_joy)) // without focus, ignore the joystick
 			{
-				j=((/*session_joy.dwPOV<0||*/session_joy.dwPOV>=36000)?(session_joy.dwYpos< 0x4000?1:0)+(session_joy.dwYpos>=0xC000?2:0)+(session_joy.dwXpos< 0x4000?4:0)+(session_joy.dwXpos>=0xC000?8:0) // axial
+				j=((/*session_joy.dwPOV<0||*/session_joy.dwPOV>=36000)?(session_joy.dwYpos<0X4000?1:0)+(session_joy.dwYpos>=0XC000?2:0)+(session_joy.dwXpos<0X4000?4:0)+(session_joy.dwXpos>=0XC000?8:0) // axial
 				:(session_joy.dwPOV< 2250?1:session_joy.dwPOV< 6750?9:session_joy.dwPOV<11250?8:session_joy.dwPOV<15750?10: // angular: U (0), U-R (4500), R (9000), R-D (13500)
 				session_joy.dwPOV<20250?2:session_joy.dwPOV<24750?6:session_joy.dwPOV<29250?4:session_joy.dwPOV<33750?5:1)) // D (18000), D-L (22500), L (27000), L-U (31500)
 				+((session_joy.dwButtons&(JOY_BUTTON1/*|JOY_BUTTON5*/))?16:0)+((session_joy.dwButtons&(JOY_BUTTON2/*|JOY_BUTTON6*/))?32:0) // FIRE1, FIRE2 ...
 				+((session_joy.dwButtons&(JOY_BUTTON3/*|JOY_BUTTON7*/))?64:0)+((session_joy.dwButtons&(JOY_BUTTON4/*|JOY_BUTTON8*/))?128:0) // FIRE3, FIRE4 ...
-				/*+((session_joy.dwZpos<0x4000?4:0)+(session_joy.dwZpos>0xC000?8:0))
-				+((session_joy.dwRpos<0x4000?1:0)+(session_joy.dwRpos>0xC000?2:0))*/ // this is safe on my controller (Axis Z + Rotation Z) but perhaps not on other controllers
+				/*+((session_joy.dwZpos<0X4000?4:0)+(session_joy.dwZpos>0XC000?8:0))
+				+((session_joy.dwRpos<0X4000?1:0)+(session_joy.dwRpos>0XC000?2:0))*/ // this is safe on my controller (Axis Z + Rotation Z) but perhaps not on other controllers
 				;
 			}
 			else
 				j=0; // joystick failure, release its keys
-			memset(joy_bit,0,sizeof(joy_bit));
-			for (i=0;i<length(kbd_joy);++i)
-				if (j&(1<<i))
-					joy_bit_set(kbd_joy[i]); // key is down
+			MEMZERO(joy_bit); /*if (j)*/ for (i=0;i<length(kbd_joy);++i)
+				if (j&(1<<i)) // joystick bit is set?
+					{ int k=kbd_joy[i]; joy_bit[k>>3]|=1<<(k&7); }
 		}
 	}
-	audio_target=&audio_memory[AUDIO_LENGTH_Z*AUDIO_CHANNELS*audio_session];
-	if (!audio_disabled) // avoid conflicts when realtime is off: output and playback buffers clash!
-	{
-		if (audio_filter) // audio filter: sample averaging
-			audio_playframe(audio_filter,audio_frame==audio_buffer?audio_target:audio_frame);
-		else if (audio_frame==audio_buffer)
-			memcpy(audio_target,audio_buffer,sizeof(audio_buffer));
-	}
-	if (session_wavefile) // record audio output, if required
-		session_writewave(audio_target);
-	if (session_wavefile||session_filmfile)
-		audio_frame=audio_buffer; // secondary buffer
-	else
-		audio_frame=audio_target; // primary buffer
-	session_writefilm(); // record film frame
+	if (audio_required&&audio_filter) audio_playframe(); // audio filter: sample averaging
+	session_writewave(); session_writefilm(); // record wave+film frame
 
 	if (!r) // check timers and pauses
 	{
-		if (session_audio) // use audio as clock
+		if (session_audio) // rely on audio clock; unlike SDL2, the Win32 audio clock is reliable :-)
 		{
-			static BYTE s=1; if (s!=audio_disabled)
-				if (s=audio_disabled) // silent mode needs cleanup
-					memset(audio_memory,AUDIO_ZERO,sizeof(audio_memory));
-			static BYTE o=1; if (o!=(session_fast|audio_disabled)) // sound needs higher priority, but only on realtime
+			static BYTE t=1; if (t!=(session_fast|audio_disabled)) // sound needs higher priority, but only on realtime
 			{
 				//BELOW_NORMAL_PRIORITY_CLASS was overkill and caused trouble on busy systems :-(
-				SetPriorityClass(GetCurrentProcess(),(o=session_fast|audio_disabled)?NORMAL_PRIORITY_CLASS:ABOVE_NORMAL_PRIORITY_CLASS);
-				//SetThreadPriority(GetCurrentThread(),(o=session_fast|audio_disabled)?THREAD_PRIORITY_NORMAL:THREAD_PRIORITY_ABOVE_NORMAL);
+				SetPriorityClass(GetCurrentProcess(),(t=session_fast|audio_disabled)?NORMAL_PRIORITY_CLASS:ABOVE_NORMAL_PRIORITY_CLASS);
+				//SetThreadPriority(GetCurrentThread(),(t=session_fast|audio_disabled)?THREAD_PRIORITY_NORMAL:THREAD_PRIORITY_ABOVE_NORMAL);
 			}
-			waveOutGetPosition(session_wo,&session_mmtime,sizeof(MMTIME));
+			waveOutGetPosition(session_wo,&session_mmtime,sizeof(session_mmtime));
 			//if (!=MMSYSERR_NOERROR) session_audio=0,audio_disabled=-1; // audio device is lost! // can this really happen!?
-			static int u=0; if (!u) u=session_mmtime.u.sample+(session_hardplay?AUDIO_LENGTH_Z*AUDIO_N_FRAMES/2:0); // reference
-			i=session_mmtime.u.sample-u,j=AUDIO_PLAYBACK; // questionable -- this will break the timing every 13 hours of emulation at 44100 Hz :-(
+			i=session_mmtime.u.sample,j=AUDIO_PLAYBACK; // questionable -- this will break the timing every 13 hours of emulation at 44100 Hz :-(
 		}
 		else // use internal tick count as clock
 			i=GetTickCount(),j=1000; // questionable for similar reasons, albeit every 23 days :-(
-		q=1; if (session_wait||session_fast)
+		if (i-performance_t>=0) // update performance percentage?
 		{
-			audio_session=((i/(AUDIO_LENGTH_Z))+AUDIO_N_FRAMES-1)%AUDIO_N_FRAMES;
-			session_timer=i; // ensure that the next frame can be valid!
-		}
-		else
-		{
-			if ((i=((session_timer+=(j/VIDEO_PLAYBACK))-i))>0)
-			{
-				if ((i=(1000*i/j))>0) // avoid zero and negative values!
-				{
-					Sleep(i>1000/VIDEO_PLAYBACK?1+1000/VIDEO_PLAYBACK:i); // assume normalised Sleep()
-					//static int skew=0; int k=GetTickCount(),l=i>1000/VIDEO_PLAYBACK?1+1000/VIDEO_PLAYBACK:i;
-					//l-=skew; if (l>0) Sleep(l); skew=GetTickCount()-k-l; // normalise Sleep(), cfr. WIN10
-				}
-			}
-			else if (i<0&&!session_filmfile)//&&!video_framecount)
-				video_framecount=video_framelimit+2; // frameskip on timeout!
-			audio_session=(audio_session+1)%AUDIO_N_FRAMES;
-		}
-	}
-	if (session_wait) // resume activity after a pause
-	{
-		if (session_audio)
-			waveOutRestart(session_wo);
-		session_wait=0;
-	}
-	if ((i=GetTickCount())>(performance_t+1000)) // performance percentage
-	{
-		if (performance_t)
-		{
-			sprintf(session_tmpstr,"%s | %s | %g%% CPU %g%% %s %s",
+			sprintf(session_tmpstr,"%s | %s | %s %s %d:%d%%",
 				session_caption,session_info,
-				performance_f*100.0/VIDEO_PLAYBACK,performance_b*100.0/VIDEO_PLAYBACK,
 			#ifdef DDRAW
 				lpddback?"DDRAW":
 			#endif
-				session_hardblit?"GDI":"gdi",session_version);
+				session_hardblit?"GDI":"gdi",session_version,
+				(performance_b*100+VIDEO_PLAYBACK/2)/VIDEO_PLAYBACK,(performance_f*100+VIDEO_PLAYBACK/2)/VIDEO_PLAYBACK);
 			SetWindowText(session_hwnd,session_tmpstr);
+			performance_t=i+j,performance_f=performance_b=session_paused=0;
 		}
-		performance_t=i,performance_f=performance_b=session_paused=0;
+		q=1; static BYTE p=0; if (session_wait|session_fast)
+		{
+			if (audio_fastmute) audio_disabled|=+8;
+			p=1,session_timer=i; // ensure that the next frame can be valid!
+		}
+		else
+		{
+			audio_disabled&=~8;
+			if (p) // recalc audio buffer?
+				p=0,audio_session=(((4-session_softplay)<<(AUDIO_L2BUFFER-(2)-1))+session_timer)*AUDIO_BYTESTEP;
+			int s; if (VIDEO_PLAYBACK==50) // always true on pure PAL systems
+				s=j/50; // PAL never needs any adjusting (`j` is 1000, 22050, 24000, 44100 or 48000)
+			else // (we avoid a warning here) always true on pure NTSC systems
+				{ static int s0=0; s=(s0+=j)/VIDEO_PLAYBACK; s0%=VIDEO_PLAYBACK; } // 60 Hz: [16,17,17]
+			if ((i=(session_timer+=s)-i)>=0)
+				{ if (i=(i>s?s:i)*1000/j) Sleep(i); } // avoid zero and overflows!
+			else if (i<-s&&!session_filmfile)//&&!video_framecount) // *!* threshold?
+				video_framecount=video_framelimit+2; // skip frame on timeout!
+		}
 	}
+	audio_session=(audio_session+AUDIO_LENGTH_Z*AUDIO_BYTESTEP)&((AUDIO_BYTESTEP<<AUDIO_L2BUFFER)-AUDIO_BYTESTEP); // add block size and wrap around buffer
+	if (session_audio) // manage audio buffer
+	{
+		static BYTE s=1; if (s!=audio_disabled)
+			if (s=audio_disabled) // silent mode needs cleanup
+				MEMBYTE(audio_memory,AUDIO_ZERO);
+		if (!audio_disabled)
+		{
+			int t=AUDIO_LENGTH_Z*AUDIO_BYTESTEP,u;
+			if ((u=(AUDIO_BYTESTEP<<AUDIO_L2BUFFER)-audio_session)<t) // wrap around?
+				memcpy(&audio_memory[audio_session],audio_frame,u),
+				memcpy( audio_memory,&((BYTE*)audio_frame)[u],t-u);
+			else
+				memcpy(&audio_memory[audio_session],audio_frame,t);
+		}
+	}
+	if (session_wait) // resume activity after a pause
+		if (session_wait=0,session_audio) waveOutRestart(session_wo);
 }
 
-INLINE void session_wrapup(void); // clean runtime stuff up
 INLINE void session_byebye(void) // delete video+audio devices
 {
 	session_wrapup();
 	if (session_wo)
-		waveOutReset(session_wo),waveOutUnprepareHeader(session_wo,&session_wh,sizeof(WAVEHDR)),waveOutClose(session_wo);
+		waveOutReset(session_wo),waveOutUnprepareHeader(session_wo,&session_wh,sizeof(session_wh)),waveOutClose(session_wo);
 	if (session_menu)
 		DestroyMenu(session_menu);
 
@@ -937,13 +833,13 @@ void session_menuradio(int id,int a,int z) // set the option `id` in the range `
 
 // message box ------------------------------------------------------ //
 
-void session_message(char *s,char *t) // show multi-lined text `s` under caption `t`
+void session_message(const char *s,const char *t) // show multi-lined text `s` under caption `t`
 	{ session_please(); MessageBox(session_hwnd,s,t,strchr(t,'?')?MB_ICONQUESTION:(strchr(t,'!')?MB_ICONEXCLAMATION:MB_OK)); }
-void session_aboutme(char *s,char *t) // special case: "About.."
+void session_aboutme(const char *s,const char *t) // special case: "About.."
 {
 	session_please();
 	MSGBOXPARAMS mbp;
-	mbp.cbSize=sizeof(MSGBOXPARAMS);
+	mbp.cbSize=sizeof(mbp);
 	mbp.hwndOwner=session_hwnd;
 	mbp.hInstance=GetModuleHandle(0);
 	mbp.lpszText=s;
@@ -969,33 +865,28 @@ LRESULT CALLBACK inputproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // di
 		case WM_INITDIALOG:
 			SetWindowText(hwnd,session_dialog_text);
 			SendDlgItemMessage(hwnd,12345,EM_SETLIMITTEXT,STRMAX-1,0);
-			SendDlgItemMessage(hwnd,12345,WM_SETTEXT,0,(LPARAM)session_parmtr);
-			break;
+			return SendDlgItemMessage(hwnd,12345,WM_SETTEXT,0,(LPARAM)session_parmtr),session_dialog_return=-1;
 		/*case WM_SIZE:
 			RECT r; GetClientRect(hwnd,&r);
 			SetWindowPos(session_dialog_item,NULL,0,0,r.right,r.bottom*1/2,SWP_NOZORDER);
 			SetWindowPos(GetDlgItem(hwnd,IDOK),NULL,0,r.bottom*1/2,r.right/2,r.bottom/2,SWP_NOZORDER);
-			SetWindowPos(GetDlgItem(hwnd,IDCANCEL),NULL,r.right/2,r.bottom*1/2,r.right/2,r.bottom/2,SWP_NOZORDER);
-			break;*/
+			return SetWindowPos(GetDlgItem(hwnd,IDCANCEL),NULL,r.right/2,r.bottom*1/2,r.right/2,r.bottom/2,SWP_NOZORDER),1;*/
 		case WM_COMMAND:
 			if (LOWORD(wparam)==IDCANCEL)
 				EndDialog(hwnd,0);
-			else if (!HIWORD(wparam)&&LOWORD(wparam)==IDOK)
+			else if (/*!HIWORD(wparam)&&*/LOWORD(wparam)==IDOK)
 			{
 				session_dialog_return=SendDlgItemMessage(hwnd,12345,WM_GETTEXT,STRMAX,(LPARAM)session_parmtr);
 				EndDialog(hwnd,0);
 			}
-			break;
-		default:
-			return 0;
+			return 1;
 	}
-	return 1;
+	return 0; // ignore other messages
 }
 int session_input(char *t) // `t` is the caption; returns <0 on error or LENGTH on success
 {
 	session_please();
 	session_dialog_text=t;
-	session_dialog_return=-1;
 	DialogBoxParam(GetModuleHandle(0),(LPCSTR)34004,session_hwnd,(DLGPROC)inputproc,0);
 	return session_dialog_return; // both the source and target strings are in `session_parmtr`
 }
@@ -1013,34 +904,28 @@ LRESULT CALLBACK listproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // dia
 				SendDlgItemMessage(hwnd,12345,LB_ADDSTRING,0,(LPARAM)l);
 				while (*l++) {}
 			}
-			SendDlgItemMessage(hwnd,12345,LB_SETCURSEL,session_dialog_return,0); // select item
-			session_dialog_return=-1;
-			break;
+			return SendDlgItemMessage(hwnd,12345,LB_SETCURSEL,session_dialog_return,0),session_dialog_return=-1; // select item
 		/*case WM_SIZE:
 			RECT r; GetClientRect(hwnd,&r);
 			SetWindowPos(session_dialog_item,NULL,0,0,r.right,r.bottom*15/16,SWP_NOZORDER);
 			SetWindowPos(GetDlgItem(hwnd,IDOK),NULL,0,r.bottom*15/16,r.right/2,r.bottom/16,SWP_NOZORDER);
-			SetWindowPos(GetDlgItem(hwnd,IDCANCEL),NULL,r.right/2,r.bottom*15/16,r.right/2,r.bottom/16,SWP_NOZORDER);
-			break;*/
+			return SetWindowPos(GetDlgItem(hwnd,IDCANCEL),NULL,r.right/2,r.bottom*15/16,r.right/2,r.bottom/16,SWP_NOZORDER),1;*/
 		case WM_COMMAND:
 			if (LOWORD(wparam)==IDCANCEL)
 				EndDialog(hwnd,0);
-			else if ((HIWORD(wparam)==LBN_DBLCLK)||(!HIWORD(wparam)&&LOWORD(wparam)==IDOK))
-				if ((session_dialog_return=SendDlgItemMessage(hwnd,12345,LB_GETCURSEL,0,0))>=0)
+			else if ((HIWORD(wparam)==LBN_DBLCLK)||(/*!HIWORD(wparam)&&*/LOWORD(wparam)==IDOK))
+				if ((session_dialog_return=SendDlgItemMessage(hwnd,12345,LB_GETCURSEL,0,0))>=0) // ignore OK if no item is selected
 				{
 					SendDlgItemMessage(hwnd,12345,LB_GETTEXT,session_dialog_return,(LPARAM)session_parmtr);
 					EndDialog(hwnd,0);
 				}
-			break;
-		default:
-			return 0;
+			return 1;
 	}
-	return 1;
+	return 0; // ignore other messages
 }
-int session_list(int i,char *s,char *t) // `s` is a list of ASCIZ entries, `i` is the default chosen item, `t` is the caption; returns <0 on error or 0..n-1 on success
+int session_list(int i,const char *s,char *t) // `s` is a list of ASCIZ entries, `i` is the default chosen item, `t` is the caption; returns <0 on error or 0..n-1 on success
 {
-	if (!*s) // empty?
-		return -1;
+	if (!*s) return -1; // empty!
 	session_please();
 	session_dialog_text=t;
 	session_dialog_return=i;
@@ -1057,32 +942,25 @@ LRESULT CALLBACK scanproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // dia
 		case WM_INITDIALOG:
 			EnableWindow(session_hwnd,0);
 			SetWindowText(hwnd,session_dialog_text);
-			SendDlgItemMessage(hwnd,12345,WM_SETTEXT,0,lparam);
-			break;
+			return SendDlgItemMessage(hwnd,12345,WM_SETTEXT,0,lparam),session_dialog_return=-1;
 		/*case WM_SIZE:
 			RECT r; GetClientRect(hwnd,&r);
-			SetWindowPos(session_dialog_item,NULL,0,0,r.right,r.bottom,SWP_NOZORDER);
-			break;*/
+			return SetWindowPos(session_dialog_item,NULL,0,0,r.right,r.bottom,SWP_NOZORDER),1;*/
 		case WM_CLOSE:
 			EnableWindow(session_hwnd,1);
 			SetFocus(session_hwnd); // avoid glitches if the user switches to another window and then back to our dialog
-			DestroyWindow(hwnd);
 			session_hdlg=NULL;
-			break;
-		default:
-			return 0;
+			return DestroyWindow(hwnd),1;
 	}
-	return 1;
+	return 0; // ignore other messages
 }
-int session_scan(char *s,char *t) // `s` is the name of the event, `t` is the caption; returns <0 on error or >=0 (keyboard code) on success
+int session_scan(const char *s) // `s` is the name of the event; returns <0 on error or >=0 (keyboard code) on success
 {
 	session_please();
-	session_dialog_text=t;
-	session_dialog_return=-1;
+	session_dialog_text=txt_session_scan;
 	session_hdlg=CreateDialogParam(GetModuleHandle(0),(LPCSTR)34005,session_hwnd,(DLGPROC)scanproc,(LPARAM)s);
 	ShowWindow(session_hdlg,SW_SHOWDEFAULT); //UpdateWindow(session_hdlg);
-	for (MSG msg;session_hdlg&&GetMessage(&msg,NULL,0,0)>0;)
-	{
+	for (MSG msg;session_hdlg&&GetMessage(&msg,NULL,0,0)>0;TranslateMessage(&msg),DispatchMessage(&msg))
 		if (msg.message==WM_KEYDOWN)
 		{
 			int i=((HIWORD(msg.lParam))&127)+(((HIWORD(msg.lParam))>>1)&128);
@@ -1090,32 +968,31 @@ int session_scan(char *s,char *t) // `s` is the name of the event, `t` is the ca
 				&&!((i>=KBCODE_F1&&i<=KBCODE_F10)||(i>=KBCODE_F11&&i<=KBCODE_F12)))
 				PostMessage(session_hdlg,WM_CLOSE,0,0),session_dialog_return=i==KBCODE_ESCAPE?-1:i;
 		}
-		TranslateMessage(&msg),DispatchMessage(&msg);
-	}
 	return session_dialog_return; // the string is in `session_parmtr`
 }
 
 // file dialog ------------------------------------------------------ //
 
 OPENFILENAME session_ofn;
-int getftype(char *s) // <0 = not exist, 0 = file, >0 = directory
+int getftype(const char *s) // <0 = invalid path / nothing, 0 = file, >0 = directory
 {
-	if (!s||!*s) return -1; // not even a valid path!
-	int i=GetFileAttributes(s); return i>0?i&FILE_ATTRIBUTE_DIRECTORY:i; // not i>=0!
+	if (!s||!*s) return -1; // invalid path
+	int i=GetFileAttributes(s); return i>0?i&FILE_ATTRIBUTE_DIRECTORY:i;
 }
-int session_filedialog(char *r,char *s,char *t,int q,int f) // auxiliar function, see below
+int session_filedialog(char *r,const char *s,const char *t,int q,int f) // auxiliar function, see below
 {
+	if (!*s) return 0; // empty! GetOpenFileName and co. return ZERO when an error happens or the user hits "CANCEL"
 	session_please();
 	memset(&session_ofn,0,sizeof(session_ofn));
-	session_ofn.lStructSize=sizeof(OPENFILENAME);
+	session_ofn.lStructSize=sizeof(session_ofn);
 	session_ofn.hwndOwner=session_hwnd;
 	if (!r) r=session_path; // NULL path = default!
 	if (r!=(char*)session_tmpstr)
 		strcpy(session_tmpstr,r); // copy path, if required
 	int i=strlen(session_tmpstr); // sanitize path
 	if (i&&session_tmpstr[--i]=='\\') // pure path?
-		//if (i&&session_tmpstr[i-1]!=':') // special case "X:\"
-			session_tmpstr[i]=0;
+		if (i&&session_tmpstr[i-1]!=':') // avoid special case "C:\"
+			session_tmpstr[i]=0; // turn "C:\ABC\" into "C:\ABC"
 	r=strrchr(session_tmpstr,'\\');
 	*session_parmtr=0; // no file by default
 	if (!(i=getftype(session_tmpstr))) // valid file?
@@ -1123,35 +1000,35 @@ int session_filedialog(char *r,char *s,char *t,int q,int f) // auxiliar function
 		if (r)
 			strcpy(session_parmtr,++r),*r=0; // file with path
 		else
-			strcpy(session_parmtr,session_tmpstr),strcpy(session_tmpstr,"."); // file without path
+			strcpy(session_parmtr,session_tmpstr),strcpy(session_tmpstr,session_path); // file without path
 	}
 	else if (i<0&&r) // invalid file; valid path?
 	{
 		r[1]=0; // remove invalid file, keep path
 		if (getftype(session_tmpstr)<=0)
-			strcpy(session_tmpstr,"."); // invalid path = default!
+			strcpy(session_tmpstr,session_path); // invalid path = default!
 	}
 	strcpy(session_substr,s);
 	strcpy(&session_substr[strlen(s)+1],s); // one NULL char between two copies of the same string
 	session_substr[strlen(s)*2+2]=session_substr[strlen(s)*2+3]=0;
-	// tmpstr: "C:\ABC"; parmtr: "XYZ.EXT"; substr: "*.EX1;*.EX2"(x2)
-	session_ofn.lpstrFilter=session_substr;
-	session_ofn.nFilterIndex=1;
+	// tmpstr: "C:\ABC"; parmtr: "XYZ.EXT"; substr: "*.EXT;*.EXU","*.EXT;*.EXU",""
+	session_ofn.lpstrTitle=t;
+	session_ofn.lpstrInitialDir=session_tmpstr;
 	session_ofn.lpstrFile=session_parmtr;
 	session_ofn.nMaxFile=sizeof(session_parmtr);
-	session_ofn.lpstrInitialDir=session_tmpstr;
-	session_ofn.lpstrTitle=t;
+	session_ofn.lpstrFilter=session_substr;
+	session_ofn.nFilterIndex=1;
 	session_ofn.lpstrDefExt=((t=strrchr(s,'.'))&&(*++t!='*'))?t:NULL;
 	session_ofn.Flags=OFN_PATHMUSTEXIST|OFN_NONETWORKBUTTON|OFN_NOCHANGEDIR|(q?OFN_OVERWRITEPROMPT:(OFN_FILEMUSTEXIST|f));
 	return q?GetSaveFileName(&session_ofn):GetOpenFileName(&session_ofn);
 }
 #define session_filedialog_get_readonly() (session_ofn.Flags&OFN_READONLY)
-#define session_filedialog_set_readonly(q) (q?(session_ofn.Flags|=OFN_READONLY):(session_ofn.Flags&=~OFN_READONLY))
-char *session_newfile(char *r,char *s,char *t) // "Create File" | ...and returns NULL on failure, or `session_parmtr` (with a file path) on success.
+#define session_filedialog_set_readonly(q) ((q)?(session_ofn.Flags|=OFN_READONLY):(session_ofn.Flags&=~OFN_READONLY))
+char *session_newfile(char *r,const char *s,const char *t) // "Create File" | ...and returns NULL on failure, or `session_parmtr` (with a file path) on success.
 	{ return session_filedialog(r,s,t,1,0)?session_parmtr:NULL; }
-char *session_getfile(char *r,char *s,char *t) // "Open a File" | lists files in path `r` matching pattern `s` under caption `t`, etc.
+char *session_getfile(char *r,const char *s,const char *t) // "Open a File" | lists files in path `r` matching pattern `s` under caption `t`, etc.
 	{ return session_filedialog(r,s,t,0,OFN_HIDEREADONLY)?session_parmtr:NULL; }
-char *session_getfilereadonly(char *r,char *s,char *t,int q) // "Open a File" with Read Only option | lists files in path `r` matching pattern `s` under caption `t`; `q` is the default Read Only value, etc.
+char *session_getfilereadonly(char *r,const char *s,const char *t,int q) // "Open a File" with Read Only option | lists files in path `r` matching pattern `s` under caption `t`; `q` is the default Read Only value, etc.
 	{ return session_filedialog(r,s,t,0,q?OFN_READONLY:0)?session_parmtr:NULL; }
 
 // final definitions ------------------------------------------------ //
@@ -1160,18 +1037,17 @@ char *session_getfilereadonly(char *r,char *s,char *t,int q) // "Open a File" wi
 #define SDL_LIL_ENDIAN 1234
 #define SDL_BIG_ENDIAN 4321
 #define SDL_BYTEORDER SDL_LIL_ENDIAN
-
-// unlike SDL2, Win32 doesn't implicitly include "math.h" or its functions :-/
+// unlike SDL2, Win32 doesn't include "math.h" either directly or indirectly :-/
 #include <math.h>
 #ifndef M_PI // old MSVCRT versions lack M_PI!
-#define M_PI 3.14159265358979323846264338327950288 // used by SDL2
+#define M_PI 3.14159265358979323846264338327950288 // used by SDL2; for comparison, FFmpeg's M_PI is 3.14159265358979323846 and Direct3D's D3DX_PI is 3.141592654
 #endif
-#define SDL_cos cos
+// rely on SDL wrappers to ensure compatibility
 #define SDL_pow pow
 #define SDL_sin sin
-#define SDL_sqrt sqrt
-
-// main-WinMain bootstrap
+//#define SDL_cos cos // cos(x)=sin(x+M_PI/2)
+//#define SDL_sqrt sqrt // sqrt(x)=pow(x,0.5)
+// main-WinMain bootstrap: the normal binary is window-driven
 #ifdef DEBUG
 #define BOOTSTRAP // the debug version is terminal-driven
 #else
@@ -1181,4 +1057,4 @@ char *session_getfilereadonly(char *r,char *s,char *t,int q) // "Open a File" wi
 #define BOOTSTRAP int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) { return main(__argc,__argv); }
 #endif
 
-#endif // =========================== END OF WINDOWS 5.0+ DEFINITIONS //
+// ================================== END OF WINDOWS 5.0+ DEFINITIONS //

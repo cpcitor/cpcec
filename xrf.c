@@ -7,8 +7,8 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "XRF"
-#define MY_VERSION "20220806"//"2555"
-#define MY_LICENSE "Copyright (C) 2019-2021 Cesar Nicolas-Gonzalez"
+#define MY_VERSION "20240106"//"2555"
+#define MY_LICENSE "Copyright (C) 2019-2023 Cesar Nicolas-Gonzalez"
 
 #define GPL_3_INFO \
 	"This program comes with ABSOLUTELY NO WARRANTY; for more details" "\n" \
@@ -59,7 +59,6 @@ Contact information: <mailto:cngsoft@gmail.com> */
 
 // common data types -- mostly based on ARGB32 video and lLrR32 audio //
 
-#define MEMZERO(x) memset(&x,0,sizeof(x))
 #define MAXVIDEOBYTES (4096*512) // 2 MB > a frame of video at 800x600px 32bpp
 #define MAXAUDIOBYTES (4096*48) // 192 kB > a second of audio at 48000x2ch 16b
 BYTE *argb32,*diff32; // current and previous bitmap, respectively; the caller must assign them
@@ -102,7 +101,8 @@ int xrf_decode(BYTE *t,BYTE *s,int *l,int x) // equally hacky decoder based on a
 #define xrf_fgetc() fgetc(xrf_file)
 int xrf_fgetcc(void) { int m=xrf_fgetc()<<8; return m+xrf_fgetc(); } // Motorola order, (*(WORD*))(x) is no use
 int xrf_fgetcccc(void) { int m=xrf_fgetc()<<24; m+=xrf_fgetc()<<16; m+=xrf_fgetc()<<8; return m+xrf_fgetc(); }
-int fread1(BYTE *t,int l,FILE *f) { int i=0,j; while (i<l&&(j=fread(&t[i],1,l-i,f))) i+=j; return i; }
+//int xrf_fread(BYTE *t,int l) { int i=0,j; while (i<l&&(j=fread(&t[i],1,l-i,xrf_file))) i+=j; return i; }
+#define xrf_fread(t,l) fread(t,1,l,xrf_file)
 
 int xrf_open(char *s) // opens a XRF file and sets the common parameters up; !0 ERROR
 {
@@ -117,7 +117,7 @@ int xrf_open(char *s) // opens a XRF file and sets the common parameters up; !0 
 	fseek(xrf_file,0,SEEK_END);
 	xrf_length=ftell(xrf_file);
 	fseek(xrf_file,0,SEEK_SET);
-	unsigned char id[9]; id[fread1(id,8,xrf_file)]=0;
+	unsigned char id[9]; id[xrf_fread(id,8)]=0;
 	video_x=xrf_fgetcc();
 	video_y=xrf_fgetcc();
 	audio_z=xrf_fgetcc();
@@ -127,7 +127,8 @@ int xrf_open(char *s) // opens a XRF file and sets the common parameters up; !0 
 	xrf_cursor=8+8+4; // the bytes we've read so far
 	xrf_count=xrf_dummy=0;
 	argb32=xrf_bitmap; diff32=xrf_shadow; // this speeds things up later: swapping pointers instead of their contents
-	return (!(video_x>0&&video_y>0&&clock_z>0&&audio_z>=0)||strcmp(id,"XRF1!\015\012\032"))?fclose(xrf_file),1:0; // XRF-1 was limited to 8-bit RLE lengths, and XRF+1 didn't store the amount of frames!
+	// reject obsolete files: XRF-1 was limited to 8-bit RLE lengths, and XRF+1 didn't store the amount of frames!
+	return (!(video_x>0&&video_y>0&&clock_z>0&&audio_z>=0)||strcmp(id,"XRF1!\015\012\032"))?fclose(xrf_file),1:0;
 }
 int xrf_read(void) // reads a XRF chunk and decodes the current video and audio frames; !0 ERROR/EOF
 {
@@ -141,7 +142,7 @@ int xrf_read(void) // reads a XRF chunk and decodes the current video and audio 
 	int i,j,k,l=xrf_fgetcccc();
 	if (l<1||l>XRF_CHUNKSIZE)
 		return 1; // improper chunk size!
-	if (fread1(xrf_chunk,l,xrf_file)!=l)
+	if (xrf_fread(xrf_chunk,l)!=l)
 		return 1; // file is truncated!
 	xrf_cursor+=4+l;
 
@@ -195,14 +196,14 @@ int xrf_close(void) // close and clean up; always 0 OK
 	return 0;
 }
 
-// create and write an AVI file through Windows' AVIFILE API -------- //
-
-int avi_videos,avi_audios;
-BYTE *avi_canvas=NULL; // ARGB32 canvas
+int avi_videos,avi_audios; // video/audio counters
+BYTE *avi_canvas=NULL; // upside-down ARGB32 canvas
 
 #ifdef _WIN32
 
-char avi_fourcc[5]=""; // uncompressed "DIB " is even worse than RGB24: it's ARGB32!
+// create and write an AVI file through Windows' AVIFILE API -------- //
+
+char vfw_fourcc[5]=""; // uncompressed "DIB " is even worse than RGB24: it's ARGB32!
 PAVIFILE vfw_file=NULL; IAVIStream *vfw_video,*vfw_codec,*vfw_audio;
 
 int vfw_create(char *s) // !0 ERROR
@@ -214,7 +215,7 @@ int vfw_create(char *s) // !0 ERROR
 	if (AVIFileOpen(&vfw_file,s,OF_CREATE|OF_WRITE,NULL))
 		return AVIFileExit(),1;
 
-	AVISTREAMINFO vhdr; MEMZERO(vhdr);
+	AVISTREAMINFO vhdr; memset(&vhdr,0,sizeof(vhdr));
 	vhdr.fccType=streamtypeVIDEO;
 	//vhdr.fccHandler=0;
 	vhdr.dwRate=(vhdr.dwScale=1)*clock_z;
@@ -225,10 +226,10 @@ int vfw_create(char *s) // !0 ERROR
 	if (AVIFileCreateStream(vfw_file,&vfw_video,&vhdr))
 		vfw_video=NULL;
 
-	AVICOMPRESSOPTIONS vopt; MEMZERO(vopt);
-	vopt.fccHandler=mmioFOURCC(avi_fourcc[0],avi_fourcc[1],avi_fourcc[2],avi_fourcc[3]);
+	AVICOMPRESSOPTIONS vopt; memset(&vopt,0,sizeof(vopt));
+	vopt.fccHandler=mmioFOURCC(vfw_fourcc[0],vfw_fourcc[1],vfw_fourcc[2],vfw_fourcc[3]);
 	vopt.dwFlags=AVICOMPRESSF_KEYFRAMES; vopt.dwKeyFrameEvery=clock_z*10; // 10 s/keyframe
-	BITMAPINFO bmi; MEMZERO(bmi); bmi.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
+	BITMAPINFO bmi; memset(&bmi,0,sizeof(bmi)); bmi.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
 	bmi.bmiHeader.biPlanes=1; bmi.bmiHeader.biBitCount=32; bmi.bmiHeader.biCompression=BI_RGB;
 	bmi.bmiHeader.biWidth=video_x; bmi.bmiHeader.biHeight=video_y;
 	// negative values mean top-to-bottom; Windows' default is bottom-to-top
@@ -239,11 +240,11 @@ int vfw_create(char *s) // !0 ERROR
 
 	if (audio_z)
 	{
-		AVISTREAMINFO ahdr; MEMZERO(ahdr);
+		AVISTREAMINFO ahdr; memset(&ahdr,0,sizeof(ahdr));
 		ahdr.fccType=streamtypeAUDIO;
 		ahdr.dwRate=(ahdr.dwSampleSize=ahdr.dwScale=flags_audio[flags_z&3])*clock_z*audio_z;
 		ahdr.dwQuality=(DWORD)-1;
-		WAVEFORMATEX wfex; MEMZERO(wfex); wfex.wFormatTag=WAVE_FORMAT_PCM;
+		WAVEFORMATEX wfex; memset(&wfex,0,sizeof(wfex)); wfex.wFormatTag=WAVE_FORMAT_PCM;
 		wfex.nAvgBytesPerSec=(wfex.nBlockAlign=(wfex.wBitsPerSample=(flags_z&1)?16:8)/8*(wfex.nChannels=(flags_z&2)?2:1))
 			*(wfex.nSamplesPerSec=audio_z*clock_z);
 		if (AVIFileCreateStream(vfw_file,&vfw_audio,&ahdr))
@@ -333,12 +334,13 @@ BYTE avi_h_mute[0x0200]= // see above
 int avi_fputcccc(int i) { avi_fputc(i); avi_fputc(i>>8); avi_fputc(i>>16); return avi_fputc(i>>24); }
 void avi_mputcc(BYTE *x,int i) { *x=i; x[1]=i>>8; } // compatible, rather than ((*(WORD*))(x))=i)
 void avi_mputcccc(BYTE *x,int i) { *x=i; x[1]=i>>8; x[2]=i>>16; x[3]=i>>24; } // ditto, for DWORD
-int fwrite1(BYTE *t,int l,FILE *f) { int i=0,j; while (i<l&&(j=fwrite(&t[i],1,l-i,f))) i+=j; return i; }
+//int avi_fwrite(BYTE *t,int l) { int i=0,j; while (i<l&&(j=fwrite(&t[i],1,l-i,avi_file))) i+=j; return i; }
+#define avi_fwrite(t,l) fwrite(t,1,l,avi_file)
 
 int avi_create(char *s)
 {
 	#ifdef _WIN32
-	if (*avi_fourcc) return vfw_create(s);
+	if (*vfw_fourcc) return vfw_create(s);
 	#endif
 	if (avi_file) return 1;
 
@@ -375,7 +377,7 @@ int avi_create(char *s)
 		avi_mputcccc(&avi_header[0x008C],count_z); // avi_videos
 		avi_mputcccc(&avi_header[0x0108],count_z*audio_z); // avi_audios
 
-		avi_length=fwrite1(avi_header,sizeof(avi_header),avi_file)+12;
+		avi_length=avi_fwrite(avi_header,sizeof(avi_header))+12;
 		avi_fputcccc(0x5453494C); // "LIST"
 		avi_fputcccc(4+i); // "LIST:movi" size
 		avi_fputcccc(0x69766F6D); // "movi"
@@ -399,7 +401,7 @@ int avi_create(char *s)
 		avi_mputcccc(&avi_h_mute[0x0030],count_z); // avi_videos
 		avi_mputcccc(&avi_h_mute[0x008C],count_z); // avi_videos
 
-		avi_length=fwrite1(avi_h_mute,sizeof(avi_h_mute),avi_file)+12;
+		avi_length=avi_fwrite(avi_h_mute,sizeof(avi_h_mute))+12;
 		avi_fputcccc(0x5453494C); // "LIST"
 		avi_fputcccc(4+i); // "LIST:movi" size
 		avi_fputcccc(0x69766F6D); // "movi"
@@ -413,7 +415,7 @@ int avi_write(void)
 		return 1; // cannot allocate memory!
 
 	#ifdef _WIN32
-	if (*avi_fourcc) return vfw_write();
+	if (*vfw_fourcc) return vfw_write();
 	#endif
 	if (!avi_file) return 1;
 
@@ -431,15 +433,15 @@ int avi_write(void)
 	}
 	avi_fputcccc(0x62643030); // "00db"
 	avi_fputcccc(l=t-avi_canvas);
-	if (l!=fwrite1(avi_canvas,l,avi_file)) return 1;
-	avi_length+=8+l;
+	if (l!=avi_fwrite(avi_canvas,l)) return 1;
+	avi_length+=l+8;
 	if (audio_z)
 	{
 		avi_fputcccc(0x62773130); // "01wb"
 		avi_fputcccc(l=audio_z*flags_audio[flags_z&3]);
 		if (l&1) wave32[l++]=0; // RIFF even-padding
-		if (l!=fwrite1(wave32,l,avi_file)) return 1;
-		avi_length+=8+l;
+		if (l!=avi_fwrite(wave32,l)) return 1;
+		avi_length+=l+8;
 	}
 	++avi_videos; avi_audios+=audio_z;
 
@@ -448,7 +450,7 @@ int avi_write(void)
 int avi_finish(void)
 {
 	#ifdef _WIN32
-	if (*avi_fourcc) return vfw_finish();
+	if (*vfw_fourcc) return vfw_finish();
 	#endif
 	if (!avi_file) return 1;
 
@@ -501,7 +503,7 @@ int main(int argc,char *argv[])
 		else if (!z)
 		{
 			if (strlen(argv[i])==4)
-				strcpy(avi_fourcc,z=argv[i]);
+				strcpy(vfw_fourcc,z=argv[i]);
 			else i=argc; // help!
 		}
 		#endif
@@ -511,11 +513,11 @@ int main(int argc,char *argv[])
 	{
 		printf(MY_CAPTION " " MY_VERSION " " MY_LICENSE "\n"
 			"\n"
+			"usage: xrf source.xrf [target.avi"
 			#ifdef _WIN32
-			"usage: xrf source.xrf [target.avi [fourcc]]\n"
-			#else
-			"usage: xrf source.xrf [target.avi]\n"
+			" [fourcc]"
 			#endif
+			"]\n"
 			"       xrf source.xrf - | ffmpeg [filters] -i - [options] target\n"
 			"\n"
 			GPL_3_INFO
@@ -523,7 +525,8 @@ int main(int argc,char *argv[])
 			#ifdef _WIN32
 			ICINFO lpicinfo; ICInfo(0,-1,&lpicinfo); int n=lpicinfo.fccHandler;
 			for (int i=0;i<n;++i)
-				ICInfo(0,i,&lpicinfo),printf("%s%c%c%c%c",i?i%10?" ":"\n\t\t":"\n- fourcc codes: ",(char)lpicinfo.fccHandler,(char)(lpicinfo.fccHandler>>8),(char)(lpicinfo.fccHandler>>16),(char)(lpicinfo.fccHandler>>24));
+				ICInfo(0,i,&lpicinfo),printf("%s%c%c%c%c",i?i%10?" ":"\n\t\t":"\n- fourcc codes: ",
+					(char)lpicinfo.fccHandler,(char)(lpicinfo.fccHandler>>8),(char)(lpicinfo.fccHandler>>16),(char)(lpicinfo.fccHandler>>24));
 			printf("\n");
 			#endif
 		return 1;
@@ -532,7 +535,8 @@ int main(int argc,char *argv[])
 		return xrf_close(),fprintf(stderr,"error: cannot open source!\n"),1;
 	if (!count_z)
 		return xrf_close(),fprintf(stderr,"error: source is empty!\n"),1;
-	fprintf(stderr,audio_z?"VIDEO %dx%dpx %dHz - AUDIO %dch%02db %dHz\n":"VIDEO %dx%dpx %dHz - NO AUDIO\n",video_x,video_y,clock_z,(flags_z&2)?2:1,(flags_z&1)?16:8,audio_z*clock_z);
+	fprintf(stderr,audio_z?"VIDEO %dx%dpx %dHz - AUDIO %dch%02db %dHz\n":"VIDEO %dx%dpx %dHz - NO AUDIO\n",
+		video_x,video_y,clock_z,(flags_z&2)?2:1,(flags_z&1)?16:8,audio_z*clock_z);
 
 	if (t) // process
 	{
@@ -555,8 +559,8 @@ int main(int argc,char *argv[])
 	}
 	else // examine
 	{
-		long long int lv=count_z*video_x*video_y*3,la=count_z*audio_z*flags_audio[flags_z&3],lz=lv+la;
-		printf("%d frames, %lld video + %lld audio = %lld bytes.\n",count_z,lv,la,lz); // not "%lli"!
+		int llv=video_x*video_y*3,lla=audio_z*flags_audio[flags_z&3]; long long int llz=(llv+lla)*1LL*count_z;
+		printf("%d frames x (%d video + %d audio) = %lld bytes ~ %lld MB\n",count_z,llv,lla,llz,llz>>20);
 	}
 	return xrf_close(),t&&xrf_cursor!=xrf_length;
 }

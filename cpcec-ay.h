@@ -15,18 +15,30 @@
 
 // BEGINNING OF PSG AY-3-8910 EMULATION ============================== //
 
-const BYTE psg_valid[16]={255,15,255,15,255,15,31,255,31,31,31,255,255,15,255,255}; // bit masks
+const BYTE psg_valid[16]={ 255,15,255,15,255,15,31,255,31,31,31,255,255,15,255,255 }; // bit masks
 BYTE psg_index,psg_table[16]; // index and table
 BYTE psg_hard_log=0xFF; // default mode: drop and stay
 #define PSG_ULTRASOUND (PSG_KHZ_CLOCK*256/AUDIO_PLAYBACK)
 int psg_ultra_beep,psg_ultra_hits; // ultrasound/beeper filter
+
+const BYTE psg_envelope[8][32]= // precalc'd tables, better than calculating these values on the fly
+{
+	{ 15,14,13,12,11,10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0,15,14,13,12,11,10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0 }, // \\\\ //
+	{ 15,14,13,12,11,10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, // \... //
+	{ 15,14,13,12,11,10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15 }, // \/\/ //
+	{ 15,14,13,12,11,10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15 }, // \''' //
+	{  0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15 }, // //// //
+	{  0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15 }, // /''' //
+	{  0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15,15,14,13,12,11,10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0 }, // /\/\ //
+	{  0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, // /... //
+};
 
 // frequencies (or more properly, wave lengths) are handled as counters
 // that toggle the channels' output status when they reach their current limits.
 int psg_tone_count[3]={0,0,0},psg_tone_state[3]={0,0,0};
 int psg_tone_limit[3],psg_tone_power[3],psg_tone_mixer[3];
 int psg_noise_limit,psg_noise_count=0;
-int psg_hard_limit,psg_hard_count,psg_hard_style,psg_hard_level,psg_hard_flag0,psg_hard_flag2;
+int psg_hard_limit,psg_hard_count; char psg_hard_style,psg_hard_level;
 #if AUDIO_CHANNELS > 1
 int psg_stereo[3][2]; // the three channels' LEFT and RIGHT weights
 #endif
@@ -59,8 +71,8 @@ void psg_reg_update(int c)
 				psg_hard_count=psg_hard_limit; // cfr. nota supra
 			break;
 		case 13: // envelope bits
-			c=psg_table[13]; psg_hard_count=psg_hard_level=psg_hard_flag0=0;
-			psg_hard_flag2=(psg_hard_log=psg_hard_style=c<4?9:c<8?15:c)&4?0:15; // unify styles!
+			c=psg_table[13]/*&15*/; psg_hard_count=psg_hard_level=0;
+			psg_hard_log=psg_hard_style=c<4?1:c>=8?c&7:7; // unify styles!
 			break;
 	}
 }
@@ -99,13 +111,13 @@ INLINE void psg_table_sendto(BYTE x,BYTE i)
 #ifdef PSG_PLAYCITY
 #ifdef PSG_PLAYCITY_HALF
 BYTE playcity_table[1][16],playcity_index[1],playcity_hard_new[1];
-int playcity_hard_style[1],playcity_hard_count[1],playcity_hard_level[1],playcity_hard_flag0[1],playcity_hard_flag2[1];
+int playcity_hard_style[1],playcity_hard_count[1],playcity_hard_level[1];
 #if AUDIO_CHANNELS > 1
 int playcity_stereo[1][3][2];
 #endif
 #else
 int playcity_clock=0; BYTE playcity_table[2][16],playcity_index[2],playcity_hard_new[2];
-int playcity_hard_style[2],playcity_hard_count[2],playcity_hard_level[2],playcity_hard_flag0[2],playcity_hard_flag2[2];
+int playcity_hard_style[2],playcity_hard_count[2],playcity_hard_level[2];
 #if AUDIO_CHANNELS > 1
 int playcity_stereo[2][3][2];
 #endif
@@ -137,8 +149,8 @@ void playcity_send(BYTE x,BYTE b)
 		playcity_table[x][y]=(b&=psg_valid[y]);
 		if (y==13) // envelope bits?
 		{
-			playcity_hard_count[x]=playcity_hard_level[x]=playcity_hard_flag0[x]=0;
-			playcity_hard_flag2[x]=(playcity_hard_style[x]=b<4?9:b<8?15:b)&4?0:15;
+			playcity_hard_count[x]=playcity_hard_level[x]=0;
+			playcity_hard_style[x]=b<4?1:b>=8?b&7:7;
 		}
 	}
 }
@@ -187,7 +199,7 @@ void psg_main(int t,int d) // render audio output for `t` clock ticks, with `d` 
 	#endif
 	do
 	{
-		static int smash=0,crash=1;
+		static unsigned int smash=0,crash=1;
 		#if AUDIO_CHANNELS > 1
 		static int n=0,o0=0,o1=0; // output averaging variables
 		#else
@@ -205,22 +217,17 @@ void psg_main(int t,int d) // render audio output for `t` clock ticks, with `d` 
 				if (--psg_noise_count<=0)
 				{
 					psg_noise_count=psg_noise_limit;
-					if (crash&1) crash+=0x48000; smash^=(crash>>=1)&1; // LFSR x2
+					smash=crash&1; crash<<=1; crash+=(((crash>>23)^(crash>>18))&1); // 23-bit LFSR randomizer
 				}
 			//}
 			//else // update hard envelope, at half the rate
 			//{
-				audio_table[16]=audio_table[psg_hard_level^psg_hard_flag2^((psg_hard_style&2)?psg_hard_flag0:0)]; // update hard envelope
+				psg_outputs[16]=psg_outputs[psg_envelope[psg_hard_style][psg_hard_level]];
 				if (--psg_hard_count<=0)
 				{
 					psg_hard_count=psg_hard_limit;
-					if (++psg_hard_level>15) // end of hard envelope?
-					{
-						if (psg_hard_style&1)
-							psg_hard_level=15,psg_hard_flag0=15,psg_hard_count=1<<30; // stop!
-						else
-							psg_hard_level=0,psg_hard_flag0^=15; // loop!
-					}
+					if (++psg_hard_level>=32) // end of hard envelope?
+						psg_hard_level=(psg_hard_style&1)?16:0; // stop or loop!
 				}
 			}
 			for (int c=0;c<3;++c)
@@ -232,18 +239,18 @@ void psg_main(int t,int d) // render audio output for `t` clock ticks, with `d` 
 				if ((psg_tone_mixer[c]&8)|smash) // is the channel noisy?
 		#if AUDIO_CHANNELS > 1
 				{
-					int o=audio_table[psg_tone_power[c]];
+					int o=psg_outputs[psg_tone_power[c]];
 					o0+=o*psg_stereo[c][0],
 					o1+=o*psg_stereo[c][1];
 				}
 		o0+=d,
 		o1+=d;
 		#else
-					o+=   audio_table[psg_tone_power[c]];
+					o+=   psg_outputs[psg_tone_power[c]];
 		o+=d;
 		#endif
 		++n;
-		static int b=0; if ((b-=AUDIO_PLAYBACK*PSG_TICK_STEP>>PSG_MAIN_EXTRABITS)<=0)
+		static int b=0; if ((b-=(AUDIO_PLAYBACK*PSG_TICK_STEP)>>PSG_MAIN_EXTRABITS)<=0)
 		{
 			b+=TICKS_PER_SECOND;
 			#if AUDIO_CHANNELS > 1
@@ -268,17 +275,14 @@ void playcity_main(AUDIO_UNIT *t,int l)
 {
 	#ifdef PSG_PLAYCITY_HALF
 	if (playcity_table[0][7]==0x3F||l<=0) return;
+	const int x=0,playcity_clock=0;
+	int playcity_tone_limit[1][3],playcity_tone_power[1][3],playcity_tone_mixer[1][3],playcity_noise_limit[1],playcity_hard_limit[1];
+	static int playcity_tone_count[1][3],playcity_tone_state[1][3]={{0,0,0}},playcity_noise_count[1],playcity_hard_power[1]; static unsigned int smash[1]={0},crash[1]={1};
 	#else
 	int dirty_l=playcity_table[0][7]==0x3F,dirty_h=playcity_table[1][7]!=0x3F;
 	if (dirty_l>dirty_h||l<=0) return; // disabled chips? no buffer? quit!
-	#endif
-	#ifdef PSG_PLAYCITY_HALF
-	const int x=0,playcity_clock=0;
-	int playcity_tone_limit[1][3],playcity_tone_power[1][3],playcity_tone_mixer[1][3],playcity_noise_limit[1],playcity_hard_limit[1];
-	static int playcity_tone_count[1][3],playcity_tone_state[1][3]={{0,0,0}},playcity_noise_count[1],smash[1]={0},crash[1]={1},playcity_hard_power[1];
-	#else
 	int playcity_tone_limit[2][3],playcity_tone_power[2][3],playcity_tone_mixer[2][3],playcity_noise_limit[2],playcity_hard_limit[2];
-	static int playcity_tone_count[2][3],playcity_tone_state[2][3]={{0,0,0},{0,0,0}},playcity_noise_count[2],smash[2]={0,0},crash[2]={1,1},playcity_hard_power[2];
+	static int playcity_tone_count[2][3],playcity_tone_state[2][3]={{0,0,0},{0,0,0}},playcity_noise_count[2],playcity_hard_power[2]; static unsigned int smash[2]={0,0},crash[2]={1,1};
 	for (int x=dirty_l;x<=dirty_h;++x)
 	#endif
 	{
@@ -320,23 +324,17 @@ void playcity_main(AUDIO_UNIT *t,int l)
 					if (--playcity_noise_count[x]<=0)
 					{
 						playcity_noise_count[x]=playcity_noise_limit[x];
-						if (crash[x]&1) crash[x]+=0x48000; // LFSR x2
-						smash[x]^=(crash[x]>>=1)&1;
+						smash[x]=crash[x]&1; crash[x]<<=1; crash[x]+=(((crash[x]>>23)^(crash[x]>>18))&1); // 23-bit LFSR
 					}
 				//}
 				//else // update hard envelopes, half the rate
 				//{
-					playcity_hard_power[x]=playcity_hard_level[x]^playcity_hard_flag2[x]^((playcity_hard_style[x]&2)?playcity_hard_flag0[x]:0);
+					playcity_hard_power[x]=psg_envelope[playcity_hard_style[x]][playcity_hard_level[x]];
 					if (--playcity_hard_count[x]<=0)
 					{
 						playcity_hard_count[x]=playcity_hard_limit[x];
-						if (++playcity_hard_level[x]>15) // end of hard envelope?
-						{
-							if (playcity_hard_style[x]&1)
-								playcity_hard_level[x]=15,playcity_hard_flag0[x]=15,playcity_hard_count[x]=1<<30; // stop!
-							else
-								playcity_hard_level[x]=0,playcity_hard_flag0[x]^=15; // loop!
-						}
+						if (++playcity_hard_level[x]>=32) // end of hard envelope?
+							playcity_hard_level[x]=(playcity_hard_style[x]&1)?16:0; // stop or loop!
 					}
 				}
 				for (int c=0;c<3;++c) // update channels and render output
@@ -351,11 +349,11 @@ void playcity_main(AUDIO_UNIT *t,int l)
 							if (z&16)
 								z=playcity_hard_power[x];
 							#if AUDIO_CHANNELS > 1
-							int o=audio_table[z]*playcity_mono;
+							int o=psg_outputs[z]*playcity_mono;
 							o0+=o*playcity_stereo[x][c][0],
 							o1+=o*playcity_stereo[x][c][1];
 							#else
-							o+=   audio_table[z]*playcity_mono;
+							o+=   psg_outputs[z]*playcity_mono;
 							#endif
 						}
 				}

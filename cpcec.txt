@@ -18,6 +18,14 @@ emulation of the Z80 microprocessor and it replicates the behavior of the CRTC
 circuits found in the original hardware, and the tape deck and floppy disc drive
 that made possible loading and running software.
 
+CPCEC includes several related projects. ZXSEC is an emulator of the <B>Sinclair
+Spectrum family (48K, 128K, +2/Plus2 and +3/Plus3) based on the components it
+shared with the Amstrad CPC family: the Z80 microprocessor, the PSG AY-3-8192
+sound chip, the tape system and the NEC765 disc drive controller; CSFEC is an
+emulator of the Commodore 64 platform, similarly based on shared code; and MSXEC
+is an emulator of the MSX family (1983 MSX, 1985 MSX2, 1988 MSX2+), also based
+on shared code.
+
 Software and documentation are provided "as is" with no warranty. The source
 code of CPCEC and its binaries follow the GNU General Public License v3, as seen
 in the file GPL.TXT within the package.
@@ -32,11 +40,12 @@ that the main microprocessor runs at 400 MHz at least. Screen resolution in
 pixels must be 800x600 at least. A sound card is optional, as well as equipping
 a joystick. The mouse can emulate a lightgun to the user's choice.
 
-The emulator spans several files: the runnable binaries (by default CPCEC.EXE,
-CSFEC.EXE and ZXSEC.EXE for Windows) and the firmware files C1541.ROM,
-C64EN.ROM, CPC464.ROM, CPC664.ROM, CPC6128.ROM, CPCADOS.ROM, CPCPLUS.ROM,
-SPEC128K.ROM, SPEC-P-2.ROM, SPEC-P-3.ROM and SPECTRUM.ROM. All these files must
-be copied in a single directory, ideally created to host the emulator.
+The emulators span several files: the runnable binaries (by default CPCEC.EXE,
+CSFEC.EXE, MSXEC.EXE, ZXSEC.EXE and XRF.EXE in Windows) and the firmware files
+C1541.ROM, C64EN.ROM, CPC464.ROM, CPC664.ROM, CPC6128.ROM, CPCADOS.ROM,
+CPCPLUS.ROM, MSX.ROM, MSX2.ROM, MSX2P.ROM, MSXDISK.ROM, MSXEC.SHA, SPEC128K.ROM,
+SPEC-P-2.ROM, SPEC-P-3.ROM and SPECTRUM.ROM. All these files must be copied in a
+single directory, ideally created to host the emulators.
 
 The binaries can be compiled from the source files by following the instructions
 in the next paragraphs. GCC 4.9.2, GCC 5.1.0, Pelles C 4.50.113, TCC 0.9.27 and
@@ -52,7 +61,11 @@ following commands:
 
 	windres csfec.rc -Ocoff -ocsfec.res
 	gcc -mwindows csfec.res -O2 -xc csfec.c -luser32 -lgdi32 -lwinmm
--lcomdlg32 -lshell32 -osfcec.exe
+-lcomdlg32 -lshell32 -ocsfec.exe
+
+	windres msxec.rc -Ocoff -omsxec.res
+	gcc -mwindows msxec.res -O2 -xc msxec.c -luser32 -lgdi32 -lwinmm
+-lcomdlg32 -lshell32 -omsxec.exe
 
 	windres zxsec.rc -Ocoff -ozxsec.res
 	gcc -mwindows zxsec.res -O2 -xc zxsec.c -luser32 -lgdi32 -lwinmm
@@ -62,11 +75,11 @@ Optional DirectDraw support can be achieved by appending `-DDDRAW -lddraw` to
 the `gcc ...` commands.
 
 Pelles C and other visual compilers can define the whole project from the source
-files CPCEC.C, CSFEC.C and ZXSEC.C and the resource files CPCEC.RC, CSFEC.RC and
-ZXSEC.RC, and guess the additional files on their own (icons and header files)
-while the libraries required for the compiling procedure (if the compiler
-doesn't recognize them on its own) are USER32, GDI32, WINMM, COMDLG32 and
-SHELL32, all them from the Win32 SDK.
+files CPCEC.C, CSFEC.C, MSXEC.EXE and ZXSEC.C and the resource files CPCEC.RC,
+CSFEC.RC, MSXEC.RC and ZXSEC.RC, and guess the additional files on their own
+(icons and header files) while the libraries required for the compiling
+procedure (if the compiler doesn't recognize them on its own) are USER32, GDI32,
+WINMM, COMDLG32 and SHELL32, all them from the Win32 SDK.
 
 The binaries for operating systems supported by SDL2 need different commands.
 Some systems may require an additional parameter `-DSDL2_DOUBLE_QUEUE` if the
@@ -75,6 +88,8 @@ sound becomes choppy due to the default buffer being too short.
 	gcc -DSDL2 -O2 -xc cpcec.c -lSDL2 -ocpcec
 
 	gcc -DSDL2 -O2 -xc csfec.c -lSDL2 -ocsfec
+
+	gcc -DSDL2 -O2 -xc msxec.c -lSDL2 -omsxec
 
 	gcc -DSDL2 -O2 -xc zxsec.c -lSDL2 -ozxsec
 
@@ -95,29 +110,30 @@ short help explaining the available options.
 * -C2 : display the screen in full colour (by default);
 * -C3 : display the screen in light colour;
 * -C4 : display the screen in levels of green;
-* -c0 : set the scanline mode to half;
-* -c2 : set the scanline mode to whole (by default);
+* -c0 : set the scanline mode to full (by default);
+* -c2 : set the scanline mode to average;
 * -c4 : set the interlace mode to simple;
 * -c6 : set the interlace mode to double;
-* -c8 : set the interlace mode to average;
-* -c1, -c3, -c5, -c7, -c9 : set the scanline and interlace modes as in
--c0...-c8, plus interframe blending;
+* -c1, -c3, -c5, -c7 : set the scanline and interlace modes as in -c0...-c6,
+plus interframe blending;
 * -d : start the emulation with the debugger on (by default off);
 * -g0, -g1, -g2, -g3, -g4 : set the CRTC type (by default 1);
 * -h : short help;
 * -j : enable emulation of joystick on keyboard (by default cursors and keys Z,
 X and C);
 * -J : disable the usage of a joystick plugged to the system;
-* -K, -k0 : emulate 64k RAM only
-* -k1 : emulate 128k RAM (by default);
-* -k2 : emulate 192k RAM;
-* -k3 : emulate 320k RAM;
-* -k4 : emulate 576k RAM;
+* -K, -k0 : emulate 64K RAM only
+* -k1 : emulate 128K RAM (by default);
+* -k2 : emulate 192K RAM;
+* -k3 : emulate 320K RAM;
+* -k4 : emulate 576K RAM;
+* -k5 : emulate 1088K RAM;
+* -k6 : emulate 2112K RAM;
 * -m0 : start emulation as an Amstrad CPC 464;
 * -m1 : start emulation as an Amstrad CPC 664;
 * -m2 : start emulation as an Amstrad CPC 6128, by default;
 * -m3 : start emulation as an Amstrad Plus (Plus 464, Plus 6128 and GX4000 only
-differ in the amount of RAM, the disc controller and the keyboard);
+differ in the amount of RAM, the disc drive and the keyboard);
 * -o : show onscreen indicators;
 * -O : hide onscreen indicators (by default shown);
 * -p : enable Playcity audio (by default disabled);
@@ -250,8 +266,8 @@ defines an attribute or a ROM:
 
 * type = 0..3 : sets the firmware type (for example 0 stands for CPC464) as seen
 in the command line parameters -m0..3;
-* bank = 0..4 : sets the RAM size (for example 0 stands for 64k) as seen in the
-parameters -k0..4;
+* bank = 0..6 : sets the RAM size (for example 0 stands for 64K) as seen in the
+parameters -k0..6;
 * crtc = 0..4 : sets the CRTC type, as seen in the parameters -g0..4;
 * fddc = 0..1 : sets whether the floppy disc drive controller is enabled (1) or
 disabled (0);
@@ -373,11 +389,11 @@ two different ways, one is exclusive of Windows, the other one is general.
 When compiling the tool for Windows (it needs the system library AVIFIL32: "gcc
 -lavifil32 -lvfw32 -xc xrf.c -oxrf.exe") and running it (the syntax is "xrf
 source.xrf target.avi ABCD") it will read the file "source.xrf" and generate a
-file named "target.avi" with the help of the codec ABCD, if it's available.
-Running the tool without parameters shows the help and the list of available
-codecs; running it without a target parameter prints the source file's
+file named "target.avi" with the help of the video codec ABCD, if it's
+available. Running the tool without parameters shows the help and the list of
+available codecs; running it without a target parameter prints the source file's
 parameters. It's advised to install and use the codec ZMBV developed by the
-Dosbox project because it provides the best performance in pixellated recordings
+DOSBOX project because it provides the best performance in pixellated recordings
 like these.
 
 In other systems XRF cannot directly use any codec, so the outcome is an AVI
@@ -390,23 +406,23 @@ matter.
 
 ## ZXSEC ##
 
-ZXSEC is an emulator of the Sinclair Spectrum family (48k, 128k, +2/Plus2 and
+ZXSEC is an emulator of the Sinclair Spectrum family (48K, 128K, +2/Plus2 and
 +3/Plus3) based on the components it shared with the Amstrad CPC family: the Z80
 microprocessor, the PSG AY-3-8192 sound chip, the tape system and the NEC765
 disc drive controller. It also optionally emulates several add-ons: the Spectrum
 Dandanator extension, the Beta128 disc interface, the Pentagon 128 board, the
-64-colour ULAplus video chip and the AY-Melodik 48k and Covox $FB sound chips.
+64-colour ULAplus video chip and the AY-Melodik 48K and Covox $FB sound chips.
 
 It spans the files ZXSEC.EXE, SPECTRUM.ROM, SPEC128K.ROM, SPEC-P-2.ROM and
 SPEC-P-3.ROM, and otherwise runs the same as CPCEC, with several differences:
 
-* option -mX chooses one out of four possible models: -m0 (48k), -m1 (128k), -m2
-(+2) or -m3 (+3).
+* option -mX chooses one out of four possible models: -m0 (48K), -m1 (128K), -m2
+(+2) or -m3 (+3);
 * option -K enables the Spectrum 16K memory mode (disabled by default) if the
-chosen model is Spectrum 48k;
-* option -X disables the disc drives if the chosen model is Spectrum +3, that
+chosen model is Spectrum 48K;
+* option -X disables the disc drive if the chosen model is Spectrum +3, that
 thus becomes a +2A instead; same outcome can happen on runtime by disabling
-"Settings: Disc controller" and selecting the firmware SPEC-P-3.ROM;
+"Settings: Disc drive" and selecting the firmware SPEC-P-3.ROM;
 * options -p and -P enable and disable the Pentagon timings; they can be toggled
 within the emulator with Shift+F6, too;
 * Control+Shift+F8 starts (or stops) the cassette motor, because the CPC
@@ -417,28 +433,30 @@ and ESCAPE emulates CAPS+SPACE (BREAK);
 * joystick options apply to the Sinclair 2 interface by default; the menu and
 the options -g0, -g1, -g2, g3 and -g4 allow choosing the type of joystick.
 
-ZXSEC can show Gigascreen effects (for example the demo "Mescaline Synesthesia"
-2009 DeMarche) through the interlace options in the Video menu.
+ZXSEC can show Gigascreen effects (for example the Spectrum 128 demo "Mescaline
+Synesthesia" 2009 DeMarche) through the interlace and blending options in the
+Video menu; the non-interlaced non-blending modes will flicker.
 
 ## CSFEC ##
 
 CSFEC is an emulator of the Commodore 64 system (PAL model) based on the general
-framework of CPCEC and ZXSEC. It can read PRG programme files and TAP and T64
-tape images, and it optionally supports one extra SID chip at port $D420 or
-$DE00, or two extra chips at ports $D420 and $D440 or $DE00 and $DF00.
+framework of CPCEC and ZXSEC. It can read PRG programme files, TAP and T64 tape
+images and CRT cartridges, and it optionally supports one extra SID chip at port
+$D420 or $DE00, or two extra chips at ports $D420 and $D440 or $DE00 and $DF00.
 
 It spans the files CSFEC.EXE, C64EN.ROM and C1541.ROM, and runs like CPCEC and
 ZXSEC, with some few differences:
 
-* no options -mX, -kX or -K, as just one model is emulated at the moment, and no
-extended memory is available yet.
-* no options -p and -P;
-* firmware files (such as the included C64EN.ROM) are 20k files where the first
-8k are the KERNAL ROM, the next 8k are the BASIC ROM, and the final 4k are the
+* no option -mX as just one model is emulated at the moment;
+* extended memory is available (-k0..-k4, ranging from 64K to 576K) but the user
+must choose between GeoRAM and REU modes (they're mutually incompatible) with -g
+or -G in the command line, or within the menu;
+* firmware files (such as the included C64EN.ROM) are 20K files where the first
+8K are the KERNAL ROM, the next 8K are the BASIC ROM, and the final 4K are the
 CHAR ROM.
 * ESCAPE emulates the RUN/STOP key, TAB emulates CONTROL, CAPS LOCK emulates
-CONTROL+SHIFT, CONTROL emulates the C= key, INSERT emulates the POUND key, HOME
-emulates CLR/HOME, DELETE emulates ARROW UP, END emulates RESTORE and the
+CONTROL+SHIFT, CONTROL emulates the C= key, INSERT emulates the POUND key,
+DELETE emulates ARROW UP, HOME emulates CLR/HOME, END emulates RESTORE and the
 numeric keypad emulates the F1-F8 function keys; notice that CSFEC automatically
 takes care of the dual SHIFT keypresses generated by some keys, for example
 CURSOR UP = CURSOR DOWN + SHIFT;
@@ -446,8 +464,55 @@ CURSOR UP = CURSOR DOWN + SHIFT;
 choosing the joystick port #1 instead.
 
 CSFEC can play the sampled sound from titles such as "Stormlord" if the option
-"SID 8580 type" is off, following the impact of the SID chip type in real
+"Play SID samples" is on, following the impact of the SID chip type in real
 machines on sample playback.
+
+## MSXEC ##
+
+MSXEC is an emulator of the MSX family (and more exactly the 1983 MSX, 1985 MSX2
+and 1988 MSX2+ models) also based on the general framework of CPCEC and its
+siblings. It supports tapes (WAV, CSW, TSX and CAS formats), discs (DSK format;
+internally MSXEC emulates a Western Digital-like disc controller) and cartridges
+with configurable mappers and static RAM.
+
+It spans the files MSXEC.EXE, MSXEC.SHA, MSX.ROM, MSX2.ROM, MSX2P.ROM and
+MSXDISK.ROM and runs like CPCEC, ZXSEC and CSFEC. Again, there are several
+differences:
+
+* option -mX chooses one out of three possible models: -m0 (1983 MSX), -m1 (1985
+MSX2) or -m2 (1988 MSX2+);
+* extended memory is available (-k0..-k5, ranging from 64K to 1024K), with the
+only particularity that there are two 64K modes: one without a RAM mapper (-k0,
+compatible with several pre-MSX2 games) and another one with a mapper (-k1) as
+expected in MSX2 machines;
+* standard firmware files are either 32K long (1983 MSX: 16K BIOS and 16K BASIC
+glued together), 48K (1985 MSX2: the same 32K from 1983 MSX, plus 16K SUB) or
+80K (1988 MSX2+: the same 48K from 1985 MSX2, plus 32K KANJI);
+* the C-BIOS firmwares are supported, albeit with a slightly different format:
+48K for 1983 MSX (16K BIOS + 16K BASIC + 16K LOGO) and 64K for 1985 MSX2 and
+1988 MSX2+ (16K BIOS + 16K BASIC + 16K LOGO + 16K SUB);
+* INSERT, DELETE and HOME emulate their namesake keys, END emulates the STOP
+key, PAGE UP emulates CODE, PAGE DOWN emulates GRAPH and the numeric keypad
+emulates the F1-F5 function keys (1-5) and SELECT (6).
+* Japanese input extensions JIS 128/256K are supported, MSXEC will automatically
+load a file named MSXJIS1.ROM (128K) or MSXJIS2.ROM (256K) if it shares path
+with the emulator;
+* the MSX-MUSIC interface is supported; MSXEC will automatically load a file
+named MSXMUSIC.ROM (16K) if it shares path with the emulator; if said file is
+missing, the OPLL support will rely on a dummy ROM without BASIC functions;
+* primary and secondary slots are predefined: in all models PSLOT 0 stores BIOS
+and BASIC (plus LOGO in C-BIOS firmwares), PSLOT 1 is the primary cartridge slot
+(cartridges can be up to 1024K long) and PSLOT 2 is the disc drive controller,
+effectively keeping the secondary cartridge slot to itself. In the 1983 MSX
+model PSLOT 3 is the RAM; in other models PSLOT 3 is divided in four secondary
+slots, namely SSLOT 0 (unused), SSLOT 1 (the 1985 MSX2 SUB ROM, plus KANJI ROM
+in the 1988 MSX2+ model), SSLOT 2 (RAM) and SSLOT 3 (MSX-MUSIC, when enabled);
+* a list of cartridge SHA-1 signatures and their corresponding mappers is stored
+in a file named MSXEC.SHA; MSXEC uses it to automatically select mappers for
+known cartridges.
+
+MSXEC can show hi-res video modes (for example the MSX2+ demo "Interlacing Demo"
+1989 Cracxy Crew) through the interlace options in the Video menu, as in ZXSEC.
 
 ## Acknowledgements ##
 
@@ -678,10 +743,10 @@ automatic frameskip kicks in.
 - 20190831 -- minor patch fixing several bugs (booting two-sided discs with FLIP
 SIDE option on, recording snapshots or tapes after loading a snapshot or tape
 from a ZIP archive), improving several details (loading snapshots with memory
-compression, emulating up to 576 kB RAM) and redefining the menus (Edit is
-divided into Edit and Settings, Image and Sound become Video and Audio, new
-video filter functions...) and the command line: "-+" now limits the zoom to
-integer values; "-!" inherits the option of hiding the menu.
+compression, emulating up to 576K RAM) and redefining the menus (Edit is divided
+into Edit and Settings, Image and Sound become Video and Audio, new video filter
+functions...) and the command line: "-+" now limits the zoom to integer values;
+"-!" inherits the option of hiding the menu.
 - 20191003 -- twelfth public release. Precise (albeit not perfect yet) memory
 contention and ULA noise ("snow") on Spectrum: "48K Timing Tests" passes all
 tests but 36 and 37, and "128K Timing Tests" fails on just six tests. "Mask 3:
@@ -739,7 +804,7 @@ Design Design ("2112 AD"), The Edge ("Palitron"), Titus ("Prehistorik" and
 "Moktar/Titus the Fox"), bugfixes (READ ID: "5KB Demo 3", "Daley Thompson's
 Olympic Challenge" and "Turbo Copy III"; FORMAT TRACK converts old-style MV -
 CPC discs into new-style EXTENDED ones, and cleans up useless data at the end of
-the disc). CPCEC honours the RAM size (up to 576k) and CRTC type stated by a
+the disc). CPCEC honours the RAM size (up to 576K) and CRTC type stated by a
 snapshot ("Postscript" demo) and so does ZXSEC, that can read Z80 snapshots now
 and allows 48K SNA files to be either strict (the original format) or relaxed:
 128K headers on 48K data. Control-F2 avoids accidental recording of snapshots
@@ -774,9 +839,9 @@ vertically aligned and the hardware information panel is aligned to the ASCII
 memory dump. Fixed a bug in the ZIP archive header seeker, too.
 - 20200420 -- minor patch fixing the HSYNC signals' black stripes from "Chany
 Dream End Megademo" on CRTC1, "Onescreen Colonies" on CRTC0, etc., as well as
-the value of MEMPTR in JR cc,$RR and DJNZ $RR and the logic of BIT n,r,(IX+$XX):
-the error rates of ZXSEC in the 2012 RAXOFT tests are Z80FULL 10/152, Z80CCF
-70/152 and Z80MEMPTR 4/152.
+the value of MEMPTR (=WZ) in JR cc,$RR and DJNZ $RR and the logic of BIT
+n,r,(IX+$XX): the error rates of ZXSEC in the 2012 RAXOFT tests are Z80FULL
+10/152, Z80CCF 70/152 and Z80MEMPTR 4/152.
 - 20200430 -- sixteenth public release. Now you can compile CPCEC and ZXSEC with
 SDL2 (featuring its own graphical user interface) for multiple operating systems
 through the option -DSDL_MAIN_HANDLED; the precompiled files CPCEC.ELF and
@@ -998,8 +1063,9 @@ tape handling code (the TZX1 blocks JUMP, CALL and RETURN from are properly
 handled), improving the Pentagon video logic ("Across the Edge" and "Rage" show
 their pixel-precise border effects), making the CPCEC option "Strict SNA files"
 write V2 snapshots when enabled, and simplifying the $EDA0-$EDBB Z80 opcode
-block. Experimental compile-time options include saving SZX snapshots from ZXSEC
-and reading Kansas City blocks from CDT and TZX files.
+block. Experimental compile-time options include saving SZX snapshots
+(compressed or not) from ZXSEC and reading Kansas City blocks from CDT and TZX
+files.
 - 20211111 -- minor patch fixing a bug in TZX playback that made all tapes after
 the first one lose the first item in the first block, adding basic DMA-PIO
 contention to the CPC Plus ASIC and improving the Spectrum floating bus: the
@@ -1097,9 +1163,9 @@ default) that tells the emulators to trap boot procedures and speed them up.
 Printing a disassembly now includes the source bytes, ensuring that the binary
 can be always rebuilt even if the disassembly is ambiguous. The Z80 operations
 RETN and RETI are now identical; telling them apart is up to the NMI-issuing
-hardware. The Plus ASIC SSSL function is now 32k-compatible, as required by the
+hardware. The Plus ASIC SSSL function is now 32K-compatible, as required by the
 intro "Simply the Bests". Simpler ZX ULA memory contention model: the timing
-buffer is now 128k long instead of 256k. The VIC-II chip is more accurate:
+buffer is now 128K long instead of 256K. The VIC-II chip is more accurate:
 slowdowns caused by badlines and sprite fetching are emulated (Extend's
 "Fellas", "HVSC 10 Years" intro...), effectively enabling badline manipulation
 (Archmage's "Data Zombies", Focus' "Ms. Pac Man", Excess' "Funny Rasters"...),
@@ -1143,3 +1209,30 @@ SDL2 audio buffer is now the library's choice (suggested by Kawe). The keyboard
 shortcuts Alt+Up and Alt+Down zoom the window up and down. Enabling both
 X-masking and Y-masking shows a new dot matrix. Minor optimisations in XRF film
 logic.
+- 20240224 -- twenty-fourth public release. MSXEC is a new MSX emulator
+supporting the first three generations (1983 MSX, 1985 MSX2 and 1988 MSX2+),
+their Western Digital-based disc drives and some few additional devices (such as
+the Konami SCC-051649 sound chip and the JIS 128/256K external ROMs) although
+the emulation is less developed in some fields than others (VDP timings are
+inaccurate: Logon System's intro "IO" shows artifacts in the 3D scrollers and
+the final screen; the MSX-MUSIC interface is minimal, barely able to play
+notes). Fixed bugs in the Z80 (such as bad inner timings in EX HL,(SP) and EX
+IX,(SP) detected by Kio's "Z80 Test Programm"), the CRTC (VSYNC loss in the
+dancing bobs of "PhX" on CRTC4, misaligned HSYNC in Longshot's RV.BAS), the ULA
+("snow" in 128K models can leak from different banks than VRAM), the VIC-II
+("Super Stock Car" switched the video display off when it shouldn't) and the SID
+(L-Man's "Amazing Discoveries" failed to play samples; "Mazemania" got weak
+random values from ports 27 and 28). Added 1088K and 2112K RAM modes to CPCEC
+(the first version of "Still the One" needed 1024K to run) and REU/GeoRAM RAM
+extensions (up to 512K) to CSFEC. Code cleanup in several modules, turning
+repeated paragraphs into several "goto" pointing to a single paragraph and
+merging several lists into a single table. Streamlined video and audio filters,
+the former removing the "Half scanlines" video mode and adding two new options:
+"Microwave static" that adds randomised noise to the image and "Narrow
+X-Blending" that softens the effect of the X-blending option. CSFEC now has an
+explicit "Play tape" option instead of autoplay: some titles rely on the user
+pressing TAPE and STOP on the tape deck ("Super Space Invaders"). Snapshots in
+CSFEC and MSXEC are optionally compressed with a quick implementation of
+Emmanuel Marty's LZSA2 method. The user can set whether the screenshots are BMP
+(default) or QOI files. Removed the Spanish documentation due to lack of
+readers.
