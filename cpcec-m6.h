@@ -168,9 +168,9 @@ WORD debug_dasm_any(char *t,WORD p,BYTE q(WORD)) // where `BYTE q(WORD)` is a fu
 
 #define m65xx_close() ((void)0)
 
-#define M65XX_MERGE_P (M65XX_P=(z?48:50)+(n&128)+(M65XX_P&77)) // 77 = 64+8+4+1 (i.e. the flags V+D+I+C)
-#define M65XX_BREAK_P (M65XX_P=(z?32:34)+(n&128)+(M65XX_P&77)) // used by the IRQ/NMI handler to reset B
-#define M65XX_SPLIT_P (z=~M65XX_P&2,n=M65XX_P&128) // `z` is the latest zero-relevant value; `n` is the latest sign-relevant value
+#define M65XX_MERGE_P (M65XX_P=(z?48:50)+(n&128)+(M65XX_P&77)) // 77 = 64+8+4+1, i.e. the flags V+D+I+C
+#define M65XX_BREAK_P (M65XX_P=(z?32:34)+(n&128)+(M65XX_P&77)) // used by the IRQ/NMI handler to reset flag B
+#define M65XX_SPLIT_P (z=~M65XX_P&2,n=M65XX_P&128) // `z` and `n` are the latest relevant zero-value and sign-value
 
 // the memory access modes! notice that only the immediate mode feeds the value proper; other modes expect the operation to do the PEEKs and POKEs
 

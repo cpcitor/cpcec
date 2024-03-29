@@ -226,7 +226,8 @@ void sid_reg_update(int x,int i)
 			sid_tone_limit[x][c]=SID_TABLE[x][c*7+0]+SID_TABLE[x][c*7+1]*256; break; // voice frequency
 		case  2: case  9: case 16: // pulse wave duty lo-byte
 		case  3: case 10: case 17: // pulse wave duty hi-byte
-			if ((sid_tone_pulse[x][c]=(SID_TABLE[x][c*7+2]+(SID_TABLE[x][c*7+3]&15)*256)<<8)>=0XFFF00) sid_tone_pulse[x][c]=0X100000; break; // voice duty cycle; pad it if required
+			if ((sid_tone_pulse[x][c]=(SID_TABLE[x][c*7+2]+(SID_TABLE[x][c*7+3]&15)*256)<<8)>=0XFFF00) sid_tone_pulse[x][c]=0X100000; // voice duty cycle; pad it if required
+			break;
 		case  4: case 11: case 18: // voice control
 			if (SID_TABLE[x][i]&1) // attack/release trigger (bit 0)
 			{
@@ -520,7 +521,7 @@ void sid_frame(void)
 			sid_mixer[x]=((sid_mixer[x]<i)+sid_mixer[x]+i)>>1;
 		else if (sid_digis[x]<9) // medium clobbering? ignore if too high!
 			sid_mixer[x]=(sid_mixer[x]*3+i)>>2;
-		if (!(sid_filters*sid_mixer[x])) sid_filter_zero(x); // cleanup
+		if (!(sid_filters&&sid_mixer[x])) sid_filter_zero(x); // cleanup
 		if (!sid_samples)
 			sid_voice[x]=0; // no samples? no hissing at all!
 		else if ((sid_digis[x]+SID_TABLE[x][24])<3)

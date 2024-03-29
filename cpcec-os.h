@@ -37,14 +37,14 @@
 
 // general engine constants and variables --------------------------- //
 
-//#define AUDIO_UNIT unsigned char // obsolete 8-bit audio
+//typedef unsigned char AUDIO_UNIT; // obsolete 8-bit audio
 //#define AUDIO_BITDEPTH 8
 //#define AUDIO_ZERO 128
-#define AUDIO_UNIT signed short // standard 16-bit audio
+typedef signed short AUDIO_UNIT; // standard 16-bit audio
 #define AUDIO_BITDEPTH 16
 #define AUDIO_ZERO 0
 #define AUDIO_BYTESTEP (AUDIO_CHANNELS*AUDIO_BITDEPTH/8) // i.e. 1, 2 or 4 bytes
-#define VIDEO_UNIT DWORD // the pixel style must be 0X00RRGGBB and nothing else!
+typedef DWORD VIDEO_UNIT; // the pixel style must be 0X00RRGGBB and nothing else!
 
 BYTE audio_memory[AUDIO_BYTESTEP<<AUDIO_L2BUFFER]; // audio buffer
 VIDEO_UNIT *video_frame,*video_blend; // video + blend frames, allocated on runtime
@@ -459,7 +459,7 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 			else if (!session_event) // special key, but only if not already set by debugger
 				session_event=(k-(GetKeyState(VK_CONTROL)<0?128:0))<<8;
 			break;
-		case WM_CHAR: // always follows WM_KEYDOWN
+		case WM_CHAR: // always follows WM_KEYDOWN; the `session_scan` loop seems not to trigger this, unlike SDL2
 			if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant inside debugger
 				session_event=wparam>32&&wparam<=255?wparam:0; // exclude SPACE and non-visible codes!
 			break;
@@ -484,13 +484,16 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 				switch (wparam)
 				{
 					case VK_F10: // F10 shows the popup menu
-						if (session_contextmenu()) return 0; break; // skip OS if the popup menu is allowed
+						if (session_contextmenu()) return 0; // skip OS if the popup menu is allowed
+						break;
 					case VK_RETURN: // ALT+RETURN toggles fullscreen
 						return session_fullblit=!session_fullblit,session_resize(),0; // skip OS
 					case VK_UP: //case VK_ADD: case 0XBB: // ALT+UP raises the zoom
-						return (!session_fullblit&&session_zoomblit<4&&(++session_zoomblit,session_resize())),0;
+						if (!session_fullblit&&session_zoomblit<4) ++session_zoomblit,session_resize();
+						return 0;
 					case VK_DOWN: //case VK_SUBTRACT: case 0XBD: // ALT+DOWN lowers it
-						return (!session_fullblit&&session_zoomblit>0&&(--session_zoomblit,session_resize())),0;
+						if (!session_fullblit&&session_zoomblit>0) --session_zoomblit,session_resize();
+						return 0;
 				}
 			else if (msg==WM_KILLFOCUS)
 				session_focused=0;
@@ -961,7 +964,7 @@ int session_scan(const char *s) // `s` is the name of the event; returns <0 on e
 	session_hdlg=CreateDialogParam(GetModuleHandle(0),(LPCSTR)34005,session_hwnd,(DLGPROC)scanproc,(LPARAM)s);
 	ShowWindow(session_hdlg,SW_SHOWDEFAULT); //UpdateWindow(session_hdlg);
 	for (MSG msg;session_hdlg&&GetMessage(&msg,NULL,0,0)>0;TranslateMessage(&msg),DispatchMessage(&msg))
-		if (msg.message==WM_KEYDOWN)
+		if (msg.message==WM_KEYDOWN) // dialogs hide WM_KEYDOWN events, so we must track them here
 		{
 			int i=((HIWORD(msg.lParam))&127)+(((HIWORD(msg.lParam))>>1)&128);
 			if (i!=KBCODE_L_SHIFT&&i!=KBCODE_R_SHIFT&&i!=KBCODE_L_CTRL&&i!=KBCODE_R_CTRL
@@ -1009,8 +1012,8 @@ int session_filedialog(char *r,const char *s,const char *t,int q,int f) // auxil
 			strcpy(session_tmpstr,session_path); // invalid path = default!
 	}
 	strcpy(session_substr,s);
-	strcpy(&session_substr[strlen(s)+1],s); // one NULL char between two copies of the same string
-	session_substr[strlen(s)*2+2]=session_substr[strlen(s)*2+3]=0;
+	i=strlen(s); strcpy(&session_substr[i+1],s); // one NULL char between two copies of the same string
+	session_substr[i*2+2]=session_substr[i*2+3]=0; // two NULL chars here will mark the end of the list
 	// tmpstr: "C:\ABC"; parmtr: "XYZ.EXT"; substr: "*.EXT;*.EXU","*.EXT;*.EXU",""
 	session_ofn.lpstrTitle=t;
 	session_ofn.lpstrInitialDir=session_tmpstr;

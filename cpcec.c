@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20240224"
+#define MY_VERSION "20240328"
 #define MY_LICENSE "Copyright (C) 2019-2024 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -49,6 +49,10 @@ Contact information: <mailto:cngsoft@gmail.com> */
 #define VIDEO_OFFSET_Y (17<<2) // (4<<4) //
 #define VIDEO_PIXELS_X (48<<4)
 #define VIDEO_PIXELS_Y (67<<3) // (34<<4) //
+//#define VIDEO_OFFSET_X (19<<4) // show the default 640x400 screen without the border
+//#define VIDEO_OFFSET_Y ( 9<<4)
+//#define VIDEO_PIXELS_X (40<<4)
+//#define VIDEO_PIXELS_Y (25<<4)
 #define VIDEO_HSYNC_LO (62<<4)
 #define VIDEO_HSYNC_HI (66<<4)
 #define VIDEO_VSYNC_LO (37<<4)
@@ -137,6 +141,7 @@ const int video_asic_table[32]= // the 0GRB format used in ASIC PLUS
 };
 const VIDEO_UNIT video_table[32+16+16+16]= // colour table, 0xRRGGBB style: the 32 original colours, followed by 16 levels of G, 16 of R and 16 of B
 {
+	#if 1 // linear RGB
 	0X808080,0X808080,0X00FF80,0XFFFF80,
 	0X000080,0XFF0080,0X008080,0XFF8080,
 	0XFF0080,0XFFFF80,0XFFFF00,0XFFFFFF,
@@ -145,7 +150,7 @@ const VIDEO_UNIT video_table[32+16+16+16]= // colour table, 0xRRGGBB style: the 
 	0X000000,0X0000FF,0X008000,0X0080FF,
 	0X800080,0X80FF80,0X80FF00,0X80FFFF,
 	0X800000,0X8000FF,0X808000,0X8080FF,
-	// OLD -/- NEW // (actually linear?)
+	// OLD above -/- NEW G/R/B below //
 	0X000000,0X001100,0X002200,0X003300,
 	0X004400,0X005500,0X006600,0X007700,
 	0X008800,0X009900,0X00AA00,0X00BB00,
@@ -158,6 +163,29 @@ const VIDEO_UNIT video_table[32+16+16+16]= // colour table, 0xRRGGBB style: the 
 	0X000044,0X000055,0X000066,0X000077,
 	0X000088,0X000099,0X0000AA,0X0000BB,
 	0X0000CC,0X0000DD,0X0000EE,0X0000FF,
+	#else // gamma: 1.6
+	0XA5A5A5,0XA5A5A5,0X00FFA5,0XFFFFA5,
+	0X0000A5,0XFF00A5,0X00A5A5,0XFFA5A5,
+	0XFF00A5,0XFFFFA5,0XFFFF00,0XFFFFFF,
+	0XFF0000,0XFF00FF,0XFFA500,0XFFA5FF,
+	0X0000A5,0X00FFA5,0X00FF00,0X00FFFF,
+	0X000000,0X0000FF,0X00A500,0X00A5FF,
+	0XA500A5,0XA5FFA5,0XA5FF00,0XA5FFFF,
+	0XA50000,0XA500FF,0XA5A500,0XA5A5FF,
+	// OLD above -/- NEW G/R/B below //
+	0X000000,0X002F00,0X004800,0X005D00,
+	0X006F00,0X008000,0X009000,0X009E00,
+	0X00AC00,0X00B900,0X00C600,0X00D200,
+	0X00DE00,0X00E900,0X00F400,0X00FF00,
+	0X000000,0X2F0000,0X480000,0X5D0000,
+	0X6F0000,0X800000,0X900000,0X9E0000,
+	0XAC0000,0XB90000,0XC60000,0XD20000,
+	0XDE0000,0XE90000,0XF40000,0XFF0000,
+	0X000000,0X00002F,0X000048,0X00005D,
+	0X00006F,0X000080,0X000090,0X00009E,
+	0X0000AC,0X0000B9,0X0000C6,0X0000D2,
+	0X0000DE,0X0000E9,0X0000F4,0X0000FF,
+	#endif
 };
 VIDEO_UNIT video_xlat[32]; // static colours only (dynamic ASIC PLUS colours go elsewhere)
 
@@ -170,7 +198,7 @@ VIDEO_UNIT video_xlat[32]; // static colours only (dynamic ASIC PLUS colours go 
 // mainly defined by the simultaneous operation of the video output
 // (32 horizontal thin pixels) and the Z80 behavior (4 cycles)
 // (the clock is technically 16 MHz but we mean atomic steps here)
-int multi_t=1; // overclocking factor
+int multi_t=0,multi_u=0; // overclocking shift+bitmask
 
 // HARDWARE DEFINITIONS ============================================= //
 
@@ -1132,7 +1160,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 			vsync_count+=2; vsync_match+=2;
 			// "PREHISTORIK 2", "EDGE GRINDER" and the like perform smooth horizontal scrolling with the low nibble of REG3.
 			// However, "SCROLL FACTORY" (and to a lesser degree "ONESCREEN COLONIES") expect the REG3 low nibble to do nothing.
-			video_nextscanline((hsync_count&15)+(VIDEO_LENGTH_X-hsync_limit)/2+((crtc_table[4]*crtc_double)?0: // kludge fingerprint: avoid 32K screens
+			video_nextscanline((hsync_count&15)+(VIDEO_LENGTH_X-hsync_limit)/2+((crtc_table[4]&&crtc_double)?0: // kludge fingerprint: avoid 32K screens
 				((crtc_limit_r3x>=2&&crtc_limit_r3x<=6)?(6-crtc_limit_r3x)*8:0))); // scanline event!
 			// the LA-7800 aligns the image in two ways: the second one is based on keeping the HSYNC_SET period steady.
 			int i=hsync_limit-(hsync_count-hsync_match)*2; if (i>0) // when the image is perfectly stable i==1024
@@ -1200,7 +1228,7 @@ int autorun_kbd_bit(int k) // combined autorun+keyboard+joystick bits
 	}
 	return kbd_bit[k]|joy_bit[k];
 }
-INLINE void autorun_next(void)
+INLINE void autorun_next(void) // handle AUTORUN
 {
 	switch (autorun_mode)
 	{
@@ -1234,7 +1262,7 @@ INLINE void autorun_next(void)
 			autorun_kbd_res(0x12); // RELEASE RETURN
 			if (plus_enabled&&disc_disabled) // Gremlin games ("Basil the Great Mouse Detective", "Gauntlet", "Skate Crazy"...)
 				POKE(0XC2D4)=0XC0; // need this to load on Plus; POKE(0XC374)=0 is redundant, because it's already zero.
-			autorun_mode=0;
+			disc_disabled&=1,autorun_mode=0; // end of AUTORUN
 			break;
 	}
 }
@@ -1278,20 +1306,16 @@ int z80_loss; // at least one device (the PLUS ASIC when DMA and PIO clash) can 
 void z80_sync(int t) // the Z80 asks the hardware/video/audio to catch up
 {
 	static int r=0; main_t+=t;
-	int tt=(r+=t)/multi_t; // calculate base value of `t`
-	r-=(t=tt*multi_t); // adjust `t` and keep remainder
+	//if (!disc_disabled) // redundant, in most cases disc_main() does nothing
+		disc_main(t);
+	if (tape_enabled&&tape)
+		audio_dirty|=tape_loud,tape_main(t); // echo the tape signal thru sound!
+	t=(r+=t)>>multi_t; r&=multi_u; // calculate base value of `t` and keep remainder
 	if (t>0)
 	{
-		//if (!disc_disabled) // redundant, in most cases disc_main() does nothing
-			disc_main(t);
-		if (tape_enabled&&tape)
-			audio_dirty|=tape_loud,tape_main(t); // echo the tape signal thru sound!
-		if (tt>0)
-		{
-			if (audio_queue+=tt,audio_dirty&&audio_required)
-				audio_main(audio_queue),audio_dirty=audio_queue=0;
-			video_main(tt);
-		}
+		if (audio_queue+=t,audio_dirty&&audio_required)
+			audio_main(audio_queue),audio_dirty=audio_queue=0;
+		video_main(t);
 	}
 }
 
@@ -1986,6 +2010,8 @@ void z80_tape_trap(void)
 BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 {
 	BYTE b=255; z80_loss=0; // as in z80_send, multiple devices can answer to the Z80 request at the same time if the bit patterns match; hence the use of "b&=" from the second device onward.
+	if (!(p&0x8000)) // 0x7F00, GATE ARRAY (1/2)
+		cprintf("%08X: RECV $%04X!\n",z80_pc.w,p); // do any titles do this!?
 	if ((p&0x4200)==0x0200) // 0xBE00-0xBF00, CRTC 6845
 	{
 		if (!(p&0x100)) // 0xBE00: depends on the CRTC type!
@@ -2043,6 +2069,8 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 				b&=(pio_control&1)?15|(pio_port_c&~15):pio_port_c; // *!* todo: else...? *!*
 		}
 	}
+	if (!(p&0x2000)) // 0xDF00, GATE ARRAY (2/2)
+		cprintf("%08X: RECV $%04X!\n",z80_pc.w,p); // do any titles do this!?
 	if (!(p&0x0400)) // 0xFB00, FDC 765
 	{
 		if ((p&0x0380)==0x0300) // 0xFB7F: DATA I/O // 0xFB7E: STATUS
@@ -2283,11 +2311,13 @@ BYTE z80_ack_delay=0; // unlike Z80_LOCAL it cannot be local, it must stick :-(
 #define Z80_MREQ_1X_NEXT(t)
 #define Z80_WAIT(t)
 #define Z80_WAIT_IR1X(t)
+#define Z80_DUMB(w) ((void)0) // dumb 3-T MREQ
 #define Z80_PEEK PEEK
 #define Z80_PEEK0 Z80_PEEK // untrappable single read, use with care
 #define Z80_PEEK9 Z80_PEEK // trappable single read, be careful too
 #define Z80_PEEK1 Z80_PEEK
 #define Z80_PEEK2 Z80_PEEK
+#define Z80_DUMBZ(w) ((void)0) // dumb 4-T MREQ
 #define Z80_PEEKZ Z80_PEEK // slow PEEK
 #define Z80_PRAE_PEEKXY PEEK // special DD/FD PEEK (1/2)
 #define Z80_POST_PEEKXY // special DD/FD PEEK (2/2)
@@ -2387,10 +2417,10 @@ void debug_info(int q)
 			sprintf(DEBUG_INFOZ(7+q),"%03X,%03X:%c  %03X,%03X:%c"
 				,(mgetii(&plus_sprite_xyz[q*16+ 0]))&0xFFF // posx
 				,(mgetii(&plus_sprite_xyz[q*16+ 2]))&0xFFF // posy
-				,hexa1[q0]+((q0&3)*(q0&12)?128:0) // hilight if visible
+				,hexa1[q0]+((q0&3)&&(q0&12)?128:0) // hilight if visible
 				,(mgetii(&plus_sprite_xyz[q*16+ 8]))&0xFFF // posx
 				,(mgetii(&plus_sprite_xyz[q*16+10]))&0xFFF // posy
-				,hexa1[q1]+((q1&3)*(q1&12)?128:0)); // ditto
+				,hexa1[q1]+((q1&3)&&(q1&12)?128:0)); // ditto
 		}
 	}
 }
@@ -2398,9 +2428,9 @@ int grafx_mask(void) { return 0XFFFF; }
 int grafx_size(int i) { return i*4; }
 int grafx_show(VIDEO_UNIT *t,int g,int n,int w,int o)
 {
-	g-=4; do
+	BYTE z=-(o&1); g-=4; do
 	{
-		w&=0XFFFF; BYTE b=debug_peekpook(w); // readable/writeable (up to the user)
+		w&=0XFFFF; BYTE b=debug_peekpook(w)^z; // readable/writeable (up to the user)
 		if (gate_mcr&1) // MODE 1
 		{
 			*t++=video_clut[gate_mode1[0][b]];
@@ -2535,8 +2565,8 @@ int bios_load(char *s) // load a cartridge file or a firmware ROM file. 0 OK, !0
 			{
 				ss=tt=UTF8_BOM(t);
 				while (*ss&&*ss<=' ') ++ss; // trim left
-				while ((*tt=*ss)>=' ') ++tt,++ss; *tt=0; // trim right
-				if (*t>' '&&(tt=strchr(t,'='))&&tt[1]) // "name[blank]=[blank]value"?
+				while ((*tt=*ss)>=' ') ++tt,++ss; // trim right
+				*tt=0; if (*t>' '&&(tt=strchr(t,'='))&&tt[1]) // "name[blank]=[blank]value"?
 				{
 					BYTE *rr=tt; while (*++rr==' ') {} strcpy(uu,rr); // trim right, copy
 					while (*--tt==' ') {} tt[1]=0; // trim left, keep the name
@@ -2664,7 +2694,7 @@ int dandanator_load(char *s) // inserts Dandanator cartridge, performs several t
 
 // snapshot file handling operations -------------------------------- //
 
-char snap_pattern[]="*.sna"; char snap_magic8[]="MV - SNA";
+char snap_pattern[]="*.sna",snap_magic8[]="MV - SNA";
 char snap_path[STRMAX]="",snap_extended=1; // compress memory dumps and save extra blocks
 
 void snap_save_rle5h(int k,int l,BYTE **t) // flush a compression code; `l` can be zero!
@@ -3147,7 +3177,8 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 				if (q) // autorun for tape and disc
 				{
 					dandanator_remove(),old_type_id=old_type_id>2?-1:old_type_id,all_reset(),bios_reload(); // force firmware reload if required
-					if (tape) disc_disabled|=2; autorun_mode=type_id<3?disc_disabled?1:3:4; autorun_t=55; // the PLUS menu must be handled separately
+					if (tape) disc_disabled|=2; // disable disc to avoid accidents
+					autorun_mode=type_id<3?disc_disabled?1:3:4; autorun_t=55; // the PLUS menu must be handled separately
 				}
 			}
 			else // load bios? reset!
@@ -3171,37 +3202,37 @@ char file_pattern[]="*.cdp;*.cdt;*.cpr;*.crt;*.csw;*.dsk;*.ini;*.des;*.rom;*.sna
 char session_menudata[]=
 	"File\n"
 	"0x8300 Open any file..\tF3\n"
-	"0xC300 Load snapshot..\tShift+F3\n"
-	"0x0300 Load last snapshot\tCtrl+F3\n"
+	"0xC300 Load snapshot..\tShift-F3\n"
+	"0x0300 Load last snapshot\tCtrl-F3\n"
 	"0x8200 Save snapshot..\tF2\n"
-	"0x0200 Save last snapshot\tCtrl+F2\n"
+	"0x0200 Save last snapshot\tCtrl-F2\n"
 	"=\n"
 	"0x8700 Insert disc into A:..\tF7\n"
 	"0x8701 Create disc in A:..\n"
 	"0x0701 Flip disc sides in A:\n"
-	"0x0700 Remove disc from A:\tCtrl+F7\n"
-	"0xC700 Insert disc into B:..\tShift+F7\n"
+	"0x0700 Remove disc from A:\tCtrl-F7\n"
+	"0xC700 Insert disc into B:..\tShift-F7\n"
 	"0xC701 Create disc in B:..\n"
 	"0x4701 Flip disc sides in B:\n"
-	"0x4700 Remove disc from B:\tCtrl+Shift+F7\n"
+	"0x4700 Remove disc from B:\tCtrl-Shift-F7\n"
 	"=\n"
 	"0x8800 Insert tape..\tF8\n"
-	"0xC800 Record tape..\tShift+F8\n"
+	"0xC800 Record tape..\tShift-F8\n"
 	"0x8801 Browse tape..\n"
-	"0x0800 Remove tape\tCtrl+F8\n"
-	//"0x4800 Play tape\tCtrl+Shift+F8\n"
+	"0x0800 Remove tape\tCtrl-F8\n"
+	//"0x4800 Play tape\tCtrl-Shift-F8\n"
 	"0x4801 Flip tape polarity\n"
 	#ifdef Z80_DANDANATOR
 	"=\n"
-	"0xC500 Insert Dandanator..\tShift+F5\n"
-	"0x4500 Remove Dandanator\tCtrl+Shift+F5\n"
+	"0xC500 Insert Dandanator..\tShift-F5\n"
+	"0x4500 Remove Dandanator\tCtrl-Shift-F5\n"
 	"0x0510 Writeable Dandanator\n"
 	#endif
 	"=\n"
 	"0x0080 E_xit\n"
 	"Edit\n"
 	"0x8500 Select firmware..\tF5\n"
-	"0x0500 Reset emulation\tCtrl+F5\n"
+	"0x0500 Reset emulation\tCtrl-F5\n"
 	"0x8F00 Pause\tPause\n"
 	"0x8900 Debug\tF9\n"
 	//"0x8910 NMI\n"
@@ -3235,16 +3266,16 @@ char session_menudata[]=
 	"0x8603 3" I18N_MULTIPLY " realtime speed\n"
 	"0x8604 4" I18N_MULTIPLY " realtime speed\n"
 	"0x8600 Run at full throttle\tF6\n"
-	//"0x0600 Raise Z80 speed\tCtrl+F6\n"
-	//"0x4600 Lower Z80 speed\tCtrl+Shift+F6\n"
+	//"0x0600 Raise Z80 speed\tCtrl-F6\n"
+	//"0x4600 Lower Z80 speed\tCtrl-Shift-F6\n"
 	"0x0601 1" I18N_MULTIPLY " CPU clock\n"
 	"0x0602 2" I18N_MULTIPLY " CPU clock\n"
-	"0x0603 3" I18N_MULTIPLY " CPU clock\n"
-	"0x0604 4" I18N_MULTIPLY " CPU clock\n"
+	"0x0603 4" I18N_MULTIPLY " CPU clock\n"
+	"0x0604 8" I18N_MULTIPLY " CPU clock\n"
 	"=\n"
-	"0x0400 Virtual joystick\tCtrl+F4\n"
+	"0x0400 Virtual joystick\tCtrl-F4\n"
 	"0x0401 Redefine virtual joystick\n"
-	"0x4400 Flip joystick buttons\tCtrl+Shift+F4\n"
+	"0x4400 Flip joystick buttons\tCtrl-Shift-F4\n"
 	"=\n"
 	"0x851F Strict snapshots\n"
 	"0x852F Printer output..\n"
@@ -3252,8 +3283,8 @@ char session_menudata[]=
 	"0x8590 Strict disc writes\n"
 	"0x8591 Read-only disc by default\n"
 	//"=\n"
-	"0x0900 Tape speed-up\tCtrl+F9\n"
-	"0x4900 Tape analysis\tCtrl+Shift+F9\n"
+	"0x0900 Tape speed-up\tCtrl-F9\n"
+	"0x4900 Tape analysis\tCtrl-Shift-F9\n"
 	"0x0901 Tape auto-rewind\n"
 	"0x0605 Power-up boost\n"
 	"Audio\n"
@@ -3274,24 +3305,24 @@ char session_menudata[]=
 	"0x8403 Middle filtering\n"
 	"0x8404 Heavy filtering\n"
 	"=\n"
-	"0x4C00 Record YM file\tCtrl+Shift+F12\n"
-	"0x0C00 Record WAV file\tCtrl+F12\n"
+	"0x4C00 Record YM file\tCtrl-Shift-F12\n"
+	"0x0C00 Record WAV file\tCtrl-F12\n"
 	"0x8C03 High wavedepth\n"
 	"Video\n"
-	"0x8901 Onscreen status\tShift+F9\n"
+	"0x8901 Onscreen status\tShift-F9\n"
 	"0x8B01 Monochrome\n"
 	"0x8B02 Dark palette\n"
 	"0x8B03 Normal palette\n"
 	"0x8B04 Light palette\n"
 	"0x8B05 Green screen\n"
 	//"0x8B00 Next palette\tF11\n"
-	//"0xCB00 Prev. palette\tShift+F11\n"
+	//"0xCB00 Prev. palette\tShift-F11\n"
 	"=\n"
 	"0x8907 Microwave static\n"
 	"0x8903 X-masking\n"
 	"0x8902 Y-masking\n"
-	//"0x0B00 Next scanline\tCtrl+F11\n"
-	//"0x4B00 Prev. scanline\tCtrl+Shift+F11\n"
+	//"0x0B00 Next scanline\tCtrl-F11\n"
+	//"0x4B00 Prev. scanline\tCtrl-Shift-F11\n"
 	"0x0B01 All scanlines\n"
 	"0x0B03 Simple interlace\n"
 	"0x0B04 Double interlace\n"
@@ -3313,7 +3344,7 @@ char session_menudata[]=
 	"=\n"
 	"0x8C00 Save screenshot\tF12\n"
 	"0x8C04 Output QOI format\n"
-	"0xCC00 Record film\tShift+F12\n"
+	"0xCC00 Record film\tShift-F12\n"
 	"0x8C02 High framerate\n"
 	"0x8C01 High resolution\n"
 	"Window\n"
@@ -3326,7 +3357,7 @@ char session_menudata[]=
 	"0x8A15 300% zoom\n"
 	"Help\n"
 	"0x8100 Help..\tF1\n"
-	"0x0100 About..\tCtrl+F1\n"
+	"0x0100 About..\tCtrl-F1\n"
 	"";
 
 void session_clean(void) // refresh options
@@ -3355,7 +3386,7 @@ void session_clean(void) // refresh options
 	session_menucheck(0x4900,tape_fastload);
 	session_menucheck(0x0400,session_key2joy);
 	session_menucheck(0x4400,key2joy_flag);
-	session_menuradio(0x0601+multi_t-1,0x0601,0x0604);
+	session_menuradio(0x0601+multi_t,0x0601,0x0604);
 	session_menucheck(0x0605,power_boost-POWER_BOOST0);
 	session_menuradio(0x8501+crtc_type,0x8501,0x8505);
 	session_menucheck(0x8508,!crtc_hold);
@@ -3411,7 +3442,7 @@ void session_clean(void) // refresh options
 	#endif
 	#endif
 	video_resetscanline(),debug_dirty=1; sprintf(session_info,"%d:%dK %s%c %d.0MHz"//" | disc %s | tape %s | %s"
-		,ram_dirty,ram_kbyte[ram_depth],plus_enabled?"ASIC":"CRTC",'0'+crtc_type,multi_t*4);
+		,ram_dirty,ram_kbyte[ram_depth],plus_enabled?"ASIC":"CRTC",'0'+crtc_type,4<<multi_t);
 }
 void session_user(int k) // handle the user's commands
 {
@@ -3658,16 +3689,15 @@ void session_user(int k) // handle the user's commands
 			break;
 		#endif
 		case 0x852F: // PRINTER
-			if (printer)
-				printer_close();
-			else if (s=session_newfile(NULL,"*.txt","Printer output"))
-				if (printer_p=0,!(printer=fopen(s,"wb")))
-					session_message("Cannot record printer!",txt_error);
+			if (printer) printer_close(); else
+				if (s=session_newfile(NULL,"*.txt","Printer output"))
+					if (printer_p=0,!(printer=fopen(s,"wb")))
+						session_message("Cannot record printer!",txt_error);
 			break;
 		case 0x8600: // F6: TOGGLE REALTIME
 			if (!session_shift)
 				{ session_fast^=1; break; }
-			//case 0xC600: // SHIFT+F6: NEXT CRTC TYPE
+			//case 0xC600: // +SHIFT: NEXT CRTC TYPE
 			if (plus_enabled) {} // CRTC TYPE 3
 			else
 			{
@@ -3683,13 +3713,14 @@ void session_user(int k) // handle the user's commands
 			session_rhythm=k-0x8600-1; session_fast&=~1;
 			break;
 		case 0x0600: // ^F6: TOGGLE TURBO Z80
-			multi_t=(((multi_t+(session_shift?-1:1))-1)&3)+1;
+			multi_u=(1<<(multi_t=(multi_t+(session_shift?-1:1))&3))-1;
+			// update hardware?
 			break;
 		case 0x0601: // CPU x1
 		case 0x0602: // CPU x2
 		case 0x0603: // CPU x3
 		case 0x0604: // CPU x4
-			multi_t=k-0x0600;
+			multi_u=(1<<(multi_t=k-0x0601))-1;
 			break;
 		case 0x0605: // POWER-UP BOOST
 			power_boost^=POWER_BOOST1^POWER_BOOST0;
@@ -4138,7 +4169,7 @@ int main(int argc,char *argv[])
 			z80_main(( // clump Z80 instructions together to gain speed...
 				(session_fast&-2)?VIDEO_LENGTH_X>>4: // tape loading allows simpler timings, but some sync is still needed
 				video_pos_x<video_threshold?1:(VIDEO_LENGTH_X+15-video_pos_x)>>4 // VRAM effects' threshold ("Chapelle Sixteen")
-			)*multi_t); // ...without missing any IRQ and CRTC deadlines!
+			)<<multi_t); // ...without missing any IRQ and CRTC deadlines!
 		if (session_signal&SESSION_SIGNAL_FRAME) // end of frame?
 		{
 			if (!video_framecount&&onscreen_flag)

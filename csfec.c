@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "CSFEC"
 #define my_caption "csfec"
-#define MY_VERSION "20240224"
+#define MY_VERSION "20240328"
 #define MY_LICENSE "Copyright (C) 2019-2024 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -46,9 +46,13 @@ Contact information: <mailto:cngsoft@gmail.com> */
 #define VIDEO_LENGTH_X (63<<4) // HBLANK 9c, BORDER 7c, BITMAP 40c, BORDER 7c
 #define VIDEO_LENGTH_Y (39<<4)
 #define VIDEO_OFFSET_X (13<<4)
-#define VIDEO_OFFSET_Y (23<<1) // the best balance for "Delta" (score panel on top) and "Megaphoenix" (on bottom)
+#define VIDEO_OFFSET_Y (11<<2) // the best balance for "Delta" (score panel on top) and "Megaphoenix" (on bottom)
 #define VIDEO_PIXELS_X (48<<4)
 #define VIDEO_PIXELS_Y (67<<3)
+//#define VIDEO_OFFSET_X (17<<4) // show the default 640x400 screen without the border
+//#define VIDEO_OFFSET_Y (25<<2)
+//#define VIDEO_PIXELS_X (40<<4)
+//#define VIDEO_PIXELS_Y (25<<4)
 #define VIDEO_RGB2Y(r,g,b) ((r)*3+(g)*6+(b)) // generic RGB-to-Y expression
 
 #if defined(SDL2)||!defined(_WIN32)
@@ -141,27 +145,27 @@ VIDEO_UNIT video_table[16]; // colour table, 0xRRGGBB style: the 16 original col
 VIDEO_UNIT video_xlat[16]; // all colours are static in the VIC-II
 
 char palette_path[STRMAX]="";
-int video_table_load(char *s) // based on VICE's palette files (either RR GG BB or RR GG BB X)
+int video_table_load(char *s) // based on VICE's palette files (either RR GG BB or RR GG BB X) for the 16 inks
 {
 	FILE *f=puff_fopen(s,"r"); if (!f) return -1;
 	unsigned char t[STRMAX],n=0; VIDEO_UNIT p[16];
-	while (fgets(t,STRMAX,f)&&n<=16) if (*t>' '&&*t!='#')
-		{ int r,g,b; if (sscanf(UTF8_BOM(t),"%X%X%X",&r,&g,&b)!=3) n=16; else if (n<16) p[n]=((r&255)<<16)+((g&255)<<8)+(b&255); ++n; }
+	while (fgets(t,STRMAX,f)&&n<=16) if (*t>'#') // skip "# comment" and others
+		{ unsigned int r,g,b; if (sscanf(UTF8_BOM(t),"%X%X%X",&r,&g,&b)!=3) n=16; else if (n<16) p[n]=((r&255)<<16)+((g&255)<<8)+(b&255); ++n; }
 	puff_fclose(f); if (n!=16) return -1;
 	STRCOPY(palette_path,s); for (n=0;n<16;++n) video_table[n]=p[n]; return 0;
 }
 void video_table_reset(void)
 {
 	VIDEO_UNIT const p[]={
-		// VICE 2.4 -- vice-emu.sourceforge.io
-		//0X000000,0XFFFFFF,0X924A40,0X84C5CC,0X9351B6,0X72B14B,0X483AAA,0XD5DF7C,
-		//0X99692D,0X675200,0XC18178,0X606060,0X8A8A8A,0XB3EC91,0X867ADE,0XB3B3B3,
-		// Pepto's Colodore v1 -- colodore.com
-		//0X000000,0XFFFFFF,0X813338,0X75CEC8,0X8E3C97,0X56AC4D,0X2E2C9B,0XEDF171,
-		//0X8E5029,0X553800,0XC46C71,0X4A4A4A,0X7B7B7B,0XA9FF9F,0X706DEB,0XB2B2B2,
 		// Community-Colors v1.2a -- p1x3l.net
 		0X000000,0XFFFFFF,0XAF2A2A,0X62D8CC,0XB03FB6,0X4AC64A,0X3739C4,0XE4ED4E,
 		0XB6591C,0X683808,0XEA746C,0X4D4D4D,0X848484,0XA6FA9E,0X707CE6,0XB6B6B6,
+		// Pepto's Colodore v1 -- colodore.com
+		//0X000000,0XFFFFFF,0X813338,0X75CEC8,0X8E3C97,0X56AC4D,0X2E2C9B,0XEDF171,
+		//0X8E5029,0X553800,0XC46C71,0X4A4A4A,0X7B7B7B,0XA9FF9F,0X706DEB,0XB2B2B2,
+		// VICE 2.4 -- vice-emu.sourceforge.io
+		//0X000000,0XFFFFFF,0X924A40,0X84C5CC,0X9351B6,0X72B14B,0X483AAA,0XD5DF7C,
+		//0X99692D,0X675200,0XC18178,0X606060,0X8A8A8A,0XB3EC91,0X867ADE,0XB3B3B3,
 	};
 	for (int n=0;n<16;++n) video_table[n]=p[n];
 }
@@ -170,7 +174,7 @@ void video_table_reset(void)
 
 #define TICKS_PER_FRAME ((VIDEO_LENGTH_X*VIDEO_LENGTH_Y)/32)
 #define TICKS_PER_SECOND (TICKS_PER_FRAME*VIDEO_PLAYBACK)
-int multi_t=1; // overclocking factor
+int multi_t=0,multi_u=0; // overclocking shift+bitmask
 
 // HARDWARE DEFINITIONS ============================================= //
 
@@ -294,9 +298,9 @@ int cart_insert(char *s) // insert a cartridge or "inject" a program file thru a
 #define cart_reset() (cart_bank=0,m6510_start=(cart_mode=cart_boot)==1?mgetii(&cart[0X3FFC]):mgetii(&mem_rom[0X1FFC]))
 
 // PORT $0001 input mask: 0XFF -0X17 (MMU + TAPE INP) -0X20 (TAPE MOTOR) =0XC8!
-#define MMU_CFG_GET(w) (w?(mmu_cfg[0]&mmu_cfg[1])+(~mmu_cfg[0]&((mmu_out|mmu_inp)&0XDF)):mmu_cfg[0])
+#define MMU_CFG_GET(w) ((w)?(mmu_cfg[0]&mmu_cfg[1])+(~mmu_cfg[0]&((mmu_out|mmu_inp)&0XDF)):mmu_cfg[0])
 BYTE mmu_cfg_get(WORD w) { return MMU_CFG_GET(w); }
-#define MMU_CFG_SET(w,b) do{ mmu_cfg[w]=b; mmu_update(); }while(0)
+#define MMU_CFG_SET(w,b) do{ mmu_cfg[(w)]=(b); mmu_update(); }while(0)
 #define mmu_cfg_set MMU_CFG_SET
 
 #define mmu_recalc() (mmu_mcr=~0,mmu_update()) // this overrides the MMU cache; use this with care!
@@ -311,14 +315,14 @@ void mmu_update(void) // set the address offsets, as well as the tables for m651
 		BYTE *recv8=mem_ram,*recva=mem_ram,*recve=mem_ram,*recvd=mem_ram,*sendd=mem_ram; // all RAM by default
 		switch ((mmu_mcr=i)&7) // notice the "incremental" design and the lack of `break` here!
 		{
-			case 3: recva=&mem_rom[0X2000-0XA000]; // BASIC
-			case 2: recve=&mem_rom[0X0000-0XE000]; // KERNAL
-			case 1: recvd=&mem_rom[0X4000-0XD000]; // CHARGEN
-			case 0: break;
 			case 7: recva=&mem_rom[0X2000-0XA000]; // BASIC
 			case 6: recve=&mem_rom[0X0000-0XE000]; // KERNAL
 			case 5: recvd=sendd=&mem_i_o[-0XD000]; // I/O
 			case 4: break;
+			case 3: recva=&mem_rom[0X2000-0XA000]; // BASIC
+			case 2: recve=&mem_rom[0X0000-0XE000]; // KERNAL
+			case 1: recvd=&mem_rom[0X4000-0XD000]; // CHARGEN
+			case 0: break;
 		}
 		/*if (cart)*/ switch (mmu_mcr&192) // now we check the cartridge mode; again, the design is incremental
 		{
@@ -439,6 +443,30 @@ BYTE cia_port_13[2],cia_port_11[2]; // flags: CIA interrupt status + locked time
 char vicii_n_cia=0; // the counter of frames between decimals of second (5 PAL, 6 NTSC)
 char cia_nouveau=1; // the original CIA 6526 had a bug that the later CIA 6526A fixed out: polling port 13 halted the countdown for an instant (?)
 char vic_nouveau=1; // the original CIA 6526 - VIC-II 6569 bridge relied on discrete glue logic instead of a custom IC devised for the VIC-II 8565
+
+int cias_alarmclock(int i) // check the alarm; return ZERO if no interruption must trigger, NONZERO otherwise
+{
+	if (equalsiiii(&CIA_TABLE_0[i*(CIA_TABLE_1-CIA_TABLE_0)+8],cia_hhmmssd[i]))
+		if (((cia_port_13[i]|=4)&CIA_TABLE_0[i*(CIA_TABLE_1-CIA_TABLE_0)+13]&4)&&cia_port_13[i]<128)
+			return cia_port_13[i]+=128;
+	return 0;
+}
+int cias_24hours(int i) // tick the CIA time-of-day clock; return ZERO if no alarm happens, NONZERO otherwise
+{
+	DWORD x=cia_hhmmssd[i]; if (x&0X40000000) return 0;
+	if ((++x&15)>=10) // tenths of second
+		if (!(~(x+= 256 - 10 )&0X00000A00)) // seconds
+			if (!(~(x+=0X00000600)&0X00006000)) // tens of seconds
+				if (!(~(x+=0X0000A000)&0X000A0000)) // minutes
+					if (!(~(x+=0X00060000)&0X00600000)) // tens of minutes
+					{
+						if (!(~(x+=0X00A00000)&0X13000000)) // hours
+							x-=0X92000000;
+						else if (!(~(x&0X0A000000))) // tens of hours
+							x+=0X06000000;
+					}
+	return cia_hhmmssd[i]=x,cias_alarmclock(i);
+}
 
 // signals between the C64 main CPU and the C1541 controller:
 // on the C1541 side ($1800)
@@ -629,11 +657,8 @@ int tape_catalog(char *t,int x) // fills the buffer `t` of size `x` with the tap
 		case +3: // T64
 			for (int n=0;n<tape_filesize;++n) // ditto, the contents of a T64 file are limited
 			{
-				char s[17],m; for (m=0;m<16;++m)
-				{
-					int k=tape_buffer[80+n*32+m]&127;
-					if (k<32) k='?'; s[m]=k;
-				}
+				char s[17],m,k; for (m=0;m<16;++m)
+					k=tape_buffer[80+n*32+m]&127,s[m]=k<32?'?':k;
 				while (m>0&&s[m-1]==' ') --m; // trim spaces!
 				s[m]=0;
 				u+=1+sprintf(u,"%010d -- PROGRAM '%s', %d bytes",n,s,mgetii(&tape_buffer[68+n*32])-mgetii(&tape_buffer[66+n*32]));
@@ -729,8 +754,8 @@ int t64_loadfile(void) // handles the KERNAL operation "$F533: Load File From Ta
 	if (mem_ram[0X93]||i>16) return 1; // VERIFY (instead of LOAD) or invalid filename? quit!
 	if (!i) return tape_t64load(NULL); // no filename? load anything!
 	char t[17]; memcpy(t,&mem_ram[mgetii(&mem_ram[0XBB])],16);
-	while (i<16) t[i++]=' '; t[i]=0; // pad the filename with spaces!
-	return tape_t64load(t);
+	while (i<16) t[i++]=' '; // pad the filename with spaces!
+	return t[i]=0,tape_t64load(t);
 }
 
 // behind the CIA: disc I/O handling -------------------------------- //
@@ -1981,7 +2006,7 @@ int m6510_tick(int q) // handles the essential events that happen on each tick, 
 				if (vicii_cow& 16) vicii_takeover=1;
 				if (frame_pos_y>=VIDEO_OFFSET_Y&&frame_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y&&frame_pos_y==video_pos_y) video_drawscanline(); // scanline is complete!
 				video_nextscanline(0); // scanline event!
-				audio_queue+=vicii_len_x/multi_t; // update audio; even the sharpest samples eat more than one scanline per signal
+				audio_queue+=vicii_len_x>>multi_t; // update audio; even the sharpest samples eat more than one scanline per signal
 				M6510_62500HZ_H; // evenly distributed
 				break;
 			case +1:
@@ -2005,23 +2030,16 @@ int m6510_tick(int q) // handles the essential events that happen on each tick, 
 				{
 					//if (video_pos_y>=VIDEO_LENGTH_Y)
 					//{
-						video_newscanlines(video_pos_x,0); // end of frame!
+						#define VICII_POS_Y_ADD (-1) // the physical VSYNC when this line ends, hence this value
+						video_newscanlines(video_pos_x,VICII_POS_Y_ADD*2); // end of frame!
 					//}
 					// handle decimals, seconds, minutes, hours and alarm in a single block;
 					// bit 30 keeps the clock from updating (f.e. while setting the time)
-					#define cia_alarmclock(xxx,yyy,zzz) \
-						do{ if (((cia_port_13[yyy]|=4)&xxx[13]&4)&&cia_port_13[yyy]<128) { cia_port_13[yyy]+=128; zzz; } }while(0)
-					#define CIAS_24HOURS(x,y,z) do{ if (!(x&0X40000000)) { if ((++x&15)>=10) \
-						if (!(~(x+= 256 - 10 )&0X00000A00)) if (!(~(x+=0X00000600)&0X00006000)) \
-						if (!(~(x+=0X0000A000)&0X000A0000)) if (!(~(x+=0X00060000)&0X00600000)) \
-						{ if (!(~(x+=0X00A00000)&0X13000000)) x-=0X92000000; \
-						else if (!(~(x&0X0A000000))) x+=0X06000000; } \
-						if (equalsiiii(y,x)) z; } }while(0)
 					if (--vicii_n_cia<=0)
 					{
 						vicii_n_cia=vicii_len_y<288?6:5; // i.e. NTSC versus PAL
-						if (!cia_port_11[0]) CIAS_24HOURS(cia_hhmmssd[0],&CIA_TABLE_0[8],cia_alarmclock(CIA_TABLE_0,0,M6510_CIA_SET));
-						if (!cia_port_11[1]) CIAS_24HOURS(cia_hhmmssd[1],&CIA_TABLE_1[8],cia_alarmclock(CIA_TABLE_1,1,M6510_NMI_SET));
+						if (!cia_port_11[0]) if (cias_24hours(0)) { M6510_CIA_SET; }
+						if (!cia_port_11[1]) if (cias_24hours(1)) { M6510_NMI_SET; }
 					}
 					// reset VIC-II in-frame counters
 					vicii_pos_y=vicii_backup=vicii_frame=0;
@@ -2187,16 +2205,12 @@ int m6510_tick(int q) // handles the essential events that happen on each tick, 
 /*void m6510_sync(int t) // handles the hardware events that can gather multiple clock ticks, set here as `t`
 {
 	static int r=0; //main_t+=t;
-	int tt=(r+=t)/multi_t; // calculate base value of `t`
-	r-=(t=tt*multi_t); // adjust `t` and keep remainder
+	t=(r+=t)>>multi_t; r&=multi_u; // calculate base value of `t` and keep remainder
 	if (t>0)
 	{
-		if (tt>0)
-		{
-			... // devices with their own clocks
-		}
-		... // devices sharing clock with the M6510 even when it's sped-up
+		... // devices with their own clocks
 	}
+	... // devices sharing clock with the M6510 even when it's sped-up
 }*/
 
 // the C64 special I/O addresses are divided in several spaces:
@@ -2227,12 +2241,12 @@ BYTE m6510_recv(WORD w) // receive a byte from the I/O address `w`
 					case 22: return VICII_TABLE[22]|0XC0; // $D016: CONTROL REGISTER 2
 					case 24: return VICII_TABLE[24]|0X01; // $D018: MEMORY CONTROL REGISTER
 					case 25: // $D019: INTERRUPT REQUEST REGISTER
-					case 26: // $D01A: INTERRUPT REQUEST MASK
 						return VICII_TABLE[25]|0X70;
 					case 30: return w=VICII_TABLE[30],VICII_TABLE[30]=0,w; // $D01E: SPRITES-SPRITES COLLISIONS
 					case 31: return w=VICII_TABLE[31],VICII_TABLE[31]=0,w; // $D01F: SPRITES-SCENERY COLLISIONS
 					case 32: case 33: case 34: case 35: case 36: case 37: case 38: case 39: case 40:
 					case 41: case 42: case 43: case 44: case 45: case 46: // $D020-$D02E: COLOURS
+					case 26: // $D01A: INTERRUPT REQUEST MASK // with 0X70, "HVSC 20 YEARS" hangs on launch!
 						return VICII_TABLE[w]|0XF0;
 					case 47: // ???
 					case 48: // "PENTAGRAM": this is ALWAYS $FF on a C64, but not on a C128!
@@ -2406,6 +2420,7 @@ void m6510_send(WORD w,BYTE b) // send the byte `b` to the I/O address `w`
 							// - "FUNNY RASTERS" ($C15F, Y=$03A,$03B...) freezes the cursor;
 							// - "ONEDER-OXYRON" ($3403, every 4 Y...) reloads the attributes;
 							// ...and all we know is that the VIC-II dominant range is X=12..55
+							// one mystery: the high score scroll of "BMX KIDZ" is glitchy, why?
 							if (vicii_badline=!((b-vicii_pos_y)&7))
 							{
 								if (vicii_pos_x>=12/*&&vicii_pos_x<55*/)
@@ -2423,9 +2438,10 @@ void m6510_send(WORD w,BYTE b) // send the byte `b` to the I/O address `w`
 						{
 							if (vicii_pos_y==48)
 								vicii_ready=1; // we can enable the display if we're still on line $30
-							else if (vicii_pos_y>/*=*/48&&vicii_pos_y<248) // '&&!vicii_ready' is WRONG: "SUPER STOCK CAR" (menu)
-								if (!vicii_takeover) // avoid top-line glitch in "MAYHEM IN MONSTERLAND" (cfr. "CREATURES")
-									vicii_mode&=~32; // remove border but DON'T enable display: "SWIRL BY DNP"
+							else if (vicii_pos_y>48&&vicii_pos_y<248) // '&&!vicii_ready' is WRONG: "SUPER STOCK CAR" (menu)
+								if (VICII_TABLE[17]!=b) // "Paradroid" behaves weirdly without this sanity check!
+									if (!vicii_takeover) // avoid top-line glitch in "MAYHEM IN MONSTERLAND" (cfr. "CREATURES")
+										vicii_mode&=~32; // remove border but DON'T enable display: "SWIRL BY DNP"
 						}
 						// the remainder of the consequences of modifying this register are handled in the VIC-II ticker, not here
 						// no `break`! The IRQ high bit is handled by the next register
@@ -2513,7 +2529,7 @@ void m6510_send(WORD w,BYTE b) // send the byte `b` to the I/O address `w`
 					case  8: // decimals
 						if (CIA_TABLE_0[15]>=128) CIA_TABLE_0[ 8]=b&15;
 							else cia_port_11[0]=0,cia_hhmmssd[0]=(cia_hhmmssd[0]&0XFFFFFF00)+ (b& 15);
-						if (equalsiiii(&CIA_TABLE_0[8],cia_hhmmssd[0])) cia_alarmclock(CIA_TABLE_0,0,M6510_CIA_SET); // "HAMMERFIST" needs this to run (cfr. $A7D0)
+						if (cias_alarmclock(0)) { M6510_CIA_SET; } // "HAMMERFIST" needs this to run (cfr. $A7D0)
 						break;
 					case  9: // seconds
 						if (CIA_TABLE_0[15]>=128) CIA_TABLE_0[ 9]=b&63;
@@ -2575,7 +2591,7 @@ void m6510_send(WORD w,BYTE b) // send the byte `b` to the I/O address `w`
 					case  8: // decimals
 						if (CIA_TABLE_1[15]>=128) CIA_TABLE_1[ 8]=b&15;
 							else cia_port_11[1]=0,cia_hhmmssd[1]=(cia_hhmmssd[1]&0XFFFFFF00)+ (b& 15);
-						if (equalsiiii(&CIA_TABLE_1[8],cia_hhmmssd[1])) cia_alarmclock(CIA_TABLE_1,1,M6510_NMI_SET);
+						if (cias_alarmclock(1)) { M6510_NMI_SET; }
 						break;
 					case  9: // seconds
 						if (CIA_TABLE_1[15]>=128) CIA_TABLE_1[ 9]=b&63;
@@ -2798,10 +2814,10 @@ int grafx_mask(void) { return 0XFFFF; }
 int grafx_size(int i) { return i*8; }
 int grafx_show(VIDEO_UNIT *t,int g,int n,int w,int o)
 {
-	g-=8; do
+	BYTE z=-(o&1); g-=8; do
 	{
-		w&=0XFFFF; BYTE b=mem_ram[w]; // base RAM only
-		if (o&1) b=~b; if (o&2)
+		w&=0XFFFF; BYTE b=mem_ram[w]^z; // base RAM only
+		if (o&2)
 		{
 			VIDEO_UNIT p;
 			*t++=p=grafx_show2b[ b>>6   ]; *t++=p;
@@ -2822,7 +2838,7 @@ int grafx_show(VIDEO_UNIT *t,int g,int n,int w,int o)
 }
 void grafx_info(VIDEO_UNIT *t,int g,int o) // draw the palette and the sprites
 {
-	t-=16*6; for (int y=0;y<2*12;++y)
+	BYTE z=-(o&1); t-=16*6; for (int y=0;y<2*12;++y)
 		for (int x=0;x<16*6;++x)
 			t[y*g+x]=video_clut[(x/6)+(y/12)*16];
 	for (int y=0,i=0;y<2;++y)
@@ -2833,14 +2849,14 @@ void grafx_info(VIDEO_UNIT *t,int g,int o) // draw the palette and the sprites
 				if (o&2)
 					for (int xx=0;xx<3;++xx,++ii)
 					{
-						BYTE b=vicii_memory[ii]; if (o&1) b=~b;
+						BYTE b=vicii_memory[ii]^z;
 						for (int zz=0;zz<8;zz+=2)
 							tt[xx*8+zz]=tt[xx*8+zz+1]=grafx_show2b[(b>>(6-zz))&3];
 					}
 				else
 					for (int xx=0;xx<3;++xx,++ii)
 					{
-						BYTE b=vicii_memory[ii]; if (o&1) b=~b;
+						BYTE b=vicii_memory[ii]^z;
 						for (int zz=0;zz<8;++zz)
 							tt[xx*8+zz]=(b<<zz)&128?0XFFFFFF:0;//video_clut[23+i]:video_clut[17];
 					}
@@ -2868,12 +2884,12 @@ int autorun_type(char *s,int n)
 	return 0;
 }
 
-INLINE void autorun_next(void)
+INLINE void autorun_next(void) // handle AUTORUN
 {
 	switch (autorun_mode)
 	{
 		case 1: // TYPE "RUN", PRESS RETURN...
-			if (autorun_type("\022U",2)) break; // retry!
+			if (autorun_type("\022\025\016",3)) break; // retry!
 			// no `break`!
 		case 2: // INJECT FILE...
 			if (autorun_type(NULL,0)) break; // retry!
@@ -2885,21 +2901,21 @@ INLINE void autorun_next(void)
 			autorun_mode=9;
 			break;
 		case 3: // TYPE "LOAD", PRESS RETURN...
-			if (!autorun_type("\014O",2)) session_dirty|=(tape_enabled=m6510_t64ok!=7),autorun_mode=4; // `tape_enabled` is reset by all_reset(), so we must set it here
+			if (!autorun_type("\014\017\001\004",4)) session_dirty|=(tape_enabled=m6510_t64ok!=7),autorun_mode=4; // `tape_enabled` is reset by all_reset(), so we must set it here
 			break;
 		case 4: // RELEASE RETURN...
 			autorun_kbd_res(0001);
 			autorun_t=3; autorun_mode=5;
 			break;
 		case 5: // TYPE "RUN", PRESS RETURN...
-			if (!(m6510_pc.w>=0XE000&&autorun_type("\022U",2))) autorun_t=autorun_mode=9; // we must NOT retry if we're already running code!!
+			if (!(m6510_pc.w>=0XE000&&autorun_type("\022\025\016",3))) autorun_t=autorun_mode=9; // we must NOT retry if we're already running code!!
 			break;
 		case 8: // TYPE "LOAD"*",8,1", PRESS RETURN...
-			if (!autorun_type("\014O\042\052\042" ",8,1",9)) autorun_mode=9; // ditto!
+			if (!autorun_type("\014\017\001\004\042\052\042" ",8,1",11)) autorun_mode=9; // ditto!
 			break;
 		case 9: // ...RELEASE RETURN!
 			autorun_kbd_res(0001);
-			autorun_mode=0;
+			disc_disabled&=1,autorun_mode=0; // end of AUTORUN
 			break;
 	}
 }
@@ -2947,18 +2963,22 @@ void all_reset(void) // reset everything!
 // firmware ROM file handling operations ---------------------------- //
 
 char bios_path[STRMAX]="";
+char old_bios_id=-1,bios_id=0;
 
 int bios_load(char *s) // loads the CBM64 firmware; 0 OK, !0 ERROR
 {
 	FILE *f=puff_fopen(s,"rb"); if (!f) return 1; // fail!
 	int i=fread1(mem_rom,20<<10,f); i+=fread1(mem_rom,20<<10,f);
+	old_bios_id=99; // temporarily tag BIOS as wrong -- it will be made right later
 	if (puff_fclose(f),i!=(20<<10)) return 1; // check filesize; are there any fingerprints?
+	for (i=0;i<0XD0;++i) if (mem_rom[0X4008+i]^mem_rom[0X4408+i]^mem_rom[0X4808+i]^mem_rom[0X4C08+i]) return 1; // CHAR ROM fail!
 	if ((char*)session_substr!=s) STRCOPY(bios_path,s);
+	old_bios_id=bios_id;
 	return 0;
 }
 
 int bios_reload(void) // loads the default CBM64 firmware
-	{ return bios_load(strcat(strcpy(session_substr,session_path),"c64en.rom")); }
+	{ return old_bios_id==bios_id?0:bios_load(strcat(strcpy(session_substr,session_path),"c64en.rom")); }
 
 int bdos_load(char *s) // loads the C1541 firmware; 0 OK, !0 ERROR
 {
@@ -2970,7 +2990,7 @@ int bdos_load(char *s) // loads the C1541 firmware; 0 OK, !0 ERROR
 
 // snapshot file handling operations -------------------------------- //
 
-char snap_pattern[]="*.s64"; BYTE snap_obsolete[]="C64-SNAPSHOT v1\032",snap_magic16[]="C64 SNAPSHOT V1\032";
+char snap_pattern[]="*.s64",snap_obsolete[]="C64-SNAPSHOT v1\032",snap_magic16[]="C64 SNAPSHOT V1\032";
 char snap_path[STRMAX]="",snap_extended=1; // compress memory dumps
 
 int snap_bin2x(BYTE *t,int o,BYTE *s,int i)
@@ -3026,8 +3046,8 @@ int snap_save(char *s) // saves snapshot file `s`; 0 OK, !0 ERROR
 	/*if (cia_serialz[0])*/ header[0x5C]=(cia_serials[0]<<2)+cia_serialz[0];
 	// CIA #2
 	memcpy(&header[0x60],CIA_TABLE_1,0X10);
-	mputii(&header[0x74],cia_count_a[1]); header[0x7E]=cia_event_a[1]^CIA_TABLE_0[14];
-	mputii(&header[0x76],cia_count_b[1]); header[0x7F]=cia_event_b[1]^CIA_TABLE_0[15];
+	mputii(&header[0x74],cia_count_a[1]); header[0x7E]=cia_event_a[1]^CIA_TABLE_1[14];
+	mputii(&header[0x76],cia_count_b[1]); header[0x7F]=cia_event_b[1]^CIA_TABLE_1[15];
 	header[0x7D]=cia_port_13[1]; mputiiii(&header[0x78],cia_hhmmssd[1]|(cia_port_11[1]<<30));
 	/*if (cia_serialz[1])*/ header[0x7C]=(cia_serials[1]<<2)+cia_serialz[1];
 	// SID #1
@@ -3036,8 +3056,8 @@ int snap_save(char *s) // saves snapshot file `s`; 0 OK, !0 ERROR
 	mputii(&header[0x9E],sid_extras>2?0XD000+(SID_TABLE[2]-VICII_TABLE):0);
 	mputiiii(&header[0xA8],sid_randomize); // the global SID LFSR must stick between sessions
 	// VIC-II
-	memcpy(&header[0xB0],VICII_TABLE,0X30);
-	if ((i=vicii_pos_x)<0) i+=vicii_len_x; header[0xE0]=i/multi_t;
+	memcpy(&header[0xB0],VICII_TABLE,0X30); if ((i=vicii_pos_x)<0) i+=vicii_len_x;
+	header[0xE0]=i>>multi_t;
 	header[0xE1]=6-vicii_n_cia; mputii(&header[0xE2],vicii_pos_y);
 	// CARTRIDGE (if any)
 	if (cart) header[0XF0]=cart_mode,header[0XF1]=cart_bank;
@@ -3132,9 +3152,10 @@ int snap_load(char *s) // loads snapshot file `s`; 0 OK, !0 ERROR
 	sid_all_update();
 	// VIC-II
 	memcpy(VICII_TABLE,&header[0xB0],0X30);
-	if ((vicii_pos_x=header[0xE0]*multi_t)>=vicii_irq_x) vicii_pos_x-=vicii_len_x;
-	i=vicii_pos_y; vicii_pos_y=mgetii(&header[0xE2]); i=vicii_pos_y-i;
-	video_pos_y+=i*=2; frame_pos_y+=i; video_target+=i*VIDEO_LENGTH_X; // adjust!
+	if ((vicii_pos_x=(header[0xE0]<<multi_t))>=vicii_irq_x) vicii_pos_x-=vicii_len_x;
+	frame_pos_y-=video_pos_y,video_target-=video_pos_y*VIDEO_LENGTH_X; // adjust (1/2)
+	video_pos_y=(video_pos_y&1)+((vicii_pos_y=mgetii(&header[0xE2]))+VICII_POS_Y_ADD)*2;
+	frame_pos_y+=video_pos_y,video_target+=video_pos_y*VIDEO_LENGTH_X; // adjust (2/2)
 	vicii_n_cia=(6-header[0xE1])&7; vicii_irq_y=(VICII_TABLE[17]&128)*2+VICII_TABLE[18];
 	vicii_badline=vicii_pos_y>=48&&vicii_pos_y<248&&!((VICII_TABLE[17]-vicii_pos_y)&7);
 	vicii_setmaps(),vicii_setmode();
@@ -3195,7 +3216,7 @@ int snap_load(char *s) // loads snapshot file `s`; 0 OK, !0 ERROR
 		}
 		// ... future blocks will go here ...
 		else cprintf("SNAP %08X:%08X?\n",k,i); // unknown type:size
-		if (i<0) return puff_fclose(f),1; fseek(f,i,SEEK_CUR);
+		{ if (i<0) return puff_fclose(f),1; } fseek(f,i,SEEK_CUR); // abort on error!
 	}
 	if (georam_yes>=2) // adjust variables after loading REU data
 	{
@@ -3301,10 +3322,9 @@ int psid_load(char *s) // load a PSID file and build a minimal framework around 
 int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` autorun; 0 OK, !0 ERROR
 {
 	autorun_mode=0; // cancel any autoloading yet
+	if (!video_table_load(s)) video_main_xlat(),video_xlat_clut(); else
 	#ifdef DEBUG
-	if (!psid_load(s)) // SID files ALWAYS take over!
-		disc_disabled|=2; // disable drive altogether!
-	else
+	if (!psid_load(s)) disc_disabled|=2; else // SID files ALWAYS take over: disable drive!
 	#endif
 	if (snap_load(s))
 	{
@@ -3335,44 +3355,44 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 // auxiliary user interface operations ------------------------------ //
 
 char txt_error_snap_save[]="Cannot save snapshot!";
+char file_pattern[]="*.csw;*.d64;*.crt;*.prg;*.rom;*.s64;"
 #ifdef DEBUG
-char file_pattern[]="*.csw;*.d64;*.crt;*.prg;*.rom;*.s64;*.sid;*.t64;*.tap;*.wav"; // from A to Z
-#else
-char file_pattern[]="*.csw;*.d64;*.crt;*.prg;*.rom;*.s64;*.t64;*.tap;*.wav"; // from A to Z -SID!
+	"*.sid;"
 #endif
+	";*.t64;*.tap;*.vpl;*.wav"; // from A to Z!
 
 char session_menudata[]=
 	"File\n"
 	"0x8300 Open any file..\tF3\n"
-	"0xC300 Load snapshot..\tShift+F3\n"
-	"0x0300 Load last snapshot\tCtrl+F3\n"
+	"0xC300 Load snapshot..\tShift-F3\n"
+	"0x0300 Load last snapshot\tCtrl-F3\n"
 	"0x8200 Save snapshot..\tF2\n"
-	"0x0200 Save last snapshot\tCtrl+F2\n"
+	"0x0200 Save last snapshot\tCtrl-F2\n"
 	"=\n"
 	"0x8700 Insert disc in 8:..\tF7\n"
 	"0x8701 Create disc in 8:..\n"
-	"0x0700 Remove disc from 8:\tCtrl+F7\n"
+	"0x0700 Remove disc from 8:\tCtrl-F7\n"
 	#if 0 // *!* TODO
-	"0xC700 Insert disc in 9:..\tShift+F7\n"
+	"0xC700 Insert disc in 9:..\tShift-F7\n"
 	"0xC701 Create disc in 9:..\n"
-	"0x4700 Remove disc from 9:\tCtrl+Shift+F7\n"
+	"0x4700 Remove disc from 9:\tCtrl-Shift-F7\n"
 	#endif
 	"=\n"
 	"0x8800 Insert tape..\tF8\n"
-	"0xC800 Record tape..\tShift+F8\n"
+	"0xC800 Record tape..\tShift-F8\n"
 	"0x8801 Browse tape..\n"
-	"0x0800 Remove tape\tCtrl+F8\n"
-	"0x4800 Play tape\tCtrl+Shift+F8\n"
+	"0x0800 Remove tape\tCtrl-F8\n"
+	"0x4800 Play tape\tCtrl-Shift-F8\n"
 	"0x4801 Flip tape polarity\n"
 	"=\n"
-	//"0XC500 Load programme..\tShift+F5\n"
-	"0xC500 Insert cart/prog..\tShift+F5\n"
-	"0x4500 Remove cartridge\tCtrl+Shift+F5\n"
+	//"0XC500 Load programme..\tShift-F5\n"
+	"0xC500 Insert cart/prog..\tShift-F5\n"
+	"0x4500 Remove cartridge\tCtrl-Shift-F5\n"
 	"=\n"
 	"0x0080 E_xit\n"
 	"Edit\n"
 	"0x8500 Select firmware..\tF5\n"
-	"0x0500 Reset emulation\tCtrl+F5\n"
+	"0x0500 Reset emulation\tCtrl-F5\n"
 	"0x8F00 Pause\tPause\n"
 	"0x8900 Debug\tF9\n"
 	//"0x8910 NMI\n"
@@ -3405,16 +3425,16 @@ char session_menudata[]=
 	"0x8603 3" I18N_MULTIPLY " realtime speed\n"
 	"0x8604 4" I18N_MULTIPLY " realtime speed\n"
 	"0x8600 Run at full throttle\tF6\n"
-	//"0x0600 Raise CPU speed\tCtrl+F6\n"
-	//"0x4600 Lower CPU speed\tCtrl+Shift+F6\n"
+	//"0x0600 Raise CPU speed\tCtrl-F6\n"
+	//"0x4600 Lower CPU speed\tCtrl-Shift-F6\n"
 	"0x0601 1" I18N_MULTIPLY " CPU clock\n"
 	"0x0602 2" I18N_MULTIPLY " CPU clock\n"
-	"0x0603 3" I18N_MULTIPLY " CPU clock\n"
-	"0x0604 4" I18N_MULTIPLY " CPU clock\n"
+	"0x0603 4" I18N_MULTIPLY " CPU clock\n"
+	"0x0604 8" I18N_MULTIPLY " CPU clock\n"
 	"=\n"
-	"0x0400 Virtual joystick\tCtrl+F4\n"
+	"0x0400 Virtual joystick\tCtrl-F4\n"
 	"0x0401 Redefine virtual joystick\n"
-	"0x4400 Flip joystick ports\tCtrl+Shift+F4\n"
+	"0x4400 Flip joystick ports\tCtrl-Shift-F4\n"
 	#ifdef DEBUG
 	"0x850D Mute SID voice A\n"
 	"0x850E Mute SID voice B\n"
@@ -3423,12 +3443,12 @@ char session_menudata[]=
 	"=\n"
 	"0x851F Strict snapshots\n"
 	//"0x852F Printer output..\n" // *!* TODO
-	"0x8510 Enable disc drive\tShift+F6\n"
+	"0x8510 Enable disc drive\tShift-F6\n"
 	"0x8590 Strict disc writes\n"
 	"0x8591 Read-only disc by default\n"
 	//"=\n"
-	"0x0900 Tape speed-up\tCtrl+F9\n"
-	"0x4900 Tape analysis\tCtrl+Shift+F9\n"
+	"0x0900 Tape speed-up\tCtrl-F9\n"
+	"0x4900 Tape analysis\tCtrl-Shift-F9\n"
 	"0x0901 Tape auto-rewind\n"
 	"0x0605 Power-up boost\n"
 	"Audio\n"
@@ -3449,24 +3469,24 @@ char session_menudata[]=
 	"0x8403 Middle filtering\n"
 	"0x8404 Heavy filtering\n"
 	"=\n"
-	"0x4C00 Record YM file\tCtrl+Shift+F12\n"
-	"0x0C00 Record WAV file\tCtrl+F12\n"
+	"0x4C00 Record YM file\tCtrl-Shift-F12\n"
+	"0x0C00 Record WAV file\tCtrl-F12\n"
 	"0x8C03 High wavedepth\n"
 	"Video\n"
-	"0x8901 Onscreen status\tShift+F9\n"
+	"0x8901 Onscreen status\tShift-F9\n"
 	"0x8B01 Monochrome\n"
 	"0x8B02 Dark palette\n"
 	"0x8B03 Normal palette\n"
 	"0x8B04 Light palette\n"
 	"0x8B05 Green screen\n"
 	//"0x8B00 Next palette\tF11\n"
-	//"0xCB00 Prev. palette\tShift+F11\n"
+	//"0xCB00 Prev. palette\tShift-F11\n"
 	"=\n"
 	"0x8907 Microwave static\n"
 	"0x8903 X-masking\n"
 	"0x8902 Y-masking\n"
-	//"0x0B00 Next scanline\tCtrl+F11\n"
-	//"0x4B00 Prev. scanline\tCtrl+Shift+F11\n"
+	//"0x0B00 Next scanline\tCtrl-F11\n"
+	//"0x4B00 Prev. scanline\tCtrl-Shift-F11\n"
 	"0x0B01 All scanlines\n"
 	"0x0B03 Simple interlace\n"
 	"0x0B04 Double interlace\n"
@@ -3488,7 +3508,7 @@ char session_menudata[]=
 	"=\n"
 	"0x8C00 Save screenshot\tF12\n"
 	"0x8C04 Output QOI format\n"
-	"0xCC00 Record film\tShift+F12\n"
+	"0xCC00 Record film\tShift-F12\n"
 	"0x8C02 High framerate\n"
 	"0x8C01 High resolution\n"
 	"Window\n"
@@ -3501,7 +3521,7 @@ char session_menudata[]=
 	"0x8A15 300% zoom\n"
 	"Help\n"
 	"0x8100 Help..\tF1\n"
-	"0x0100 About..\tCtrl+F1\n"
+	"0x0100 About..\tCtrl-F1\n"
 	"";
 
 void session_clean(void) // refresh options
@@ -3529,7 +3549,7 @@ void session_clean(void) // refresh options
 	session_menucheck(0x4900,tape_fastload);
 	session_menucheck(0x0400,session_key2joy);
 	session_menucheck(0x4400,key2joy_flag);
-	session_menuradio(0x0601+multi_t-1,0x0601,0x0604);
+	session_menuradio(0x0601+multi_t,0x0601,0x0604);
 	session_menucheck(0x0605,power_boost-POWER_BOOST0);
 	session_menucheck(0x8501,!cia_nouveau);
 	session_menucheck(0x8502,!vic_nouveau);
@@ -3551,7 +3571,7 @@ void session_clean(void) // refresh options
 	session_menuradio(0x8511+ram_depth,0x8511,0x8515);
 	session_menucheck(0x8517,georam_yes);
 	session_menucheck(0x851F,!(snap_extended));
-	session_menucheck(0x852F,!!printer);
+	//session_menucheck(0x852F,!!printer); // *!* TODO
 	session_menucheck(0x8901,onscreen_flag);
 	session_menucheck(0x8902,video_filter&VIDEO_FILTER_MASK_Y);
 	session_menucheck(0x8903,video_filter&VIDEO_FILTER_MASK_X);
@@ -3575,7 +3595,7 @@ void session_clean(void) // refresh options
 	if (ram_dirty>ram_cap) ram_dirty=ram_cap; // avoid hot-switch accidents!
 	//if (ram_depth>2) reu_table[0]+=16; // +256K REU mode, but only on old models!
 	vicii_len_y=312; // PAL/NTSC vertical configuration
-	vicii_irq_x=(vicii_len_x=63*multi_t)-8; // PAL/NTSC horizontal; cfr. "logical" VS "physical" tickers
+	vicii_irq_x=(vicii_len_x=63<<multi_t)-8; // PAL/NTSC horizontal; cfr. "logical" VS "physical" tickers
 	if (sid_extras&1)
 		SID_TABLE[1]=&mem_i_o[0X420],SID_TABLE[2]=&mem_i_o[0X440];
 	else
@@ -3605,9 +3625,9 @@ void session_clean(void) // refresh options
 			#endif
 	}
 	#endif
-	video_resetscanline(),debug_dirty=1; sprintf(session_info,"%d:%dK %s %sx%c %c.0MHz"//" | disc %s | tape %s | %s"
+	video_resetscanline(),debug_dirty=1; sprintf(session_info,"%d:%dK %s %sx%c %d.0MHz"//" | disc %s | tape %s | %s"
 		,ram_dirty?65+(ram_dirty>>10):64,64+ram_kbyte[ram_depth],georam_yes?"GEO":"REU"
-		,sid_nouveau?"8580":"6581",'0'+sid_chips,'0'+multi_t);
+		,sid_nouveau?"8580":"6581",'0'+sid_chips,1<<multi_t);
 }
 void session_user(int k) // handle the user's commands
 {
@@ -3842,17 +3862,18 @@ void session_user(int k) // handle the user's commands
 			//else // redundant!
 			all_reset();
 			break;
+		/* *!* TODO
 		case 0x852F: // PRINTER
-			if (printer)
-				printer_close();
-			else if (s=session_newfile(NULL,"*.txt","Printer output"))
-				if (printer_p=0,!(printer=fopen(s,"wb")))
-					session_message("Cannot record printer!",txt_error);
+			if (printer) printer_close(); else
+				if (s=session_newfile(NULL,"*.txt","Printer output"))
+					if (printer_p=0,!(printer=fopen(s,"wb")))
+						session_message("Cannot record printer!",txt_error);
 			break;
+		*/
 		case 0x8600: // F6: TOGGLE REALTIME
 			if (!session_shift)
 				{ session_fast^=1; break; }
-			// SHIFT+F6: no `break`!
+			// +SHIFT: no `break`!
 		case 0x8510: // DISC DRIVE
 			if (!(disc_disabled^=1)) c1541_reset(); // disabling the disc drive = powering it off, enabling it = powering it on!
 			break;
@@ -3875,13 +3896,14 @@ void session_user(int k) // handle the user's commands
 			session_rhythm=k-0x8600-1; session_fast&=~1;
 			break;
 		case 0x0600: // ^F6: TOGGLE TURBO 6510
-			multi_t=(((multi_t+(session_shift?-1:1))-1)&3)+1;
+			multi_u=(1<<(multi_t=(multi_t+(session_shift?-1:1))&3))-1;
+			// update hardware?
 			break;
 		case 0x0601: // CPU x1
 		case 0x0602: // CPU x2
 		case 0x0603: // CPU x3
 		case 0x0604: // CPU x4
-			multi_t=k-0x0600;
+			multi_u=(1<<(multi_t=k-0x0601))-1;
 			break;
 		case 0x0605: // POWER-UP BOOST
 			power_boost^=POWER_BOOST1^POWER_BOOST0;
@@ -4291,7 +4313,7 @@ int main(int argc,char *argv[])
 	if (bios_reload())
 		return printferror(txt_error_bios),1;
 	bdos_load("c1541.rom"); //if (!*c1541_rom&&!disc_disabled) disc_disabled=1; // can't enable the disc drive without its ROM!
-	if (k) all_reset(); if (!m6510_pc.w) mmu_reset(),m6510_reset(); // reset machine again if required; we must also catch the illegal PC=0!
+	if (k) all_reset(); else if (!m6510_pc.w) mmu_reset(),m6510_reset(); // reset machine again if required; we must also catch the illegal PC=0!
 	char *s=session_create(session_menudata); if (s)
 		return sprintf(session_scratch,"Cannot create session: %s!",s),printferror(session_scratch),1;
 	session_kbdreset();
@@ -4306,7 +4328,7 @@ int main(int argc,char *argv[])
 		{
 			m6510_main( // clump MOS 6510 instructions together to gain speed...
 			((VIDEO_LENGTH_X+15-video_pos_x)>>4)
-			*multi_t); // ...without missing any deadlines!
+			<<multi_t); // ...without missing any deadlines!
 		}
 		if (session_signal&SESSION_SIGNAL_FRAME) // end of frame?
 		{
@@ -4371,7 +4393,8 @@ int main(int argc,char *argv[])
 			{
 				static BYTE mmu_old=0,mmu_fly=0;
 				if (~mmu_old&mmu_out&(128+64+8)) mmu_fly=9; //else if (~mmu_out&mmu_old&(128+64+8)) mmu_fly=0; // CPUPORT complains below 9
-				if (!--mmu_fly) mmu_out&=~(128+64+8); mmu_old=mmu_out; // undefined signal loss
+				if (!--mmu_fly) mmu_out&=~(128+64+8); // undefined signal loss
+				mmu_old=mmu_out; // remember for later
 			}
 			if (m6510_pc.w>=0XE4E2&&m6510_pc.w<0XE4EB&&mmu_mcr==7&&(tape_skipload|tape_fastload|autorun_mode)) m6510_pc.w=0XE4EB; // tape "FOUND FILENAME" boost
 			#ifdef DEBUG
@@ -4437,7 +4460,8 @@ int main(int argc,char *argv[])
 				for (i=0;i<length(kbd_bits);++i) kbd_bits[i]=kbd_bit[i]|joy_bit[i]; // mix keyboard + joystick bits
 				if (kbd_bit[ 8]) kbd_bits[0]|=kbd_bit[ 8],kbd_bits[1]|=128; // LEFT SHIFT + right side KEY combos (1/2)
 				if (kbd_bit[15]) kbd_bits[7]|=kbd_bit[15],kbd_bits[1]|=128; // LEFT SHIFT + left  side KEY combos (2/2)
-				if (!(~kbd_bits[9]&3)) kbd_bits[9]-=3; if (!(~kbd_bits[9]&12)) kbd_bits[9]-=12; // catch illegal UP+DOWN and LEFT+RIGHT joystick bits
+				if (!(~kbd_bits[9]&3)) kbd_bits[9]-=3; // catch illegal UP+DOWN...
+				if (!(~kbd_bits[9]&12)) kbd_bits[9]-=12; // and LEFT+RIGHT joystick bits
 			}
 		}
 	}

@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "MSXEC"
 #define my_caption "msxec"
-#define MY_VERSION "20240224"
+#define MY_VERSION "20240328"
 #define MY_LICENSE "Copyright (C) 2019-2024 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -49,6 +49,14 @@ Contact information: <mailto:cngsoft@gmail.com> */
 #define VIDEO_OFFSET_Y ( 5<<4)
 #define VIDEO_PIXELS_X (40<<4)
 #define VIDEO_PIXELS_Y (30<<4)
+//#define VIDEO_OFFSET_X (27<<2) // the original MSX1 512x384 screen without the border
+//#define VIDEO_OFFSET_Y (32<<2)
+//#define VIDEO_PIXELS_X (32<<4)
+//#define VIDEO_PIXELS_Y (24<<4)
+//#define VIDEO_OFFSET_X (27<<2) // the default MSX2 512x424 screen without the border
+//#define VIDEO_OFFSET_Y (27<<2)
+//#define VIDEO_PIXELS_X (32<<4)
+//#define VIDEO_PIXELS_Y (53<<3)
 #define VIDEO_RGB2Y(r,g,b) ((r)*3+(g)*6+(b)) // generic RGB-to-Y expression
 
 #if defined(SDL2)||!defined(_WIN32)
@@ -129,27 +137,32 @@ const unsigned char kbd_map_xlt[]=
 VIDEO_UNIT video_table[16+24]= // colour table, 0xRRGGBB style, according to https://en.wikipedia.org/wiki/TMS9918
 {
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // VDP palette, to be filled later
-	//// MSX2 V9938 additive GREEN, RED and BLUE channels (actually linear?)
+	#if 1 // MSX2 V9938 additive GREEN, RED and BLUE channels (linear RGB)
 	0X000000,0X002400,0X004900,0X006D00,0X009200,0X00B600,0X00DB00,0X00FF00, // G
 	0X000000,0X240000,0X490000,0X6D0000,0X920000,0XB60000,0XDB0000,0XFF0000, // R
 	0X000000,0X000024,0X000049,0X00006D,0X000092,0X0000B6,0X0000DB,0X0000FF, // B
+	#else // MSX2 V9938 additive GREEN, RED and BLUE channels (gamma: 1.6)
+	0X000000,0X004B00,0X007400,0X009600,0X00B400,0X00CF00,0X00E800,0X00FF00, // G
+	0X000000,0X4B0000,0X740000,0X960000,0XB40000,0XCF0000,0XE80000,0XFF0000, // R
+	0X000000,0X00004B,0X000074,0X000096,0X0000B4,0X0000CF,0X0000E8,0X0000FF, // B
+	#endif
 };
 VIDEO_UNIT video_xlat[16]; // static colours only (dynamic V9938 colours go elsewhere)
 
 char palette_path[STRMAX]="";
-int video_table_load(char *s) // shared with CSFEC, based on VICE's palette files
+int video_table_load(char *s) // shared with CSFEC, based on VICE's palette files, but ink #0 is unused
 {
 	FILE *f=puff_fopen(s,"r"); if (!f) return -1;
-	unsigned char t[STRMAX],n=0; VIDEO_UNIT p[16];
-	while (fgets(t,STRMAX,f)&&n<=16) if (*t>' '&&*t!='#')
-		{ int r,g,b; if (sscanf(UTF8_BOM(t),"%X%X%X",&r,&g,&b)!=3) n=16; else if (n<16) p[n]=((r&255)<<16)+((g&255)<<8)+(b&255); ++n; }
+	unsigned char t[STRMAX],n=1; VIDEO_UNIT p[16];
+	while (fgets(t,STRMAX,f)&&n<=16) if (*t>'#') // skip "# comment" and others
+		{ unsigned int r,g,b; if (sscanf(UTF8_BOM(t),"%X%X%X",&r,&g,&b)!=3) n=16; else if (n<16) p[n]=((r&255)<<16)+((g&255)<<8)+(b&255); ++n; }
 	puff_fclose(f); if (n!=16) return -1;
-	STRCOPY(palette_path,s); for (n=0;n<16;++n) video_table[n]=p[n]; return 0;
+	STRCOPY(palette_path,s); for (n=1;n<16;++n) video_table[n]=p[n]; return 0;
 }
 void video_table_reset(void)
 {
 	VIDEO_UNIT const p[]={
-		// https://en.wikipedia.org/wiki/TMS9918
+		// https://en.wikipedia.org/wiki/TMS9918 (NTSC rather than PAL?)
 		0X000000,0X000000,0X0AAD1E,0X34C84C,0X2B2DE3,0X514BFB,0XBD2925,0X1EE2EF,
 		0XFB2C2B,0XFF5F4C,0XBDA22B,0XD7B454,0X0A8C18,0XAF329A,0XB2B2B2,0XFFFFFF,
 		// https://github.com/mamedev/mame/blob/master/src/devices/video/tms9928a.cpp (NTSC only) // = above but brighter
@@ -158,42 +171,6 @@ void video_table_reset(void)
 		// https://www.msx.org/wiki/VDP_Color_Palette_Registers (MSX2 default palette)
 		//0X000000,0X000000,0X24DB24,0X6DFF6D,0X2424FF,0X496DFF,0XB62424,0X49DBFF,
 		//0XFF2424,0XFF6D6D,0XDBDB24,0XDBDB92,0X249224,0XDB49B6,0XB6B6B6,0XFFFFFF,
-		// TMS9918 APPROX -- http://bifi.msxnet.org/paledit/
-		//0X000000,0X000000,0X49B649,0X6DDB6D,0X4949B6,0X926DFF,0XB64924,0X49DBFF,
-		//0XDB6D49,0XFF926D,0XDBDB49,0XDBDB92,0X249224,0XB66DB6,0XDBDBDB,0XFFFFFF,
-		// TMS9928 APPROX -- http://bifi.msxnet.org/paledit/
-		//0X000000,0X000000,0X24DB24,0X6DDB6D,0X4949FF,0X6D6DFF,0XDB4949,0X49DBFF,
-		//0XFF4949,0XFF6D6D,0XDBB649,0XDBDB6D,0X24B624,0XB66DB6,0XDBDBDB,0XFFFFFF,
-		// TMS9929 APPROX -- http://bifi.msxnet.org/paledit/
-		//0X000000,0X000000,0X24B624,0X49DB49,0X2449FF,0X6D6DFF,0X924900,0X49B6DB,
-		//0XB66D49,0XDB926D,0XB6B624,0XDBDB6D,0X249224,0XB66DDB,0XDBDBDB,0XFFFFFF,
-		// TMS9129 APPROX -- http://bifi.msxnet.org/paledit/
-		//0X000000,0X000000,0X49DB49,0X6DFF6D,0X6D49FF,0X926DFF,0XDB6D6D,0X6DFFFF,
-		//0XFF6D6D,0XFF9292,0XDBDB49,0XFFFF6D,0X49B624,0XB66DDB,0XDBDBDB,0XFFFFFF,
-		// T6950 APPROX -- http://bifi.msxnet.org/paledit/
-		//0X000000,0X000000,0X49DB49,0X6DFF6D,0X4949FF,0X926DFF,0XDB4924,0X49FFFF,
-		//0XFF2424,0XFF6D49,0XDBDB24,0XDBDB92,0X00B600,0XDB49DB,0XDBDBDB,0XFFFFFF,
-		// 315-5124 APPROX -- http://bifi.msxnet.org/paledit/
-		//0X000000,0X000000,0X00B600,0X00FF00,0X000049,0X0000FF,0X490000,0X00FFFF,
-		//0XB60000,0XFF0000,0X494900,0XFFFF00,0X004900,0XFF00FF,0X494949,0XFFFFFF,
-		// EXECROM ENHANCED -- http://bifi.msxnet.org/paledit/
-		//0X000000,0X000000,0X49B66D,0X6DDB92,0X3649B6,0X496DDB,0XB64936,0X6DB6FF,
-		//0XDB6D49,0XFF9249,0XFFDB49,0XFFFF92,0X369249,0XB64992,0XB6B6B6,0XFFFFFF,
-		// VAMPIER KONAMI -- http://bifi.msxnet.org/paledit/
-		//0X000000,0X000000,0X24B624,0X49FF49,0X24246D,0X4949B6,0X6D2400,0X6D6DFF,
-		//0XB66D24,0XFFB649,0XFFDB6D,0XFFFF92,0X496D24,0X926DB6,0XDBDBDB,0XFFFFFF,
-		// RAMONES SHALOM -- http://bifi.msxnet.org/paledit/
-		//0X000000,0X242424,0X24DB24,0X6DFF6D,0X2424FF,0X496DFF,0X922400,0X49FFDB,
-		//0XDB2400,0XDB6D00,0XFF926D,0XFFB692,0X249224,0XDB49B6,0XB6B6B6,0XFFFFFF,
-		// BIFI KV2 ENHANCE -- http://bifi.msxnet.org/paledit/
-		//0X000000,0X000000,0X00B600,0X00FF00,0X0000FF,0X0092FF,0XDB0000,0X00DBDB,
-		//0XFF0000,0XFF6D00,0XFFB6B6,0XFFDBDB,0X006D00,0XDB00DB,0X929292,0XFFFFFF,
-		// GAME COLLECTION -- http://bifi.msxnet.org/paledit/
-		//0X000000,0X000000,0X24DB24,0X6DFF6D,0X2424FF,0X496DFF,0XDB4900,0X49DBFF,
-		//0XFF6D00,0XFF9200,0XFFDB00,0XFFFF92,0X249224,0XDB49B6,0XB6B6B6,0XFFFFFF,
-		// ANTIQUES PSX -- http://bifi.msxnet.org/paledit/
-		//0X000000,0X000000,0X24B600,0X49DB00,0X2424B6,0X2449DB,0XB60049,0X49B6B6,
-		//0XDB0049,0XFF496D,0XDBDB49,0XDBFF92,0X006D00,0X924992,0X929292,0XDBDBDB,
 	};
 	for (int n=0;n<16;++n) video_table[n]=p[n];
 }
@@ -206,7 +183,7 @@ int TICKS_PER_FRAME;// (TICKS_PER_LINE*LINES_PER_FRAME)
 int TICKS_PER_SECOND;// (TICKS_PER_FRAME*VIDEO_PLAYBACK)
 // Everything in the MSX hardware is tuned to a 3.58 MHz clock,
 // using simple binary divisors to adjust the devices' timings.
-int multi_t=1; // overclocking factor
+int multi_t=0,multi_u=0; // overclocking shift+bitmask
 
 // HARDWARE DEFINITIONS ============================================= //
 
@@ -507,7 +484,7 @@ char sram_path[STRMAX]=""; BYTE sram_dirt=0,sram_cart=0,sram_mask=0; // path and
 int sram_makepath(char *s) // build `sram_path` using string `s` as a base; NONZERO OK!
 {
 	strcpy(sram_path,s); char *t=strrchr(sram_path,'.'),*u=strrchr(sram_path,PATHCHAR);
-	if (t&&(!u||u<t)) return strcpy(t,".srm"),1; return 0; // "dir/name.old" => "dir/name.new"
+	return t&&(!u||u<t)?strcpy(t,".srm"),1:0; // "dir/name.old" => "dir/name.new"
 }
 
 char cart_path[STRMAX]="",cart_sha1_file[]=my_caption ".sha"; // compatible with "carts.sha" from FMSX
@@ -564,17 +541,17 @@ int cart_insert(char *s) // insert a cartridge; ZERO OK, NONZERO ERROR!
 void cart_reset(void)
 {
 	cart_bank[0]=cart_bank[1]=cart_bank[2]=cart_bank[3]=0; // default to zero
-	if (!cart||cart_big<1) // nothing to bank!
-		;
-	else if (cart_id==5) // "Gall Force" requires the second bank to boot as 0; "Eggerland 2" suggests that this is normal in ASCII 16K
+	if (!cart||cart_big<1)
+		; // nothing to bank!
+	else if (cart_id==5) // ASCII 16K: "Gall Force" requires the second bank to boot as 0; "Eggerland 2" suggests that this is normal
 	{
 		if (equalsmmmm(&cart[0X2804C],0X4259444F))
-			cart_bank[0]=15; // special case: "R-Type" is ASCII 16K, but the $4000-$7FFF bank boots as 15!
+			cart_bank[0]=15; // special case: "R-Type" is ASCII 16K, but the $4000-$7FFF bank boots as 15 instead of as zero!
 	}
 	else if (cart_id<8)
-		/*cart_bank[0]=0,*/cart_bank[1]=1,cart_bank[2]=2,cart_bank[3]=3; // typical boot values for Generic and Konami cartridges
+		cart_bank[0]=0,cart_bank[1]=1,cart_bank[2]=2,cart_bank[3]=3; // normal boot values for Generic, Konami and ASCII 8K carts
 	else
-		; // types 8 (ASCII 16K + SRAM: "A-TRAIN") and 9 ("HARRY FOX: YUKI NO MAOH", "SUPER LODE RUNNER", "CROSS BLAIM") need zeros
+		; // types 8 and 9 (ASCII 16K + SRAM: "A-TRAIN"; "HARRY FOX: YUKI NO MAOH", "SUPER LODE RUNNER", "CROSS BLAIM") use zeros
 }
 void cart_remove(void) // remove the cartridge
 {
@@ -588,39 +565,37 @@ void cart_remove(void) // remove the cartridge
 void cart_setup(void) // load the cartridge list, if available
 {
 	strcat(strcpy(session_substr,session_path),cart_sha1_file);
-	FILE *f=fopen(session_substr,"rb"); if (f)
+	cart_sha1_size=0; FILE *f=fopen(session_substr,"r"); if (f)
 	{
-		char k; do
+		while (cart_sha1_size<length(cart_sha1_list)&&fgets(session_substr,STRMAX,f))
 		{
-			unsigned int h0=0,h1=0,h2=0,h3=0,h4=0;
-			while ((k=eval_hex(fgetc(f)))>=0)
-				h0=( h0<<4)            +(h1>>28),
-				h1=((h1<<4)&0XFFFFFFFF)+(h2>>28),
-				h2=((h2<<4)&0XFFFFFFFF)+(h3>>28),
-				h3=((h3<<4)&0XFFFFFFFF)+(h4>>28),
-				h4=((h4<<4)&0XFFFFFFFF)+  k     ;
-			if ((k=eval_hex(fgetc(f)))>=0&&k<CART_IDS) // supported?
-				cart_sha1_list[cart_sha1_size][0]=h0,
-				cart_sha1_list[cart_sha1_size][1]=h1,
-				cart_sha1_list[cart_sha1_size][2]=h2,
-				cart_sha1_list[cart_sha1_size][3]=h3,
-				cart_sha1_list[cart_sha1_size][4]=h4,
-				cart_sha1_list[cart_sha1_size][5]= k,
-				//cprintf("%08X%08X%08X%08X%08X:%d\n",h0,h1,h2,h3,h4,k),
+			char *s=UTF8_BOM(session_substr); int k; unsigned int h[5]={0,0,0,0,0};
+			while ((k=eval_hex(*s))>=0) // build a 40-nibble value, even if the string isn't 40 chars!
+				h[0]=(h[0]<<4)+((h[1]>>28)&15),
+				h[1]=(h[1]<<4)+((h[2]>>28)&15),
+				h[2]=(h[2]<<4)+((h[3]>>28)&15),
+				h[3]=(h[3]<<4)+((h[4]>>28)&15),
+				h[4]=(h[4]<<4)+((k>>0)&15),++s;
+			if (s!=(char*)session_substr&&(k=eval_hex(*++s))>=0&&k<CART_IDS) // valid and supported?
+				cart_sha1_list[cart_sha1_size][0]=h[0]&0XFFFFFFFF,
+				cart_sha1_list[cart_sha1_size][1]=h[1]&0XFFFFFFFF,
+				cart_sha1_list[cart_sha1_size][2]=h[2]&0XFFFFFFFF,
+				cart_sha1_list[cart_sha1_size][3]=h[3]&0XFFFFFFFF,
+				cart_sha1_list[cart_sha1_size][4]=h[4]&0XFFFFFFFF,
+				cart_sha1_list[cart_sha1_size][5]=k,
+				cprintf("%08X%08X%08X%08X%08X:%d\n",h[0],h[1],h[2],h[3],h[4],k), // perhaps too much
 				++cart_sha1_size;
-			while ((k=fgetc(f))>=0&&k!=10) ; // ignore spaces, comments, CR... we just want LF or EOF
 		}
-		while (k==10&&cart_sha1_size<length(cart_sha1_list));
-		cprintf("SHA-1 list: %d entries.\n",cart_sha1_size);
+		cprintf("SHA-1 list: %d entries.\n",cart_sha1_size); // sufficient
 		fclose(f);
 	}
-	//else cprintf("Cannot load SHA-1 list!"); // should we show an actual warning?
+	else cprintf("Cannot load SHA-1 list!"); // should we show an actual warning?
 }
 
 BYTE ps_slot[4];
 BYTE slots_ram=0x32,slots_1st=0x10,slots_2nd=0x20,slots_dsk=0x20; // original MSX1 slots
 BYTE slots_sub=0x31,slots_mus=0x33; // later MSX2, MSX2P and MSXTR slots
-// some slots are compatible with each other; for example SUB is compatible with DOS or OPL in MSX1 and MSX2
+// some slots are compatible with each other; for example SUB is compatible with DSK or MUS in MSX2 but not in MSX2P
 
 void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bitmask!
 {
@@ -812,6 +787,20 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 				if (ps_slot[2]==slots_1st)
 					mmu_rom[ 8]=mmu_rom[ 9]=mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[1]<<15)&CART_MASK)+0X4000-0X8000];
 			}
+			/*
+			else if (equalsmmmm(&cart[0X00018],0X50414332)) // "PAC2" <= "PAC2OPLL"
+			{
+				if (ps_slot[1]==slots_1st)
+				{
+					if (equalsmm(&sram[0X1FFE],0X4D69)) // the FM-PAC SRAM is visible when the chars "Mi" are poked
+						mmu_ram[ 5]=mmu_rom[ 5]=mmu_ram[ 4]=mmu_rom[ 4]=&sram[0X0000-0X4000];
+					else // ROM only, but still catches writes to 5FFE and 5FFF that reveal the SRAM
+						mmu_bit[5]=2; // detect POKE at $5000-$5FFF (actually $5FFE-$5FFF)
+				}
+				//if (ps_slot[2]==slots_1st)
+					//mmu_rom[ 8]=mmu_rom[ 9]=mmu_rom[10]=mmu_rom[11]=&bad_rom[0-0X8000];
+			}
+			*/
 			break;
 	}
 }
@@ -898,7 +887,7 @@ void mmu_slowpoke(WORD w,BYTE b) // notice that the caller already filters out i
 				if (equalsmmmm(&cart[0X05350],0X64426553)) // "CROSS BLAIM"
 					cart_bank[1]=b,mmu_update();
 			}
-			else if (w==0X0000)
+			else if (!w)//==0X0000
 			{
 				if (equalsmmmm(&cart[0X1FA74],0X4D453150)) // "SUPER LODE RUNNER"
 					cart_bank[1]=b,mmu_update();
@@ -908,6 +897,13 @@ void mmu_slowpoke(WORD w,BYTE b) // notice that the caller already filters out i
 				if (equalsmmmm(&cart[0X004E4],0X384C7C78)) // "HARRY FOX: YUKI NO MAOH"
 					cart_bank[(w>>12)- 6]=b,mmu_update();
 			}
+			/*
+			else if (w>=0X5FFE&&w<=0X5FFF) // only $5FFE and $5FFF can make the FM-PAC SRAM visible
+			{
+				if (equalsmmmm(&cart[0X00018],0X50414332)) // "PAC2" <= "PAC2OPLL"
+					{ if (sram[w-0X4000]!=b) sram[w-0X4000]=b,mmu_update(); }
+			}
+			*/
 			//else POKE(w)=b; // redundant
 			break;
 	}
@@ -2100,9 +2096,9 @@ void audio_main(int t) // render audio output for `t` clock ticks; t is always n
 // autorun runtime logic -------------------------------------------- //
 
 BYTE snap_done; // avoid accidents with ^F2, see all_reset()
-char autorun_path[STRMAX]="",autorun_line[STRMAX],*autorun_s=NULL,autorun_t=0;
+char autorun_path[STRMAX]="",*autorun_s=NULL,autorun_t=0;
 //BYTE autorun_kbd[16]; // automatic keypresses
-#define autorun_next() ((void)0)
+#define autorun_next() ((void)0) // handle AUTORUN
 
 // Z80-hardware procedures ------------------------------------------ //
 
@@ -2116,19 +2112,16 @@ int z80_skip; // V9958 can induce delays on the Z80 I/O to prevent buffer overru
 void z80_sync(int t) // the Z80 asks the hardware/video/audio to catch up
 {
 	static int r=0; main_t+=t;
-	int tt=(r+=t)/multi_t; // calculate base value of `t`
-	r-=(t=tt*multi_t); // adjust `t` and keep remainder
+	vdp_blit_main(t); // it must be pegged to the Z80!
+	//diskette_main(t); // ???
+	if (tape_enabled&&tape)
+		audio_dirty=1/*|=tape_loud*/,tape_main(t); // echo the tape signal thru sound!
+	t=(r+=t)>>multi_t; r&=multi_u; // calculate base value of `t` and keep remainder
 	if (t>0)
 	{
-		vdp_blit_main(t); // it must be pegged to the Z80!
-		if (tape_enabled&&tape)
-			audio_dirty=1/*|=tape_loud*/,tape_main(t); // echo the tape signal thru sound!
-		if (tt>0)
-		{
-			if (audio_queue+=tt,audio_dirty&&audio_required)
-				audio_main(audio_queue),audio_dirty=audio_queue=0;
-			video_main(tt);
-		}
+		if (audio_queue+=t,audio_dirty&&audio_required)
+			audio_main(audio_queue),audio_dirty=audio_queue=0;
+		video_main(t);
 	}
 }
 
@@ -2284,12 +2277,15 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 				{ if (b==0X23) openmsx_log=1,cputs("OPENMSX: `"); }
 			break; // '#'
 		case 0X2F: // OPENMSX DEBUG PORT #1
-			if (openmsx_log) cputchar(b); break;
+			if (openmsx_log) cputchar(b);
+			break;
 		#endif
 		case 0X7C: // OPLL PORT #0
-			if (opll_internal) opll_setindex(b); break;
+			if (opll_internal) opll_setindex(b);
+			break;
 		case 0X7D: // OPLL PORT #1
-			if (opll_internal) opll_sendbyte(b); break;
+			if (opll_internal) opll_sendbyte(b);
+			break;
 		case 0X90: // PRINTER PORT #0: send $00, then $FF to print last character sent to #1
 			if (printer&&printer_z<b)
 				if (++printer_p>=length(printer_t))
@@ -2302,7 +2298,7 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 		case 0X98: // VDP PORT #0
 			if (vdp_table[25]&4) z80_skip+=0; // the V9958 flag WTE/WAIT ENABLE can delay I/O *!* how many T? does it actually do anything on a 3.6 MHz Z80?
 			// TODO: detect whether the S1985 (MSX-SYSTEM chipset) is related to the byte loss: early MSX1 machines suffered it more easily than late S1985-based ones
-			if ((main_t&63)||(vdp_raster_mode&64)||(type_id|ram_map)||multi_t>1||(session_fast&-2)||(main_t-vdp_smash>25)) // "MEGAPHOENIX": byte loss in early models!
+			if ((main_t&63)||(vdp_raster_mode&64)||(type_id|ram_map)||multi_t>0||(session_fast&-2)||(main_t-vdp_smash>25)) // "MEGAPHOENIX": byte loss in early models!
 				vdp_ram_send(vdp_latch=b); // "IO" is more careful and only rarely triggers this at $5208: "OUT ($98),A" four times, the last three are dummy writes
 			else if (session_shift) cprintf("%08X: T=%02d! ",z80_pc.w,main_t-vdp_smash); // "CHASE HQ" shouldn't trigger byte loss AFAIK: "OUT ($98),A: DJNZ $-2" = 26 T
 			// TODO: strings of "OUT ($98),A" (12 T) are the only way to cause byte loss in a MSX2; are they worth emulating? does any software rely on such behavior?
@@ -2366,6 +2362,7 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 			if (!(type_id|ram_map)) break;
 		case 0XAB: // PIO CONTROL
 			if (b&128)
+				//pio_port_a=pio_port_b=pio_port_c=0, // true on MSX?
 				pio_control=b; // useless on MSX!
 			else
 			{	if (b&1)
@@ -2380,9 +2377,11 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 		case 0XB5: // RTC PORT #1
 			cmos_table_send(b); break;
 		case 0XDA: // KANJI PORT #0 (JIS2)
-			if (!kanji_rom[0X20000]) kanji_p=(kanji_p&0X1F800)+(b&63)*32+0X20000; break; // JIS2-able?
+			if (!kanji_rom[0X20000]) kanji_p=(kanji_p&0X1F800)+(b&63)*32+0X20000; // JIS2-able?
+			break;
 		case 0XDB: // KANJI PORT #1 (JIS2)
-			if (!kanji_rom[0X20000]) kanji_p=(kanji_p&0X7E0)+(b&63)*2048+0X20000; break; // JIS2-able?
+			if (!kanji_rom[0X20000]) kanji_p=(kanji_p&0X7E0)+(b&63)*2048+0X20000; // JIS2-able?
+			break;
 		case 0XD8: // KANJI PORT #0 (JIS1)
 			kanji_p=(kanji_p&0X1F800)+(b&63)*32; break;
 		case 0XD9: // KANJI PORT #1 (JIS1)
@@ -2619,11 +2618,13 @@ const BYTE z80_delays[]= // precalc'd coarse timings
 #define Z80_MREQ_1X_NEXT(t)
 #define Z80_WAIT(t)
 #define Z80_WAIT_IR1X(t)
+#define Z80_DUMB(w) ((void)0) // dumb 3-T MREQ
 #define Z80_PEEK PEEK
 #define Z80_PEEK0 PEEK // untrappable single read, use with care
 #define Z80_PEEK9(w) (mmu_bit[w>>12]&1?mmu_peek(w):PEEK(w)) // trappable single read, be careful too
 #define Z80_PEEK1 Z80_PEEK
 #define Z80_PEEK2 Z80_PEEK
+#define Z80_DUMBZ(w) ((void)0) // dumb 4-T MREQ
 #define Z80_PEEKZ Z80_PEEK // slow PEEK
 #define Z80_PRAE_PEEKXY PEEK // special DD/FD PEEK (1/2)
 #define Z80_POST_PEEKXY // special DD/FD PEEK (2/2)
@@ -2650,12 +2651,12 @@ const BYTE z80_delays[]= // precalc'd coarse timings
 #define Z80_XCF_BUG 0 // replicate the SCF/CCF quirk -- seen on Spectrum, not sure on MSX
 #define Z80_0XED71 0 // whether OUT (C) sends 0 (NMOS) or 255 (CMOS)
 
-#define bios_magick() (debug_point[0X23E7]=debug_point[0X030D]=debug_point[0X0370]=debug_point[0X045C]=debug_point[0X04BF]=debug_point[0X7BC1]=debug_point[0X7D12]=debug_point[0X7D68]=DEBUG_MAGICK)
+#define bios_magick() (debug_point[0X10CB]=debug_point[0X030D]=debug_point[0X0370]=debug_point[0X045C]=debug_point[0X04BF]=debug_point[0X7BC1]=debug_point[0X7D12]=debug_point[0X7D68]=DEBUG_MAGICK)
 void z80_magick(void) // virtual magick!
 {
 	//cprintf("MAGICK:%08X ",z80_pc.w);
 	/**/ if (pio_port_a& 15) ; //if (mmu_rom[0]!=&mem_rom[0X0000-0X0000]||mmu_rom[4]!=&mem_rom[0X4000-0X4000]) ; // BIOS & BASIC only!
-	else if (z80_pc.w==0X23E7) { if (autorun_t>0&&mem_rom[0X23E7]==0XCD) z80_af.b.h=*autorun_s++,--autorun_t,z80_pc.w+=3; } // autorun
+	else if (z80_pc.w==0X10CB) { if (autorun_t>0) { { if (mem_rom[0X10CB]==0XE5) z80_af.b.h=*autorun_s++,z80_pc.w=0XFD9F; } if (!--autorun_t) disc_disabled&=1; } } // AUTORUN + end of AUTORUN
 	else if (!power_boosted) ; // power-up boost only!
 	else if (z80_pc.w==0X030D||z80_pc.w==0X0370) // MSX1: power-up boost (hardware test)
 		{ if (!type_id&&mem_rom[z80_pc.w]==0X2C) z80_hl.b.l=255; }
@@ -2742,10 +2743,9 @@ int grafx_mask(void) { return debug_mode?0XFFFF:0X1FFFF; }
 int grafx_size(int i) { return i*8; }
 int grafx_show(VIDEO_UNIT *t,int g,int n,int w,int o)
 {
-	g-=8; do
+	const VIDEO_UNIT p0=0,p1=0XFFFFFF; BYTE z=-(o&1); g-=8; do
 	{
-		w&=debug_grafx_m; BYTE b=debug_mode?debug_peek(w):vdp_ram[w]; // Z80 or VDP!
-		VIDEO_UNIT p1=o&1?0XFFFFFF:0,p0=0XFFFFFF^p1;
+		w&=debug_grafx_m; BYTE b=(debug_mode?debug_peek(w):vdp_ram[w])^z; // Z80 or VDP!
 		*t++=b&128?p1:p0; *t++=b& 64?p1:p0;
 		*t++=b& 32?p1:p0; *t++=b& 16?p1:p0;
 		*t++=b&  8?p1:p0; *t++=b&  4?p1:p0;
@@ -2759,7 +2759,7 @@ void grafx_info(VIDEO_UNIT *t,int g,int o) // draw the palette and the current s
 		for (int x=0;x<16*8;++x)
 			t[y*g+x]=video_clut[(x/8)/*+(y/12)*16*/];
 	o=(o&1)?video_clut[15]:video_clut[0]; // sprite background color
-	int i=0,p=0; BYTE z; if (vdp_memtype) // MODE 2 sprites?
+	int i=0,p=0; BYTE z=0; if (vdp_memtype) // MODE 2 sprites?
 		for (int y=0;y<4*16;++y)
 			for (int x=0;x<8*16;++x) // always assuming 16x16
 			{
@@ -2878,7 +2878,7 @@ int bios_load(char *s) // load ROM. `s` path; 0 OK, !0 ERROR
 
 // snapshot file handling operations -------------------------------- //
 
-char snap_pattern[]="*.stx"; BYTE snap_magic16[]="MSX SNAPSHOT V1\032";
+char snap_pattern[]="*.stx",snap_magic16[]="MSX SNAPSHOT V1\032";
 char snap_path[STRMAX]="",snap_extended=1; // flexible behavior (i.e. compression)
 
 int snap_bin2x(BYTE *t,int o,BYTE *s,int i)
@@ -3015,8 +3015,8 @@ int snap_load(char *s) // load a snapshot `s`; zero OK, nonzero error!
 	z80_pc .w=mgetii(&header[32+22]);
 	z80_ir.b.h=header[32+24];
 	z80_ir.b.l=header[32+25];
-	z80_iff.w=(header[32+26]&1)*257; // should we be more precise here?
-	z80_imd=header[32+28];
+	z80_iff .w=header[32+26]&257; // should we be more precise here?
+	z80_imd=header[32+28]&3;
 	// PSG
 	memcpy(psg_table,&header[64+ 0],16);
 	psg_table_select(header[64+16]); psg_all_update();
@@ -3092,7 +3092,7 @@ int snap_load(char *s) // load a snapshot `s`; zero OK, nonzero error!
 		}
 		// ... future blocks will go here ...
 		else cprintf("SNAP %08X:%08X?\n",k,i); // unknown type:size
-		if (i<0) return puff_fclose(f),1; fseek(f,i,SEEK_CUR);
+		{ if (i<0) return puff_fclose(f),1; } fseek(f,i,SEEK_CUR); // abort on error!
 	}
 	ram_dirty=(j>>14)-1; i=0; while (j>65536) ++i,j>>=1;
 	if (ram_depth<i) ram_setcfg(i+1); // update extended RAM config
@@ -3111,6 +3111,7 @@ int snap_load(char *s) // load a snapshot `s`; zero OK, nonzero error!
 int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` autorun; 0 OK, !0 ERROR
 {
 	autorun_t=0; // cancel any autoloading yet
+	if (!video_table_load(s)) video_main_xlat(),video_xlat_clut(); else
 	if (snap_load(s))
 		if (disc_open(s,0,0))
 			if (tape_open(s))
@@ -3130,11 +3131,11 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 					{
 						cart_remove(),all_reset(),disc_disabled|=2;
 						if (globbing("*cload*",s,1)) // least likely (<10%)
-							autorun_s="cload\015run\015",autorun_t=10;
+							autorun_t=10,autorun_s="cload\015run\015";
 						else if (globbing("*bload*",s,1)) // halfway (>30%)
-							autorun_s="bload\042cas:\042,r\015",autorun_t=14;
+							autorun_t=14,autorun_s="bload\042cas:\042,r\015";
 						else // most likely (>50%!)
-							autorun_s="run\042cas:\042\015",autorun_t=10;
+							autorun_t=10,autorun_s="run\042cas:\042\015";
 					}
 				} // disable disc drive and write RUN"CAS: or BLOAD"CAS:",R
 		else
@@ -3144,39 +3145,39 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 }
 
 char txt_error_snap_save[]="Cannot save snapshot!";
-char file_pattern[]="*.cas;*.csw;*.dsk;*.mx1;*.mx2;*.rom;*.stx;*.tsx;*.wav"; // from A to Z
+char file_pattern[]="*.cas;*.csw;*.dsk;*.mx1;*.mx2;*.rom;*.stx;*.tsx;*.vpl;*.wav"; // from A to Z
 
 char session_menudata[]=
 	"File\n"
 	"0x8300 Open any file..\tF3\n"
-	"0xC300 Load snapshot..\tShift+F3\n"
-	"0x0300 Load last snapshot\tCtrl+F3\n"
+	"0xC300 Load snapshot..\tShift-F3\n"
+	"0x0300 Load last snapshot\tCtrl-F3\n"
 	"0x8200 Save snapshot..\tF2\n"
-	"0x0200 Save last snapshot\tCtrl+F2\n"
+	"0x0200 Save last snapshot\tCtrl-F2\n"
 	"=\n"
 	"0x8700 Insert disc into A:..\tF7\n"
 	"0x8701 Create disc in A:..\n"
 	//"0x0701 Flip disc sides in A:\n"
-	"0x0700 Remove disc from A:\tCtrl+F7\n"
-	"0xC700 Insert disc into B:..\tShift+F7\n"
+	"0x0700 Remove disc from A:\tCtrl-F7\n"
+	"0xC700 Insert disc into B:..\tShift-F7\n"
 	"0xC701 Create disc in B:..\n"
 	//"0x4701 Flip disc sides in B:\n"
-	"0x4700 Remove disc from B:\tCtrl+Shift+F7\n"
+	"0x4700 Remove disc from B:\tCtrl-Shift-F7\n"
 	"=\n"
 	"0x8800 Insert tape..\tF8\n"
-	"0xC800 Record tape..\tShift+F8\n"
+	"0xC800 Record tape..\tShift-F8\n"
 	"0x8801 Browse tape..\n"
-	"0x0800 Remove tape\tCtrl+F8\n"
-	//"0x4800 Play tape\tCtrl+Shift+F8\n"
+	"0x0800 Remove tape\tCtrl-F8\n"
+	//"0x4800 Play tape\tCtrl-Shift-F8\n"
 	"0x4801 Flip tape polarity\n"
 	"=\n"
-	"0xC500 Insert cartridge..\tShift+F5\n"
-	"0x4500 Remove cartridge\tCtrl+Shift+F5\n"
+	"0xC500 Insert cartridge..\tShift-F5\n"
+	"0x4500 Remove cartridge\tCtrl-Shift-F5\n"
 	"=\n"
 	"0x0080 E_xit\n"
 	"Edit\n"
 	"0x8500 Select firmware..\tF5\n"
-	"0x0500 Reset emulation\tCtrl+F5\n"
+	"0x0500 Reset emulation\tCtrl-F5\n"
 	"0x8F00 Pause\tPause\n"
 	"0x8900 Debug\tF9\n"
 	"=\n"
@@ -3210,26 +3211,26 @@ char session_menudata[]=
 	"0x8603 3" I18N_MULTIPLY " realtime speed\n"
 	"0x8604 4" I18N_MULTIPLY " realtime speed\n"
 	"0x8600 Run at full throttle\tF6\n"
-	//"0x0600 Raise Z80 speed\tCtrl+F6\n"
-	//"0x4600 Lower Z80 speed\tCtrl+Shift+F6\n"
+	//"0x0600 Raise Z80 speed\tCtrl-F6\n"
+	//"0x4600 Lower Z80 speed\tCtrl-Shift-F6\n"
 	"0x0601 1" I18N_MULTIPLY " CPU clock\n"
 	"0x0602 2" I18N_MULTIPLY " CPU clock\n"
-	"0x0603 3" I18N_MULTIPLY " CPU clock\n"
-	"0x0604 4" I18N_MULTIPLY " CPU clock\n"
+	"0x0603 4" I18N_MULTIPLY " CPU clock\n"
+	"0x0604 8" I18N_MULTIPLY " CPU clock\n"
 	"=\n"
-	"0x0400 Virtual joystick\tCtrl+F4\n"
+	"0x0400 Virtual joystick\tCtrl-F4\n"
 	"0x0401 Redefine virtual joystick\n"
-	"0x4400 Flip joystick ports\tCtrl+Shift+F4\n"
+	"0x4400 Flip joystick ports\tCtrl-Shift-F4\n"
 	"0x4401 Flip joystick buttons\n"
 	"=\n"
 	"0x851F Strict snapshots\n"
 	"0x852F Printer output..\n"
-	"0x8510 Enable disc drives\tShift+F6\n"
+	"0x8510 Enable disc drives\tShift-F6\n"
 	"0x8590 Strict disc writes\n"
 	"0x8591 Read-only disc by default\n"
 	//"=\n"
-	"0x0900 Tape speed-up\tCtrl+F9\n"
-	"0x4900 Tape analysis\tCtrl+Shift+F9\n"
+	"0x0900 Tape speed-up\tCtrl-F9\n"
+	"0x4900 Tape analysis\tCtrl-Shift-F9\n"
 	"0x0901 Tape auto-rewind\n"
 	"0x0605 Power-up boost\n"
 	"Audio\n"
@@ -3250,24 +3251,24 @@ char session_menudata[]=
 	"0x8403 Middle filtering\n"
 	"0x8404 Heavy filtering\n"
 	"=\n"
-	"0x4C00 Record YM file\tCtrl+Shift+F12\n"
-	"0x0C00 Record WAV file\tCtrl+F12\n"
+	"0x4C00 Record YM file\tCtrl-Shift-F12\n"
+	"0x0C00 Record WAV file\tCtrl-F12\n"
 	"0x8C03 High wavedepth\n"
 	"Video\n"
-	"0x8901 Onscreen status\tShift+F9\n"
+	"0x8901 Onscreen status\tShift-F9\n"
 	"0x8B01 Monochrome\n"
 	"0x8B02 Dark palette\n"
 	"0x8B03 Normal palette\n"
 	"0x8B04 Light palette\n"
 	"0x8B05 Green screen\n"
 	//"0x8B00 Next palette\tF11\n"
-	//"0xCB00 Prev. palette\tShift+F11\n"
+	//"0xCB00 Prev. palette\tShift-F11\n"
 	"=\n"
 	"0x8907 Microwave static\n"
 	"0x8903 X-masking\n"
 	"0x8902 Y-masking\n"
-	//"0x0B00 Next scanline\tCtrl+F11\n"
-	//"0x4B00 Prev. scanline\tCtrl+Shift+F11\n"
+	//"0x0B00 Next scanline\tCtrl-F11\n"
+	//"0x4B00 Prev. scanline\tCtrl-Shift-F11\n"
 	"0x0B01 All scanlines\n"
 	"0x0B03 Simple interlace\n"
 	"0x0B04 Double interlace\n"
@@ -3289,7 +3290,7 @@ char session_menudata[]=
 	"=\n"
 	"0x8C00 Save screenshot\tF12\n"
 	"0x8C04 Output QOI format\n"
-	"0xCC00 Record film\tShift+F12\n"
+	"0xCC00 Record film\tShift-F12\n"
 	"0x8C02 High framerate\n"
 	"0x8C01 High resolution\n"
 	"Window\n"
@@ -3302,7 +3303,7 @@ char session_menudata[]=
 	"0x8A15 300% zoom\n"
 	"Help\n"
 	"0x8100 Help..\tF1\n"
-	"0x0100 About..\tCtrl+F1\n"
+	"0x0100 About..\tCtrl-F1\n"
 	"";
 
 void session_clean(void) // refresh options
@@ -3321,10 +3322,8 @@ void session_clean(void) // refresh options
 	session_menucheck(0x4C00,!!ym3_file);
 	session_menucheck(0x8700,!!disc[0]);
 	session_menucheck(0xC700,!!disc[1]);
-	/*
-	session_menucheck(0x0701,disc_flip[0]);
-	session_menucheck(0x4701,disc_flip[1]);
-	*/
+	//session_menucheck(0x0701,disc_flip[0]);
+	//session_menucheck(0x4701,disc_flip[1]);
 	session_menucheck(0x8800,tape_type>=0&&tape);
 	session_menucheck(0xC800,tape_type<0&&tape);
 	//session_menucheck(0x4800,tape_enabled);
@@ -3335,11 +3334,9 @@ void session_clean(void) // refresh options
 	session_menucheck(0x0400,session_key2joy);
 	session_menucheck(0x4400,joystick_bit);
 	session_menucheck(0x4401,key2joy_flag);
-	session_menuradio(0x0601+multi_t-1,0x0601,0x0604);
+	session_menuradio(0x0601+multi_t,0x0601,0x0604);
 	session_menucheck(0x0605,power_boost-POWER_BOOST0);
-	/*
-	session_menucheck(0x4400,litegun);
-	*/
+	//session_menucheck(0x4400,litegun);
 	session_menucheck(0x8590,!(disc_filemode&2));
 	session_menucheck(0x8591,disc_filemode&1);
 	session_menucheck(0x8510,!(disc_disabled&1));
@@ -3394,7 +3391,7 @@ void session_clean(void) // refresh options
 		,16*(ram_dirty+1),16*(ram_bit+1)
 		,type_id>1?"MSX2+":type_id?"MSX2":"MSX"
 		,session_ntsc(i18n_ntsc)?i18n_kana?"JPN":"USA":"PAL" // always call session_ntsc()!
-		,3.6*multi_t); // actually 3.58 :-P
+		,3.6*(1<<multi_t)); // actually 3.58 :-P
 	TICKS_PER_SECOND=(TICKS_PER_FRAME=(LINES_PER_FRAME=i18n_ntsc?262:313)*TICKS_PER_LINE)*VIDEO_PLAYBACK;
 }
 void session_user(int k) // handle the user's commands
@@ -3618,16 +3615,15 @@ void session_user(int k) // handle the user's commands
 			sccplus_internal=!sccplus_internal; sccplus_playing=0;
 			break;
 		case 0x852F: // PRINTER
-			if (printer)
-				printer_close();
-			else if (s=session_newfile(NULL,"*.txt","Printer output"))
-				if (printer_p=0,!(printer=fopen(s,"wb")))
-					session_message("Cannot record printer!",txt_error);
+			if (printer) printer_close(); else
+				if (s=session_newfile(NULL,"*.txt","Printer output"))
+					if (printer_p=0,!(printer=fopen(s,"wb")))
+						session_message("Cannot record printer!",txt_error);
 			break;
 		case 0x8600: // F6: TOGGLE REALTIME
 			if (!session_shift)
 				{ session_fast^=1; break; }
-			// SHIFT+F6: no `break`!
+			// +SHIFT: no `break`!
 		case 0x8510: // DISC DRIVE
 			disc_disabled^=1; // disabling the disc drive while the firmware is on will freeze the machine!
 			break;
@@ -3650,14 +3646,14 @@ void session_user(int k) // handle the user's commands
 			session_rhythm=k-0x8600-1; session_fast&=~1;
 			break;
 		case 0x0600: // ^F6: TOGGLE TURBO Z80
-			multi_t=(((multi_t+(session_shift?-1:1))-1)&3)+1;
+			multi_u=(1<<(multi_t=(multi_t+(session_shift?-1:1))&3))-1;
 			//mmu_update(); // turbo cancels all contention!
 			break;
 		case 0x0601: // CPU x1
 		case 0x0602: // CPU x2
 		case 0x0603: // CPU x3
 		case 0x0604: // CPU x4
-			multi_t=k-0x0600;
+			multi_u=(1<<(multi_t=k-0x0601))-1;
 			break;
 		case 0x0605: // POWER-UP BOOST
 			power_boost^=POWER_BOOST1^POWER_BOOST0;
@@ -4074,7 +4070,7 @@ int main(int argc,char *argv[])
 			z80_main(( // clump Z80 instructions together to gain speed...
 				(session_fast&-2)?TICKS_PER_LINE<<2: // tape loading allows simpler timings, but some sync is still needed
 				((vdp_raster_add8==vdp_table[19]||vdp_raster==vdp_finalraster)?1:(VDP_LIMIT_X_V-video_pos_x)/3) // follow IRQ events
-			)*multi_t); // ...without missing any IRQ and ULA deadlines!
+			)<<multi_t); // ...without missing any IRQ and ULA deadlines!
 		if (session_signal&SESSION_SIGNAL_FRAME) // end of frame?
 		{
 			if (!video_framecount&&onscreen_flag)

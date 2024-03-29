@@ -18,7 +18,7 @@ emulation of the Z80 microprocessor and it replicates the behavior of the CRTC
 circuits found in the original hardware, and the tape deck and floppy disc drive
 that made possible loading and running software.
 
-CPCEC includes several related projects. ZXSEC is an emulator of the <B>Sinclair
+CPCEC includes several related projects. ZXSEC is an emulator of the Sinclair
 Spectrum family (48K, 128K, +2/Plus2 and +3/Plus3) based on the components it
 shared with the Amstrad CPC family: the Z80 microprocessor, the PSG AY-3-8192
 sound chip, the tape system and the NEC765 disc drive controller; CSFEC is an
@@ -41,11 +41,11 @@ pixels must be 800x600 at least. A sound card is optional, as well as equipping
 a joystick. The mouse can emulate a lightgun to the user's choice.
 
 The emulators span several files: the runnable binaries (by default CPCEC.EXE,
-CSFEC.EXE, MSXEC.EXE, ZXSEC.EXE and XRF.EXE in Windows) and the firmware files
-C1541.ROM, C64EN.ROM, CPC464.ROM, CPC664.ROM, CPC6128.ROM, CPCADOS.ROM,
-CPCPLUS.ROM, MSX.ROM, MSX2.ROM, MSX2P.ROM, MSXDISK.ROM, MSXEC.SHA, SPEC128K.ROM,
-SPEC-P-2.ROM, SPEC-P-3.ROM and SPECTRUM.ROM. All these files must be copied in a
-single directory, ideally created to host the emulators.
+CSFEC.EXE, MSXEC.EXE, ZXSEC.EXE, RUNEC.EXE and XRF.EXE in Windows) and the
+firmware files C1541.ROM, C64EN.ROM, CPC464.ROM, CPC664.ROM, CPC6128.ROM,
+CPCADOS.ROM, CPCPLUS.ROM, MSX.ROM, MSX2.ROM, MSX2P.ROM, MSXDISK.ROM, MSXEC.SHA,
+SPEC128K.ROM, SPEC-P-2.ROM, SPEC-P-3.ROM and SPECTRUM.ROM. All these files must
+be copied in a single directory, ideally created to host the emulators.
 
 The binaries can be compiled from the source files by following the instructions
 in the next paragraphs. GCC 4.9.2, GCC 5.1.0, Pelles C 4.50.113, TCC 0.9.27 and
@@ -433,8 +433,8 @@ and ESCAPE emulates CAPS+SPACE (BREAK);
 * joystick options apply to the Sinclair 2 interface by default; the menu and
 the options -g0, -g1, -g2, g3 and -g4 allow choosing the type of joystick.
 
-ZXSEC can show Gigascreen effects (for example the Spectrum 128 demo "Mescaline
-Synesthesia" 2009 DeMarche) through the interlace and blending options in the
+ZXSEC can show Gigascreen effects, for example the Spectrum 128 demo "Mescaline
+Synesthesia" (2009 DeMarche) through the interlace and blending options in the
 Video menu; the non-interlaced non-blending modes will flicker.
 
 ## CSFEC ##
@@ -511,8 +511,18 @@ in the 1988 MSX2+ model), SSLOT 2 (RAM) and SSLOT 3 (MSX-MUSIC, when enabled);
 in a file named MSXEC.SHA; MSXEC uses it to automatically select mappers for
 known cartridges.
 
-MSXEC can show hi-res video modes (for example the MSX2+ demo "Interlacing Demo"
-1989 Cracxy Crew) through the interlace options in the Video menu, as in ZXSEC.
+MSXEC can show hi-res video modes, such as in the MSX2+ demo "Interlacing Demo"
+(1989 Cracxy Crew) through the interlace options in the Video menu, as in ZXSEC.
+
+## RUNEC ##
+
+RUNEC is a simple tool that takes a file as a parameter and launches the most
+fitting emulator. In some cases the file extension is sufficient to tell the
+file formats apart, but there are emulators that share file extensions (for
+example SNA is common to CPCEC and ZXSEC) so RUNEC examines the contents of the
+file to make an educated guess. Non-filename parameters will be passed to the
+emulator: for example, "runec gameover.szx -d" will feed the Spectrum snapshot
+"gameover.szx" to ZXSEC and launch in debug mode (parameter "-d").
 
 ## Acknowledgements ##
 
@@ -1231,8 +1241,25 @@ the former removing the "Half scanlines" video mode and adding two new options:
 "Microwave static" that adds randomised noise to the image and "Narrow
 X-Blending" that softens the effect of the X-blending option. CSFEC now has an
 explicit "Play tape" option instead of autoplay: some titles rely on the user
-pressing TAPE and STOP on the tape deck ("Super Space Invaders"). Snapshots in
+pressing PLAY and STOP on the tape deck ("Super Space Invaders"). Snapshots in
 CSFEC and MSXEC are optionally compressed with a quick implementation of
 Emmanuel Marty's LZSA2 method. The user can set whether the screenshots are BMP
 (default) or QOI files. Removed the Spanish documentation due to lack of
 readers.
+- 20240328 -- minor patch adding RUNEC, a file helper that takes a file as a
+parameter and launches the emulator that can read it, and fixing many warnings
+caused by questionable programming styles. The SDL2 version fixes double
+keypresses when redefining the joystick keys while debugging, as well as a crash
+when compiling the emulators with small window sizes. The common CDT/TZX/PZX
+player performs sanity checks on blocks $19 and $2B. The Z80 module relies on a
+new macro, Z80_DUMB to perform dummy reads. CPU clock options are no longer
+based on 1x, 2x, 3x and 4x, but on 1x, 2x, 4x and 8x. Autorunning a tape
+disables disc drives only when rebooting the system, instead of disabling the
+drives until a reset. CSFEC fixes two bugs in the VIC-II (reading register 26
+must always set the top four bits: "HVSC 20 Years"; writing register 17 with the
+same old value must not remove the border: "Paradroid") and another one in the
+snapshot loader (pending CIA2 events were sent to CIA1) when loading snapshots.
+MSXEC now reads the file MSXEC.SHA as text instead of binary (reported by
+CPCbegin). ZXSEC can save Z80 snapshots (version 3), compression is optional.
+The package includes two new files, CSFEC-3B.VPL for CSFEC and MSXEC-3B.VPL for
+MSXEC; users can edit them to implement new colour palettes.

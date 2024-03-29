@@ -138,6 +138,7 @@ void z80_reset(void) // reset the Z80
 // macros are handier than typing the same snippets of code a million times
 #define Z80_GET_R8 ((z80_ir.b.l&0x80)+(r7&0x7F)) // rebuild R from R7
 #define Z80_FETCH Z80_PEEKZ(z80_pc.w)
+#define Z80_ZZ_PC Z80_DUMB(z80_pc.w) // the only place where dumb 3-T waits happen
 #define Z80_RD_PC Z80_PEEK(z80_pc.w)
 #define Z80_WZ_PC z80_wz=Z80_RD_PC; ++z80_pc.w; z80_wz+=Z80_RD_PC<<8 // read WZ from WORD[PC++]
 #define Z80_RD_HL BYTE b=Z80_PEEK(z80_hl.w)
@@ -229,7 +230,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 		}
 		#if !Z80_HALT_STRIDE // careful HALT
 		else if (UNLIKELY(z80_int>1))
-			{ z80_wz=z80_pc.w+1; Z80_PEEKZ(z80_wz); Z80_STRIDE(0X000); continue; } // the Z80 is actually performing NOPs rather than HALTs
+			{ z80_wz=z80_pc.w+1; Z80_DUMBZ(z80_wz); Z80_STRIDE(0X000); continue; } // HALT actually performs dumb NOP-like waits while IRQ is off
 		#endif
 		else
 		{
@@ -257,14 +258,14 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					#ifdef Z80_DNTR_0X02
 					Z80_DNTR_0X02(z80_bc.w,z80_af.b.h);
 					#endif
-					z80_wz=((z80_bc.w+1)&0x00FF)|(z80_af.b.h<<8);
+					z80_wz=((z80_bc.b.l+1)&255)+(z80_af.b.h<<8);
 					break;
 				case 0x12: // LD (DE),A
 					Z80_POKE9(z80_de.w,z80_af.b.h);
 					#ifdef Z80_DNTR_0X12
 					Z80_DNTR_0X12(z80_de.w,z80_af.b.h);
 					#endif
-					z80_wz=((z80_de.w+1)&0x00FF)|(z80_af.b.h<<8);
+					z80_wz=((z80_de.b.l+1)&255)+(z80_af.b.h<<8);
 					break;
 				case 0x0A: // LD A,(BC)
 					z80_af.b.h=Z80_PEEK9(z80_bc.w);
@@ -283,7 +284,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					#ifdef Z80_DNTR_0X32
 					Z80_DNTR_0X32(z80_wz,z80_af.b.h);
 					#endif
-					z80_wz=((z80_wz+1)&0x00FF)|(z80_af.b.h<<8);
+					z80_wz=((z80_wz+1)&255)+(z80_af.b.h<<8);
 					break;
 				case 0x2A: // LD HL,($NNNN)
 					Z80_RD2(z80_hl.b);
@@ -444,7 +445,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 						z80_pc.w=z80_wz+=z80_pc.w+1;
 						break;
 					}
-					Z80_RD_PC; ++z80_pc.w; // dummy!
+					Z80_ZZ_PC; ++z80_pc.w; // dummy!
 					#ifdef Z80_DNTR_0X10
 					Z80_DNTR_0X10(z80_pc.w);
 					#endif
@@ -463,7 +464,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 						z80_pc.w=z80_wz+=z80_pc.w+1;
 						break;
 					}
-					Z80_RD_PC; ++z80_pc.w; // dummy!
+					Z80_ZZ_PC; ++z80_pc.w; // dummy!
 					break;
 				case 0x28: // JR Z,$RRRR
 					if (z80_af.b.l&0x40)
@@ -474,7 +475,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 						z80_pc.w=z80_wz+=z80_pc.w+1;
 						break;
 					}
-					Z80_RD_PC; ++z80_pc.w; // dummy!
+					Z80_ZZ_PC; ++z80_pc.w; // dummy!
 					break;
 				case 0x30: // JR NC,$RRRR
 					if (!(z80_af.b.l&0x01))
@@ -485,7 +486,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 						z80_pc.w=z80_wz+=z80_pc.w+1;
 						break;
 					}
-					Z80_RD_PC; ++z80_pc.w; // dummy!
+					Z80_ZZ_PC; ++z80_pc.w; // dummy!
 					break;
 				case 0x38: // JR C,$RRRR
 					if (z80_af.b.l&0x01)
@@ -496,7 +497,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 						z80_pc.w=z80_wz+=z80_pc.w+1;
 						break;
 					}
-					Z80_RD_PC; ++z80_pc.w; // dummy!
+					Z80_ZZ_PC; ++z80_pc.w; // dummy!
 					break;
 				case 0x27: // DAA
 					{
@@ -1196,7 +1197,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					Z80_SEND(z80_wz,z80_af.b.h);
 					Z80_POST_SEND(z80_wz);
 					Z80_STRIDE_IO(0x1D3);
-					z80_wz=((z80_wz+1)&0x00FF)|(z80_af.b.h<<8);
+					z80_wz=((z80_wz+1)&255)+(z80_af.b.h<<8);
 					break;
 				case 0xD9: // EXX
 					Z80_EXX2(z80_bc.w,z80_bc2.w);

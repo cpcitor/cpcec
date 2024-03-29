@@ -28,6 +28,7 @@ char tape_rewind=0; // option: does the tape rewind after running out?
 char tape_status,tape_output,tape_record; // tape input and output values: 0 or 1, nothing else
 char tape_polarity=0; // do we need to invert the value of tape_status? yes (1) or no (0)
 char tape_feedable; // does the current block allow tape speedup operations? y(1) / n(0)
+int tape_seekcccc; // sanity check! for example BLOCK $19 may carry dummy data!
 
 #ifndef TAPE_KANSAS_CITY
 #ifdef DEBUG
@@ -107,7 +108,7 @@ int tape_close(void) // closes the tape file, if any; 0 OK
 		#ifdef TAPE_KANSAS_CITY
 		tape_kansas=
 		#endif
-		tape_waves=tape_tails=tape_calls=tape_loops=tape_type=0;
+		tape_waves=tape_tails=tape_calls=tape_loops=tape_type=tape_seekcccc=0;
 }
 
 int tape_open(char *s) // opens a tape file `s` for input; 0 OK, !0 ERROR
@@ -351,6 +352,8 @@ int tape_catalog(char *t,int x) // fills the buffer `t` of size `x` with the tap
 						break;
 					case 0x2A: t+=1+sprintf(t,"STOP ON 48K");
 						break;
+					case 0x2B: t+=1+sprintf(t,"SET SIGNAL LEVEL");
+						break;
 					case 0x21: t+=sprintf(t,"GROUP: "); // GROUP START
 						tape_catalog_string(&t,tape_getc()); i=0;
 						u=t;
@@ -435,9 +438,9 @@ void tape_tzx14(int l) // TZX BLOCK $14 et al. sets the "datas" and the "tails"
 void tape_tzx12(void) // TZX BLOCK $12 et al. sets the "heads"
 {
 	tape_time=tape_head=tape_heads=0;
-	if (tape_tzxpilot*tape_tzxpilots)
+	if (tape_tzxpilot&&tape_tzxpilots)
 		tape_headcode[0]=tape_tzxpilots,tape_headcode[1]=tape_tzxpilot,tape_heads=1;
-	if (tape_tzxsync1*tape_tzxsync2) // can SYNC2 be zero when SYNC1 isn't!?
+	if (tape_tzxsync1&&tape_tzxsync2) // can SYNC2 be zero when SYNC1 isn't!?
 		tape_headcode[tape_heads*2]=1,tape_headcode[tape_heads*2+1]=tape_tzxsync1,++tape_heads,
 		tape_headcode[tape_heads*2]=1,tape_headcode[tape_heads*2+1]=tape_tzxsync2,++tape_heads;
 }
@@ -477,7 +480,7 @@ void tape_select(int i) // seeks the position `i` in the tape input
 	#ifdef TAPE_KANSAS_CITY
 	tape_kansas=
 	#endif
-	tape_waves=tape_tails=tape_calls=tape_loops=0; tape_safetydelay();
+	tape_waves=tape_tails=tape_calls=tape_loops=tape_seekcccc=0; tape_safetydelay();
 }
 
 void tape_main(int t) // plays tape back for `t` ticks; t must be >0!
@@ -550,7 +553,7 @@ void tape_main(int t) // plays tape back for `t` ticks; t must be >0!
 					if (!tape_item) // start loop?
 						tape_firstbit(*tape_code);
 					if ((t=*++tape_code)>=0)
-						(tape_item++&&(tape_status^=1)),tape_n+=t; // toggle signal
+						{ if (tape_n+=t,tape_item++) tape_status^=1; } // toggle signal
 					else if (tape_item=0,--tape_time)
 						tape_code=tape_codeitem[tape_byte]; // next loop
 					else
@@ -576,7 +579,7 @@ void tape_main(int t) // plays tape back for `t` ticks; t must be >0!
 					if (!tape_item) // start loop?
 						tape_firstbit(*(tape_code=tape_codeitem[(tape_byte>>(tape_time-tape_bits))&tape_mask]));
 					if ((t=*++tape_code)>=0)
-						(tape_item++&&(tape_status^=1)),tape_n+=t; // toggle signal
+						{ if (tape_n+=t,tape_item++) tape_status^=1; } // toggle signal
 					else
 						tape_item=0,tape_time-=tape_bits,--tape_datas; // end loop
 				}
@@ -694,6 +697,8 @@ void tape_main(int t) // plays tape back for `t` ticks; t must be >0!
 					}
 					else // TZX
 					{
+						if (tape_seekcccc) // sanity check?
+							tape_seek(tape_seekcccc),tape_seekcccc=0;
 						if ((p=tape_getc())<=(tape_feedable=0))
 							{ tape_eofmet(); return; }
 						cprintf("TZX:%08X-%02X ",tape_filetell-1,p);
@@ -740,7 +745,7 @@ void tape_main(int t) // plays tape back for `t` ticks; t must be >0!
 								tape_waves+=tape_getccc()<<3;
 								break;
 							case 0x19: // GENERALIZED DATA
-								tape_getcccc();
+								tape_seekcccc=tape_getcccc(); tape_seekcccc+=tape_filetell; // sanity check!
 								tape_tzxhold=tape_getcc(); tape_tzx20();
 								tape_tones=tape_getcccc();
 								tape_toneitems=tape_getc();
@@ -754,6 +759,9 @@ void tape_main(int t) // plays tape back for `t` ticks; t must be >0!
 								break;
 							case 0x2A: // STOP ON 48K
 								tape_getcccc(); tape_signal|=2; // 1 = all systems, 2 = <128K
+								break;
+							case 0x2B: // SET SIGNAL LEVEL
+								p=tape_getcccc()-1; tape_status=(tape_getc()&1)^tape_polarity; tape_skip(p);
 								break;
 							#ifdef TAPE_KANSAS_CITY
 							case 0x4B: // KANSAS CITY DATA, used in TSX files (MSX tapes)
@@ -854,7 +862,7 @@ int fasttape_test(const BYTE *s,WORD p) // compares a chunk of memory against a 
 		if (*s==0x80) // relative word, f.e. the pair "-128,  -2" points at its first byte
 		{
 			z=PEEK(p); ++p; z+=PEEK(p)*256; ++p; a=p+(signed char)(*++s); // fetch the word
-			if (a!=z) return 0; ++s; // give up if they don't match
+			{ if (a!=z) return 0; } ++s; // give up if they don't match
 		}
 		else // memory comparison, the two bytes are the offset (signed!) and the length
 		{

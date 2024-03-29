@@ -60,14 +60,14 @@
 
 // general engine constants and variables --------------------------- //
 
-//#define AUDIO_UNIT Uint8 // obsolete 8-bit audio
+//typedef Uint8 AUDIO_UNIT; // obsolete 8-bit audio
 //#define AUDIO_BITDEPTH 8
 //#define AUDIO_ZERO 128
-#define AUDIO_UNIT Sint16 // standard 16-bit audio
+typedef Sint16 AUDIO_UNIT; // standard 16-bit audio
 #define AUDIO_BITDEPTH 16
 #define AUDIO_ZERO 0
 #define AUDIO_BYTESTEP (AUDIO_CHANNELS*AUDIO_BITDEPTH/8) // i.e. 1, 2 or 4 bytes
-#define VIDEO_UNIT DWORD // the pixel style must be 0X00RRGGBB and nothing else!
+typedef DWORD VIDEO_UNIT; // the pixel style must be 0X00RRGGBB and nothing else!
 
 VIDEO_UNIT *menus_frame; // UI frame
 VIDEO_UNIT *video_frame,*video_blend; // video + blend frames, allocated on runtime
@@ -349,11 +349,10 @@ int utf8len(const char *s) // length (in codes, not bytes) of a UTF-8 string `s`
 	{ int i=0,k; while (k=*s++) if (++i,k>=-64&&k<0) while (*s<-64) ++s; return i; }
 int utf8chk(int i) // size in bytes of a valid UTF-8 code `i`; 0 INVALID CODE
 	{ return i&-2097152?0:i<128?1:i<2048?2:i<65536?3:4; }
-int utf8add(char *s,int i) // translate from codes to bytes offset `i` (can be <0) within a **VALID** UTF-8 pointer `s`
-{
-	char *r=s; if (i>0) { do { if (*s) while (*++s<-64) {} } while (--i); }
-	else if (i<0) { do { while (*--s<-64) {} } while (++i); } return s-r;
-}
+// translate from codes to bytes offset `i` (can be <0) within a **VALID** UTF-8 pointer `s`
+int utf8inc(char *s,int i) { int o=0; do do ++o; while (*++s<-64); while (--i); return o; } // positive offset, go forwards
+int utf8dec(char *s,int i) { int o=0; do do --o; while (*--s<-64); while (++i); return o; } // negative, backwards
+#define utf8add(s,i) ((i)>0?utf8inc((s),(i)):(i)<0?utf8dec((s),(i)):0) // remember, `s` is valid UTF-8: no error checking is performed!
 #else // simple chars without UTF-8
 #define utf8put(s,i) (*((*(s))++)=i)
 #define utf8get(s) ((unsigned char)*((*(s))++))
@@ -364,7 +363,7 @@ int utf8add(char *s,int i) // translate from codes to bytes offset `i` (can be <
 
 // extremely tiny graphical user interface: SDL2 provides no widgets! //
 
-#define SESSION_UI_HEIGHT 14 // must be EVEN and higher than ONSCREEN_SIZE!!
+#define SESSION_UI_HEIGHT 14 // must be equal or higher than ONSCREEN_SIZE!!
 
 BYTE session_ui_chrs[ONSCREEN_CEIL*SESSION_UI_HEIGHT];//,session_ui_chrlen[256];
 void session_ui_makechrs(void)
@@ -433,7 +432,7 @@ void session_fillhorz(int rx,int ry,int rw,int rh,VIDEO_UNIT a,VIDEO_UNIT b) // 
 void session_ui_fillhorz(int x,int y,int w,int h,VIDEO_UNIT a,VIDEO_UNIT b) // coords in characters
 	{ session_fillhorz(x*8,y*SESSION_UI_HEIGHT,w*8,h*SESSION_UI_HEIGHT,a,b); }
 #endif
-int SESSION_UI_000=0X000000,SESSION_UI_033=0X999999,SESSION_UI_067=0XCCCCCC,SESSION_UI_100=0XFFFFFF;
+int SESSION_UI_000=0X000000,SESSION_UI_033=0X808080,SESSION_UI_067=0XC0C0C0,SESSION_UI_100=0XFFFFFF;
 int session_ui_style; // bigger than normal text; >0 draws a separator below the text (caption), <0 doesn't (menu)
 #define SESSION_UI_GAP 2 // caption height, either 2 or 3
 int session_ui_center=0; // REDEFINE texts (and perhaps others) must be centered on the dialog
@@ -475,8 +474,8 @@ int session_ui_setstyle(int i) // 0 = normal, -1 = menu bar, +1 = dialog caption
 
 int session_ui_printglyph(VIDEO_UNIT *p,int z,int q) // print glyph `z` at target `*p` with `q` inverse video
 {
-	const int w=8; //=session_ui_chrlen[z];
 	if (z<1||z>=ONSCREEN_CEIL) z=31; // unknown glyph :-/
+	const int w=8; //=session_ui_chrlen[z]; // notice we drop unknown glyphs in advance
 	{
 		VIDEO_UNIT q0,q1; if (q) // inverse video? swap ink and paper!
 			q1=session_glyph_q0,q0=session_glyph_q1; else q0=session_glyph_q0,q1=session_glyph_q1;
@@ -494,8 +493,8 @@ int session_ui_printglyph(VIDEO_UNIT *p,int z,int q) // print glyph `z` at targe
 }
 int session_ui_printasciz(unsigned char *s,int x,int y,int prae,int w,int post,int q1,int q2) // coords in characters
 {
-	if (w<0) w=utf8len((char*)s); if ((q1|q2)<0) q1=q2=-1; // default values // avoid a warning
-	int n=prae+w+post; // remember for later
+	if (w<0) w=utf8len((char*)s); // negative `w` = whole string
+	int n=prae+w+post; if ((q1|q2)<0) q1=q2=-1; // remember for later
 	VIDEO_UNIT *t=&menus_frame[x*8+(y*SESSION_UI_HEIGHT)*VIDEO_PIXELS_X];
 	while (prae-->0)
 		t+=session_ui_printglyph(t,' ',q1<0);
@@ -505,7 +504,8 @@ int session_ui_printasciz(unsigned char *s,int x,int y,int prae,int w,int post,i
 		post+=i;
 		do
 		{
-			if (s-r==q1) q=1; if (s-r==q2) q=0;
+			if (s-r==q1) q=1; // enable inverse video?
+			if (s-r==q2) q=0; // disable inverse video?
 			if (i=(utf8get((const char**)&s))) t+=session_ui_printglyph(t,i,q);
 		}
 		while (i);
@@ -515,7 +515,8 @@ int session_ui_printasciz(unsigned char *s,int x,int y,int prae,int w,int post,i
 		w-=2; // ellipsis, see below
 		while (w-->0)
 		{
-			if (s-r==q1) q=1; if (s-r==q2) q=0;
+			if (s-r==q1) q=1; // enable inverse video?
+			if (s-r==q2) q=0; // disable inverse video?
 			t+=session_ui_printglyph(t,utf8get((const char**)&s),q);
 		}
 		t+=session_ui_printglyph(t,127,q); // ellipsis,
@@ -536,7 +537,8 @@ void session_ui_drawcaption(char *s,int x,int y,int w)
 
 int session_ui_base_x,session_ui_base_y,session_ui_size_x,session_ui_size_y; // used to calculate mouse clicks relative to widget
 int session_ui_maus_x,session_ui_maus_y; // mouse X+Y, when the "key" is -1 (move), -2 (left click) or -3 (right click)
-int session_ui_char,session_ui_shift,session_ui_focusing=0; // ASCII+Shift of the latest keystroke, and focus flag
+char session_ui_char0,session_ui_shift,session_ui_focus=0; // keyboard flags (avoid double clicks, check SHIFT) and window focus
+int session_ui_char; // ASCII+Shift of the latest keystroke
 #define SESSION_UI_MAXX (VIDEO_PIXELS_X/8-6)
 #define SESSION_UI_MAXY (VIDEO_PIXELS_Y/SESSION_UI_HEIGHT-2)
 
@@ -549,7 +551,7 @@ int session_ui_exchange(void) // wait for a keystroke or a mouse motion
 				if (event.window.event==SDL_WINDOWEVENT_EXPOSED)
 					session_reveal(); // fast redraw
 				#if 0 // *!* some users expect the menus to vanish on focus loss, others don't... what do?
-				else if (event.window.event==SDL_WINDOWEVENT_FOCUS_LOST&&session_ui_focusing) return KBCODE_ESCAPE;
+				else if (event.window.event==SDL_WINDOWEVENT_FOCUS_LOST&&session_ui_focus) return KBCODE_ESCAPE;
 				#endif
 				break;
 			case SDL_MOUSEWHEEL:
@@ -561,10 +563,13 @@ int session_ui_exchange(void) // wait for a keystroke or a mouse motion
 				session_ui_maus_x=(event.button.x-session_ideal.x)*VIDEO_PIXELS_X/session_ideal.w/8-session_ui_base_x,session_ui_maus_y=(event.button.y-session_ideal.y)*VIDEO_PIXELS_Y/session_ideal.h/SESSION_UI_HEIGHT-session_ui_base_y;
 				return event.type==SDL_MOUSEBUTTONUP?event.button.button==SDL_BUTTON_RIGHT?-3:-2:-1;
 			case SDL_KEYDOWN:
+				session_ui_char0=0; // see SDL_TEXTINPUT
 				session_ui_shift=!!(event.key.keysym.mod&KMOD_SHIFT);
 				return event.key.keysym.mod&KMOD_ALT?0:event.key.keysym.scancode;
 			case SDL_TEXTINPUT: // always follows SDL_KEYDOWN
-				if ((session_ui_char=event.text.text[0])&128) // UTF-8? (not that it matters, we stick to ASCII)
+				if (session_ui_char0)
+					session_ui_char0=0;
+				else if ((session_ui_char=event.text.text[0])&128) // UTF-8? (not that it matters, we stick to ASCII)
 					session_ui_char=128+(session_ui_char&1)*64+(event.text.text[1]&63);
 				return 0;
 			case SDL_QUIT:
@@ -592,10 +597,9 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 	if (!session_ui_menusize)
 		return;
 	session_ui_init();
-	int menuxs[SESSION_UI_MAXY],events[SESSION_UI_MAXY]; // the limit is the canvas height
-	int menu=0,menus=0,menuz=-1,item=0,items=0,itemz=-1,itemx=0,itemw=0;
+	int menuxs[1<<4],events[1<<6]; // hard limits, please don't create too many items :_(
+	int menu=0,menus=0,menuz=-1,item=0,items=0,itemz=-1,itemx=0,itemw=0,itemy=0,itemh=0;
 	char *zz=NULL,*z=NULL; // `zz` points to the current submenu's first item, `z` points to the current item
-
 	int done,ox=session_ui_base_x=1,oy=session_ui_base_y=1,q=1;
 	session_event=0X8000; do
 	{
@@ -604,16 +608,12 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 			if (menuz!=menu)
 			{
 				menuz=menu; q=itemz=session_ui_setstyle(-1); // the super menu is the caption
-				int menux=menus=item=items=0; unsigned char *m=session_ui_menudata;
+				int menux=menus=item=items=itemy=0; unsigned char *m=session_ui_menudata;
 				while (*m) // scan menu data for menus
 				{
 					if (menus==menu)
-					{
 						itemx=menux;
-						menux+=session_ui_printasciz(m,ox+menux,oy+0,1,-1,1,0,-1);
-					}
-					else
-						menux+=session_ui_printasciz(m,ox+menux,oy+0,1,-1,1,0,+0);
+					menux+=session_ui_printasciz(m,ox+menux,oy+0,1,-1,1,0,menus==menu?-1:0);
 					int i=0,j=0,k=0;
 					while (*m++) // skip menu name
 						++j;
@@ -626,16 +626,35 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 							j=i;
 					}
 					if (menus==menu)
+					{
 						itemw=j,items=k;
+						if (itemx+itemw>SESSION_UI_MAXX+2) // too wide?
+							itemw=SESSION_UI_MAXX+2-itemx; // clip!
+						if ((itemh=SESSION_UI_MAXY-SESSION_UI_GAP)>items)
+							itemh=items; // avoid vertical overrun!
+					}
 					menuxs[menus++]=menux;
 				}
 				//session_ui_drawborder(ox,oy,menux,SESSION_UI_GAP);
 				session_drawborder(ox*8,oy*SESSION_UI_HEIGHT,menux*8,SESSION_UI_GAP*SESSION_UI_HEIGHT-4);
+				session_ui_drawborder(itemx+ox,SESSION_UI_GAP+oy,itemw+2,itemh);
 				session_ui_setstyle(0);
 			}
 			if (itemz!=item)
 			{
+				if (item<0)
+					item=0;
+				else if (item>items-1)
+					item=items-1;
 				itemz=item;
+				if (itemy>item)
+					itemy=item; // autoscroll
+				else if (itemy<item-itemh+1)
+					itemy=item-itemh+1; // autoscroll
+				if (itemy>items-itemh)
+					itemy=items-itemh; // keep within bounds
+				else if (itemy<0)
+					itemy=0; // keep within bounds
 				q=1; int i=0;
 				unsigned char *m=session_ui_menudata;
 				while (*m) // scan menu data for items
@@ -650,30 +669,38 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 						{
 							if (item==k)
 								z=(char*)&m[-2],session_event=j; // avoid another fastidious warning
-							session_ui_printasciz(m,itemx+ox+0,SESSION_UI_GAP+oy+k,1,itemw,1,0,item==k?-1:+0);
-							if (j==0X8000) // empty item? separator!
-								session_ui_middleline(itemx+ox,SESSION_UI_GAP+oy+k,itemw+2);
+							if (k>=itemy&&k<itemy+itemh)
+							{
+								session_ui_printasciz(m,itemx+ox+0,SESSION_UI_GAP+oy+k-itemy,1,itemw,1,0,item==k?-1:+0);
+								if (j==0X8000) // empty item? separator!
+									session_ui_middleline(itemx+ox,SESSION_UI_GAP+oy+k-itemy,itemw+2);
+							}
 							events[k++]=j;
 						}
 						while (*m++) {} // skip item name
 					}
 					++i;
 				}
-				session_ui_drawborder(itemx+ox,SESSION_UI_GAP+oy,itemw+2,items);
 			}
 			if (q)
 				session_redraw(q=0);
-			session_ui_focusing=1; // not too useful, disable it if you wish
+			session_ui_focus=1; // not too useful, disable it if you wish
 			switch (session_ui_exchange())
 			{
+				case KBCODE_NEXT:
+					++itemy,itemz=-1;
+					break;
+				case KBCODE_PRIOR:
+					--itemy,itemz=-1;
+					break;
 				case KBCODE_UP:
 					if (--item<0)
-				case KBCODE_END: //case KBCODE_NEXT: // GTK+2 style
+				case KBCODE_END:
 						item=items-1;
 					break;
 				case KBCODE_DOWN:
 					if (++item>=items)
-				case KBCODE_HOME: //case KBCODE_PRIOR: // GTK+2 style
+				case KBCODE_HOME:
 						item=0;
 					break;
 				case KBCODE_LEFT:
@@ -694,20 +721,21 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 						done=1;
 					break;
 				case -1: // mouse move
-					if (session_ui_maus_y<SESSION_UI_GAP&&session_ui_maus_x>=0&&session_ui_maus_x<session_ui_menusize) // select menu?
+					if (session_ui_maus_y<SESSION_UI_GAP) // select menu?
 					{
-						menu=menus;
-						while (menu>0&&session_ui_maus_x<menuxs[menu-1]) --menu;
+						if (session_ui_maus_x>=0&&session_ui_maus_x<session_ui_menusize)
+							for (menu=0;session_ui_maus_x>=menuxs[menu];++menu) {}
 					}
-					else if (session_ui_maus_y>=SESSION_UI_GAP&&session_ui_maus_y<items+SESSION_UI_GAP&&session_ui_maus_x>=itemx&&session_ui_maus_x<itemx+itemw+2) // select item?
-						item=session_ui_maus_y-SESSION_UI_GAP; // hover, not click!
+					else // select item?
+						if (session_ui_maus_y<itemh+SESSION_UI_GAP&&session_ui_maus_x>=itemx&&session_ui_maus_x<itemx+itemw+2)
+							item=session_ui_maus_y-SESSION_UI_GAP+itemy; // hover, not click!
 					break;
 				case -3: // mouse right click
 				case -2: // mouse left click
 					if (session_ui_maus_y<SESSION_UI_GAP&&session_ui_maus_x>=0&&session_ui_maus_x<session_ui_menusize) // select menu?
 						; // already done above
-					else if (session_ui_maus_y>=SESSION_UI_GAP&&session_ui_maus_y<items+SESSION_UI_GAP&&session_ui_maus_x>=itemx&&session_ui_maus_x<itemx+itemw+2) // select item?
-						session_event=events[session_ui_maus_y-SESSION_UI_GAP],done=1;
+					else if (session_ui_maus_y>=SESSION_UI_GAP&&session_ui_maus_y<itemh+SESSION_UI_GAP&&session_ui_maus_x>=itemx&&session_ui_maus_x<itemx+itemw+2) // select item?
+						session_event=events[session_ui_maus_y-SESSION_UI_GAP+itemy],done=1;
 					else // quit?
 						session_event=0,done=1;
 					break;
@@ -723,7 +751,7 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 								break;
 						}
 			}
-			session_ui_focusing=0;
+			session_ui_focus=0;
 			if (menuz!=menu)
 				session_ui_loop(); // redrawing the items doesn't need any wiping, unlike the menus
 		}
@@ -764,13 +792,14 @@ void session_ui_textinit(char *s,char *t,char q) // used by session_ui_text and 
 	}
 	if (textw<i)
 		textw=i;
-	if (textw>SESSION_UI_MAXX)
-		textw=SESSION_UI_MAXX;
 	if (i)
 		++texth;
 	if (q)
 		textw+=q=6; // 6: four characters for the icon, plus one extra char per side
-
+	if (textw>SESSION_UI_MAXX)
+		textw=SESSION_UI_MAXX; // avoid horizontal overruns!
+	if (texth>SESSION_UI_MAXY)
+		texth=SESSION_UI_MAXY; // avoid vertical overruns!
 	textw+=2; // include left+right margins
 	int textx=((VIDEO_PIXELS_X/8)-textw)/2,texty=((VIDEO_PIXELS_Y/SESSION_UI_HEIGHT)-texth)/2;
 	session_ui_drawborder(session_ui_base_x=textx,session_ui_base_y=texty,session_ui_size_x=textw,session_ui_size_y=texth);
@@ -779,7 +808,7 @@ void session_ui_textinit(char *s,char *t,char q) // used by session_ui_text and 
 	j=0; i=SESSION_UI_GAP;
 	m=session_parmtr;
 	session_ui_printasciz("",textx+q,texty+i++,1,textw-q,1,0,+0); // top blank line
-	while (*s) // render text proper
+	--texth; while (*s&&i<texth) // render text proper
 	{
 		int k=(*m++=*s++);
 		++j; // tabulation
@@ -795,7 +824,7 @@ void session_ui_textinit(char *s,char *t,char q) // used by session_ui_text and 
 				++j,*m++=' ';
 		}
 	}
-	if (m!=(char*)session_parmtr) // last line lacks a line feed?
+	++texth; if (m!=(char*)session_parmtr) // last line lacks a line feed?
 	{
 		*m=0; int l=session_ui_center?(textw-q-utf8len(session_parmtr))/2:0;
 		session_ui_printasciz(m=session_parmtr,textx+q,texty+i++,l+1,textw-q-l,1,0,+0);
@@ -910,8 +939,7 @@ int session_ui_input(char *t) // see session_input
 					*session_parmtr=i=j=q=0;
 				else if (dirty==KBCODE_BKSPACE?i>0:i<j)
 				{
-					int o; if (dirty==KBCODE_BKSPACE) { o=i; i+=utf8add(&session_parmtr[i],-1); }
-					else { unsigned char *z=&session_parmtr[i]; utf8get((const char**)&z); o=z-session_parmtr; }
+					int o=i; if (dirty==KBCODE_BKSPACE) i+=utf8add(&session_parmtr[i],-1); else o+=utf8add(&session_parmtr[i],+1);
 					memmove(&session_parmtr[i],&session_parmtr[o],j-i+1); j+=i-o;
 				}
 				break;
@@ -1139,6 +1167,7 @@ int session_ui_redefine(void) // wait for a key, even if it isn't a character
 				session_ui_maus_x=(event.button.x-session_ideal.x)*VIDEO_PIXELS_X/session_ideal.w/8-session_ui_base_x,session_ui_maus_y=(event.button.y-session_ideal.y)*VIDEO_PIXELS_Y/session_ideal.h/SESSION_UI_HEIGHT-session_ui_base_y;
 				return session_ui_maus_x>=0&&session_ui_maus_x<session_ui_size_x&&session_ui_maus_y>=0&&session_ui_maus_y<session_ui_size_y?0:-1;
 			case SDL_KEYDOWN:
+				session_ui_char0=1; // we do NOT handle SDL_TEXTINPUT here!!!
 				if ((event.key.keysym.scancode>=KBCODE_F1&&event.key.keysym.scancode<=KBCODE_F12)||
 					(event.key.keysym.mod&(KMOD_CTRL|KMOD_SHIFT|KMOD_ALT|KMOD_GUI))) break; // reject!
 				return event.key.keysym.scancode==KBCODE_ESCAPE?-1:event.key.keysym.scancode; // escape/return
@@ -1296,33 +1325,34 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 			strcat(strcpy(session_scratch,basepath),session_parmtr);
 			#ifdef _WIN32
 			if (session_parmtr[1]==':') // the user chose a drive root directory
-				strcpy(pastname,strcpy(basepath,session_parmtr));
+				strcpy(pastname,strcpy(basepath,session_parmtr)); // return to itself (what else?)
 			else
 			{
 				if (!strcmp(session_parmtr,strcpy(pastname,prevpath)))
 				{
-					m=strrchr(basepath,PATHCHAR);
-					while (m&&m>basepath&&*--m!=PATHCHAR) {}
-					if (m)
+					if (m=strrchr(basepath,PATHCHAR))
+					{
+						while (m!=basepath&&*--m!=PATHCHAR) {}
 						strcpy(pastname,&m[1]); // allow returning to previous directory
-					else
-						*pastname=0;
+					}
+					else *pastname=0; // nowhere to return
 				}
-				GetFullPathName(session_scratch,STRMAX,basepath,&m);
+				if (GetFullPathName(session_scratch,STRMAX,basepath,&m)) // is this long enough for the GetFullPathName() target buffer?
+					session_ui_filedialog_sanitize(basepath);
 			}
 			#else
 			if (!strcmp(session_parmtr,strcpy(pastname,prevpath)))
 			{
-				m=strrchr(basepath,PATHCHAR);
-				while (m&&m>basepath&&*--m!=PATHCHAR) {}
-				if (m)
+				if (m=strrchr(basepath,PATHCHAR))
+				{
+					while (m!=basepath&&*--m!=PATHCHAR) {}
 					strcpy(pastname,&m[1]); // allow returning to previous directory
-				else
-					*pastname=0;
+				}
+				else *pastname=0; // nowhere to return
 			}
-			!realpath(session_scratch,basepath); // realpath() requires the target to be at least 4096 bytes long in Linux 4.10.0-38-generic, Linux 4.15.0-96-generic...!
+			if (realpath(session_scratch,basepath)) // realpath() requires the target to be at least 4096 bytes long in Linux 4.10.0-38-generic, Linux 4.15.0-96-generic...!
+				session_ui_filedialog_sanitize(basepath);
 			#endif
-			session_ui_filedialog_sanitize(basepath);
 		}
 		else // the user chose a file
 		{
@@ -1432,13 +1462,13 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 			else if (*r=='0') // menu item?
 			{
 				while (*r++!=' ') {}
-				int n=0;
-				while (*r++>=' ')
-					++n;
-				if (mxx<n)
-					mxx=n;
-				--r;
-				while (*r++!='\n') {}
+				#if 1 // shortcuts aligned to the right; more packed
+				char n=0; while (*r++!='\n') ++n;
+				#else // shortcuts aligned to the left; wider spaces
+				char n=0; while (*r++>=' ') ++n;
+				#endif
+				if (mxx<n) mxx=n;
+				--r; while (*r++!='\n') {}
 			}
 			else break;
 		}
@@ -1457,9 +1487,12 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 				while ((i=(*t++=*s++))!='\n')
 					if (i=='\t') // keyboard shortcut?
 					{
-						--t;
-						for (int n=h;n<mxx;++n)
-							*t++=' ';
+						--t; // replace tab with spaces...
+						#if 1 // shortcuts aligned to the right; more packed
+						int l=0; while (*s!='\n') ++l,++s; s-=l; for (int n=h;n<mxx-l;++n) *t++=' '; // pad with spaces
+						#else // shortcuts aligned to the left; wider spaces
+						for (int n=h;n<mxx;++n) *t++=' '; // pad with spaces
+						#endif
 					}
 					else if (i=='_') // string shortcut?
 						--t;
@@ -1588,6 +1621,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 			#endif
 				break;
 			case SDL_KEYDOWN:
+				session_ui_char0=0; // see SDL_TEXTINPUT
 				session_shift=!!(event.key.keysym.mod&KMOD_SHIFT);
 				if (event.key.keysym.mod&KMOD_ALT)
 				{
@@ -1596,9 +1630,11 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 						case SDLK_RETURN: // ALT+RETURN toggles fullscreen
 							session_fullblit=!session_fullblit,session_resize(); break;
 						case SDLK_UP: //case SDLK_PLUS: case SDLK_KP_PLUS: // ALT+UP raises the zoom
-							!session_fullblit&&session_zoomblit<4&&(++session_zoomblit,session_resize()); break;
+							if (!session_fullblit&&session_zoomblit<4) ++session_zoomblit,session_resize();
+							break;
 						case SDLK_DOWN: //case SDLK_MINUS: case SDLK_KP_MINUS: // ALT+DOWN lowers it
-							!session_fullblit&&session_zoomblit>0&&(--session_zoomblit,session_resize()); break;
+							if (!session_fullblit&&session_zoomblit>0) --session_zoomblit,session_resize();
+							break;
 					}
 					break; // reject other ALT-combinations; notice that SDL2 overrides parts of the Win32 ALT+key logic
 				}
@@ -1618,7 +1654,9 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 					session_event=(k-((event.key.keysym.mod&KMOD_CTRL)?128:0))<<8;
 				break;
 			case SDL_TEXTINPUT: // always follows SDL_KEYDOWN
-				if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant inside debugger
+				if (session_ui_char0)
+					session_ui_char0=0;
+				else if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant inside debugger
 					if (event.text.text[0]>32) // exclude SPACE and non-visible codes!
 						if ((session_event=event.text.text[0])&128) // UTF-8?
 							session_event=128+(session_event&31)*64+(event.text.text[1]&63);

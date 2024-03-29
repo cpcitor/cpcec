@@ -31,7 +31,7 @@ int opll_sine[4][1<<OPLL_SINE_BITS]; //
 int opll_stereo[14][2]; // the channels' LEFT and RIGHT weights
 #endif
 
-const BYTE opll_const[19][8]= // OPLL preset insts (0-15) and drums (16-18): FMSX, BlueMSX and OpenMSX agree on their values
+const BYTE opll_const[19*8]= // OPLL preset insts (0-15) and drums (16-18): FMSX, BlueMSX and OpenMSX agree on their values
 { // each line follows the same rules from OPL regs. 0-7
 	0,0,0,0,0,0,0,0, //  0: original, user-defined
 	0X61,0X61,0X1E,0X17,0XF0,0X7F,0X00,0X17, //  1: violin
@@ -111,7 +111,7 @@ void opll_setup(void)
 			i<(3<<(OPLL_SINE_BITS-2))?-opll_sine[2][i-(2<<(OPLL_SINE_BITS-2))]: // 3/4: fall from zero to min
 			opll_sine[2][i-(3<<(OPLL_SINE_BITS-2))]-OPLL_MAX_VOICE; // 4/4: rise from min to zero
 }
-#define opll_update() 0 // nothing to do, really
+#define opll_update() ((void)0) // nothing to do... yet
 
 void opll_main(AUDIO_UNIT *t,int l) // "piggyback" the audio output for nonzero `l` samples!
 {
