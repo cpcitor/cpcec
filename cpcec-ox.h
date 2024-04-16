@@ -32,8 +32,6 @@
 	// WIN32 is never UTF-8; it's either ANSI (...A) or UNICODE (...W)
 	#define I18N_MULTIPLY "\327"
 	#define I18N_DIVISION "\367"
-	#define I18N_L_AQUOTE "\042"//"\253"
-	#define I18N_R_AQUOTE "\042"//"\273"
 #else
 	#ifdef PATH_MAX
 		#define STRMAX PATH_MAX
@@ -45,14 +43,13 @@
 	#include <dirent.h> // opendir()...
 	#include <unistd.h> // ftruncate(),fileno()...
 	#define fsetsize(f,l) (!ftruncate(fileno(f),(l)))
+	#define INT8 Sint8 // can this be safely reduced to "signed char"?
 	#define BYTE Uint8 // can this be safely reduced to "unsigned char"?
 	#define WORD Uint16 // can this be safely reduced to "unsigned short"?
 	#define DWORD Uint32 // this CANNOT be safely reduced to "unsigned int"!
 	#define SDL2_UTF8 // is there any *NIX system that does NOT rely on UTF-8?
 	#define I18N_MULTIPLY "\303\227"
 	#define I18N_DIVISION "\303\267"
-	#define I18N_L_AQUOTE "\042"//"\302\253"
-	#define I18N_R_AQUOTE "\042"//"\302\273"
 #endif
 
 #define MESSAGEBOX_WIDETAB "\t\t" // rely on monospace font
@@ -75,7 +72,7 @@ AUDIO_UNIT audio_frame[AUDIO_PLAYBACK/50*AUDIO_CHANNELS]; // audio frame; 50 is 
 VIDEO_UNIT *video_target; // pointer to current video pixel
 AUDIO_UNIT *audio_target; // pointer to current audio sample
 unsigned int session_joybits=0; // write joystick motions down here
-unsigned char session_path[STRMAX],session_parmtr[STRMAX],session_tmpstr[STRMAX],session_substr[STRMAX],session_info[STRMAX]="";
+char session_path[STRMAX],session_parmtr[STRMAX],session_tmpstr[STRMAX],session_substr[STRMAX],session_info[STRMAX]="";
 
 // SDL2 follows the USB keyboard standard, so we're using the same values here!
 
@@ -211,7 +208,7 @@ void session_kbdclear(void)
 	MEMZERO(kbd_bit); MEMZERO(joy_bit); session_joybits=0;
 }
 #define session_kbdreset() MEMBYTE(kbd_map,~~~0) // init and clean key map up
-void session_kbdsetup(const unsigned char *s,char l) // maps a series of virtual keys to the real ones
+void session_kbdsetup(const unsigned char *s,int l) // maps a series of virtual keys to the real ones
 {
 	session_kbdclear();
 	while (l--)
@@ -824,7 +821,7 @@ void session_ui_textinit(char *s,char *t,char q) // used by session_ui_text and 
 				++j,*m++=' ';
 		}
 	}
-	++texth; if (m!=(char*)session_parmtr) // last line lacks a line feed?
+	++texth; if (m!=session_parmtr) // last line lacks a line feed?
 	{
 		*m=0; int l=session_ui_center?(textw-q-utf8len(session_parmtr))/2:0;
 		session_ui_printasciz(m=session_parmtr,textx+q,texty+i++,l+1,textw-q-l,1,0,+0);
@@ -1481,7 +1478,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 			}
 			else if (*s=='0') // menu item?
 			{
-				i=strtol(s,&s,0); // allow either hex or decimal
+				i=strtol(s,&s,0); // allow either hexa or decimal
 				*t++=i>>8; *t++=i; *t++=' ';*t++=' ';
 				++s; int h=-2; // spaces between body and shortcut
 				while ((i=(*t++=*s++))!='\n')

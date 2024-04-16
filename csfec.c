@@ -8,7 +8,6 @@
 
 #define MY_CAPTION "CSFEC"
 #define my_caption "csfec"
-#define MY_VERSION "20240328"
 #define MY_LICENSE "Copyright (C) 2019-2024 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -43,7 +42,7 @@ Contact information: <mailto:cngsoft@gmail.com> */
 // Commodore 64 PAL metrics and constants defined as general types -- //
 
 #define VIDEO_PLAYBACK 50
-#define VIDEO_LENGTH_X (63<<4) // HBLANK 9c, BORDER 7c, BITMAP 40c, BORDER 7c
+#define VIDEO_LENGTH_X (63<<4)
 #define VIDEO_LENGTH_Y (39<<4)
 #define VIDEO_OFFSET_X (13<<4)
 #define VIDEO_OFFSET_Y (11<<2) // the best balance for "Delta" (score panel on top) and "Megaphoenix" (on bottom)
@@ -172,7 +171,7 @@ void video_table_reset(void)
 
 // GLOBAL DEFINITIONS =============================================== //
 
-#define TICKS_PER_FRAME ((VIDEO_LENGTH_X*VIDEO_LENGTH_Y)/32)
+#define TICKS_PER_FRAME ((VIDEO_LENGTH_X*VIDEO_LENGTH_Y)>>5)
 #define TICKS_PER_SECOND (TICKS_PER_FRAME*VIDEO_PLAYBACK)
 int multi_t=0,multi_u=0; // overclocking shift+bitmask
 
@@ -248,7 +247,7 @@ void reu_kick(void) // start a REU operation according to the current registers
 
 // cartridges use their own memory maps (EasyFlash is the preferred type) although always through the MMU
 
-BYTE *cart=NULL,cart_boot=0,cart_mode,cart_bank; char cart_type=-1; WORD m6510_start; // general cartridge settings, including MOS 6510 RESET override
+BYTE *cart=NULL,cart_boot=0,cart_mode,cart_bank; INT8 cart_type=-1; WORD m6510_start; // general cartridge settings, including MOS 6510 RESET override
 BYTE cart_poke[64]; // some cartridges embed RAM chips; this is what the first WORD in the CHIP header means.
 BYTE cart_easy[256]; // Easyflash RAM page: avoid weird accidents by keeping it separate from other devices!
 
@@ -828,7 +827,7 @@ WORD disc_trackoffset[]= // offset of each track, in 256-byte sectors
 	683 // file ends where #36 would begin
 }; // this implicitly includes the length of each track in sectors: length[x]=offset[x+1]-offset[x]
 char disc_hex2gcr[16]={ 10,11,18,19,14,15,22,23, 9,25,26,27,13,29,30,21 }; // soft-hard translation
-char disc_gcr2hex[32]={ -1,-1,-1,-1,-1,-1,-1,-1, // all words below 9 are invalid!
+INT8 disc_gcr2hex[32]={ -1,-1,-1,-1,-1,-1,-1,-1, // all words below 9 are invalid!
 	-1, 8, 0, 1,-1,12, 4, 5, -1,-1, 2, 3,-1,15, 6, 7, -1, 9,10,11,-1,13,14,-1,
 }; // hard-soft translation; 0..15 is the valid range, everything else is an invalid 5-bit word!
 
@@ -1180,6 +1179,7 @@ void m6502_send(WORD w,BYTE b) // send the byte `b` to the C1541 address `w`
 // the delays between instruction steps are always 1 T
 #define M65XX_XEE (0XEE)
 #define M65XX_XEF (0XEF)
+#define M65XX_XVS 0 // the C1541 drive will actually toggle the OVERFLOW pin... when I get to write it in :-(
 #define M65XX_WAIT (++m65xx_t)
 #define M65XX_WHAT (++m65xx_t)
 #define M65XX_TICK (++m65xx_t)
@@ -1201,8 +1201,6 @@ void c1541_reset(void); // a JAM in the 6502 can reset the C1541!
 #define M65XX_Y m6502_y
 #define M65XX_S m6502_s
 
-#define M65XX_XVS 0 // special case: this is what the M65XX OVERFLOW pin is for! the C1541 drive will actually modify it...
-
 #include "cpcec-m6.h"
 
 void c1541_reset(void)
@@ -1222,7 +1220,7 @@ void c1541_reset(void)
 #ifdef DEBUG
 BYTE sid_quiet[3]={0,0,0}; // optional muting of channels
 #endif
-int sid_extras=0;
+int sid_extras=0; // no extra chips by default
 #include "cpcec-m8.h"
 
 #include "cpcec-ym.h"
@@ -1230,7 +1228,7 @@ int ym3_write_aux(int i)
 	{ int j=16,k=SID_MAX_VOICE; for (;;) if (!--j||(i>=(k=(k*181)>>8))) return j; } // rough approximation
 void ym3_write(void)
 {
-	int i,n=511,x=0X38; // we must adjust YM values to a 2 MHz clock.
+	int i,n=511,x=0X38; // we must adjust YM values to a 2 MHz clock approx.
 	i=SID_TABLE_0[ 0]+SID_TABLE_0[ 1]*256; if (sid_tone_shape[0][0]&16) i=0,x|=1; else if (sid_tone_shape[0][0]&8) n&=(i>>5)&31,i=0,x&=~ 8;
 	i=i>512?(512*4096+i/2)/i:0; // convert channel 1 wavelength on the fly
 	ym3_tmp[ym3_count++]=i; ym3_tmp[ym3_count++]=i>>8;
@@ -2724,6 +2722,7 @@ void all_reset(void); // a JAM in the 6510 can reset the C64!
 
 #define M65XX_XEE (0XEE)
 #define M65XX_XEF ((tape&&m6510_t64ok!=7)?0XEF:0XEE) // catch special case: the Mastertronic tape loader :-/
+#define M65XX_XVS 0 // the OVERFLOW pin doesn't exist on the MOS 6510, unlike the C1541's MOS 6502
 #define M65XX_HLT (vicii_takeover) // this is how the VIC-II can override the MOS 6510
 #define M65XX_SHW (m6510_what==1) // "FELLAS-EXT" checks this to detect when READY turns true!
 int m6510_what; // it doesn't need to stick, but putting this in M65XX_LOCAL hurts the performance :-(
@@ -2972,7 +2971,7 @@ int bios_load(char *s) // loads the CBM64 firmware; 0 OK, !0 ERROR
 	old_bios_id=99; // temporarily tag BIOS as wrong -- it will be made right later
 	if (puff_fclose(f),i!=(20<<10)) return 1; // check filesize; are there any fingerprints?
 	for (i=0;i<0XD0;++i) if (mem_rom[0X4008+i]^mem_rom[0X4408+i]^mem_rom[0X4808+i]^mem_rom[0X4C08+i]) return 1; // CHAR ROM fail!
-	if ((char*)session_substr!=s) STRCOPY(bios_path,s);
+	if (session_substr!=s) STRCOPY(bios_path,s);
 	old_bios_id=bios_id;
 	return 0;
 }
@@ -3126,7 +3125,7 @@ int snap_load(char *s) // loads snapshot file `s`; 0 OK, !0 ERROR
 	cia_port_13[0]=header[0x5D]; cia_hhmmssd[0]=mgetiiii(&header[0x58]);
 	cia_port_14(0,CIA_TABLE_0[14]); cia_state_a[0]=(CIA_TABLE_0[14]&1)?+0+0+2+0:+0+0+0+1;
 	cia_port_15(0,CIA_TABLE_0[15]); cia_state_b[0]=(CIA_TABLE_0[15]&1)?+0+0+2+0:+0+0+0+1;
-	/*if (header[0x5C])*/ cia_serials[0]=((signed char)header[0x5C])>>2,cia_serialz[0]=header[0x5C]&3;
+	/*if (header[0x5C])*/ cia_serials[0]=((INT8)header[0x5C])>>2,cia_serialz[0]=header[0x5C]&3;
 	//CIA_TABLE_0[8]&=15; CIA_TABLE_0[9]&=63; CIA_TABLE_0[10]&=63; CIA_TABLE_0[11]&=143; // normalize
 	cia_port_11[0]=(cia_hhmmssd[0]>>30)&1; cia_hhmmssd[0]&=0X8F3F3F0F; // bit 30 is the "locked" flag
 	// CIA #2
@@ -3136,12 +3135,12 @@ int snap_load(char *s) // loads snapshot file `s`; 0 OK, !0 ERROR
 	cia_port_13[1]=header[0x7D]; cia_hhmmssd[1]=mgetiiii(&header[0x78]);
 	cia_port_14(1,CIA_TABLE_1[14]); cia_state_a[1]=(CIA_TABLE_1[14]&1)?+0+0+2+0:+0+0+0+1;
 	cia_port_15(1,CIA_TABLE_1[15]); cia_state_b[1]=(CIA_TABLE_1[15]&1)?+0+0+2+0:+0+0+0+1;
-	/*if (header[0x7C])*/ cia_serials[1]=((signed char)header[0x7C])>>2,cia_serialz[1]=header[0x7C]&3;
+	/*if (header[0x7C])*/ cia_serials[1]=((INT8)header[0x7C])>>2,cia_serialz[1]=header[0x7C]&3;
 	//CIA_TABLE_1[8]&=15; CIA_TABLE_1[9]&=63; CIA_TABLE_1[10]&=63; CIA_TABLE_1[11]&=143; // normalize
 	cia_port_11[1]=(cia_hhmmssd[1]>>30)&1; cia_hhmmssd[1]&=0X8F3F3F0F; // bit 30 is the "locked" flag
 	// SID #1
 	memcpy(SID_TABLE_0,&header[0x80],0X1C);
-	sid_randomize=(i=mgetiiii(&header[0xA8])&0XFFFFFF)?i:1; // old versions wrote ZERO; that kills the SID LFSR!
+	sid_randomize=((i=mgetiiii(&header[0xA8]))&0XFFFFFF)?i:1; // old versions wrote ZERO; that kills the SID LFSR!
 	if (equalsii(&header[0x9C],0XD420))
 		sid_extras=equalsii(&header[0x9E],0XD440)?3:1;
 	else if (equalsii(&header[0x9C],0XDE00))
@@ -3420,10 +3419,10 @@ char session_menudata[]=
 	"0x8506 Disable sprites\n"
 	"0x8507 Cancel sprite collisions\n"
 	"Settings\n"
-	"0x8601 1" I18N_MULTIPLY " realtime speed\n"
-	"0x8602 2" I18N_MULTIPLY " realtime speed\n"
-	"0x8603 3" I18N_MULTIPLY " realtime speed\n"
-	"0x8604 4" I18N_MULTIPLY " realtime speed\n"
+	"0x8601 1" I18N_MULTIPLY " real speed\n"
+	"0x8602 2" I18N_MULTIPLY " real speed\n"
+	"0x8603 3" I18N_MULTIPLY " real speed\n"
+	"0x8604 4" I18N_MULTIPLY " real speed\n"
 	"0x8600 Run at full throttle\tF6\n"
 	//"0x0600 Raise CPU speed\tCtrl-F6\n"
 	//"0x4600 Lower CPU speed\tCtrl-Shift-F6\n"
@@ -4348,7 +4347,7 @@ int main(int argc,char *argv[])
 				else
 				{
 					if (tape_skipping) onscreen_char(+6,-3,(tape_skipping>0?'*':'+')+k);
-					j=(long long)tape_filetell*999/tape_filesize;
+					j=(long long int)tape_filetell*999/tape_filesize;
 					onscreen_char(+7,-3,'0'+j/100+k);
 					onscreen_byte(+8,-3,j%100,k);
 				}

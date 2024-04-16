@@ -106,43 +106,30 @@ INLINE void psg_table_sendto(BYTE x,BYTE i)
 
 #define psg_setup()
 
-// The CPC PlayCity and Spectrum Turbosound require their own logic, as they're more than an extra set of AY chips!
+// The CPC PlayCity, Spectrum Turbosound and MSX Second PSG require their own logic, as they're more than an extra set of AY chips!
+// Enable then with #define PSG_PLAYCITY 1..n (though right now only CPCEC requires two extra chips; ZXSEC and MSXEC just equip one)
 
 #ifdef PSG_PLAYCITY
-#ifdef PSG_PLAYCITY_HALF
-BYTE playcity_table[1][16],playcity_index[1],playcity_hard_new[1];
-int playcity_hard_style[1],playcity_hard_count[1],playcity_hard_level[1];
+BYTE playcity_table[PSG_PLAYCITY][16],playcity_index[PSG_PLAYCITY],playcity_hard_new[PSG_PLAYCITY];
+int playcity_hard_style[PSG_PLAYCITY],playcity_hard_count[PSG_PLAYCITY],playcity_hard_level[PSG_PLAYCITY];
 #if AUDIO_CHANNELS > 1
-int playcity_stereo[1][3][2];
-#endif
-#else
-int playcity_clock=0; BYTE playcity_table[2][16],playcity_index[2],playcity_hard_new[2];
-int playcity_hard_style[2],playcity_hard_count[2],playcity_hard_level[2];
-#if AUDIO_CHANNELS > 1
-int playcity_stereo[2][3][2];
-#endif
-#endif
-#ifdef PSG_PLAYCITY_HALF
-#else
-void playcity_set_config(BYTE b)
-	{ if (b<16) playcity_clock=b; }
-#define playcity_get_config() (playcity_clock)
+int playcity_stereo[PSG_PLAYCITY][3][2];
 #endif
 void playcity_select(BYTE x,BYTE b)
 {
-	#ifdef PSG_PLAYCITY_HALF
+	#if PSG_PLAYCITY == 1
 	if (!x)
 	#else
-	if (x<2)
+	if (x<PSG_PLAYCITY)
 	#endif
 		if (b<16) playcity_index[x]=b;
 }
 void playcity_send(BYTE x,BYTE b)
 {
-	#ifdef PSG_PLAYCITY_HALF
+	#if PSG_PLAYCITY == 1
 	if (!x)
 	#else
-	if (x<2)
+	if (x<PSG_PLAYCITY)
 	#endif
 	{
 		int y=playcity_index[x];
@@ -157,20 +144,21 @@ void playcity_send(BYTE x,BYTE b)
 BYTE playcity_recv(BYTE x)
 {
 	return (
-		#ifdef PSG_PLAYCITY_HALF
+		#if PSG_PLAYCITY == 1
 			!x
 		#else
-			x<2
+			x<PSG_PLAYCITY
 		#endif
 		&&playcity_index[x]<16)?playcity_table[x][playcity_index[x]]:0xFF;
 }
 void playcity_reset(void)
 {
 	MEMZERO(playcity_table);
-	#ifdef PSG_PLAYCITY_HALF
+	PSG_PLAYCITY_RESET;
+	#if PSG_PLAYCITY == 1
 	playcity_table[0][7]=0x3F; // channels+noise off
 	#else
-	playcity_clock=0; playcity_table[0][7]=playcity_table[1][7]=0x3F; // 2 MHz, channels+noise off
+	playcity_table[0][7]=playcity_table[1][7]=0x3F;
 	#endif
 }
 #endif
@@ -273,16 +261,16 @@ void psg_main(int t,int d) // render audio output for `t` clock ticks, with `d` 
 #ifdef PSG_PLAYCITY
 void playcity_main(AUDIO_UNIT *t,int l)
 {
-	#ifdef PSG_PLAYCITY_HALF
-	if (playcity_table[0][7]==0x3F||l<=0) return;
-	const int x=0,playcity_clock=0;
-	int playcity_tone_limit[1][3],playcity_tone_power[1][3],playcity_tone_mixer[1][3],playcity_noise_limit[1],playcity_hard_limit[1];
-	static int playcity_tone_count[1][3],playcity_tone_state[1][3]={{0,0,0}},playcity_noise_count[1],playcity_hard_power[1]; static unsigned int smash[1]={0},crash[1]={1};
+	int playcity_tone_limit[PSG_PLAYCITY][3],playcity_tone_power[PSG_PLAYCITY][3],playcity_tone_mixer[PSG_PLAYCITY][3],playcity_noise_limit[PSG_PLAYCITY],playcity_hard_limit[PSG_PLAYCITY];
+	static int playcity_tone_count[PSG_PLAYCITY][3],playcity_noise_count[PSG_PLAYCITY],playcity_hard_power[PSG_PLAYCITY];
+	#if PSG_PLAYCITY == 1
+	static int playcity_tone_state[PSG_PLAYCITY][3]={{0,0,0}}; static unsigned int smash[PSG_PLAYCITY]={0},crash[PSG_PLAYCITY]={1};
+	if (playcity_table[0][7]==0x3F||l<=0) return; // nothing to do? quit!
+	const int x=0;
 	#else
+	static int playcity_tone_state[PSG_PLAYCITY][3]={{0,0,0},{0,0,0}}; static unsigned int smash[PSG_PLAYCITY]={0,0},crash[PSG_PLAYCITY]={1,1};
 	int dirty_l=playcity_table[0][7]==0x3F,dirty_h=playcity_table[1][7]!=0x3F;
 	if (dirty_l>dirty_h||l<=0) return; // disabled chips? no buffer? quit!
-	int playcity_tone_limit[2][3],playcity_tone_power[2][3],playcity_tone_mixer[2][3],playcity_noise_limit[2],playcity_hard_limit[2];
-	static int playcity_tone_count[2][3],playcity_tone_state[2][3]={{0,0,0},{0,0,0}},playcity_noise_count[2],playcity_hard_power[2]; static unsigned int smash[2]={0,0},crash[2]={1,1};
 	for (int x=dirty_l;x<=dirty_h;++x)
 	#endif
 	{
@@ -290,7 +278,7 @@ void playcity_main(AUDIO_UNIT *t,int l)
 		{
 			playcity_tone_power[x][c]=playcity_table[x][c*1+8];
 			playcity_tone_mixer[x][c]=playcity_table[x][7]>>c;
-			if ((playcity_tone_limit[x][c]=playcity_table[x][c*2+0]+playcity_table[x][c*2+1]*256)<=PSG_PLAYCITY*PSG_ULTRASOUND)
+			if ((playcity_tone_limit[x][c]=playcity_table[x][c*2+0]+playcity_table[x][c*2+1]*256)<=PSG_ULTRASOUND)
 				playcity_tone_mixer[x][c]|=1; // catch ultrasounds!
 		}
 		if (!(playcity_noise_limit[x]=playcity_table[x][6])) // noise limits
@@ -303,19 +291,19 @@ void playcity_main(AUDIO_UNIT *t,int l)
 	#else
 	static int n=0,o=0,p=0;
 	#endif
-	int playcity_clock_hi=(playcity_clock?playcity_clock*2-1:2)*(PSG_PLAYCITY*TICKS_PER_SECOND),playcity_clock_lo=(playcity_clock?playcity_clock:1)*2*AUDIO_PLAYBACK*PSG_TICK_STEP;
+	const int hiclk=playcity_hiclock,loclk=playcity_loclock; // redundant in systems where these values are constant
 	for (;;)
 	{
-		p+=playcity_clock_hi; while (p>=0)
+		p+=hiclk; while (p>=0)
 		{
-			#ifdef PSG_PLAYCITY_HALF
+			#if PSG_PLAYCITY == 1
 			static char q=0; // see below
 			#else
 			static char q=0; q=~q; // toggle once for ALL chips!
 			for (int x=dirty_l;x<=dirty_h;++x) // update all chips
 			#endif
 			{
-				#ifdef PSG_PLAYCITY_HALF
+				#if PSG_PLAYCITY == 1
 				if (q=~q) // update noises, half the rate
 				#else
 				if (q) // see above
@@ -349,16 +337,16 @@ void playcity_main(AUDIO_UNIT *t,int l)
 							if (z&16)
 								z=playcity_hard_power[x];
 							#if AUDIO_CHANNELS > 1
-							int o=psg_outputs[z]*playcity_mono;
+							int o=PSG_PLAYCITY_XLAT(psg_outputs[z]);
 							o0+=o*playcity_stereo[x][c][0],
 							o1+=o*playcity_stereo[x][c][1];
 							#else
-							o+=   psg_outputs[z]*playcity_mono;
+							o+=   PSG_PLAYCITY_XLAT(psg_outputs[z]);
 							#endif
 						}
 				}
 			}
-			++n; p-=playcity_clock_lo;
+			++n; p-=loclk;
 		}
 		// generate negative samples (-50% x2) to avoid overflows against the central AY chip (+100%)
 		if (n) // enough data to write a sample? unlike the basic PSG, `n` is >1 at 44100 Hz (5 or 6)

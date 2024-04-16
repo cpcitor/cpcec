@@ -8,7 +8,6 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_VERSION "20240328"
 #define MY_LICENSE "Copyright (C) 2019-2024 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -46,7 +45,7 @@ Contact information: <mailto:cngsoft@gmail.com> */
 #define VIDEO_LENGTH_X (64<<4)
 #define VIDEO_LENGTH_Y (39<<4)
 #define VIDEO_OFFSET_X (15<<4)
-#define VIDEO_OFFSET_Y (17<<2) // (4<<4) //
+#define VIDEO_OFFSET_Y (17<<2) // ( 4<<4) //
 #define VIDEO_PIXELS_X (48<<4)
 #define VIDEO_PIXELS_Y (67<<3) // (34<<4) //
 //#define VIDEO_OFFSET_X (19<<4) // show the default 640x400 screen without the border
@@ -191,7 +190,7 @@ VIDEO_UNIT video_xlat[32]; // static colours only (dynamic ASIC PLUS colours go 
 
 // GLOBAL DEFINITIONS =============================================== //
 
-#define TICKS_PER_FRAME ((VIDEO_LENGTH_X*VIDEO_LENGTH_Y)/32)
+#define TICKS_PER_FRAME ((VIDEO_LENGTH_X*VIDEO_LENGTH_Y)>>5)
 #define TICKS_PER_SECOND (TICKS_PER_FRAME*VIDEO_PLAYBACK)
 // everything in the Amstrad CPC is tuned to a 4 MHz clock,
 // using simple binary divisors to adjust the devices' timings,
@@ -630,9 +629,12 @@ int psg_outputs[17]={0,85,121,171,241,341,483,683,965,1365,1931,2731,3862,5461,7
 #define PSG_TICK_STEP 8 // 1 MHz /2 /8 = 62500 Hz
 #define PSG_KHZ_CLOCK 1000 // compare with the 2000 kHz YM3 standard
 #define PSG_MAIN_EXTRABITS 0 // not even the mixer-banging beepers from "STORMBRINGER" and "TERMINUS" improve with >0!
-#define PSG_PLAYCITY 2 // base clock in comparison to the main PSG
-//#define PSG_PLAYCITY_HALF // the PLAYCITY card contains two chips
-#define playcity_mono 1/2 // each PLAYCITY chip plays at half the PSG's intensity
+#define PSG_PLAYCITY 2 // the PLAYCITY card contains two chips...
+#define PSG_PLAYCITY_XLAT(x) ((x)>>1) // ...playing at 50% intensity each!
+int playcity_clock=0,playcity_hiclock,playcity_loclock; // the PLAYCITY clock is dynamic...
+#define playcity_getcfg() (playcity_clock)
+void playcity_setcfg(BYTE b) { if (b<16) playcity_clock=b,playcity_hiclock=(b?b*2-1:2)*TICKS_PER_SECOND,playcity_loclock=(b?b:1)*2*AUDIO_PLAYBACK*4; }
+#define PSG_PLAYCITY_RESET (playcity_setcfg(0)) // ...and it must be reset!
 int playcity_disabled=0,playcity_dirty,playcity_ctc_state[4]={0,0,0,0},playcity_ctc_flags[4]={0,0,0,0},playcity_ctc_count[4]={0,0,0,0},playcity_ctc_limit[4]={0,0,0,0};
 int dac_disabled=1; // Digiblaster DAC, disabled by default to avoid trouble with the printer
 
@@ -700,7 +702,7 @@ void video_main_sprites(void)
 		int zoomx; if (!(zoomx=(plus_sprite_xyz[i+4]>>2))) continue;
 		int spritey=(crtc_line-(plus_sprite_xyz[i+2]+256*plus_sprite_xyz[i+3]))&511; // 9-bit wrap!
 		if ((spritey>>=--zoomy)>=16) continue;
-		int spritex=(plus_sprite_xyz[i+0]+256*(signed char)plus_sprite_xyz[i+1])+plus_sprite_offset;
+		int spritex=(plus_sprite_xyz[i+0]+256*(INT8)plus_sprite_xyz[i+1])+plus_sprite_offset;
 		if (plus_sprite_latest>=spritex+(16<<--zoomx)||spritex>=video_pos_x) continue;
 		int x=0,xx=16;
 		if ((spritex-=plus_sprite_latest)<0)
@@ -1499,7 +1501,7 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 		}
 		if (p==0xF880)
 			//cprintf("F880:%02X ",b),
-			playcity_set_config(b); // CTC CHANNEL 0 CONFIG
+			{ if (b<16) playcity_setcfg(b); } // CTC CHANNEL 0 CONFIG
 		else if (!playcity_disabled)
 		{
 			//#ifdef Z80_NMI_ACK
@@ -2300,7 +2302,7 @@ BYTE z80_ack_delay=0; // unlike Z80_LOCAL it cannot be local, it must stick :-(
 #define Z80_PRAE_RECV(w) Z80_SYNC_IO
 #define Z80_RECV z80_recv
 #define Z80_POST_RECV(w) (_t_-=z80_loss)
-#define Z80_PRAE_SEND(w) do{ if (!((w)&0x0900)) audio_dirty=1; Z80_SYNC_IO; }while(0)
+#define Z80_PRAE_SEND(w) do{ if (!(w&0x0900)) audio_dirty=1; Z80_SYNC_IO; }while(0)
 #define Z80_SEND z80_send
 #define Z80_POST_SEND(w) (_t_-=z80_loss)
 // fine timings
@@ -2311,26 +2313,29 @@ BYTE z80_ack_delay=0; // unlike Z80_LOCAL it cannot be local, it must stick :-(
 #define Z80_MREQ_1X_NEXT(t)
 #define Z80_WAIT(t)
 #define Z80_WAIT_IR1X(t)
-#define Z80_DUMB(w) ((void)0) // dumb 3-T MREQ
-#define Z80_PEEK PEEK
+#define Z80_DUMB1(w) ((void)0) // 4-T dumb PEEK
+#define Z80_DUMB Z80_DUMB1 // 3-T dumb PEEK
+#define Z80_NEXT1 PEEK // 4-T PC FETCH
+#define Z80_NEXT Z80_NEXT1 // 3-T PC FETCH
+#define Z80_PEEK PEEK // trappable single read
 #define Z80_PEEK0 Z80_PEEK // untrappable single read, use with care
-#define Z80_PEEK9 Z80_PEEK // trappable single read, be careful too
-#define Z80_PEEK1 Z80_PEEK
-#define Z80_PEEK2 Z80_PEEK
-#define Z80_DUMBZ(w) ((void)0) // dumb 4-T MREQ
-#define Z80_PEEKZ Z80_PEEK // slow PEEK
-#define Z80_PRAE_PEEKXY PEEK // special DD/FD PEEK (1/2)
-#define Z80_POST_PEEKXY // special DD/FD PEEK (2/2)
-#define Z80_POKE(w,b) do{ BYTE z80_aux=(w)>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO, z80_t=0, z80_trap(w,b); else mmu_ram[z80_aux][w]=(b); }while(0) // trappable single write
+#define Z80_PEEK1WZ Z80_PEEK // 1st twin read from LD rr,($hhll)
+#define Z80_PEEK2WZ Z80_PEEK // 2nd twin read
+#define Z80_PEEK1SP Z80_PEEK // 1st twin read from POP rr
+#define Z80_PEEK2SP Z80_PEEK // 2nd twin read
+#define Z80_PEEK1EX Z80_PEEK // 1st twin read from EX rr,(SP)
+#define Z80_PEEK2EX Z80_PEEK // 2nd twin read
+#define Z80_PRAE_NEXTXY Z80_NEXT1 // special DD/FD PEEK (1/2)
+#define Z80_POST_NEXTXY // special DD/FD PEEK (2/2)
+#define Z80_POKE(w,b) do{ BYTE z80_aux=w>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO, z80_t=0, z80_trap(w,b); else mmu_ram[z80_aux][w]=(b); }while(0) // trappable single write
 #define Z80_PEEKPOKE Z80_POKE // a POKE that follows a same-address PEEK, f.e. INC (HL)
 #define Z80_POKE0(w,b) (POKE(w)=(b)) // untrappable single write, use with care
-#define Z80_POKE9 Z80_POKE // trappable single write, be careful too
-#define Z80_POKE1 Z80_POKE // 1st twin write from LD ($hhll),rr; see SPLIT.CPR
-#define Z80_POKE2 Z80_POKE // 2nd twin write
-#define Z80_POKE3 Z80_POKE // 1st twin write from PUSH rr
-#define Z80_POKE4 Z80_POKE // 2nd twin write
-#define Z80_POKE5 Z80_PEEKPOKE // 1st twin write from EX rr,(SP)
-#define Z80_POKE6 Z80_POKE // 2nd twin write
+#define Z80_POKE1WZ Z80_POKE // 1st twin write from LD ($hhll),rr; see SPLIT.CPR
+#define Z80_POKE2WZ Z80_POKE // 2nd twin write
+#define Z80_POKE1SP Z80_POKE // 1st twin write from PUSH rr
+#define Z80_POKE2SP Z80_POKE // 2nd twin write
+#define Z80_POKE1EX Z80_PEEKPOKE // 1st twin write from EX rr,(SP)
+#define Z80_POKE2EX Z80_POKE // 2nd twin write
 // coarse timings
 #define Z80_STRIDE(o) z80_t+=z80_delays[o]
 #define Z80_STRIDE_0 z80_ack_delay=1 // default "slow ACK" behavior
@@ -2508,7 +2513,7 @@ void all_reset(void) // reset everything!
 	pio_reset();
 	psg_reset();
 	#ifdef PSG_PLAYCITY
-	playcity_reset(); MEMZERO(playcity_ctc_count); playcity_dirty=dac_level=0;
+	MEMZERO(playcity_ctc_count); playcity_dirty=dac_level=0;
 	#endif
 	z80_reset();
 	z80_sp.w=0xC000; // implicit in "No Exit" PLUS!
@@ -2662,7 +2667,7 @@ int bios_load(char *s) // load a cartridge file or a firmware ROM file. 0 OK, !0
 	#endif
 	if (!memcmp(&mem_rom[0xCE07],"\x1B\xBB\x30\xF0\xFE\x81\x28\x0C\xEE\x82",10))
 		mem_rom[0xCE07]=0x09,mem_rom[0xCE0C]=0x31,mem_rom[0xCE10]=0x32; // PLUS HACK: boot menu accepts '1' and '2'!
-	if ((char*)session_substr!=s) STRCOPY(bios_path,s);
+	if (session_substr!=s) STRCOPY(bios_path,s);
 	return old_type_id=type_id,mmu_update(),0;
 }
 int bios_reload(void) // ditto, but from the current type_id
@@ -2750,7 +2755,7 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 	header[0x5A]=psg_index; // mistake in http://cpctech.cpc-live.com/docs/snapshot.html : INDEX can be invalid, it's the emulator's duty to behave accordingly
 	MEMSAVE(&header[0x5B],psg_table);
 	#ifdef PSG_PLAYCITY
-	header[0x5B+14]=playcity_disabled?0:(240+playcity_get_config()); // Playcity kludge: register 14 isn't readable on CPC, keyboard overrides it!
+	header[0x5B+14]=playcity_disabled?0:(240+playcity_getcfg()); // Playcity kludge: register 14 isn't readable on CPC, keyboard overrides it!
 	#endif
 	header[0x6B]=ram_dirty; header[0x6C]=ram_dirty>>8; // in V3, this field is zero if MEM0..MEM8 chunks are used. Avoid them to stay compatible.
 	// V2 data
@@ -2954,7 +2959,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 	MEMLOAD(psg_table,&header[0x5B]);
 	#ifdef PSG_PLAYCITY
 	if (psg_table[14]>=240)
-		playcity_disabled=0,playcity_set_config(psg_table[14]-240); // Playcity kludge, see snap_save()
+		playcity_disabled=0,playcity_setcfg(psg_table[14]-240); // Playcity kludge, see snap_save()
 	else
 		playcity_reset();
 	#endif
@@ -3261,10 +3266,10 @@ char session_menudata[]=
 	"0x8519 Digiblaster audio\n"
 	#endif
 	"Settings\n"
-	"0x8601 1" I18N_MULTIPLY " realtime speed\n"
-	"0x8602 2" I18N_MULTIPLY " realtime speed\n"
-	"0x8603 3" I18N_MULTIPLY " realtime speed\n"
-	"0x8604 4" I18N_MULTIPLY " realtime speed\n"
+	"0x8601 1" I18N_MULTIPLY " real speed\n"
+	"0x8602 2" I18N_MULTIPLY " real speed\n"
+	"0x8603 3" I18N_MULTIPLY " real speed\n"
+	"0x8604 4" I18N_MULTIPLY " real speed\n"
 	"0x8600 Run at full throttle\tF6\n"
 	//"0x0600 Raise Z80 speed\tCtrl-F6\n"
 	//"0x4600 Lower Z80 speed\tCtrl-Shift-F6\n"
@@ -4188,7 +4193,7 @@ int main(int argc,char *argv[])
 				else
 				{
 					if (tape_skipping) onscreen_char(+6,-3,(tape_skipping>0?'*':'+')+k);
-					j=(long long)tape_filetell*999/tape_filesize;
+					j=(long long int)tape_filetell*999/tape_filesize;
 					onscreen_char(+7,-3,'0'+j/100+k);
 					onscreen_byte(+8,-3,j%100,k);
 				}

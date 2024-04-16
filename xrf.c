@@ -557,7 +557,7 @@ int main(int argc,char *argv[])
 	}
 	else // examine
 	{
-		int llv=video_x*video_y*3,lla=audio_z*flags_audio[flags_z&3]; avi_length=(llv+lla)*1LL*count_z;
+		int llv=video_x*video_y*3,lla=audio_z*flags_audio[flags_z&3]; avi_length=(long long int)(llv+lla)*count_z;
 		printf("%d frames x (%d+%d video+audio bytes) ~ " filesize_style ".\n",count_z,llv,lla,filesize_upper(avi_length),filesize_lower(avi_length));
 	}
 	return xrf_close(); // always 0 OK

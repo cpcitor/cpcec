@@ -29,8 +29,6 @@
 // WIN32 is never UTF-8; it's either ANSI (...A) or UNICODE (...W)
 #define I18N_MULTIPLY "\327"
 #define I18N_DIVISION "\367"
-#define I18N_L_AQUOTE "\042"//"\253"
-#define I18N_R_AQUOTE "\042"//"\273"
 
 #define MESSAGEBOX_WIDETAB "\t" // expect proportional font
 #define GPL_3_LF " " // Windows provides its own line feeds
@@ -51,9 +49,9 @@ VIDEO_UNIT *video_frame,*video_blend; // video + blend frames, allocated on runt
 AUDIO_UNIT audio_frame[AUDIO_PLAYBACK/50*AUDIO_CHANNELS]; // audio frame; 50 is the lowest legal framerate
 VIDEO_UNIT *video_target; // pointer to current video pixel
 AUDIO_UNIT *audio_target; // pointer to current audio sample
-unsigned char session_focused=0; // ignore joysticks when unfocused
-unsigned char session_path[STRMAX],session_parmtr[STRMAX],session_tmpstr[STRMAX],session_substr[STRMAX],session_info[STRMAX]="";
+char session_path[STRMAX],session_parmtr[STRMAX],session_tmpstr[STRMAX],session_substr[STRMAX],session_info[STRMAX]="";
 
+unsigned char session_focused=0; // ignore joysticks and certain events when unfocused
 RECT session_ideal; // ideal rectangle where the window fits perfectly; `right` and `bottom` are actually width and height
 JOYINFOEX session_joy; // joystick+mouse buffers
 HWND session_hwnd,session_hdlg=NULL; // window handle
@@ -251,7 +249,7 @@ void session_kbdclear(void)
 	MEMZERO(kbd_bit); MEMZERO(joy_bit);
 }
 #define session_kbdreset() MEMBYTE(kbd_map,~~~0) // init and clean key map up
-void session_kbdsetup(const unsigned char *s,char l) // maps a series of virtual keys to the real ones
+void session_kbdsetup(const unsigned char *s,int l) // maps a series of virtual keys to the real ones
 {
 	session_kbdclear();
 	while (l--)
@@ -518,7 +516,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 		else if (c=='0') // menu item?
 		{
 			t=--s;
-			i=strtol(t,&s,0); // allow either hex or decimal
+			i=strtol(t,&s,0); // allow either hexa or decimal
 			t=session_tmpstr;
 			++s;
 			while ((c=*s++)!='\n') // string with shortcuts
@@ -990,7 +988,7 @@ int session_filedialog(char *r,const char *s,const char *t,int q,int f) // auxil
 	session_ofn.lStructSize=sizeof(session_ofn);
 	session_ofn.hwndOwner=session_hwnd;
 	if (!r) r=session_path; // NULL path = default!
-	if (r!=(char*)session_tmpstr)
+	if (r!=session_tmpstr)
 		strcpy(session_tmpstr,r); // copy path, if required
 	int i=strlen(session_tmpstr); // sanitize path
 	if (i&&session_tmpstr[--i]=='\\') // pure path?

@@ -84,8 +84,11 @@ int main(int argc,char *argv[])
 		{
 			/**/ if (l==0X5000&&c64chr(&tmp[0X4008],&tmp[0X4408],0XD0)&&c64chr(&tmp[0X4808],&tmp[0X4C08],0XD0)) // C64 firmware
 				o=2;
-			else if (l>=0X4000&&((!memcmp(tmp,"AB",2)&&(!tmp[3]||(tmp[3]>=64&&tmp[3]<192)))||
-				(l>=0X8000&&!memcmp(&tmp[0x4000],"AB",2)&&tmp[0x4003]>=64&&tmp[0x4003]<192)||!memcmp(&tmp[4],"\277\033\230\230",4))) // MSX cartridge
+			else if (l>=0X4000&&(
+				(!memcmp(tmp,"AB",2)&&(/*!tmp[3]||*/(tmp[3]>=64&&tmp[3]<192)))|| // MSX cartridge (99% titles) (1/3)
+				(l>=0X8000&&!memcmp(&tmp[0x4000],"AB",2)&&tmp[0x4003]>=64&&tmp[0x4003]<192)|| // MSX cartridge (2/3)
+				(l>=0X8000&&!memcmp(&tmp[0],"\010\200\151\215",4))|| // MSX cartridge (special case "R-TYPE"!) (3/3)
+				!memcmp(&tmp[4],"\277\033\230\230",4))) // MSX firmware
 				o=3;
 			else // CPC Dandanator cartridges must include FDFDFD71 and FDFDFD77 somewhere in their first 4K block
 			{

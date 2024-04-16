@@ -268,7 +268,7 @@ int tape_catalog(char *t,int x) // fills the buffer `t` of size `x` with the tap
 		int z=tape_type?-1:(-tape_step-1); // WAV granularity depends on sample width
 		for (i=0;i<100;i+=4)
 		{
-			j=tape_filebase+(((long long)i*(tape_filesize-tape_filebase)/100)&z);
+			j=tape_filebase+(((long long int)i*(tape_filesize-tape_filebase)/100)&z);
 			if (j<=tape_filetell) ++p;
 			t+=1+sprintf(t,TAPE_CATALOG_HEAD "SAMPLES %02d%%",j,i);
 		}

@@ -1263,3 +1263,17 @@ MSXEC now reads the file MSXEC.SHA as text instead of binary (reported by
 CPCbegin). ZXSEC can save Z80 snapshots (version 3), compression is optional.
 The package includes two new files, CSFEC-3B.VPL for CSFEC and MSXEC-3B.VPL for
 MSXEC; users can edit them to implement new colour palettes.
+- 20240414 -- minor patch fixing unexpected bugs in systems where "unsigned
+char" is the default setting (reported by CPCbegin on his Raspberry Pi 400),
+some of them big (for example, 48K cartridge mapping was completely wrong in
+MSXEC), some of them small (for example, pressing LEFT in the debug screen when
+the cursor was on the left edge of the register panel would wrap it to the
+right, instead of staying still as it does when pressing RIGHT on the right
+edge). The extended AY chip and Z80 interfaces got reworked to allow finer
+control of audio clocks and memory-mapped I/O, respectively. MSXEC fixes bugs in
+the MSX cartridge mappers (for example Konami 8K cartridges react to the whole
+$6000-$BFFF area rather than just to $6000, $8000 and $A000) and the V9938 (the
+"flash" bit is ignored when the active VRAM page is below the 32K boundary, as
+in the water scenes of "Maze of Galious" for MSX2), emulates the DAC in
+"Konami's Synthesizer" and allows patching the current virtual cartridge through
+IPS files.

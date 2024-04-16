@@ -11,6 +11,8 @@
 // interface of variables and procedures that don't require particular
 // knowledge of the emulation's intrinsic properties.
 
+#define MY_VERSION "20240414" // all emulators share the same release date
+
 #define INLINE // 'inline' is useless in TCC and GCC4, and harmful in GCC5!
 #define UNUSED // '__attribute__((unused))' may be missing outside GCC
 #if __GNUC__ >= 4 // optional branch prediction hints
@@ -67,9 +69,9 @@ unsigned char session_scratch[1<<18]; // at least 256k
 
 int video_pos_x=0,video_pos_y=0,frame_pos_y=0,audio_pos_z=0; // for keeping pointers within range
 int video_pos_z=0; // frame counter for timekeeping, statistics and debugging
-char video_interlaced=0,video_interlaces=0; // video scanline status
-char video_framelimit=0,video_framecount=0; // video frameskip counters; must be signed!
-char audio_disabled=0,audio_required=0; int audio_session=0; // audio status and counter
+char video_interlaced=0,video_interlaces=0; // video scanline status (on or off, odd or even)
+signed char video_framelimit=0,video_framecount=0; // video frameskip counters; they must be signed!
+char audio_disabled=0,audio_required=0; int audio_session=0; // audio playing/recording status and counter
 // "disabled" and "required" are independent because audio recording on wave and film files must happen even if the emulator is mute or sped-up
 #ifndef audio_fastmute
 #define audio_fastmute 1 // is there any reason to play sound back at full speed? :-(
@@ -172,6 +174,8 @@ int mputiiii(unsigned char *x,int y) { return x[3]=y>>24,x[2]=y>>16,x[1]=y>>8,*x
 
 int fgetii(FILE *f) { int i=fgetc(f); return i|(fgetc(f)<<8); } // common lil-endian 16-bit fgetc()
 int fputii(int i,FILE *f) { fputc(i,f); return fputc(i>>8,f); } // common lil-endian 16-bit fputc()
+int fgetiii(FILE *f) { int i=fgetc(f); i|=fgetc(f)<<8; return i|(fgetc(f)<<16); } // common lil-endian 24-bit fgetc()
+int fputiii(int i,FILE *f) { fputc(i,f); fputc(i>>8,f); return fputc(i>>16,f); } // common lil-endian 24-bit fputc()
 int fgetiiii(FILE *f) { int i=fgetc(f); i|=fgetc(f)<<8; i|=fgetc(f)<<16; return i|(fgetc(f)<<24); } // common lil-endian 32-bit fgetc()
 int fputiiii(int i,FILE *f) { fputc(i,f); fputc(i>>8,f); fputc(i>>16,f); return fputc(i>>24,f); } // common lil-endian 32-bit fputc()
 
@@ -199,6 +203,8 @@ int mputmmmm(unsigned char *x,int y) { return *x=y>>24,x[1]=y>>16,x[2]=y>>8,x[3]
 
 int fgetii(FILE *f) { int i=0; return (fread(&i,1,2,f)!=2)?EOF:i; } // native lil-endian 16-bit fgetc()
 int fputii(int i,FILE *f) { return (fwrite(&i,1,2,f)!=2)?EOF:i; } // native lil-endian 16-bit fputc()
+int fgetiii(FILE *f) { int i=0; return (fread(&i,1,3,f)!=3)?EOF:i; } // native lil-endian 24-bit fgetc()
+int fputiii(int i,FILE *f) { return (fwrite(&i,1,3,f)!=3)?EOF:i; } // native lil-endian 24-bit fputc()
 int fgetiiii(FILE *f) { int i=0; return (fread(&i,1,4,f)!=4)?EOF:i; } // native lil-endian 32-bit fgetc()
 int fputiiii(int i,FILE *f) { return (fwrite(&i,1,4,f)!=4)?EOF:i; } // native lil-endian 32-bit fputc()
 
@@ -209,6 +215,8 @@ int fputiiii(int i,FILE *f) { return (fwrite(&i,1,4,f)!=4)?EOF:i; } // native li
 #define kputiiii fputiiii
 int fgetmm(FILE *f) { int i=fgetc(f)<<8; return i|fgetc(f); } // common big-endian 16-bit fgetc()
 int fputmm(int i,FILE *f) { fputc(i>>8,f); return fputc(i,f); } // common big-endian 16-bit fputc()
+int fgetmmm(FILE *f) { int i=fgetc(f)<<16; i|=fgetc(f)<<8; return i|fgetc(f); } // common big-endian 24-bit fgetc()
+int fputmmm(int i,FILE *f) { fputc(i>>16,f); fputc(i>>8,f); return fputc(i,f); } // common big-endian 24-bit fputc()
 int fgetmmmm(FILE *f) { int i=fgetc(f)<<24; i|=fgetc(f)<<16; i|=fgetc(f)<<8; return i|fgetc(f); } // common big-endian 32-bit fgetc()
 int fputmmmm(int i,FILE *f) { fputc(i>>24,f); fputc(i>>16,f); fputc(i>>8,f); return fputc(i,f); } // common big-endian 32-bit fputc()
 
@@ -225,7 +233,7 @@ void byte2hexa(char *t,const BYTE *s,int n) { int z; while (n-->0) z=*s++,*t++=h
 int byte2hexa0(char *t,const BYTE *s,int n) { if (n>0) { byte2hexa(t,s,n); t[n*=2]=0; } return n; } // string-friendly function (trailing NUL)
 int hexa2byte(BYTE *t,const char *s,int n) { int h,l; while (n>0&&(h=eval_hex(*s++))>=0&&(l=eval_hex(*s++))>=0) *t++=(h<<4)+l,--n; return n; }
 
-#ifdef __GNUC__ // GCC4+ intrinsic!
+#if __GNUC__ >= 4 // GCC4+ intrinsic!
 #define log2u(x) (__builtin_clz(x)^(sizeof(unsigned int)*8-1)) // `x` must be >0!
 //#define sqrtu(x) ((int)(__builtin_sqrt(x)))
 #else // slow but compatible
@@ -347,8 +355,8 @@ int sortedsearch(char *t,int z,const char *s) // look for string `s` in an alpha
 #if 0 // this isn't allowed anymore!
 int bin2rle(BYTE *t,int o,const BYTE *s,int i) // encode `i` exact bytes from source `s` onto up to `o` bytes at target `t`; >=0 OK (encoded bytes), <0 ERROR
 {
-	const BYTE *u=t,*r=s+i; BYTE k=0; while (s<r&&o>=3) // source error!
-	{ *t++=k=*s,i=0; while (++s<r&&k==*s&&i<255) ++i; if (i) *t++=k,*t++=i-1,o-=3; else --o; }
+	const BYTE *u=t,*r=s+i; BYTE k=0; while (s!=r&&o>=3) // source error!
+	{ *t++=k=*s,i=0; while (++s!=r&&k==*s&&i<255) ++i; if (i) *t++=k,*t++=i-1,o-=3; else --o; }
 	return o>=3?*t++=(k=~k),*t++=k,*t++=255,t-u:-1; // OK! // target error!
 }
 #endif
@@ -368,8 +376,8 @@ int rle2bin(BYTE *t,int o,const BYTE *s,int i) // decode up to `i` bytes from so
 // - the end marker is "X,255,Y", where Y is a global 8-bit checksum.
 int bin2rlf(BYTE *t,int o,const BYTE *s,int i) // encode `i` exact bytes from source `s` onto up to `o` bytes at target `t`; >=0 OK (encoded bytes), <0 ERROR
 {
-	const BYTE *u=t,*r=s+i; BYTE k=255,x=255,c; int h[256]; for (int z=0;z<256;++z) h[z]=0; while (i) ++h[s[--i]]; do if (h[x]>=h[--k]) x=k; while (k); c=*t++=x; while (s<r&&o>=3)
-	{ c+=k=*s,i=0; while (++s<r&&k==*s&&i<254) c+=k,++i; if (i>=3) o-=3,*t++=x,*t++=i,*t++=k; else if (k==x) o-=2,*t++=k,*t++=i; else do --o,*t++=k; while (i--); }
+	const BYTE *u=t,*r=s+i; BYTE k=255,x=255,c; int h[256]; for (int z=0;z<256;++z) h[z]=0; while (i) ++h[s[--i]]; do if (h[x]>=h[--k]) x=k; while (k); c=*t++=x; while (s!=r&&o>=3)
+	{ c+=k=*s,i=0; while (++s!=r&&k==*s&&i<254) c+=k,++i; if (i>=3) o-=3,*t++=x,*t++=i,*t++=k; else if (k==x) o-=2,*t++=k,*t++=i; else do --o,*t++=k; while (i--); }
 	return o>=3?*t++=x,*t++=255,*t++=c,t-u:-1; // OK! // target error!
 }
 int rlf2bin(BYTE *t,int o,const BYTE *s,int i) // decode up to `i` bytes from source `s` onto up to `o` bytes at target `t`; >=0 OK (decoded bytes), <0 ERROR
@@ -400,7 +408,7 @@ int bin2lze(BYTE *t,int o,const BYTE *s,int i) // encode `i` exact bytes from so
 	BYTE *u=t; int h=0,p=0,k=0,z,*hh,*pp; if (!(hh=(int*)malloc(sizeof(int[65536+65536])))) return -1; // memory error! maybe this could go to session_preset()...
 	{ for (pp=hh+65536,z=65536+65536;z;) hh[--z]=~65536; } while (p+2<i) // ~65536 < -65536, i.e. setup hashes with values beyond the search range
 		{ int g=0,m=0,r=0,n=p-65536; for (int q=hh[s[p+1]*256+s[p]],e=LEMPELZIV_RETRY;q>=n&&e;q=pp[q&65535],(LEMPELZIV_RETRY<65536&&--e)) if (s[q+m]==s[p+m])
-			{ int y; if ((z=65535+p)>i) z=i; const BYTE *v=s+q+1,*w=s+p+1,*x=s+z; while (*++v==*++w&&w<x) {} // search in current minimum and maximum
+			{ int y; if ((z=65535+p)>i) z=i; const BYTE *v=s+q+1,*w=s+p+1,*x=s+z; while (*++v==*++w&&w!=x) {} // search in current minimum and maximum
 			if (z=w-s-p,g<(y=z-(p-q>256?1:0)-(z<18?0:z<256?1:z<512?2:3))) if (g=y,m=z,r=p-q,w==x) break; } // early break!
 		if (m<3) ++p; else // the LZSA1 standard can't handle more than 65535 literals in a row, hence the better-safe-than-sorry 64K limit
 			{ if ((z=p-k)>65535||(o-=z+2)<8) break; *t++=(r>256?128:0)+(z<7?z*16:112)+(m<18?m-3:15);
@@ -420,7 +428,7 @@ int lze2bin(BYTE *t,int o,const BYTE *s,int i) // decode up to `i` bytes from so
 	BYTE c=0,*u=t,z; while (i>4) // the shortest possible end marker is five bytes long (15, checksum, 238, 0, 0)
 		{ int r,m=((z=*s++)>>4)&7; if (m>=7&&(--i,(m+=*s++)>=256)) { if (--i,m>256) m=*s+++256; else if (--i,m=*s++,(m+=*s++<<8)<512) break; } // bad header!
 		{ if ((o-=m)<0||(i-=m+2)<3) break; } for (;m;--m) c+=*t++=*s++; r=*s++-256; if (z&128) if (--i,(r+=(*s++-255)<<8)>=-256) break; // bad source/length!
-		if ((m=(z&15)+3)>=18&&(--i,(m+=*s++)>=256)) { if (--i,m>256) m=*s+++256; else if (--i,m=*s++,(m+=*s++<<8)<512) return (m||r+256-c)?-1:t-u; } // exit!
+		if ((m=(z&15)+3)>=18&&(--i,(m+=*s++)>=256)) { if (--i,m>256) m=*s+++256; else if (--i,m=*s++,(m+=*s++<<8)<512) return (m||(z&128)||r+256-c)?-1:t-u; } // exit!
 		const BYTE *v=t+r; if (v<u||(o-=m)<0) break; do c+=*t++=*v++; while (--m); } // bad offset/target!
 	return -1; // something went wrong!
 }
@@ -439,7 +447,7 @@ int bin2lzf(BYTE *t,int o,const BYTE *s,int i) // encode `i` exact bytes from so
 	BYTE *u=t,a=0,*b; int h=0,p=0,k=0,rr=0,z,*hh,*pp; if (!(hh=(int*)malloc(sizeof(int[65536+65536])))) return -1; // memory error! maybe this should go to session_preset()...
 	{ for (pp=hh+65536,z=65536+65536;z;) hh[--z]=~65536; } while (p+1<i) // ~65536 < -65536, i.e. setup hashes with values beyond the search range
 		{ int g=0,m=0,r=0,n=p-65536; for (int q=hh[s[p+1]*256+s[p]],e=LEMPELZIV_RETRY;q>=n&&e;q=pp[q&65535],(LEMPELZIV_RETRY<65536&&--e)) if (p-q==rr||s[q+m]==s[p+m])
-			{ int y; if ((z=65535+p)>i) z=i; const BYTE *v=s+q+1,*w=s+p+1,*x=s+z; while (*++v==*++w&&w<x) {} // search in current minimum and maximum
+			{ int y; if ((z=65535+p)>i) z=i; const BYTE *v=s+q+1,*w=s+p+1,*x=s+z; while (*++v==*++w&&w!=x) {} // search in current minimum and maximum
 			if (z=w-s-p,g<(y=z*2-(p-q==rr?1:p-q>512?p-q>8704?5:4:p-q>32?3:2)-(z<24?z<9?1:2:z<256?4:8))) if (g=y,m=z,r=p-q,w==x) break; } // early break!
 		if (m<2) ++p; else // the LZSA2 standard can't handle more than 65535 literals in a row, hence the better-safe-than-sorry 64K limit
 			{ if ((z=p-k)>65535||(o-=z+1)<7) break; *t++=(r==rr?224:r>512?r>8704?192:160-((-r>>3)&32):r>32?96-((-r>>3)&32):((~r&1)<<5))+(z<3?z*8:24)+(m<9?m-2:7);
@@ -462,7 +470,7 @@ int lzf2bin(BYTE *t,int o,const BYTE *s,int i) // decode up to `i` bytes from so
 		{ int m=((z=*s++)>>3)&3; if (m>=3&&((m+=lzf2bin_n())>=18)) { if (--i,(m+=*s++)>256) if (i-=2,m=*s++,(m+=*s++<<8)<256) break; } // bad header!
 		{ if ((o-=m)<0||(i-=m+1)<2) break; } for (;m;--m) c+=*t++=*s++; if (z<128) if (z<64) r=lzf2bin_n()*2-((z>>5)&1)-31; else { if (--i,(r=*s++-((z&32)*8)-256)>=-32) break; }
 		else if (z<192) --i,r=lzf2bin_n()*512-((z&32)*8)-8448,r+=*s++; else { if (z<224?i-=2,r=(*s++-256)<<8,(r+=*s++)>=-8704:!r) break; } // bad source/length!
-		if ((m=(z&7)+2)>=9&&((m+=lzf2bin_n())>=24)) { if (--i,(m+=*s++)==256) return r+512-c?-1:t-u; else if (m>256&&(i-=2,m=*s++,(m+=*s++<<8)<256)) break; } // exit!
+		if ((m=(z&7)+2)>=9&&((m+=lzf2bin_n())>=24)) { if (--i,(m+=*s++)==256) return ((z&~24)-103||r+512-c)?-1:t-u; else if (m>256&&(i-=2,m=*s++,(m+=*s++<<8)<256)) break; } // exit!
 		const BYTE *v=t+r; if (v<u||(o-=m)<0) break; do c+=*t++=*v++; while (--m); } // bad offset/target!
 	return -1; // something went wrong!
 }
@@ -572,7 +580,7 @@ void video_recalc(void)
 			srgb[h*256+l]=(h+l+1)>>1;
 }
 #define VIDEO_FILTER_SRGB(x,y) (srgb[((x>>8)&0XFF00)+(y>>16)]<<16)|(srgb[(x&0XFF00)+((y>>8)&255)]<<8)|srgb[((x&255)<<8)+(y&255)] // old-new avg.
-#else // working with linear RGB is faster, but the image loses brightness.
+#else // working with linear RGB is faster, but the image loses brightness!
 #define VIDEO_FILTER_SRGB VIDEO_FILTER_5050
 #endif
 #define VIDEO_FILTER_HALF(x,y) (x==y?x:VIDEO_FILTER_SRGB(x,y))
@@ -591,16 +599,17 @@ void video_recalc(void)
 #define VIDEO_FILTER_BLUR2(r,z) v2z=VIDEO_FILTER_HALF(z,v0z),r=VIDEO_FILTER_HALF(v2z,v4z),v0z=z,v3z=v1z // = ((B+C)/2+(D+E)/2)/2
 #endif
 
-//#define VIDEO_FILTER_DOT0(x) ((((x)>>2)&0X3F3F3F)*3+0X212121) // (6x+1y)/8
-#define VIDEO_FILTER_DOT0(x) ((x)-(((x)>>2)&0X3F3F3F)+0X202020) // (6x+1y)/8
-//#define VIDEO_FILTER_DOT1(x) ((x)-(((x)>>1)&0X007F00)+0X004000) // (8x+0y:4x+2y:8x+0y)/8
-//#define VIDEO_FILTER_DOT2(x) ((x)-(((x)>>1)&0X00007F)+0X000040) // (8x+0y:8x+0y:4x+2y)/8
-//#define VIDEO_FILTER_DOT3(x) ((x)-(((x)>>1)&0X7F0000)+0X400000) // (4x+2y:8x+0y:8x+0y)/8
-#define VIDEO_FILTER_DOT1(x) ((x)-(((x)>>1)&0X7F007F)+0X400040) // (4x+2y:8x+0y:4x+2y)/8
-#define VIDEO_FILTER_DOT2(x) ((x)-(((x)>>1)&0X007F00)+0X004000) // (8x+0y:4x+2y:8x+0y)/8
-//#define VIDEO_FILTER_DOT3
-#define VIDEO_FILTER_DOT3 VIDEO_FILTER_DOT0
-//#define VIDEO_FILTER_DOT2(x) ((((x)>>1)&0X7F7F7F)+0X404040) // (4x+2y:4x+2y:4x+2y)/8
+//#define VIDEO_FILTER_DOT0(x) ((((x)>>1)&0X7F7F7F)+0X404040) // (4+2)/8: 00->40,FF->BF
+//#define VIDEO_FILTER_DOT0(x) ((x)-(((x)>>1)&0X7F7F7F)+0X404040) // no mult: 00->40,FF->C0
+//#define VIDEO_FILTER_DOT0(x) ((((x)>>2)&0X3F3F3F)*3+0X212121) // (6+1)/8: 00->21,FF->DE
+#define VIDEO_FILTER_DOT0(x) ((x)-(((x)>>2)&0X3F3F3F)+0X202020) // no mult: 00->20,FF->E0
+#define VIDEO_FILTER_DOT1(x) ((x)-(((x)>>1)&0X007F00)+0X004000) // (8+0:4+2:8+0)/8
+//#define VIDEO_FILTER_DOT2(x) ((x)-(((x)>>1)&0X00007F)+0X000040) // (8+0:8+0:4+2)/8
+//#define VIDEO_FILTER_DOT3(x) ((x)-(((x)>>1)&0X7F0000)+0X400000) // (4+2:8+0:8+0)/8
+#define VIDEO_FILTER_DOT2(x) ((x)-(((x)>>1)&0X7F007F)+0X400040) // (4+2:8+0:4+2)/8
+//#define VIDEO_FILTER_DOT3(x) ((x)-(((x)>>1)&0X7F7F7F)+0X404040) // hard crossing patterns
+#define VIDEO_FILTER_DOT3(x) ((x)-(((x)>>2)&0X3F3F3F)+0X202020) // soft crossing patterns
+//#define VIDEO_FILTER_DOT3 // checkerboard, quick but not very visible
 
 #define MAIN_FRAMESKIP_MASK ((1<<MAIN_FRAMESKIP_BITS)-1)
 void video_resetscanline(void) // reset configuration values on new video options
@@ -1660,7 +1669,7 @@ void debug_hilight(char *t,int n) { while (n-->0) *t++|=128; } // set inverse vi
 int debug_grafx_m=0XFFFF,debug_grafx_i=0; // VRAM address binary mask: MSX1 VRAM is 16K, MSX2 VRAM is either 64K or 128K, etc.
 BYTE debug_panel=0,debug_page=0,debug_grafx,debug_mode=0,debug_match,debug_grafx_l=1; // debugger options: visual style, R/W mode, disasm flags...
 WORD debug_panel0_w,debug_panel1_w=1,debug_panel2_w=0,debug_panel3_w; // must be unsigned!
-char debug_panel0_x,debug_panel1_x=0,debug_panel2_x=0,debug_panel3_x,debug_grafx_v=0; // must be signed!
+INT8 debug_panel0_x,debug_panel1_x=0,debug_panel2_x=0,debug_panel3_x,debug_grafx_v=0; // must be signed!
 WORD debug_longdasm(char *t,WORD p) // disassemble code and include its hexadecimal dump
 {
 	WORD q=p; memset(t,' ',9); p=debug_dasm(t+9,p);
@@ -2133,11 +2142,11 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 			break;
 		case 'P': // PRINT DISASSEMBLY/HEXDUMP INTO FILE..
 			if (!(debug_panel&1))
-				if (*session_parmtr=0,session_input(debug_panel?"Hex dump length":"Disassembly length")>=0)
+				if (*session_parmtr=0,session_input(debug_panel?"Hexa dump length":"Disassembly length")>=0)
 				{
 					char *s,*t; FILE *f; WORD w=debug_panel?debug_panel2_w:debug_panel0_w,u;
 					if (i=(WORD)session_debug_eval(session_parmtr))
-						if (s=session_newfile(NULL,"*.TXT",debug_panel?"Print hex dump":"Print disassembly"))
+						if (s=session_newfile(NULL,"*.TXT",debug_panel?"Print hexa dump":"Print disassembly"))
 							if (f=fopen(s,"w"))
 							{
 								if (debug_panel) // HEXDUMP?
@@ -2240,7 +2249,7 @@ int session_createwave(void) // create a wave file; !0 ERROR
 		return 1; // too many files!
 	if (!(session_wavefile=fopen(session_parmtr,"wb")))
 		return 1; // cannot create file!
-	static unsigned char h[44]="RIFF\000\000\000\000WAVEfmt \020\000\000\000\001\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000data"; // zero-padded
+	static char h[44]="RIFF\000\000\000\000WAVEfmt \020\000\000\000\001\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000data"; // zero-padded
 	h[0X16]=AUDIO_CHANNELS; // channels
 	mputii(&h[0X18],AUDIO_PLAYBACK); // samples per second
 	mputiiii(&h[0X1C],(AUDIO_PLAYBACK*AUDIO_BYTESTEP)>>session_wavedepth); // bytes per second
@@ -2529,7 +2538,7 @@ INLINE int session_savebitmap(void) // save a RGB888 BMP/QOI file; !0 ERROR
 	}
 	else
 	{
-		static unsigned char h[54]="BM\000\000\000\000\000\000\000\000\066\000\000\000\050\000\000\000\000\000\000\000\000\000\000\000\001\000\030\000"; // zero-padded
+		static char h[54]="BM\000\000\000\000\000\000\000\000\066\000\000\000\050\000\000\000\000\000\000\000\000\000\000\000\001\000\030\000"; // zero-padded
 		i=(VIDEO_PIXELS_X*VIDEO_PIXELS_Y*3)>>(2*session_filmscale);
 		mputiiii(&h[0X02],sizeof(h)+i); mputiiii(&h[0X22],i);
 		mputii(&h[0X12],VIDEO_PIXELS_X>>session_filmscale);
@@ -2602,7 +2611,7 @@ int session_qoi3_foot(BYTE *s,int i) // process the footer: NEGATIVE if bad, foo
 
 // configuration functions ------------------------------------------ //
 
-#define UTF8_BOM(s) ((-17==(char)*s&&-69==(char)s[1]&&-65==(char)s[2])?s+3:s) // skip UTF8 BOM if present
+#define UTF8_BOM(s) ((239==(BYTE)*s&&187==(BYTE)s[1]&&191==(BYTE)s[2])?s+3:s) // skip UTF8 BOM if present
 void session_detectpath(char *s) // detects session path using argv[0] as reference
 {
 	if (s=strrchr(strcpy(session_path,s),PATHCHAR))

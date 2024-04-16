@@ -8,7 +8,6 @@
 
 #define MY_CAPTION "MSXEC"
 #define my_caption "msxec"
-#define MY_VERSION "20240328"
 #define MY_LICENSE "Copyright (C) 2019-2024 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -253,7 +252,7 @@ BYTE sccplus_table[256],sccplus_wave[5],sccplus_internal=1;
 // B0-BF: R/W mirror of A0-AF
 // C0-DF: test ?	// E0-FF: unused ?
 BYTE sccplus_playing; // zero on reset, one when a channel is first enabled
-int sccplus_tone[5],sccplus_ampl[5]; // these values are too big for 8 bits
+int sccplus_tone[5],sccplus_ampl[5],cart_synth; // these values are too big for 8 bits
 #define SCCPLUS_MAX 225 // 255 maximum and noisy; 240 noisy on stereo
 const BYTE sccplus_loud[16]={0,(SCCPLUS_MAX  +7)/15,(SCCPLUS_MAX* 2+7)/15,(SCCPLUS_MAX* 3+7)/15,
 	(SCCPLUS_MAX* 4+7)/15,(SCCPLUS_MAX* 5+7)/15,(SCCPLUS_MAX* 6+7)/15,(SCCPLUS_MAX* 7+7)/15,
@@ -266,6 +265,7 @@ int sccplus_stereo[5][2]; // the five channels' LEFT and RIGHT weights
 void sccplus_reset(void)
 {
 	MEMZERO(sccplus_table); MEMZERO(sccplus_tone); MEMZERO(sccplus_ampl); sccplus_playing=0;
+	cart_synth=0; // "KONAMI'S SYNTHESIZER" also goes here, as it uses the same unsigned byte samples (no DMA or mixer tho')
 	for (int i=0;i<32*5;++i) sccplus_table[i]=(i&16)?-128:127; // dummy square waves; implied in the "BATMAN" remake for MSX2 (42CD: [00]=7F,[10]=80)
 }
 #define sccplus_amplis(c,b) (sccplus_playing|=sccplus_ampl[c]=sccplus_loud[(b)&15])
@@ -318,7 +318,7 @@ void sccplus_table_send(BYTE r,BYTE b) // send byte `b` to register `r` in "SCC+
 }
 BYTE sccplus_table_recv(BYTE r) // request a byte from register `r` in "SCC+" mode
 {
-	if (r>=0XC0&&r>=0XDF) sccplus_table[192]=255; // reading these bytes causes a write!
+	if (r>=0XC0&&r<=0XDF) sccplus_table[192]=255; // reading these bytes causes a write!
 	return r>=0XB0&&r<=0XBF?sccplus_table[r-16]:sccplus_table[r]; // *!* undefined areas!?
 }
 
@@ -351,7 +351,7 @@ void sccplus_main(AUDIO_UNIT *t,int l) // "piggyback" the audio output for nonze
 					{
 						int k=(sccplus_tone[c]+=m)/j; sccplus_wave[c]+=k,sccplus_tone[c]%=j;
 						j=sccplus_wave[c]; //if (!sccplus_table[192]) j^=sccplus_wave[c]>>5;
-						int p=sccplus_ampl[c]*(signed char)sccplus_table[c*32+(j&31)];
+						int p=sccplus_ampl[c]*(INT8)sccplus_table[c*32+(j&31)];
 						#if AUDIO_CHANNELS > 1
 							o0+=sccplus_stereo[c][0]*p,
 							o1+=sccplus_stereo[c][1]*p;
@@ -489,24 +489,26 @@ int sram_makepath(char *s) // build `sram_path` using string `s` as a base; NONZ
 
 char cart_path[STRMAX]="",cart_sha1_file[]=my_caption ".sha"; // compatible with "carts.sha" from FMSX
 unsigned int cart_sha1_size=0,cart_sha1_list[2<<10][6];
-BYTE cart_bank[4],cart_id=0; char cart_big=0; // <0 32K/48K/64K cartridge that begins at $0000; 0 16K/32K/48K cartridge that begins at $4000; >0 cartridge with custom mapper
-int cart_insert(char *s) // insert a cartridge; ZERO OK, NONZERO ERROR!
+BYTE cart_bank[4],cart_id=0,cart_log=0; // cart_id is the mapper type, cart_log is the ceiling of the binary logarithm of the cartridge size
+BYTE cart_big=0; // overrides cart_id if nonzero: 1: 32K/48K/64K cartridges that "invade" $0000-$3FFF; 2: 16K/32K/48K cartridges that start at $4000
+int cart_insert(char *s) // insert a cartridge; zero OK, nonzero error!
 {
 	FILE *f=puff_fopen(s,"rb"); if (!f) return 1; // cannot open file!
 	int i,o; char q;
 	/**/ if (fgetii(f)==0X4241) // normal case, "AB" appears at the beginning
-		q=0;
-	else if (fseek(f,0X4000,SEEK_SET),fgetii(f)==0X4241) // "AB" appears at offset 16K, f.e. the MSX2 remake of "Knight Lore"
-		q=1;
+		q=2; // cart_big is either 0 or 2
+	else if (fseek(f,+0X4000,SEEK_SET),fgetii(f)==0X4241) // "AB" appears at offset +16K (f.e. the "Knight Lore MSX2" remake)
+		q=1; // cart_big is always 1
 	else if (fseek(f,-0X4000,SEEK_END),fgetii(f)==0X4241) // "AB" appears at offset -16K, we've spotted the fearsome "R-Type"
-		q=-1;
+		q=0; // cart_big is always 0
 	else return puff_fclose(f),1; // missing "AB" ID!
 	i=fgetii(f); o=fgetii(f); // "Super Lode Runner" stores $0000 in both fields :-(
 	if ((i|o)&&(i<0X4004||i>0XBFFF)&&(o<0X4004||o>0XBFFF)) return puff_fclose(f),1; // wrong JUMP/CALL value! ("Fantasy Zone 2" uses $4004)
-	fseek(f,0,SEEK_END); i=ftell(f); if (i<32||i>(1<<CART_BITS)) return puff_fclose(f),1; // too short (dummy SCCPLUS cart 32 B) or too long!
+	fseek(f,0,SEEK_END); i=ftell(f); if (i<32||i>(1<<CART_BITS)) return puff_fclose(f),1; // too short (dummy SCCPLUS cart is 32B) or too long!
 	if (!cart) { if (!(cart=malloc(1<<CART_BITS))) return puff_fclose(f),1; } // memory full!
 	memset(cart,255,1<<CART_BITS);
 	fseek(f,0,SEEK_SET); fread1(cart,i,f); puff_fclose(f);
+	cart_log=12; while ((1<<++cart_log)<i) {}
 	// mirror pages, if required
 	if (i<=(1<<14)) memcpy(&cart[1<<14],cart,1<<14); //  16K-> 32K
 	if (i<=(1<<15)) memcpy(&cart[1<<15],cart,1<<15); //  32K-> 64K
@@ -514,7 +516,7 @@ int cart_insert(char *s) // insert a cartridge; ZERO OK, NONZERO ERROR!
 	if (i<=(1<<17)) memcpy(&cart[1<<17],cart,1<<17); // 128K->256K
 	if (i<=(1<<18)) memcpy(&cart[1<<18],cart,1<<18); // 256K->512K
 	if (i<=(1<<19)) memcpy(&cart[1<<19],cart,1<<19); // 512K->1.0M
-	cart_big=q>0?-1:i>0XC000?1:0; // cartridges where "AB" appears in the second 16K "invade" $0000-$3FFF; above 32K, they carry custom banking; below 32K, PSLOT is enough
+	cart_big=q<2?q:i>0XC000?0:2; // cartridges where "AB" appears in the second 16K "invade" $0000-$3FFF; above 48K, they carry custom banking; otherwise PSLOT is enough
 	// load SRAM, if possible, but don't tag it as dirty
 	sram_dirt=sram_cart=sram_mask=0; MEMBYTE(sram,-1); if (sram_makepath(s))
 		if (f=puff_fopen(sram_path,"rb")) fread1(sram,sizeof(sram),f),puff_fclose(f);
@@ -541,7 +543,7 @@ int cart_insert(char *s) // insert a cartridge; ZERO OK, NONZERO ERROR!
 void cart_reset(void)
 {
 	cart_bank[0]=cart_bank[1]=cart_bank[2]=cart_bank[3]=0; // default to zero
-	if (!cart||cart_big<1)
+	if (!cart||cart_big)
 		; // nothing to bank!
 	else if (cart_id==5) // ASCII 16K: "Gall Force" requires the second bank to boot as 0; "Eggerland 2" suggests that this is normal
 	{
@@ -555,9 +557,9 @@ void cart_reset(void)
 }
 void cart_remove(void) // remove the cartridge
 {
-	int i=sram_dirt?sram_mask+1:0; sram_dirt=0; if (cart)
+	int i=sram_dirt?sram_mask+1:0; sram_dirt=cart_log=0; if (cart)
 	{
-		free(cart),cart=NULL,cart_reset(),cart_big=0;
+		free(cart),cart=NULL,cart_reset();
 		if (sram_dirt&&sram_cart) if (sram_makepath(cart_path))
 			{ FILE *f=puff_fopen(sram_path,"wb"); if (f) fwrite1(sram,i<<13,f),puff_fclose(f); }
 	}
@@ -576,7 +578,7 @@ void cart_setup(void) // load the cartridge list, if available
 				h[2]=(h[2]<<4)+((h[3]>>28)&15),
 				h[3]=(h[3]<<4)+((h[4]>>28)&15),
 				h[4]=(h[4]<<4)+((k>>0)&15),++s;
-			if (s!=(char*)session_substr&&(k=eval_hex(*++s))>=0&&k<CART_IDS) // valid and supported?
+			if (s!=session_substr&&(k=eval_hex(*++s))>=0&&k<CART_IDS) // valid and supported?
 				cart_sha1_list[cart_sha1_size][0]=h[0]&0XFFFFFFFF,
 				cart_sha1_list[cart_sha1_size][1]=h[1]&0XFFFFFFFF,
 				cart_sha1_list[cart_sha1_size][2]=h[2]&0XFFFFFFFF,
@@ -590,6 +592,18 @@ void cart_setup(void) // load the cartridge list, if available
 		fclose(f);
 	}
 	else cprintf("Cannot load SHA-1 list!"); // should we show an actual warning?
+}
+int cart_hotfix(char *s) // patch cartridge according to IPS file `s`; zero OK, nonzero error!
+{
+	if (!cart) return 1; // no cartridge, nothing to do
+	FILE *f=puff_fopen(s,"rb"); if (!f) return 1; // cannot open file!
+	int i=fgetmmmm(f),j,k,l=1<<cart_log; if (i!=0X50415443||fgetc(f)!=0X48) return puff_fclose(f),1; // wrong file!
+	while ((i=fgetmmm(f)),(j=fgetmm(f))>=0&&i>=0)
+		if (j) // normal patch?
+			if (i+j>l) break; else cprintf("IPS:%06X:%04X\n",i,j),fread1(cart+i,j,f); // quit if the patch overflows!
+		else // RLE compression
+			if (i+(j=fgetmm(f))>l) break; else k=fgetc(f),cprintf("IPS:%06X:%04X,%02X\n",i,j,k),memset(cart+i,k,j);
+	return puff_fclose(f),j>=0||i!=0X454F46;
 }
 
 BYTE ps_slot[4];
@@ -609,7 +623,7 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 	/**/ if (!z) s=&mem_rom[0X00000-0X0000]; // BIOS!
 	else if (z==slots_ram) s=t=&mem_ram[(((ram_cfg[0]^3)&ram_bit)<<14)-0X0000];
 	else if (z==slots_1st) // normal cartridge (1/4)
-		{ if (cart) if (cart_big<0) s=&cart[0X0000-0X0000]; }
+		{ if (cart) if (cart_big==1) s=&cart[0X0000-0X0000]; }
 	else if (z==slots_sub) // EXT.! (MSX2)
 		{ /*if (equalsii(&mem_rom[0X10000],0X4443))*/ s=&mem_rom[0X10000-0X0000]; }
 	mmu_rom[ 0]=mmu_rom[ 1]=mmu_rom[ 2]=mmu_rom[ 3]=s;
@@ -618,8 +632,8 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 	s=&bad_rom[0-0X4000]; t=&bad_ram[0-0X4000]; z=(pio_port_a>>2)&3; ps_slot[1]=z=((rom_cfg[z]>>2)&3)+z*16;
 	/**/ if (!z) s=&mem_rom[0X04000-0X4000]; // BAS.!
 	else if (z==slots_ram) s=t=&mem_ram[(((ram_cfg[1]^3)&ram_bit)<<14)-0X4000];
-	else if (z==slots_1st) // normal cartridge (2/4) // primary KONAMI SCC interface (1/2)
-		{ if (cart) s=cart_big<0?&cart[0X4000-0X4000]:&cart[0X0000-0X4000]; else if (sccplus_internal) s=&sccp_rom[0-0X4000]; }
+	else if (z==slots_1st) // normal cartridge (2/4) // primary KONAMI SCC interface (1/2) + "KONAMI'S SYNTHESIZER" DAC
+		{ if (cart) s=cart_big==1?&cart[0X4000-0X4000]:&cart[0X0000-0X4000]; else if (sccplus_internal) s=&sccp_rom[0-0X4000]; }
 	else if (z==slots_dsk) // DISK without C-BIOS LOGO?
 		{ if (!disc_disabled&&!equalsii(&mem_rom[0X08000],0X2D43)) s=disc_mapping[1],mmu_bit[ 7]=3; } // WD1793 handler (2/4)
 	else if (z==slots_sub)
@@ -633,7 +647,7 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 	/**/ if (!z) { /*if (!equalsii(&mem_rom[0X18000],0X4443))*/ s=&mem_rom[0X08000-0X8000]; } // LOGO! (C-BIOS)
 	else if (z==slots_ram) s=t=&mem_ram[(((ram_cfg[2]^3)&ram_bit)<<14)-0X8000];
 	else if (z==slots_1st) // normal cartridge (3/4) // primary KONAMI SCC interface (2/2)
-		{ if (cart) s=cart_big<0?&cart[0X8000-0X8000]:&cart[0X4000-0X8000]; else if (sccplus_internal) s=&sccp_rom[0-0X8000],mmu_bit[9]=mmu_bit[11]=3; }
+		{ if (cart) s=cart_big==1?&cart[0X8000-0X8000]:&cart[0X4000-0X8000]; else if (sccplus_internal) s=&sccp_rom[0-0X8000],mmu_bit[9]=mmu_bit[11]=3; }
 	else if (z==slots_dsk) // DISK without C-BIOS LOGO?
 		{ if (!disc_disabled&&!equalsii(&mem_rom[0X08000],0X2D43)) s=disc_mapping[2],mmu_bit[11]=3; } // WD1793 handler (3/4)
 	else if (z==slots_sub)
@@ -646,55 +660,63 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 	/**/ if (!z) ;//s=&mem_rom[0X0C000-0X0000]; // XYZ1! (is there any machine where this is NOT like bad_rom?)
 	else if (z==slots_ram) s=t=&mem_ram[(((ram_cfg[3]^3)&ram_bit)<<14)-0XC000];
 	else if (z==slots_1st) // normal cartridge (4/4)
-		{ if (cart) s=cart_big<0?&cart[0XC000-0XC000]:&cart[0X8000-0XC000]; }
+		{ if (cart) s=cart_big==1?&cart[0XC000-0XC000]:&cart[0X8000-0XC000]; }
 	else if (z==slots_sub) // XYZ2! (MSX2) (ditto, is there any machine where this is NOT like bad_rom?)
 		;//{ /*if (equalsii(&mem_rom[0X10000],0X4443))*/ s=&mem_rom[0X1C000-0X0000]; }
 	mmu_rom[12]=mmu_rom[13]=mmu_rom[14]=mmu_rom[15]=s;
 	mmu_ram[12]=mmu_ram[13]=mmu_ram[14]=mmu_ram[15]=t;
+	if (cart_big) // small special cartridges go here
+	{
+		if (ps_slot[1]==slots_1st)
+		{
+			if (equalsmmmm(&cart[0X7F64],0X37343120)) mmu_bit[4]=2; // "KONAMI'S SYNTHESIZER" DAC: POKE $4000,NN
+		}
+	}
 	// cartridges bigger than 48k require more logic: mappers!
-	if (cart_big>0) switch (cart_id)
+	else if (cart) switch (cart_id)
 	{
 		case 0: // Generic 8K
 			if (ps_slot[1]==slots_1st)
 				//mmu_ram[ 4]=mmu_ram[ 5]=mmu_ram[ 6]=mmu_ram[ 7]=&bad_ram[0-0X4000],
 				mmu_rom[ 4]=mmu_rom[ 5]=&cart[((cart_bank[0]<<13)&CART_MASK)-0X4000],
 				mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[1]<<13)&CART_MASK)-0X6000],
-				mmu_bit[ 4]=mmu_bit[ 6]=2; // detect POKE at $4000/$6000
+				mmu_bit[ 4]=mmu_bit[ 5]=mmu_bit[ 6]=mmu_bit[ 7]=2; // detect POKE
 			if (ps_slot[2]==slots_1st)
 				//mmu_ram[ 8]=mmu_ram[ 9]=mmu_ram[10]=mmu_ram[11]=&bad_ram[0-0X8000],
 				mmu_rom[ 8]=mmu_rom[ 9]=&cart[((cart_bank[2]<<13)&CART_MASK)-0X8000],
 				mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[3]<<13)&CART_MASK)-0XA000],
-				mmu_bit[ 8]=mmu_bit[10]=2; // detect POKE at $8000/$A000
+				mmu_bit[ 8]=mmu_bit[ 9]=mmu_bit[10]=mmu_bit[11]=2; // detect POKE
 			break;
 		case 1: // Generic 16K
 			if (ps_slot[1]==slots_1st)
 				//mmu_ram[ 4]=mmu_ram[ 5]=mmu_ram[ 6]=mmu_ram[ 7]=&bad_ram[0-0X4000],
 				mmu_rom[ 4]=mmu_rom[ 5]=
 				mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[0]<<14)&CART_MASK)-0X4000],
-				mmu_bit[ 4]=2; // detect POKE at $4000
+				mmu_bit[ 4]=mmu_bit[ 5]=mmu_bit[ 6]=mmu_bit[ 7]=2; // detect POKE
 			if (ps_slot[2]==slots_1st)
 				//mmu_ram[ 8]=mmu_ram[ 9]=mmu_ram[10]=mmu_ram[11]=&bad_ram[0-0X8000],
 				mmu_rom[ 8]=mmu_rom[ 9]=
 				mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[1]<<14)&CART_MASK)-0X8000],
-				mmu_bit[ 8]=2; // detect POKE at $8000
+				mmu_bit[ 8]=mmu_bit[ 9]=mmu_bit[10]=mmu_bit[11]=2; // detect POKE
 			break;
 		case 2: // Konami SCC
 			if (ps_slot[1]==slots_1st)
 				//mmu_ram[ 4]=mmu_ram[ 5]=mmu_ram[ 6]=mmu_ram[ 7]=&bad_ram[0-0X4000],
 				mmu_rom[ 4]=mmu_rom[ 5]=&cart[((cart_bank[0]<<13)&CART_MASK)-0X4000],
 				mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[1]<<13)&CART_MASK)-0X6000],
-				mmu_bit[ 5]=mmu_bit[ 7]=2; // detect POKE at $5000/$7000
+				mmu_bit[ 5]=mmu_bit[ 7]=2; // detect POKE at $5000-$77FF
 			if (ps_slot[2]==slots_1st)
 				//mmu_ram[ 8]=mmu_ram[ 9]=mmu_ram[10]=mmu_ram[11]=&bad_ram[0-0X8000],
 				mmu_rom[ 8]=mmu_rom[ 9]=&cart[((cart_bank[2]<<13)&CART_MASK)-0X8000],
 				mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[3]<<13)&CART_MASK)-0XA000],
-				mmu_bit[ 9]=3,mmu_bit[11]=3; // detect POKE+PEEK at $9000/$B000
+				mmu_bit[ 9]=mmu_bit[11]=3; // detect POKE+PEEK at $9000/$B7FF
 			break;
 		case 6: // Konami 8K + SRAM (16K SRAM set by BIT 4 and selected by BIT 5)
 		case 3: // Konami 8K (no SRAM at all)
 			if (ps_slot[1]==slots_1st)
 			{
-				mmu_bit[ 6]=2; // detect $6000, ignore $4000
+				mmu_bit[ 6]=2; // detect $6000-$6FFF, ignore $4000-$4FFF
+				if (!sram_cart) mmu_bit[ 7]=2; // detect $6000-$7FFF, ignore $4000-$5FFF
 				//mmu_rom[ 4]=mmu_rom[ 5]=&cart[0-0X4000]; // this is always BANK 0!
 				if (cart_bank[1]&sram_cart)
 					s=&sram[(cart_bank[1]&32)<<7],
@@ -704,7 +726,8 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 			}
 			if (ps_slot[2]==slots_1st)
 			{
-				mmu_bit[ 8]=mmu_bit[10]=2; // detect POKE at $8000/$A000
+				mmu_bit[ 8]=mmu_bit[10]=2; // detect POKE at $8000-$8FFF and $A000-$AFFF
+				if (!sram_cart) mmu_bit[ 9]=mmu_bit[11]=2; // detect POKE at $8000-$BFFF
 				if (cart_bank[2]&sram_cart)
 					s=&sram[(cart_bank[2]&32)<<7],
 					mmu_rom[ 9]=(mmu_rom[ 8]=s-0X8000)-0X1000;
@@ -848,38 +871,42 @@ void mmu_slowpoke(WORD w,BYTE b) // notice that the caller already filters out i
 		else if (w>=0XB800&&w<=0XBFFF) // primary Konami SCC+?
 			sccplus_table_send(w,b);
 	}
-	else if (cart_big>0) switch (cart_id)
+	else if (cart_big) // small special cartridges go here
+	{
+		if (w==0X4000&&equalsmmmm(&cart[0X7F64],0X37343120))
+			cart_synth=((b-128)*SCCPLUS_MAX+1)>>1; // "KONAMI'S SYNTHESIZER" DAC: unsigned 8-bit sample
+	}
+	else if (cart) switch (cart_id)
 	{
 		case 6: // Konami 8K + SRAM (GAME MASTER 2)
-		case 3: // Konami 8K: POKE $4000/$6000/$8000/$A000,cfg.0/1/2/3
-			if (!(w&0X1FFF))
-			// no `break`!
-		case 0: // Generic 8K: POKE $4000-$BFFF,cfg.0/1/2/3
+		case 3: // Konami 8K: HML------------- HML=(0..3)+2
+		case 0: // Generic 8K: HML------------- HML=(0..3)+2
 			cart_bank[(w>>13)- 2]=b,mmu_update();
 			break;
-		case 1: // Generic 16K: POKE $4000-$BFFF,cfg.0/1
+		case 1: // Generic 16K: HL-------------- HL=(0..1)+1
 			cart_bank[(w>>14)- 1]=b,mmu_update();
 			break;
-		case 2: // Konami SCC: POKE $5000/$7000/$9000/$B000,cfg.0/1/2/3
-			/**/ if ((w&0X1FFF)==0X1000)
+		case 2: // Konami SCC: HML10----------- HML=(0..3)+2
+			/**/ if ((w&0X1800)==0X1000)
 				cart_bank[(w>>13)- 2]=b,mmu_update();
-			else if (w>=0X9800&&w<=0X9FFF)
+			else if (w>=0X9800&&w<=0X9FFF) // SCC-: 10011-----------
 			{
 				if (cart_id==2&&!(~cart_bank[2]&63)) // Konami SCC-?
 					sccplus_minus_send(w,b);
 			}
-			else if (w>=0XB800&&w<=0XBFFF)
+			else if (w>=0XB800&&w<=0XBFFF) // SCC+: 10111-----------
 			{	if (cart_id==2&&(cart_bank[2]&128)) // Konami SCC+?
 					sccplus_table_send(w,b);
 			}
 			break;
 		case 7: // ASCII 8K + SRAM (KOEI SRAM)
-		case 4: // ASCII 8K: POKE $6000-$7FFF,cfg.0/1/2/3
+		case 4: // ASCII 8K: 011HL----------- HL=0..3
 			cart_bank[(w>>11)-12]=b,mmu_update();
 			break;
 		case 8: // ASCII 16K + SRAM
-		case 5: // ASCII 16K: POKE $6000-$7FFF,cfg.0/1
-			cart_bank[(w>>12)- 6]=b,mmu_update();
+		case 5: // ASCII 16K: 011L0----------- L=0..1
+			if (!(w&0X0800)) // does any cartridge write to $6800-$6FFF or $7800-$7FFF?
+				cart_bank[(w>>12)- 6]=b,mmu_update();
 			break;
 		case 9: // Miscellaneous
 			/**/ if (w==0X4045)
@@ -892,7 +919,7 @@ void mmu_slowpoke(WORD w,BYTE b) // notice that the caller already filters out i
 				if (equalsmmmm(&cart[0X1FA74],0X4D453150)) // "SUPER LODE RUNNER"
 					cart_bank[1]=b,mmu_update();
 			}
-			else if (w>=0X6000&&w<=0X7FFF) // AFAIK only $6000 and $7000 are used here
+			else if (!(w&0X0FFF)) // AFAIK only $6000 and $7000 are used here
 			{
 				if (equalsmmmm(&cart[0X004E4],0X384C7C78)) // "HARRY FOX: YUKI NO MAOH"
 					cart_bank[(w>>12)- 6]=b,mmu_update();
@@ -942,7 +969,7 @@ BYTE mmu_slowpeek(WORD w) // ditto, we can only reach this function if the MMU_B
 	{
 		/**/ if (w>=0X9800&&w<=0X9FFF)
 		{
-			if (mmu_rom[ 8]==&sccp_rom[0-0X8000]||(cart_id==2&&(!~cart_bank[2]&63))) // [primary] Konami SCC-?
+			if (mmu_rom[ 8]==&sccp_rom[0-0X8000]||(cart_id==2&&!(~cart_bank[2]&63))) // [primary] Konami SCC-?
 				return sccplus_minus_recv(w);
 		}
 		else if (w>=0XB800&&w<=0XBFFF)
@@ -1037,7 +1064,13 @@ int psg_outputs[17]={0,85,121,171,241,341,483,683,965,1365,1931,2731,3862,5461,7
 
 #define PSG_TICK_STEP 16 // 3.58 MHz /2 /16 = 111875 Hz
 #define PSG_KHZ_CLOCK 1750 // compare with the 2000 kHz YM3 standard
-#define PSG_MAIN_EXTRABITS 0 // "QUATTROPIC" [http://randomflux.info/1bit/viewtopic.php?id=21] improves weakly with >0
+#define PSG_MAIN_EXTRABITS 0 // does any title need nonzero here at all?
+#define PSG_PLAYCITY 1 // the SECOND PSG card contains one chip...
+#define PSG_PLAYCITY_XLAT // ...playing at the PSG's same intensity
+#define playcity_hiclock TICKS_PER_SECOND // the SECOND PSG clock is fixed
+#define playcity_loclock (AUDIO_PLAYBACK*16)
+#define PSG_PLAYCITY_RESET ((void)0) // nothing special to do!
+int playcity_disabled=1; // this chip is an extension (disabled by default)
 
 #include "cpcec-ay.h"
 
@@ -1058,10 +1091,10 @@ const BYTE vdp_palette7[32]={0X00,0,0X03,0,0X30,0,0X33,0,0X00,3,0X03,3,0X30,3,0X
 // VDP maps: PATTERN NAME X2, COLOUR TABLE X2, PATTERN GENERATOR X2, SPRITE ATTRIBUTE X2, SPRITE GENERATOR
 BYTE *vdp_map_pn1,*vdp_map_pn2,*vdp_map_ct1,*vdp_map_ct2,*vdp_map_pg1,*vdp_map_pg2,*vdp_map_sa1,*vdp_map_sa2,*vdp_map_sa7,*vdp_map_sg1,*vdp_map_sg7;
 int vdp_bit_pg2,vdp_bit_ct2,vdp_bit_bmp,vdp_bit_bm1,vdp_map_k32,vdp_map_bm4,vdp_map_bm8; // MSX2 additional values
-char vdp_memtype; // 0 in MSX1 video modes (16K linear), +1 in MSX2 SPRITE MODE 2 modes minus G6/G7 (128K linear), -1 in MSX2 G6/G7 (128K planar)
-char vdp_spritel,vdp_sprite1; // sprite length and mask
+BYTE vdp_memtype; // 0 in MSX1 video modes (16K linear), 1 in MSX2 SPRITE MODE 2 modes minus G6/G7 (128K linear), 2 in MSX2 G6/G7 (128K planar)
+BYTE vdp_spritel,vdp_sprite1; // sprite length and mask
 char vdp_legalsprites=0,vdp_finalsprite=32,vdp_impactsprite=32; // sprite limits and options
-int vdp_finalraster=192; // MSX1: 192 always; MSX2: 192 or 212
+int vdp_finalraster; // MSX1: 192 always; MSX2: 192 or 212
 int vdp_flash=0; // counter for ODD and EVEN blinking effects
 BYTE vdp_table_last=99; // last modified register, for debug purposes
 #define video_clut_r3g3b3(v,i) (video_xlat_rgb(video_table[16+( v[i*2+1]    &7)]+video_table[24+((v[i*2+0]>>4)&7)]+video_table[32+( v[i*2+0]    &7)]))
@@ -1113,7 +1146,7 @@ void vdp_mode_update(void) // recalculate video mode and blitter budget on each 
 void vdp_update(void) // recalculate bitmap and sprite values
 {
 	if ((vdp_table[1]&24)==0&&(vdp_table[0]&10)==10) // i.e. if ((vdp_raster_mode&29)==5) ...
-		vdp_memtype=-1; // G6/G7: memory is planar!
+		vdp_memtype=2; // G6/G7: memory is planar!
 	else vdp_memtype=(vdp_table[0]&12)&&!(vdp_table[1]&24); // memory is linear
 	vdp_legalsprites=vdp_legalsprites<32?vdp_memtype?8:4:32;
 	int i=((vdp_table[11]&  3)<<15)+(vdp_table[5]<<7);
@@ -1147,6 +1180,8 @@ void vdp_update(void) // recalculate bitmap and sprite values
 	vdp_bit_bmp=(vdp_table[2]&31)*8+7;
 	vdp_map_bm4=(vdp_table[2]&96)<<10;
 	vdp_map_bm8=(vdp_table[2]&32)<<10;
+	// alternating even/odd screens? "MAZE OF GALIOUS MSX2" uses this in water screens!
+	vdp_map_k32=((vdp_table[9]&4)?video_interlaces:vdp_flash<0)?~0X8000:~0;
 }
 void vdp_blink(void) // update blink and flash attributes, once per frame
 {
@@ -1160,10 +1195,6 @@ void vdp_blink(void) // update blink and flash attributes, once per frame
 		vdp_state[2]&=~2;
 	else
 		vdp_state[2]|=+2;
-	if ((vdp_table[9]&4)?!video_interlaces:vdp_flash<0) // alternating even/odd screens?
-		vdp_map_k32=32<<10;
-	else
-		vdp_map_k32=0;
 }
 void vdp_reset(void)
 {
@@ -1180,13 +1211,13 @@ void vdp_reset(void)
 BYTE vdp_ram_send(BYTE b)
 {
 	int i=((vdp_table[14]&7)<<14)+vdp_where; // linear offset
-	if (vdp_memtype<0) i=((i>>1)+(i<<16))&0X1FFFF; // planar modes (G6, G7 and their YJK/YAE variants) are different!
+	if (vdp_memtype>1) i=((i>>1)+(i<<16))&0X1FFFF; // planar modes (G6, G7 and their YJK/YAE variants) are different!
 	vdp_ram[i]=b; vdp_next_where(); return b;
 }
 BYTE vdp_ram_recv(void)
 {
 	int i=((vdp_table[14]&7)<<14)+vdp_where; // linear offset
-	if (vdp_memtype<0) i=((i>>1)+(i<<16))&0X1FFFF; // planar modes (G6, G7 and their YJK/YAE variants) are different!
+	if (vdp_memtype>1) i=((i>>1)+(i<<16))&0X1FFFF; // planar modes (G6, G7 and their YJK/YAE variants) are different!
 	i=vdp_ram[i]; vdp_next_where(); return i;
 }
 
@@ -1197,8 +1228,8 @@ BYTE vdp_ram_recv(void)
 unsigned int vdp_blit_nx; // they MUST overflow! ZERO always means MAXIMUM!
 unsigned int vdp_blit_sx,vdp_blit_dx; // SY and DY are kept in their registers!
 int vdp_blit_nz,vdp_blit_t; // counter (used by command LINE and Z80-to-VDP waits) and timer (where operations take their clock ticks)
-char vdp_blit_ax,vdp_blit_ay; // step (add to value), either +1 or -1
-char vdp_blit_case,vdp_blit_addx,vdp_blit_step,vdp_blit_bits; BYTE vdp_blit_mask; // precalc's that avoid repeating the same calculations
+INT8 vdp_blit_ax,vdp_blit_ay; // step (add to value), either +1 or -1
+INT8 vdp_blit_case,vdp_blit_addx; BYTE vdp_blit_step,vdp_blit_bits,vdp_blit_mask; // precalc's that avoid repeating the same calculations
 int vdp_blit_xl,vdp_blit_yl,vdp_blit_xh,vdp_blit_yh; // AND (255/511/1023) and NAND (-256/-512/-1024) masks of the screen coordinates
 
 int vdp_blit_update(void) // set MASK, GAPS and BITS the current mode; >=0 OK, <0 ERROR
@@ -1546,7 +1577,7 @@ BYTE vdp_spritepos[32];
 void video_sprites_test(BYTE y) // look for illegal sprites in scanline `y`. This happens one scanline in advance!
 {
 	char m=0,n=0; int i=0,j; MEMZERO(vdp_spritepos);
-	if (vdp_memtype<0) for (;i<vdp_finalsprite&&(j=vdp_map_sa7[i*2+256])!=216;++i) // SPRITE PLANAR?
+	if (vdp_memtype>1) for (;i<vdp_finalsprite&&(j=vdp_map_sa7[i*2+256])!=216;++i) // SPRITE PLANAR?
 	{
 		BYTE a=y-j; if (vdp_table[1]&1) a>>=1; if (a>=vdp_spritel) // zoom x2? active sprite?
 			;
@@ -1582,7 +1613,7 @@ void video_sprites_test(BYTE y) // look for illegal sprites in scanline `y`. Thi
 void video_sprites_calc(void) // fetch the next scanline sprites. Call this early in the scanline!
 {
 	int i=0,j; MEMZERO(vdp_spritetmp);
-	if (vdp_memtype<0) for (;i<vdp_spritetop;++i) // SPRITE PLANAR?
+	if (vdp_memtype>1) for (;i<vdp_spritetop;++i) // SPRITE PLANAR?
 	{
 		if (!(j=vdp_spritepos[i])) continue;
 		--j,j=(j&1)*65536+(j>>1),vdp_spritetmp[64+i]=vdp_map_sa7[i*8+j],j+=(vdp_map_sa7[i*2+257]&vdp_sprite1)*4;
@@ -1905,7 +1936,7 @@ INLINE void video_main(int t) // render video output for `t` Z80 clock ticks; t 
 							case  3: // MSX2: "G4" (GRAPHIC4) 256x4-BIT PIXELS
 							{
 								i=(y&vdp_bit_bmp)<<7; // undoc'd R#2 mask!
-								int j=vdp_map_bm4^vdp_map_k32; if (vdp_hscroll_p) vdp_hscroll_p=32768;
+								int j=vdp_map_bm4&vdp_map_k32; if (vdp_hscroll_p) vdp_hscroll_p=32768;
 								do
 								{
 									if (!--n)
@@ -1924,7 +1955,7 @@ INLINE void video_main(int t) // render video output for `t` Z80 clock ticks; t 
 							case  4: // MSX2: "G5" (GRAPHIC5) 512x2-BIT PIXELS
 							{
 								i=(y&vdp_bit_bmp)<<7; // undoc'd R#2 mask!
-								int j=vdp_map_bm4^vdp_map_k32; if (vdp_hscroll_p) vdp_hscroll_p=32768;
+								int j=vdp_map_bm4&vdp_map_k32; if (vdp_hscroll_p) vdp_hscroll_p=32768;
 								do
 								{
 									if (!--n)
@@ -1945,7 +1976,7 @@ INLINE void video_main(int t) // render video output for `t` Z80 clock ticks; t 
 							case  5: // MSX2: "G6" (GRAPHIC6) 512x4-BIT PIXELS
 							{
 								i=(y&vdp_bit_bmp)<<7; // undoc'd R#2 mask?
-								int j=vdp_map_bm8^vdp_map_k32; if (vdp_hscroll_p) vdp_hscroll_p=32768;
+								int j=vdp_map_bm8&vdp_map_k32; if (vdp_hscroll_p) vdp_hscroll_p=32768;
 								do
 								{
 									y=vdp_ram[(j^vdp_hscroll_p)+i+(x>>1)+(x&1)*65536]; // planar :-(
@@ -1959,7 +1990,7 @@ INLINE void video_main(int t) // render video output for `t` Z80 clock ticks; t 
 							case  7: // MSX2: "G7" (GRAPHIC7) 256x8-BIT PIXELS
 							{
 								i=(y&vdp_bit_bmp)<<7; // undoc'd R#2 mask?
-								int j=vdp_map_bm8^vdp_map_k32; if (vdp_hscroll_p) vdp_hscroll_p=32768;
+								int j=vdp_map_bm8&vdp_map_k32; if (vdp_hscroll_p) vdp_hscroll_p=32768;
 								if (!(vdp_table[25]&8)) // V9938 256-colour palette
 									do
 									{
@@ -2072,7 +2103,7 @@ INLINE void video_main(int t) // render video output for `t` Z80 clock ticks; t 
 						vdp_raster+=(vdp_finalraster-(i18n_ntsc?270:320))>>1; // PAL 64/54 lines above, 192/212 pixels, 4<n<64 lines below; NTSC 37/27 lines above, 192/212 pixels, 4<n<64 lines below
 						vdp_count_y=0; video_newscanlines(0,i18n_ntsc?25*2:0); // end of frame!
 					}
-					else if (vdp_count_y*2==LINES_PER_FRAME) audio_dirty|=sccplus_playing|opll_playing; // force audio updates, possibly redundant
+					else if (vdp_count_y*2==LINES_PER_FRAME) audio_dirty|=sccplus_playing|opll_playing|!playcity_disabled; // force audio updates, possibly redundant
 					//opll_frame(); // handle OPLL ADSR
 				}
 			}
@@ -2083,9 +2114,13 @@ INLINE void video_main(int t) // render video output for `t` Z80 clock ticks; t 
 void audio_main(int t) // render audio output for `t` clock ticks; t is always nonzero!
 {
 	int z=audio_pos_z; // unlike other sound chips, the Konami SCCPLUS requires a fine-grained emulation (f.e. "F1 SPIRIT")
-	psg_main(t,((tape_status^tape_output)<<12)^((pio_port_c&128)<<5)); // merge tape signals and beeper: x<<(7+5)=x<<12
+	psg_main(t,((tape_status^tape_output)<<12)^((pio_port_c&128)<<5)+cart_synth); // merge tape signals and beeper: x<<(7+5)=x<<12
 	if (z<audio_pos_z)
 	{
+		#ifdef PSG_PLAYCITY
+		if (!playcity_disabled)
+			playcity_main(&audio_frame[z*AUDIO_CHANNELS],audio_pos_z-z);
+		#endif
 		if (sccplus_playing)
 			sccplus_main(&audio_frame[z*AUDIO_CHANNELS],audio_pos_z-z);
 		else if (opll_playing) // can SCCPLUS and OPLL coexist!?
@@ -2144,6 +2179,7 @@ BYTE z80_tape_fastload[][32] = { // codes that read pulses : <offset, length, da
 /*  8 */ {  -6,   3,0X04,0XC8,0X3E,  +3,   7,0X1F,0XA9,0XD8,0XE6,0X40,0X28,0XF3 }, // "TIME SCANNER"
 /*  9 */ {  -4,  11,0X04,0XC8,0XDB,0XA2,0X1F,0X1F,0XA9,0XE6,0X20,0X28,0XF5 }, // RED POINT
 /* 10 */ {  -6,   3,0X04,0XC8,0X3E,  +3,   5,0X2F,0XA9,0XE6,0X80,0XCA,-128, -13 }, // "SURVIVOR"
+/* 11 */ {  -6,   3,0X04,0XC8,0X3E,  +3,   7,0XBF,0XC0,0XA9,0XE6,0X80,0X28,0XF3 }, // "SUPER MSX"
 };
 BYTE z80_tape_fastfeed[][32] = { // codes that build bytes
 /*  0 */ {  -0,  12,0XFE,0X04,0X3F,0XD8,0XFE,0X02,0X3F,0XCB,0X1A,0X79,0X0F,0XD4,  +2,   1,0XCD,  +2,   2,0X2D,0XC2,-128, -24 }, // MSX1 FIRMWARE: $1AE9
@@ -2261,6 +2297,9 @@ void z80_tape_trap(void)
 		case 10: // "SURVIVOR"
 			fasttape_add8(~z80_bc.b.l>>7,60,&z80_bc.b.h,1);
 			break;
+		case 11: // "SUPER MSX"
+			fasttape_add8(z80_bc.b.l>>7,68,&z80_bc.b.h,1);
+			break;
 	}
 }
 #endif
@@ -2269,6 +2308,15 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 {
 	z80_skip=0; switch (p&=0XFF)
 	{
+		#ifdef PSG_PLAYCITY
+		case 0X10: // SECOND PSG PORT #0
+			if (!playcity_disabled) playcity_select(0,b);
+			break;
+		case 0X11: // SECOND PSG PORT #1
+			if (!playcity_disabled) playcity_send(0,b);
+			break;
+		//case 0X12: // SECOND PSG PORT #2
+		#endif
 		#ifdef DEBUG
 		case 0X2E: // OPENMSX DEBUG PORT #0 (f.e. CBIOS-MUSIC.ROM)
 			if (openmsx_log)
@@ -2402,6 +2450,12 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 {
 	z80_skip=0; switch (p&=0XFF)
 	{
+		#ifdef PSG_PLAYCITY
+		//case 0X10: // SECOND PSG PORT #0
+		//case 0X11: // SECOND PSG PORT #1
+		case 0X12: // SECOND PSG PORT #2
+			return playcity_disabled?255:playcity_recv(0);
+		#endif
 		case 0X90: // PRINTER PORT #0: BIT1 = !READY (?)
 			return printer?253:255;
 		//case 0X91: // PRINTER PORT #1
@@ -2611,33 +2665,36 @@ const BYTE z80_delays[]= // precalc'd coarse timings
 #define Z80_SEND z80_send
 #define Z80_POST_SEND(w) z80_t+=z80_skip//,_t_-=z80_loss
 // fine timings
-#define Z80_LOCAL
+#define Z80_LOCAL // it must stick between macros :-/
 #define Z80_MREQ(t,w)
 #define Z80_MREQ_1X(t,w)
 #define Z80_MREQ_NEXT(t)
 #define Z80_MREQ_1X_NEXT(t)
 #define Z80_WAIT(t)
 #define Z80_WAIT_IR1X(t)
-#define Z80_DUMB(w) ((void)0) // dumb 3-T MREQ
-#define Z80_PEEK PEEK
+#define Z80_DUMB1(w) ((void)0) // dumb 4-T MREQ
+#define Z80_DUMB Z80_DUMB1 // dumb 3-T MREQ
+#define Z80_NEXT1 PEEK // 4-T PC FETCH
+#define Z80_NEXT Z80_NEXT1 // 3-T PC FETCH
+#define Z80_PEEK(w) ((mmu_bit[w>>12]&1)?mmu_peek(w):mmu_rom[w>>12][w])
 #define Z80_PEEK0 PEEK // untrappable single read, use with care
-#define Z80_PEEK9(w) (mmu_bit[w>>12]&1?mmu_peek(w):PEEK(w)) // trappable single read, be careful too
-#define Z80_PEEK1 Z80_PEEK
-#define Z80_PEEK2 Z80_PEEK
-#define Z80_DUMBZ(w) ((void)0) // dumb 4-T MREQ
-#define Z80_PEEKZ Z80_PEEK // slow PEEK
-#define Z80_PRAE_PEEKXY PEEK // special DD/FD PEEK (1/2)
-#define Z80_POST_PEEKXY // special DD/FD PEEK (2/2)
-#define Z80_POKE(w,b) (POKE(w)=(b))
-#define Z80_PEEKPOKE(w,b) (POKE(w)=(b)) // a POKE that follows a same-address PEEK, f.e. INC (HL)
+#define Z80_PEEK1WZ Z80_PEEK // 1st twin read from LD rr,($hhll)
+#define Z80_PEEK2WZ Z80_PEEK // 2nd twin read
+#define Z80_PEEK1SP Z80_PEEK0 // 1st twin read from POP rr
+#define Z80_PEEK2SP Z80_PEEK0 // 2nd twin read
+#define Z80_PEEK1EX Z80_PEEK0 // 1st twin read from EX rr,(SP)
+#define Z80_PEEK2EX Z80_PEEK0 // 2nd twin read
+#define Z80_PRAE_NEXTXY Z80_NEXT1 // special DD/FD PEEK (1/2)
+#define Z80_POST_NEXTXY // special DD/FD PEEK (2/2)
+#define Z80_POKE(w,b) do{ if (mmu_bit[w>>12]&2) mmu_poke(w,b); else POKE(w)=(b); }while(0) // trappable single write; be careful, too
+#define Z80_PEEKPOKE(w,b) do{ if (mmu_bit[w>>12]&2) mmu_poke(w,b); else POKE(w)=(b); }while(0) // a POKE that follows a same-address PEEK, f.e. INC (HL)
 #define Z80_POKE0(w,b) (POKE(w)=(b)) // untrappable single write, use with care
-#define Z80_POKE9(w,b) do{ if (mmu_bit[w>>12]&2) mmu_poke(w,b); else POKE(w)=(b); }while(0) // trappable single write; be careful, too
-#define Z80_POKE1 Z80_POKE // 1st twin write from LD ($hhll),rr
-#define Z80_POKE2 Z80_POKE // 2nd twin write
-#define Z80_POKE3 Z80_POKE // 1st twin write from PUSH rr
-#define Z80_POKE4 Z80_POKE // 2nd twin write
-#define Z80_POKE5 Z80_PEEKPOKE // 1st twin write from EX rr,(SP)
-#define Z80_POKE6 Z80_POKE // 2nd twin write
+#define Z80_POKE1WZ Z80_POKE // 1st twin write from LD ($hhll),rr
+#define Z80_POKE2WZ Z80_POKE // 2nd twin write
+#define Z80_POKE1SP Z80_POKE0 // 1st twin write from PUSH rr
+#define Z80_POKE2SP Z80_POKE0 // 2nd twin write
+#define Z80_POKE1EX Z80_POKE0 // 1st twin write from EX rr,(SP)
+#define Z80_POKE2EX Z80_POKE0 // 2nd twin write
 // coarse timings
 #define Z80_STRIDE(o) z80_t+=z80_delays[o]
 #define Z80_STRIDE_0 // default "slow ACK" behavior
@@ -2673,8 +2730,10 @@ BYTE debug_pook(int q,WORD w) { return q?vdp_ram[w]:PEEK(w); } // show either VD
 //BYTE debug_pook(int q,WORD w) { return PEEK(w); } // `q` doesn't matter on MSX! empty banks are unreadable AND unwritable!
 void debug_info(int q)
 {
-	sprintf(DEBUG_INFOZ( 0),cart_big>0?"MAP:   %c %02X:%02X:%02X:%02X":"MAP:   - --:--:--:--",
-		hexa1[cart_id],cart_bank[0],cart_bank[1],cart_bank[2],cart_bank[3]);
+	if (cart&&!cart_big)
+		sprintf(DEBUG_INFOZ( 0),"MAP:   %c %02X:%02X:%02X:%02X",hexa1[cart_id],cart_bank[0],cart_bank[1],cart_bank[2],cart_bank[3]);
+	else
+		sprintf(DEBUG_INFOZ( 0),"MAP:   - --:--:--:--");
 	sprintf(DEBUG_INFOZ( 1)+4,"PIO%c %02X:%02X:%02X:%02X",cart?'*':'-',pio_port_a,pio_port_b,pio_port_c,pio_control);
 	sprintf(DEBUG_INFOZ( 2)+5,"RAM %02X:%02X:%02X:%02X",ram_cfg[0],ram_cfg[1],ram_cfg[2],ram_cfg[3]);
 	sprintf(DEBUG_INFOZ( 3)+6,"PS %02X:%02X:%02X:%02X",ps_slot[0],ps_slot[1],ps_slot[2],ps_slot[3]);
@@ -2732,10 +2791,20 @@ void debug_info(int q)
 		sprintf(DEBUG_INFOZ( 8),"DSK:");
 			sprintf(DEBUG_INFOZ( 9)+4,"%02X%02X%02X--%02X%02X-- %c",
 				diskette_command,diskette_track,diskette_sector,diskette_side,diskette_motor*128+diskette_drive,diskette_length?'*':'-');
-		sprintf(DEBUG_INFOZ(10),"SCC:");
-			byte2hexa(DEBUG_INFOZ(11)+4,&sccplus_table[160],8); // remember, we handle SCC- as a subset of SCC+,
-			byte2hexa(DEBUG_INFOZ(12)+4,&sccplus_table[168],8); // and thus we must use the offsets of the later
-		byte2hexa(DEBUG_INFOZ(12)+1,&sccplus_table[192],1);
+		if (playcity_disabled)
+		{
+			sprintf(DEBUG_INFOZ(10),"SCC:");
+				byte2hexa(DEBUG_INFOZ(11)+4,&sccplus_table[160],8); // remember, we handle SCC- as a subset of SCC+,
+				byte2hexa(DEBUG_INFOZ(12)+4,&sccplus_table[168],8); // and thus we must use the offsets of the later
+			byte2hexa(DEBUG_INFOZ(12)+1,&sccplus_table[192],1);
+		}
+		else
+		{
+			sprintf(DEBUG_INFOZ(10),"PSG2ND:");
+				byte2hexa(DEBUG_INFOZ(11)+4,&playcity_table[0][0],8);
+				byte2hexa(DEBUG_INFOZ(12)+4,&playcity_table[0][8],8);
+			debug_hilight2(DEBUG_INFOZ(11+(playcity_index[0]&15)/8)+4+(playcity_index[0]&7)*2);
+		}
 		sprintf(DEBUG_INFOZ(13),"I/O F5=%02X JIS%c:%05X",ioctl_flags,/*kanji_rom[0X20000]?128:256,*/kanji_rom[0]?'-':kanji_rom[0X20000]?'1':'2',kanji_p&0X3FFFF);
 	}
 }
@@ -2869,7 +2938,7 @@ int bios_load(char *s) // load ROM. `s` path; 0 OK, !0 ERROR
 		//else ; // no "CD": C-BIOS1!
 	}
 	//else ; // 32K, official MSX1 ROM set!
-	if ((char*)session_substr!=s) STRCOPY(bios_path,s);
+	if (session_substr!=s) STRCOPY(bios_path,s);
 	if (type_id!=old_type_id&&type_id>1) msx2p_flags=0,video_wide_xlat(); // MSX2P!
 	old_type_id=type_id=mem_rom[0X2D]; // take the ID value from the BIOS
 	return 0;
@@ -2987,6 +3056,10 @@ int snap_save(char *s) // save a snapshot `s`; zero OK, nonzero error!
 	if (opll_playing)
 		kputmmmm(0X4F504C4C,f), // "OPLL", the OPLL status
 		snap_savechunk(opll_table,64,f); //fputiiii(256,f); fwrite1(sccplus_table,256,f);
+	if (!playcity_disabled)
+		kputmmmm(0X50534732,f), // "PSG2", the SECOND PSG status
+		kputiiii(16+1,f),
+		fwrite1(playcity_table[0],16,f),fputc(playcity_index[0],f);
 	STRCOPY(snap_path,s);
 	return snap_done=!puff_fclose(f),0;
 }
@@ -3090,6 +3163,10 @@ int snap_load(char *s) // load a snapshot `s`; zero OK, nonzero error!
 		{
 			i=snap_loadchunk(opll_table, 64,f,i,header[14]); //fread1(sccplus_table,256,f); i-=256;
 		}
+		else if (k==0X50534732&&i== 17) // "PSG2", the SECOND PSG status
+		{
+			playcity_disabled=0,fread1(playcity_table[0],16,f),playcity_index[0]=fgetc(f),i-=17;
+		}
 		// ... future blocks will go here ...
 		else cprintf("SNAP %08X:%08X?\n",k,i); // unknown type:size
 		{ if (i<0) return puff_fclose(f),1; } fseek(f,i,SEEK_CUR); // abort on error!
@@ -3111,7 +3188,7 @@ int snap_load(char *s) // load a snapshot `s`; zero OK, nonzero error!
 int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` autorun; 0 OK, !0 ERROR
 {
 	autorun_t=0; // cancel any autoloading yet
-	if (!video_table_load(s)) video_main_xlat(),video_xlat_clut(); else
+	if (!video_table_load(s)) video_main_xlat(),video_xlat_clut(); else if (!cart_hotfix(s)) {} else
 	if (snap_load(s))
 		if (disc_open(s,0,0))
 			if (tape_open(s))
@@ -3145,7 +3222,7 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 }
 
 char txt_error_snap_save[]="Cannot save snapshot!";
-char file_pattern[]="*.cas;*.csw;*.dsk;*.mx1;*.mx2;*.rom;*.stx;*.tsx;*.vpl;*.wav"; // from A to Z
+char file_pattern[]="*.cas;*.csw;*.dsk;*.ips;*.mx1;*.mx2;*.rom;*.stx;*.tsx;*.vpl;*.wav"; // from A to Z
 
 char session_menudata[]=
 	"File\n"
@@ -3173,6 +3250,7 @@ char session_menudata[]=
 	"=\n"
 	"0xC500 Insert cartridge..\tShift-F5\n"
 	"0x4500 Remove cartridge\tCtrl-Shift-F5\n"
+	"0x0510 Patch cartridge..\n"
 	"=\n"
 	"0x0080 E_xit\n"
 	"Edit\n"
@@ -3199,17 +3277,18 @@ char session_menudata[]=
 	"0x850A Miscellaneous mapper\n"
 	"0x850E MSX-MUSIC (YM2413)\n"
 	"0x850F Primary Konami SCC\n"
+	"0x8518 Second PSG at $10\n"
 	"=\n"
 	"0x8B08 Custom VDP palette..\n"
 	"0x8B18 Reset VDP palette\n"
 	"0x850B Disable sprites\n"
-	"0x850D Show " I18N_L_AQUOTE "illegal" I18N_R_AQUOTE " sprites\n"
+	"0x850D Show \"illegal\" sprites\n"
 	"0x850C Cancel sprite collisions\n"
 	"Settings\n"
-	"0x8601 1" I18N_MULTIPLY " realtime speed\n"
-	"0x8602 2" I18N_MULTIPLY " realtime speed\n"
-	"0x8603 3" I18N_MULTIPLY " realtime speed\n"
-	"0x8604 4" I18N_MULTIPLY " realtime speed\n"
+	"0x8601 1" I18N_MULTIPLY " real speed\n"
+	"0x8602 2" I18N_MULTIPLY " real speed\n"
+	"0x8603 3" I18N_MULTIPLY " real speed\n"
+	"0x8604 4" I18N_MULTIPLY " real speed\n"
 	"0x8600 Run at full throttle\tF6\n"
 	//"0x0600 Raise Z80 speed\tCtrl-F6\n"
 	//"0x4600 Lower Z80 speed\tCtrl-Shift-F6\n"
@@ -3347,6 +3426,9 @@ void session_clean(void) // refresh options
 	session_menuradio(0x8511+ram_getcfg(),0x8511,0x8516);
 	session_menuradio(0x8501+cart_id,0x8501,0x8501+CART_IDS-1);
 	session_menucheck(0x850F,sccplus_internal);
+	#ifdef PSG_PLAYCITY
+	session_menucheck(0x8518,!playcity_disabled);
+	#endif
 	session_menucheck(0xC500,!!cart);
 	session_menucheck(0x851F,!(snap_extended));
 	session_menucheck(0x852F,!!printer);
@@ -3376,6 +3458,10 @@ void session_clean(void) // refresh options
 	psg_stereo[0][0]=256+audio_stereos[audio_mixmode][1],psg_stereo[0][1]=256-audio_stereos[audio_mixmode][1];
 	psg_stereo[1][0]=256+audio_stereos[audio_mixmode][0],psg_stereo[1][1]=256-audio_stereos[audio_mixmode][0];
 	psg_stereo[2][0]=256+audio_stereos[audio_mixmode][2],psg_stereo[2][1]=256-audio_stereos[audio_mixmode][2];
+	#ifdef PSG_PLAYCITY
+	for (int i=0;i<3;++i)
+		playcity_stereo[0][i][0]=psg_stereo[i][0],playcity_stereo[0][i][1]=psg_stereo[i][1]; // TURBO SOUND chip shares stereo with the PSG
+	#endif
 	// is the Konami SCC stereo? let's assume it's M:L:R:LM:MR -- voices 4 and 5 must be in opposite sides, and "F1 SPIRIT" uses voice 1 as the engine
 	sccplus_stereo[0][0]=psg_stereo[0][0];
 	sccplus_stereo[0][1]=psg_stereo[0][1];
@@ -3588,6 +3674,12 @@ void session_user(int k) // handle the user's commands
 			//else // redundant!
 			all_reset();
 			break;
+		case 0x0510: // PATCH CARTRIDGE
+			if (cart) // no cartridge, nothing to do
+				if (s=puff_session_getfile(cart_path,"*.ips","Patch cartridge"))
+					if (cart_hotfix(s))
+						session_message("Cannot patch cartridge!",txt_error);
+			break;
 		case 0x8511: // 64K RAM W/O MAPPER
 		case 0x8512: // 64K RAM
 		case 0x8513: // 128K RAM
@@ -3606,11 +3698,17 @@ void session_user(int k) // handle the user's commands
 		case 0x8508: // ASCII 8K + SRAM (KOEI SRAM)
 		case 0x8509: // ASCII 16K + SRAM MAPPER
 		case 0x850A: // MISCELLANEOUS MAPPER
-			if (cart_id!=(k-=0x8501)) { cart_id=k; if (cart&&cart_big>0) all_reset(); } // don't reset if nothing changes
+			if (cart_id!=(k-=0x8501)) { cart_id=k; if (cart&&!cart_big) all_reset(); } // don't reset if nothing changes
 			break;
 		case 0x850E: // MSX-MUSIC OPLL
 			opll_internal=!opll_internal; opll_playing=0;
 			break;
+		#ifdef PSG_PLAYCITY
+		case 0x8518: // SECOND PSG (PORT $10)
+			if (playcity_disabled=!playcity_disabled)
+				playcity_reset();
+			break;
+		#endif
 		case 0x850F: // KONAMI SCC
 			sccplus_internal=!sccplus_internal; sccplus_playing=0;
 			break;
@@ -4089,7 +4187,7 @@ int main(int argc,char *argv[])
 				else
 				{
 					if (tape_skipping) onscreen_char(+6,-3,(tape_skipping>0?'*':'+')+k);
-					j=(long long)tape_filetell*999/tape_filesize;
+					j=(long long int)tape_filetell*999/tape_filesize;
 					onscreen_char(+7,-3,'0'+j/100+k);
 					onscreen_byte(+8,-3,j%100,k);
 				}

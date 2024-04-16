@@ -8,7 +8,6 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_VERSION "20240328"
 #define MY_LICENSE "Copyright (C) 2019-2024 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
@@ -43,7 +42,7 @@ Contact information: <mailto:cngsoft@gmail.com> */
 // ZX Spectrum metrics and constants defined as general types ------- //
 
 #define VIDEO_PLAYBACK 50
-#define VIDEO_LENGTH_X (56<<4) // HBLANK 12c, BORDER 6c, BITMAP 32c, BORDER 6c
+#define VIDEO_LENGTH_X (56<<4)
 #define VIDEO_LENGTH_Y (39<<4)
 #define VIDEO_OFFSET_X (14<<4)
 #define VIDEO_OFFSET_Y ( 5<<4) // Pentagon: ( 3<<4)
@@ -180,7 +179,7 @@ VIDEO_UNIT video_xlat[16]; // static colours only (dynamic ULAPLUS colours go el
 
 // GLOBAL DEFINITIONS =============================================== //
 
-int TICKS_PER_FRAME;// ((VIDEO_LENGTH_X*VIDEO_LENGTH_Y)/32);
+int TICKS_PER_FRAME;// ((VIDEO_LENGTH_X*VIDEO_LENGTH_Y)>>3);
 int TICKS_PER_SECOND;// (TICKS_PER_FRAME*VIDEO_PLAYBACK);
 // Everything in the ZX Spectrum is tuned to a 3.5 MHz clock,
 // using simple binary divisors to adjust the devices' timings;
@@ -654,9 +653,11 @@ int psg_outputs[17]={0,85,121,171,241,341,483,683,965,1365,1931,2731,3862,5461,7
 #define PSG_TICK_STEP 16 // 3.5 MHz /2 /16 = 109375 Hz
 #define PSG_KHZ_CLOCK 1750 // compare with the 2000 kHz YM3 standard
 #define PSG_MAIN_EXTRABITS 0 // "QUATTROPIC" [http://randomflux.info/1bit/viewtopic.php?id=21] improves weakly with >0
-#define PSG_PLAYCITY 1 // base clock in comparison to the main PSG
-#define PSG_PLAYCITY_HALF // the TURBO SOUND chip is emulated as a single-chip PLAYCITY card
-#define playcity_mono 1 // the PLAYCITY single chip plays at the PSG's same intensity
+#define PSG_PLAYCITY 1 // the TURBO SOUND card contains one chip...
+#define PSG_PLAYCITY_XLAT // ...playing at the PSG's same intensity
+#define playcity_hiclock TICKS_PER_SECOND // the TURBO SOUND clock is pegged to the main clock
+#define playcity_loclock (AUDIO_PLAYBACK*16)
+#define PSG_PLAYCITY_RESET (playcity_active=0) // the TURBO SOUND card uses a switch
 int playcity_disabled=1,playcity_active=0; // this chip is an extension (disabled by default)
 int dac_disabled=1; // Covox $FB DAC, enabled by default on almost every Pentagon 128, but missing everywhere else :-(
 
@@ -1016,7 +1017,7 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 			}
 		}
 		if (p&0x8000) // PSG 128K
-			if (type_id||!psg_disabled||!playcity_disabled) // optional on 48K
+			if (type_id||!psg_disabled) // optional on 48K
 			{
 				if (p&0x4000) // 0xFFFD: SELECT PSG REGISTER
 				{
@@ -1465,42 +1466,45 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 #define Z80_SYNC_IO(t) ( _t_-=z80_t-t, z80_sync(z80_t-t), z80_t=t ) // `t` sets a delay between updates
 #define Z80_PRAE_RECV(w) do{ Z80_IORQ(1,w); Z80_SYNC_IO(ula_fix_out); }while(0)
 #define Z80_RECV z80_recv
-#define Z80_POST_RECV(w) do{ if ((w)&1) Z80_IORQ_1X_NEXT(3); else Z80_IORQ_PAGE(3,4); }while(0)
-#define Z80_PRAE_SEND(w) do{ if ((w)&3) audio_dirty=1; Z80_IORQ(1,w); Z80_SYNC_IO(ula_fix_out); }while(0)
+#define Z80_POST_RECV(w) do{ if (w&1) Z80_IORQ_1X_NEXT(3); else Z80_IORQ_PAGE(3,4); }while(0)
+#define Z80_PRAE_SEND(w) do{ if (w&3) audio_dirty=1; Z80_IORQ(1,w); Z80_SYNC_IO(ula_fix_out); }while(0)
 #define Z80_SEND z80_send
-#define Z80_POST_SEND(w) do{ if ((w)&1) Z80_IORQ_1X_NEXT(3); else Z80_IORQ_PAGE(3,4); }while(0)
+#define Z80_POST_SEND(w) do{ if (w&1) Z80_IORQ_1X_NEXT(3); else Z80_IORQ_PAGE(3,4); }while(0)
 // fine timings
 #define Z80_LOCAL BYTE z80_aux1,z80_aux2 // they must stick between macros :-/
-#define Z80_MREQ(t,w) Z80_MREQ_PAGE(t,z80_aux1=((w)>>14)) // these contended memory pauses are common to all official Sinclair/Amstrad ZX Spectrum machines
-#define Z80_MREQ_1X(t,w) do{ z80_aux1=(w)>>14; if (/*t>1&&*/type_id<3) { BYTE z80_auxx=t; do Z80_MREQ_PAGE(1,z80_aux1); while (--z80_auxx); } else Z80_MREQ_PAGE(t,z80_aux1); }while(0)
+#define Z80_MREQ(t,w) Z80_MREQ_PAGE(t,z80_aux1=(w>>14)) // these contended memory pauses are common to all official Sinclair/Amstrad ZX Spectrum machines
+#define Z80_MREQ_1X(t,w) do{ z80_aux1=w>>14; if (/*t>1&&*/type_id<3) { BYTE z80_auxx=t; do Z80_MREQ_PAGE(1,z80_aux1); while (--z80_auxx); } else Z80_MREQ_PAGE(t,z80_aux1); }while(0)
 #define Z80_MREQ_NEXT(t) Z80_MREQ_PAGE(t,z80_aux1) // when the very last z80_aux1 is the same as the current one
 #define Z80_MREQ_1X_NEXT(t) do{ if (/*t>1&&*/type_id<3) { BYTE z80_auxx=t; do Z80_MREQ_NEXT(1); while (--z80_auxx); } else Z80_WAIT(t); }while(0) // *Z80_MREQ_NEXT => Z80_WAIT ("Mask 3: Venom Strikes Back")
-#define Z80_IORQ(t,w) Z80_IORQ_PAGE(t,z80_aux1=((w)>>14)) // these pauses are different in Spectrum PLUS3 (and PLUS2A) because only MREQ actions are contended:
-#define Z80_IORQ_1X(t,w) do{ z80_aux1=(w)>>14; if (t>1) { BYTE z80_auxx=t; do Z80_IORQ_PAGE(1,z80_aux1); while (--z80_auxx); } else Z80_IORQ_PAGE(t,z80_aux1); }while(0) // *UNUSED* Z80_IORQ is always ZERO on PLUS3!
+#define Z80_IORQ(t,w) Z80_IORQ_PAGE(t,z80_aux1=(w>>14)) // these pauses are different in Spectrum PLUS3 (and PLUS2A) because only MREQ actions are contended:
+#define Z80_IORQ_1X(t,w) do{ z80_aux1=w>>14; if (t>1) { BYTE z80_auxx=t; do Z80_IORQ_PAGE(1,z80_aux1); while (--z80_auxx); } else Z80_IORQ_PAGE(t,z80_aux1); }while(0) // *UNUSED* Z80_IORQ is always ZERO on PLUS3!
 #define Z80_IORQ_NEXT(t) Z80_IORQ_PAGE(t,z80_aux1) // when the very last z80_aux1 is the same as the current one
 #define Z80_IORQ_1X_NEXT(t) do{ /*if (t>1)*/ { BYTE z80_auxx=t; do Z80_IORQ_NEXT(1); while (--z80_auxx); } /*else Z80_WAIT(t);*/ }while(0) // Z80_IORQ is always ZERO on PLUS3! *Z80_IORQ_NEXT => Z80_WAIT (?)
 #define Z80_WAIT(t) ( z80_t+=t, ula_clash_z+=t )
 #define Z80_WAIT_IR1X(t) do{ if (type_id<3) { z80_aux1=z80_ir.w>>14; if (t>1) { BYTE z80_auxx=t; do Z80_MREQ_PAGE(1,z80_aux1); while (--z80_auxx); } else { Z80_MREQ_PAGE(t,z80_aux1); } } else Z80_WAIT(t); }while(0)
+#define Z80_DUMB1(w) Z80_MREQ(4,w) // dumb 4-T MREQ
 #define Z80_DUMB(w) Z80_MREQ(3,w) // dumb 3-T MREQ
+#define Z80_NEXT1(w) ( Z80_MREQ(4,w), mmu_rom[z80_aux1][w] ) // 4-T PEEK
+#define Z80_NEXT(w) ( Z80_MREQ(3,w), mmu_rom[z80_aux1][w] ) // 3-T PEEK
 #define Z80_PEEK(w) ( Z80_MREQ(3,w), mmu_rom[z80_aux1][w] )
 #define Z80_PEEK0 Z80_PEEK // untrappable single read, use with care
-#define Z80_PEEK9 Z80_PEEK // trappable single read, be careful too
-#define Z80_PEEK1 Z80_PEEK
-#define Z80_PEEK2 Z80_PEEK
-#define Z80_DUMBZ(w) Z80_MREQ(4,w) // dumb 4-T MREQ
-#define Z80_PEEKZ(w) ( Z80_MREQ(4,w), mmu_rom[z80_aux1][w] ) // slow PEEK
-#define Z80_PRAE_PEEKXY(w) (z80_aux1=((w)>>14),mmu_rom[z80_aux1][w]) // special DD/FD PEEK (1/2)
-#define Z80_POST_PEEKXY Z80_MREQ_NEXT(4) // special DD/FD PEEK (2/2)
+#define Z80_PEEK1WZ Z80_PEEK // 1st twin read from LD rr,($hhll)
+#define Z80_PEEK2WZ Z80_PEEK // 2nd twin read
+#define Z80_PEEK1SP Z80_PEEK // 1st twin read from POP rr
+#define Z80_PEEK2SP Z80_PEEK // 2nd twin read
+#define Z80_PEEK1EX Z80_PEEK // 1st twin read from EX rr,(SP)
+#define Z80_PEEK2EX Z80_PEEK // 2nd twin read
+#define Z80_PRAE_NEXTXY(w) (z80_aux1=(w>>14),mmu_rom[z80_aux1][w]) // special DD/FD PEEK (1/2)
+#define Z80_POST_NEXTXY Z80_MREQ_NEXT(4) // special DD/FD PEEK (2/2)
 #define Z80_POKE(w,b) ( Z80_MREQ(3,w), mmu_ram[z80_aux1][w]=(b) ) // trappable single write
 #define Z80_PEEKPOKE(w,b) ( Z80_MREQ_NEXT(3), mmu_ram[z80_aux1][w]=(b) ) // a POKE that follows a same-address PEEK, f.e. INC (HL)
 #define Z80_POKE0 Z80_POKE // untrappable single write, use with care
-#define Z80_POKE9 Z80_POKE // trappable single write, be careful too
-#define Z80_POKE1(w,b) ( Z80_MREQ(3,w), ((w)>=0X5800&&(w)<=0X5AFF&&(Z80_SYNC_IO(0))), mmu_ram[z80_aux1][w]=(b) ) // 1st twin write from LD ($hhll),rr; NIRVANA games on PLUS3 require it
-#define Z80_POKE2 Z80_POKE1 // 2nd twin write; NIRVANA games on 48K and 128K require it
-#define Z80_POKE3 Z80_POKE1 // 1st twin write from PUSH rr; NIRVANA games always need it
-#define Z80_POKE4 Z80_POKE0 // 2nd twin write; no ATTRIB effects seem to need it
-#define Z80_POKE5 Z80_PEEKPOKE // 1st twin write from EX rr,(SP)
-#define Z80_POKE6 Z80_POKE0 // 2nd twin write
+#define Z80_POKE1WZ(w,b) ( Z80_MREQ(3,w), (w>=0X5800&&w<=0X5AFF&&(Z80_SYNC_IO(0))), mmu_ram[z80_aux1][w]=(b) ) // 1st twin write from LD ($hhll),rr; NIRVANA games on PLUS3 require it
+#define Z80_POKE2WZ Z80_POKE1WZ // 2nd twin write; NIRVANA games on 48K and 128K require it
+#define Z80_POKE1SP Z80_POKE1WZ // 1st twin write from PUSH rr; NIRVANA games always need it
+#define Z80_POKE2SP Z80_POKE0 // 2nd twin write; no ATTRIB effects seem to need it
+#define Z80_POKE1EX Z80_PEEKPOKE // 1st twin write from EX rr,(SP)
+#define Z80_POKE2EX Z80_POKE0 // 2nd twin write
 // coarse timings
 #define Z80_STRIDE(o)
 #define Z80_STRIDE_0
@@ -1634,9 +1638,7 @@ void all_reset(void) // reset everything!
 	tape_reset();
 	disc_reset();
 	psg_reset();
-	#ifdef PSG_PLAYCITY
-	playcity_reset(),playcity_active=dac_level=0;
-	#endif
+	dac_level=0;
 	z80_reset();
 	debug_reset();
 	disc_disabled&=1,z80_irq=snap_done=autorun_mode=autorun_t=0; // avoid accidents!
@@ -1690,7 +1692,7 @@ int bios_load(char *s) // load ROM. `s` path; 0 OK, !0 ERROR
 		memcpy(&mem_rom[1<<15],mem_rom,1<<15); // mirror 32K ROM up
 	old_type_id=type_id=i>(1<<14)?i>(1<<15)?3:mem_rom[0x5540]=='A'?2:1:0; // original Sinclair 128K or modified Amstrad PLUS2?
 	//cprintf("Firmware %dk m%d\n",i>>10,type_id);
-	if ((char*)session_substr!=s) STRCOPY(bios_path,s);
+	if (session_substr!=s) STRCOPY(bios_path,s);
 	return 0;
 }
 int bios_reload(void) // ditto, but from the current type_id
@@ -2450,10 +2452,10 @@ char session_menudata[]=
 	"0x8519 Covox $FB audio\n"
 	#endif
 	"Settings\n"
-	"0x8601 1" I18N_MULTIPLY " realtime speed\n"
-	"0x8602 2" I18N_MULTIPLY " realtime speed\n"
-	"0x8603 3" I18N_MULTIPLY " realtime speed\n"
-	"0x8604 4" I18N_MULTIPLY " realtime speed\n"
+	"0x8601 1" I18N_MULTIPLY " real speed\n"
+	"0x8602 2" I18N_MULTIPLY " real speed\n"
+	"0x8603 3" I18N_MULTIPLY " real speed\n"
+	"0x8604 4" I18N_MULTIPLY " real speed\n"
 	"0x8600 Run at full throttle\tF6\n"
 	//"0x0600 Raise Z80 speed\tCtrl-F6\n"
 	//"0x4600 Lower Z80 speed\tCtrl-Shift-F6\n"
@@ -2833,7 +2835,7 @@ void session_user(int k) // handle the user's commands
 		#ifdef PSG_PLAYCITY
 		case 0x8518: // PLAYCITY
 			if (playcity_disabled=!playcity_disabled)
-				playcity_reset(),playcity_active=0;
+				playcity_reset();
 			break;
 		case 0x8519: // COVOX
 			if (dac_disabled=!dac_disabled)
@@ -3380,7 +3382,7 @@ int main(int argc,char *argv[])
 				else
 				{
 					if (tape_skipping) onscreen_char(+6,-3,(tape_skipping>0?'*':'+')+k);
-					j=(long long)tape_filetell*999/tape_filesize;
+					j=(long long int)tape_filetell*999/tape_filesize;
 					onscreen_char(+7,-3,'0'+j/100+k);
 					onscreen_byte(+8,-3,j%100,k);
 				}

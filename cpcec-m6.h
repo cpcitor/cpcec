@@ -41,15 +41,16 @@
 // M65XX_WAIT -- name of the wait-till-READY clock tick procedure
 // M65XX_TICK -- name of the single clock tick procedure (++m65xx_t, etc)
 // M65XX_TOCK -- name of the INT=IRQ procedure (M65XX_INT=M65XX_IRQ, etc)
+// void M65XX_CRASH(void) -- react to the JAM opcode (for example, reset)
 
-// Please notice that M65XX_PEEK and M65XX_POKE must handle the special
-// cases $0000 and $0001 when they emulate a 6510 instead of a 6502.
+// Please mind that M65XX_PEEK, M65XX_POKE etc. must catch the magic
+// addresses $0000/$0001 when they emulate a 6510 instead of a 6502.
 
-// Notice also that the difference between real and "dumb" PEEK/POKE
-// is that the later can be simplified to "++m65xx_t" if we're sure
-// of the null impact in the emulated system of double I/O actions
-// such as "LDX #$10: LDA $DFCD,X" (reading from $DC0D and $DD0D)
-// and "LSR $D019" (writing twice on $D019: operand and result).
+// Notice also that the difference between real and "dumb" PEEK/POKE is
+// that the later can be simplified to "++m65xx_t" if we're fully sure
+// of the lack of relevant double I/O actions in the emulated system
+// such as "LDX #$10: LDA $DFCD,X" (reading from $DC0D and $DD0D) and
+// "LSR $D019" (writing twice on $D019: operand and result) in the C64.
 
 // The macros M65XX_DUMBPUSH and M65XX_DUMBPEEKZERO are never required;
 // M65XX_DUMBPULL and M65XX_DUMBPOKEZERO are dummied out because of the
@@ -156,11 +157,12 @@ WORD debug_dasm_any(char *t,WORD p,BYTE q(WORD)) // where `BYTE q(WORD)` is a fu
 			sprintf(t,"%s  $%04X,X",opcodez[o],DEBUG_DASM_WORD); break;
 		case 0X96: case 0XB6:
 			sprintf(t,"%s  $%02X,Y",opcodez[o],DEBUG_DASM_BYTE); break;
-		default:
-		//case 0X40: case 0X60:
-		//case 0X02: case 0X12: case 0X22: case 0X32: case 0X42: case 0X52: case 0X62: case 0X72: case 0X92: case 0XB2: case 0XD2: case 0XF2:
-		//case 0X08: case 0X18: case 0X28: case 0X38: case 0X48: case 0X58: case 0X68: case 0X78: case 0X88: case 0X98: case 0XA8: case 0XB8: case 0XC8: case 0XD8: case 0XE8: case 0XF8:
-		//case 0X1A: case 0X3A: case 0X5A: case 0X7A: case 0X8A: case 0X9A: case 0XAA: case 0XBA: case 0XCA: case 0XDA: case 0XEA: case 0XFA:
+		default: // parameter-less opcodes
+		//case 0X08: case 0X18: case 0X28: case 0X38: case 0X48: case 0X58: case 0X68: case 0X78: // PHP, CLC, PLP, SEC, PHA, CLI, PLA, SEI
+		//case 0X88: case 0X98: case 0XA8: case 0XB8: case 0XC8: case 0XD8: case 0XE8: case 0XF8: // DEY, TYA, TAY, CLV, INY, CLD, INX, SED
+		//case 0X40: case 0X60: case 0X8A: case 0X9A: case 0XAA: case 0XBA: case 0XCA: // RTI, RTS, TXA, TXS, TAX, TSX, DEX
+		//case 0XEA: case 0X1A: case 0X3A: case 0X5A: case 0X7A: case 0XDA: case 0XFA: // NOP (official) + NOP x6 (illegal!)
+		//case 0X02: case 0X12: case 0X22: case 0X32: case 0X42: case 0X52: case 0X62: case 0X72: case 0X92: case 0XB2: case 0XD2: case 0XF2: // JAM
 			strcpy(t,/*%s*/opcodez[o]); break;
 	};
 	return p;
@@ -453,17 +455,14 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 					M65XX_TRAP_0X50;
 					#endif
 					M65XX_TOCK; M65XX_FETCH(o);
-					#ifdef M65XX_XVS
-					if (!M65XX_XVS)
-					#endif
-					if (!(M65XX_P&64)) goto go_to_branch;
+					if (!((M65XX_P&64)|M65XX_XVS)) goto go_to_branch;
 					break;
 				case 0X70: // BVS $RRRR
 					#ifdef M65XX_TRAP_0X70
 					M65XX_TRAP_0X70;
 					#endif
 					M65XX_TOCK; M65XX_FETCH(o);
-					if (M65XX_P&64) goto go_to_branch;
+					if ( ((M65XX_P&64)|M65XX_XVS)) goto go_to_branch;
 					break;
 				case 0X90: // BCC $RRRR
 					#ifdef M65XX_TRAP_0X90
@@ -1296,9 +1295,9 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0XEA: // NOP (official)
 					M65XX_TOCK; M65XX_BADPC;
 					break;
-				//default: // ILLEGAL CODE!
-				case 0X02: case 0X12: case 0X22: case 0X32: case 0X42: case 0X52: // JAM (1/2)
-				case 0X62: case 0X72: case 0X92: case 0XB2: case 0XD2: case 0XF2: // JAM (2/2)
+				default: // ILLEGAL CODE!
+				//case 0X02: case 0X12: case 0X22: case 0X32: case 0X42: case 0X52: // JAM (1/2)
+				//case 0X62: case 0X72: case 0X92: case 0XB2: case 0XD2: case 0XF2: // JAM (2/2)
 					#ifdef DEBUG_HERE
 					{ --M65XX_PC.w; _t_=0,session_signal|=SESSION_SIGNAL_DEBUG; } // throw!
 					#else
