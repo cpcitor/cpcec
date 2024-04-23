@@ -11,7 +11,7 @@
 // interface of variables and procedures that don't require particular
 // knowledge of the emulation's intrinsic properties.
 
-#define MY_VERSION "20240414" // all emulators share the same release date
+#define MY_VERSION "20240422" // all emulators share the same release date
 
 #define INLINE // 'inline' is useless in TCC and GCC4, and harmful in GCC5!
 #define UNUSED // '__attribute__((unused))' may be missing outside GCC
@@ -81,16 +81,16 @@ char audio_disabled=0,audio_required=0; int audio_session=0; // audio playing/re
 #define SESSION_SIGNAL_DEBUG 2
 #define SESSION_SIGNAL_PAUSE 4
 int session_timer,session_event=0; // timing synchronisation and user command
-unsigned char session_fast=0,session_rhythm=0,session_wait=0,session_softblit=1,session_hardblit,session_softplay=0; // software blitting enabled by default
-unsigned char session_audio=1,session_stick=1,session_shift=0,session_key2joy=0; // keyboard and joystick
+char session_fast=0,session_rhythm=0,session_wait=0,session_softblit=1,session_hardblit,session_softplay=0; // software blitting enabled by default
+char session_audio=1,session_stick=1,session_shift=0,session_key2joy=0; // keyboard and joystick
 int session_maus_x=0,session_maus_y=0; // mouse coordinates (debugger + SDL2 UI + optional emulation)
 #ifdef MAUS_EMULATION
 int session_maus_z=0; // optional mouse and lightgun
 #endif
-unsigned char video_filter=0,audio_filter=0,video_fineblend=0; // filter flags
-unsigned char session_fullblit=0,session_zoomblit=0,session_version[16]; // OS label, [8] was too short
-unsigned char session_paused=0,session_signal=0,session_signal_frames=0,session_signal_scanlines=0;
-unsigned char session_dirty=0; // cfr. session_clean()
+char video_filter=0,audio_filter=0,video_fineblend=0; // filter flags
+char session_fullblit=0,session_zoomblit=0,session_version[16]; // OS label, [8] was too short
+char session_paused=0,session_signal=0,session_signal_frames=0,session_signal_scanlines=0;
+char session_dirty=0; // cfr. session_clean()
 
 #define session_getscanline(i) (&video_frame[i*VIDEO_LENGTH_X+VIDEO_OFFSET_X]) // pointer to scanline `i`
 FILE *session_wavefile=NULL,*session_filmfile=NULL; // audio + video recording is done on each done frame
@@ -569,15 +569,26 @@ VIDEO_UNIT *video_xlat_all(VIDEO_UNIT *t,VIDEO_UNIT const *s,int n) // turn pale
 //#define RGB2LINEAR // uncomment this for linear sRGB gamma correction
 char video_gammaflag=1; // keep it even if we disable this on compile-time!
 #ifndef RGB2LINEAR // working with non-linear sRGB looks better but is slow;
-BYTE srgb[1<<16]; // the sRGB-to-linear-and-back operations need precalculated tables, they're too expensive otherwise :-(
+BYTE srgb[1<<16],crt1[256],crt2[256]; // the sRGB-to-linear-and-back operations need precalculated tables, they're too expensive otherwise :-(
 void video_recalc(void)
 {
 	if (video_gammaflag)
-		for (int h=0;h<256;++h) for (int l=0;l<256;++l)
-			srgb[h*256+l]=sqrtu((h*h+l*l+h+l)>>1);
+		for (int h=0;h<256;++h)
+		{
+			int z=h*h;
+			crt1[h]=z<128*255?0:sqrtu(z*2-255*255),
+			crt2[h]=z<128*255?sqrtu(  z*2):   255 ;
+			for (int l=0;l<256;++l)
+				srgb[h*256+l]=sqrtu((h*h+l*l+h+l)>>1);
+		}
 	else
-		for (int h=0;h<256;++h) for (int l=0;l<256;++l)
-			srgb[h*256+l]=(h+l+1)>>1;
+		for (int h=0;h<256;++h)
+		{
+			crt1[h]=(h<128?0:h*2-255), // i.e. (255*2=510)-255=255
+			crt2[h]=(h<128?  h*2:255);
+			for (int l=0;l<256;++l)
+				srgb[h*256+l]=(h+l+1)>>1;
+		}
 }
 #define VIDEO_FILTER_SRGB(x,y) (srgb[((x>>8)&0XFF00)+(y>>16)]<<16)|(srgb[(x&0XFF00)+((y>>8)&255)]<<8)|srgb[((x&255)<<8)+(y&255)] // old-new avg.
 #else // working with linear RGB is faster, but the image loses brightness!
@@ -603,18 +614,33 @@ void video_recalc(void)
 //#define VIDEO_FILTER_DOT0(x) ((x)-(((x)>>1)&0X7F7F7F)+0X404040) // no mult: 00->40,FF->C0
 //#define VIDEO_FILTER_DOT0(x) ((((x)>>2)&0X3F3F3F)*3+0X212121) // (6+1)/8: 00->21,FF->DE
 #define VIDEO_FILTER_DOT0(x) ((x)-(((x)>>2)&0X3F3F3F)+0X202020) // no mult: 00->20,FF->E0
+#ifndef RGB2LINEAR
+//#define VIDEO_FILTER_DOT1(x) ((crt1[(x)>>16]<<16)+(crt1[((x)>>8)&255]<<8)+(crt1[(x)&255]))
+//#define VIDEO_FILTER_DOT2(x) ((crt2[(x)>>16]<<16)+(crt2[((x)>>8)&255]<<8)+(crt2[(x)&255]))
+#define VIDEO_FILTER_DOT1(x) ((crt1[(x)>>16]<<16)+(crt1[((x)>>8)&255]<<8)+(crt1[(x)&255])) // without colour aberration (fewer artifacts)
+#define VIDEO_FILTER_DOT2(x) ((crt2[(x)>>16]<<16)+(crt2[((x)>>8)&255]<<8)+(crt2[(x)&255]))
+//#define VIDEO_FILTER_DOT1(x) ((crt1[(x)>>16]<<16)+(crt2[((x)>>8)&255]<<8)+(crt1[(x)&255])) // with colour aberration (closer to true CRT)
+//#define VIDEO_FILTER_DOT2(x) ((crt2[(x)>>16]<<16)+(crt1[((x)>>8)&255]<<8)+(crt2[(x)&255]))
+#define VIDEO_FILTER_DOT3(x) ((x)-(((x)>>1)&0X7F7F7F)+0X404040) // (4+2:4+2:4+2)/8
+//#define VIDEO_FILTER_DOT3(x) ((x)-(((x)>>2)&0X3F3F3F)+0X202020) // (6+1:6+1:6+1)/8
+//#define VIDEO_FILTER_DOT3 // checkerboard, quick but not very visible
+#else
+//#define VIDEO_FILTER_DOT1(x) ((x)-(((x)>>1)&0X7F0000)+0X400000) // red
+//#define VIDEO_FILTER_DOT2(x) ((x)-(((x)>>1)&0X00007F)+0X000040) // blue
+//#define VIDEO_FILTER_DOT3(x) ((x)-(((x)>>1)&0X007F00)+0X004000) // green
 #define VIDEO_FILTER_DOT1(x) ((x)-(((x)>>1)&0X007F00)+0X004000) // (8+0:4+2:8+0)/8
 //#define VIDEO_FILTER_DOT2(x) ((x)-(((x)>>1)&0X00007F)+0X000040) // (8+0:8+0:4+2)/8
 //#define VIDEO_FILTER_DOT3(x) ((x)-(((x)>>1)&0X7F0000)+0X400000) // (4+2:8+0:8+0)/8
 #define VIDEO_FILTER_DOT2(x) ((x)-(((x)>>1)&0X7F007F)+0X400040) // (4+2:8+0:4+2)/8
-//#define VIDEO_FILTER_DOT3(x) ((x)-(((x)>>1)&0X7F7F7F)+0X404040) // hard crossing patterns
-#define VIDEO_FILTER_DOT3(x) ((x)-(((x)>>2)&0X3F3F3F)+0X202020) // soft crossing patterns
+//#define VIDEO_FILTER_DOT3(x) ((x)-(((x)>>1)&0X7F7F7F)+0X404040) // (4+2:4+2:4+2)/8
+#define VIDEO_FILTER_DOT3(x) ((x)-(((x)>>2)&0X3F3F3F)+0X202020) // (6+1:6+1:6+1)/8
 //#define VIDEO_FILTER_DOT3 // checkerboard, quick but not very visible
+#endif
 
 #define MAIN_FRAMESKIP_MASK ((1<<MAIN_FRAMESKIP_BITS)-1)
 void video_resetscanline(void) // reset configuration values on new video options
 {
-	static char b=-1; if (b!=video_pageblend) // do we need to reset the blending buffer?
+	static char b=0; if (b!=video_pageblend) // do we need to reset the blending buffer?
 		if (b=video_pageblend)
 			for (int y=0;y<VIDEO_PIXELS_Y/2;++y)
 				MEMNCPY(&video_blend[y*VIDEO_PIXELS_X],&video_frame[(VIDEO_OFFSET_Y+y*2)*VIDEO_LENGTH_X+VIDEO_OFFSET_X],VIDEO_PIXELS_X);
@@ -1459,7 +1485,7 @@ char *puff_session_subdialog(char *r,const char *s,const char *t,char *zz,int qq
 
 char *puff_session_filedialog(char *r,char *s,char *t,int q,int f) // ZIP archive wrapper for session_getfile
 {
-	unsigned char rr[STRMAX],ss[STRMAX],*z,*zz;
+	char rr[STRMAX],ss[STRMAX],*z,*zz;
 	sprintf(ss,"%s;%s",puff_pattern,s); if (!r) r=session_path; strcpy(rr,r); // NULL path = default!
 	for (int qq=0;;) // try either a file list or the file dialog until the user either chooses a file or quits
 	{
@@ -2250,11 +2276,11 @@ int session_createwave(void) // create a wave file; !0 ERROR
 	if (!(session_wavefile=fopen(session_parmtr,"wb")))
 		return 1; // cannot create file!
 	static char h[44]="RIFF\000\000\000\000WAVEfmt \020\000\000\000\001\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000data"; // zero-padded
-	h[0X16]=AUDIO_CHANNELS; // channels
-	mputii(&h[0X18],AUDIO_PLAYBACK); // samples per second
-	mputiiii(&h[0X1C],(AUDIO_PLAYBACK*AUDIO_BYTESTEP)>>session_wavedepth); // bytes per second
-	h[0X20]=AUDIO_BYTESTEP>>session_wavedepth; // bytes per sample
-	h[0X22]=AUDIO_BITDEPTH>>session_wavedepth;
+	h[22]=AUDIO_CHANNELS; // channels
+	mputii(&h[24],AUDIO_PLAYBACK); // samples per second
+	mputiiii(&h[28],(AUDIO_PLAYBACK*AUDIO_BYTESTEP)>>session_wavedepth); // bytes per second
+	h[32]=AUDIO_BYTESTEP>>session_wavedepth; // bytes per sample
+	h[34]=AUDIO_BITDEPTH>>session_wavedepth;
 	fwrite(h,1,sizeof(h),session_wavefile);
 	return session_wavesize=0;
 }
@@ -2522,7 +2548,7 @@ int session_qoi3_exit(void)
 	return t-session_qoi3_temp;
 }
 
-BYTE session_qoi3_flag=0;
+char session_qoi3_flag=0;
 INLINE int session_savebitmap(void) // save a RGB888 BMP/QOI file; !0 ERROR
 {
 	if (!(session_nextbitmap=session_savenext(session_qoi3_flag?"%s%08u.qoi":"%s%08u.bmp",session_nextbitmap)))
@@ -2540,9 +2566,9 @@ INLINE int session_savebitmap(void) // save a RGB888 BMP/QOI file; !0 ERROR
 	{
 		static char h[54]="BM\000\000\000\000\000\000\000\000\066\000\000\000\050\000\000\000\000\000\000\000\000\000\000\000\001\000\030\000"; // zero-padded
 		i=(VIDEO_PIXELS_X*VIDEO_PIXELS_Y*3)>>(2*session_filmscale);
-		mputiiii(&h[0X02],sizeof(h)+i); mputiiii(&h[0X22],i);
-		mputii(&h[0X12],VIDEO_PIXELS_X>>session_filmscale);
-		mputii(&h[0X16],VIDEO_PIXELS_Y>>session_filmscale);
+		mputiiii(&h[2],sizeof(h)+i); mputiiii(&h[34],i);
+		mputii(&h[18],VIDEO_PIXELS_X>>session_filmscale);
+		mputii(&h[22],VIDEO_PIXELS_Y>>session_filmscale);
 		fwrite(h,1,sizeof(h),f);
 		for (i=VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-session_filmscale-1;i>=VIDEO_OFFSET_Y;i-=session_filmscale+1)
 		{
@@ -2611,7 +2637,8 @@ int session_qoi3_foot(BYTE *s,int i) // process the footer: NEGATIVE if bad, foo
 
 // configuration functions ------------------------------------------ //
 
-#define UTF8_BOM(s) ((239==(BYTE)*s&&187==(BYTE)s[1]&&191==(BYTE)s[2])?s+3:s) // skip UTF8 BOM if present
+char *UTF8_BOM(char *s) // skip UTF8 BOM if present
+	{ return (239==(BYTE)*s&&187==(BYTE)s[1]&&191==(BYTE)s[2])?s+3:s; }
 void session_detectpath(char *s) // detects session path using argv[0] as reference
 {
 	if (s=strrchr(strcpy(session_path,s),PATHCHAR))
@@ -2629,11 +2656,11 @@ FILE *session_configfile(int q) // returns handle to configuration file, `q`?rea
 	#endif
 	),q?"r":"w");
 }
-char *session_configread(unsigned char *t) // reads configuration file; t points to the current line; returns NULL if handled, a string otherwise
+char *session_configread(void) // reads configuration file; session_parmtr holds the current line; returns NULL if handled, the unknown label otherwise
 {
-	unsigned char *s=t=UTF8_BOM(t); while (*s) ++s; // go to trail
-	while (s>t&&*--s<=' ') *s=0; // clean trail up
-	s=t; while (*s>' ') ++s; *s++=0; // divide name and data
+	char *t=UTF8_BOM(session_parmtr),*s=t; while (*s) ++s; // go to trail
+	while (s!=t&&(BYTE)*--s<=' ') *s=0; // clean trail up
+	s=t; while ((BYTE)*s>' ') ++s; *s++=0; // divide name and data
 	while (*s==' ') ++s; // skip spaces between both
 	if (*s) // handle common parameters, unless empty
 	{
@@ -2653,7 +2680,7 @@ void session_configwrite(FILE *f) // save common parameters
 {
 	fprintf(f,"film %d\ninfo %d\n"
 		"hardaudio %d\nsoftaudio %d\nhardvideo %d\nsoftvideo %X\nzoomvideo %d\nsafevideo %d\nsafeaudio %d\n"
-		,(session_filmscale?1:0)+(session_filmtimer?2:0)+(session_wavedepth?4:0),(onscreen_flag?1:0)+(session_qoi3_flag?2:0)+(video_fineblend?4:0)
+		,session_filmscale*1+session_filmtimer*2+session_wavedepth*4,(onscreen_flag*1)+(session_qoi3_flag*2)+(video_fineblend*4)
 		,audio_mixmode,audio_filter,(video_scanline<<1)+(video_pageblend?1:0),video_filter,(video_lineblend?1:0)+(session_zoomblit<<1),session_softblit+(video_gammaflag?0:2)+(video_microwave?4:0),session_softplay^3);
 }
 

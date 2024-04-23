@@ -2497,7 +2497,9 @@ char session_menudata[]=
 	"=\n"
 	"0x4C00 Record YM file\tCtrl-Shift-F12\n"
 	"0x0C00 Record WAV file\tCtrl-F12\n"
+	#if AUDIO_BITDEPTH > 8
 	"0x8C03 High wavedepth\n"
+	#endif
 	"Video\n"
 	"0x8901 Onscreen status\tShift-F9\n"
 	"0x8B01 Monochrome\n"
@@ -2559,7 +2561,9 @@ void session_clean(void) // refresh options
 	session_menuradio((session_fast&1)?0x8600:0x8601+session_rhythm,0x8600,0x8604);
 	session_menucheck(0x8C01,!session_filmscale);
 	session_menucheck(0x8C02,!session_filmtimer);
+	#if AUDIO_BITDEPTH > 8
 	session_menucheck(0x8C03,!session_wavedepth);
+	#endif
 	session_menucheck(0x8C04,session_qoi3_flag);
 	session_menucheck(0xCC00,!!session_filmfile);
 	session_menucheck(0x0C00,!!session_wavefile);
@@ -2979,7 +2983,7 @@ void session_user(int k) // handle the user's commands
 				{ session_signal=SESSION_SIGNAL_DEBUG^(session_signal&~SESSION_SIGNAL_PAUSE),debug_clean(); break; }
 			// no `break`!
 		case 0x8901:
-			onscreen_flag=!onscreen_flag;
+			onscreen_flag^=1;
 			break;
 		case 0x8902: // Y-MASKING
 			video_filter^=VIDEO_FILTER_MASK_Y;
@@ -3006,7 +3010,7 @@ void session_user(int k) // handle the user's commands
 		#endif
 		#ifdef VIDEO_FILTER_BLUR0
 		case 0x8909: // FINE/COARSE X-BLENDING
-			video_fineblend=!video_fineblend; break;
+			video_fineblend^=1; break;
 		#endif
 		case 0x0900: // ^F9: TOGGLE FAST LOAD OR FAST TAPE
 			if (session_shift)
@@ -3018,7 +3022,7 @@ void session_user(int k) // handle the user's commands
 			tape_rewind=!tape_rewind;
 			break;
 		case 0x8A10: // FULL SCREEN
-			session_fullblit=!session_fullblit; session_resize();
+			session_fullblit^=1; session_resize();
 			break;
 		case 0x8A11: // WINDOW SIZE 100%, etc
 		case 0x8A12: case 0x8A14:
@@ -3058,18 +3062,20 @@ void session_user(int k) // handle the user's commands
 			break;
 		case 0x8C01:
 			if (!session_filmfile)
-				session_filmscale=!session_filmscale;
+				session_filmscale^=1;
 			break;
 		case 0x8C02:
 			if (!session_filmfile)
-				session_filmtimer=!session_filmtimer;
+				session_filmtimer^=1;
 			break;
+		#if AUDIO_BITDEPTH > 8
 		case 0x8C03:
 			if (!session_filmfile&&!session_wavefile)
-				session_wavedepth=!session_wavedepth;
+				session_wavedepth^=1;
 			break;
+		#endif
 		case 0X8C04: // OUTPUT AS QOI
-			session_qoi3_flag=!session_qoi3_flag;
+			session_qoi3_flag^=1;
 			break;
 		case 0x8C00: // F12: SAVE SCREENSHOT OR RECORD FILM
 			if (!session_shift)
@@ -3129,27 +3135,27 @@ void session_user(int k) // handle the user's commands
 
 void session_configreadmore(char *s)
 {
-	int i; if (!s||!*s||!session_parmtr[0]) {} // ignore if empty or internal!
-	else if (!strcasecmp(session_parmtr,"type")) { if ((i=*s&7)<length(bios_system)) type_id=i; }
-	else if (!strcasecmp(session_parmtr,"joy1")) { if ((i=*s&7)<length(joy1_types)) joy1_type=i; }
-	else if (!strcasecmp(session_parmtr,"ulas")) ulaplus_enabled=*s&1,ula_pentagon=(*s>>1)&1;
-	else if (!strcasecmp(session_parmtr,"unit")) disc_filemode=*s&3,disc_disabled=(*s>>2)&1;
-	else if (!strcasecmp(session_parmtr,"misc")) snap_extended=*s&1,ula_snow_disabled=(*s>>1)&1,psg_disabled=(*s>>2)&1;
+	int i; char *t=UTF8_BOM(session_parmtr); if (!s||!*s||!session_parmtr[0]) {} // ignore if empty or internal!
+	else if (!strcasecmp(t,"type")) { if ((i=*s&7)<length(bios_system)) type_id=i; }
+	else if (!strcasecmp(t,"joy1")) { if ((i=*s&7)<length(joy1_types)) joy1_type=i; }
+	else if (!strcasecmp(t,"ulas")) ulaplus_enabled=*s&1,ula_pentagon=(*s>>1)&1;
+	else if (!strcasecmp(t,"unit")) disc_filemode=*s&3,disc_disabled=(*s>>2)&1;
+	else if (!strcasecmp(t,"misc")) snap_extended=*s&1,ula_snow_disabled=(*s>>1)&1,psg_disabled=(*s>>2)&1;
 	#ifdef PSG_PLAYCITY
-	else if (!strcasecmp(session_parmtr,"play")) playcity_disabled=~*s&1,dac_disabled=(~*s>>1)&1;
+	else if (!strcasecmp(t,"play")) playcity_disabled=~*s&1,dac_disabled=(~*s>>1)&1;
 	#endif
-	else if (!strcasecmp(session_parmtr,"file")) strcpy(autorun_path,s);
-	else if (!strcasecmp(session_parmtr,"snap")) strcpy(snap_path,s);
-	else if (!strcasecmp(session_parmtr,"tape")) strcpy(tape_path,s);
-	else if (!strcasecmp(session_parmtr,"disc")) strcpy(disc_path,s),strcpy(trdos_path,s);
-	else if (!strcasecmp(session_parmtr,"bios")) strcpy(bios_path,s);
+	else if (!strcasecmp(t,"file")) strcpy(autorun_path,s);
+	else if (!strcasecmp(t,"snap")) strcpy(snap_path,s);
+	else if (!strcasecmp(t,"tape")) strcpy(tape_path,s);
+	else if (!strcasecmp(t,"disc")) strcpy(disc_path,s),strcpy(trdos_path,s);
+	else if (!strcasecmp(t,"bios")) strcpy(bios_path,s);
 	#ifdef Z80_DANDANATOR
-	else if (!strcasecmp(session_parmtr,"cart")) strcpy(dandanator_path,s);
+	else if (!strcasecmp(t,"cart")) strcpy(dandanator_path,s);
 	#endif
-	else if (!strcasecmp(session_parmtr,"vjoy")) { if (!hexa2byte(session_parmtr,s,KBD_JOY_UNIQUE)) usbkey2native(kbd_k2j,session_parmtr,KBD_JOY_UNIQUE); }
-	else if (!strcasecmp(session_parmtr,"palette")) { if ((i=*s&7)<5) video_type=i; }
-	else if (!strcasecmp(session_parmtr,"casette")) tape_rewind=*s&1,tape_skipload=(*s>>1)&1,tape_fastload=(*s>>2)&1;
-	else if (!strcasecmp(session_parmtr,"debug")) debug_configread(strtol(s,NULL,10));
+	else if (!strcasecmp(t,"vjoy")) { if (!hexa2byte(session_parmtr,s,KBD_JOY_UNIQUE)) usbkey2native(kbd_k2j,session_parmtr,KBD_JOY_UNIQUE); }
+	else if (!strcasecmp(t,"palette")) { if ((i=*s&7)<5) video_type=i; }
+	else if (!strcasecmp(t,"casette")) tape_rewind=*s&1,tape_skipload=(*s>>1)&1,tape_fastload=(*s>>2)&1;
+	else if (!strcasecmp(t,"debug")) debug_configread(strtol(s,NULL,10));
 }
 void session_configwritemore(FILE *f)
 {
@@ -3180,8 +3186,7 @@ int main(int argc,char *argv[])
 {
 	FILE *f; session_detectpath(argv[0]); if ((f=session_configfile(1)))
 	{
-		while (fgets(session_parmtr,STRMAX-1,f))
-			session_configreadmore(session_configread(session_parmtr));
+		while (fgets(session_parmtr,STRMAX-1,f)) session_configreadmore(session_configread());
 		fclose(f);
 	}
 	all_setup(); all_reset();

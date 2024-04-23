@@ -336,23 +336,23 @@ void utf8put(char **s,int i) // send a valid code `i` to a UTF-8 pointer `s`
 }
 int utf8get(const char **s) // get a code `i` from a UTF-8 pointer `s`; <0 INVALID CODE
 {
-	int i=*((*s)++); if (i>=0) return i; if (i<-64) return -1;
-	int j=0; char k; while ((k=**s)<-64) j=j*64+k+128,(*s)++;
+	int i=(INT8)*((*s)++); if (i>=0) return i; if (i<-64) return -1;
+	int j=0; INT8 k; while ((k=**s)<-64) j=j*64+k+128,(*s)++;
 	if (i<-32) return ((i=((i+64)<<6)+j)>=128&&i<2048)?i:-1;
 	if (i<-16) return ((i=((i+32)<<12)+j)>=2048&&i<65536)?i:-1;
 	return ((i=((i+16)<<18)+j)>=65536&&i<2097152)?i:-1;
 }
 int utf8len(const char *s) // length (in codes, not bytes) of a UTF-8 string `s`
-	{ int i=0,k; while (k=*s++) if (++i,k>=-64&&k<0) while (*s<-64) ++s; return i; }
+	{ int i=0,k; while (k=(INT8)*s++) if (++i,k>=-64&&k<0) while ((INT8)*s<-64) ++s; return i; }
 int utf8chk(int i) // size in bytes of a valid UTF-8 code `i`; 0 INVALID CODE
 	{ return i&-2097152?0:i<128?1:i<2048?2:i<65536?3:4; }
-// translate from codes to bytes offset `i` (can be <0) within a **VALID** UTF-8 pointer `s`
-int utf8inc(char *s,int i) { int o=0; do do ++o; while (*++s<-64); while (--i); return o; } // positive offset, go forwards
-int utf8dec(char *s,int i) { int o=0; do do --o; while (*--s<-64); while (++i); return o; } // negative, backwards
+// translate offset `i` (positive or negative) from codes to bytes within a **VALID** UTF-8 pointer `s`
+int utf8inc(char *s,int i) { int o=0; do do ++o; while ((INT8)*++s<-64); while (--i); return o; } // positive offset, go forwards
+int utf8dec(char *s,int i) { int o=0; do do --o; while ((INT8)*--s<-64); while (++i); return o; } // negative, backwards
 #define utf8add(s,i) ((i)>0?utf8inc((s),(i)):(i)<0?utf8dec((s),(i)):0) // remember, `s` is valid UTF-8: no error checking is performed!
 #else // simple chars without UTF-8
 #define utf8put(s,i) (*((*(s))++)=i)
-#define utf8get(s) ((unsigned char)*((*(s))++))
+#define utf8get(s) ((BYTE)*((*(s))++))
 #define utf8len(s) strlen((s))
 #define utf8chk(i) (1)
 #define utf8add(s,i) (i)
@@ -393,7 +393,7 @@ void session_ui_makechrs(void)
 /*int session_ui_strlen(const char *s) // get proportional string length in pixels
 	{ int i=0; while (*s) i+=session_ui_chrlen[*s++-32]; return i; }*/
 
-unsigned char session_ui_menudata[1<<12],session_ui_menusize; // encoded menu data
+BYTE session_ui_menudata[1<<12],session_ui_menusize; // encoded menu data
 #ifdef _WIN32
 int session_ui_drives=0; char session_ui_drive[]="::\\";
 #endif
@@ -476,7 +476,7 @@ int session_ui_printglyph(VIDEO_UNIT *p,int z,int q) // print glyph `z` at targe
 	{
 		VIDEO_UNIT q0,q1; if (q) // inverse video? swap ink and paper!
 			q1=session_glyph_q0,q0=session_glyph_q1; else q0=session_glyph_q0,q1=session_glyph_q1;
-		unsigned char const *r=&session_ui_chrs[z*SESSION_UI_HEIGHT];
+		BYTE const *r=&session_ui_chrs[z*SESSION_UI_HEIGHT];
 		q=session_ui_style?(SESSION_UI_HEIGHT*(SESSION_UI_GAP-1))/2-2:0;
 		for (int yy=q;yy>0;p+=VIDEO_PIXELS_X-w,--yy)
 			for (int xx=w;xx>0;--xx) *p++=q0;
@@ -488,14 +488,14 @@ int session_ui_printglyph(VIDEO_UNIT *p,int z,int q) // print glyph `z` at targe
 	}
 	return w; // pixel width
 }
-int session_ui_printasciz(unsigned char *s,int x,int y,int prae,int w,int post,int q1,int q2) // coords in characters
+int session_ui_printasciz(char *s,int x,int y,int prae,int w,int post,int q1,int q2) // coords in characters
 {
-	if (w<0) w=utf8len((char*)s); // negative `w` = whole string
+	if (w<0) w=utf8len(s); // negative `w` = whole string
 	int n=prae+w+post; if ((q1|q2)<0) q1=q2=-1; // remember for later
 	VIDEO_UNIT *t=&menus_frame[x*8+(y*SESSION_UI_HEIGHT)*VIDEO_PIXELS_X];
 	while (prae-->0)
 		t+=session_ui_printglyph(t,' ',q1<0);
-	int i=w-utf8len((char*)s),q=q1<0; unsigned char *r=s; // avoid another warning
+	int i=w-utf8len(s),q=q1<0; char *r=s; // avoid another warning
 	if (i>=0)
 	{
 		post+=i;
@@ -605,7 +605,7 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 			if (menuz!=menu)
 			{
 				menuz=menu; q=itemz=session_ui_setstyle(-1); // the super menu is the caption
-				int menux=menus=item=items=itemy=0; unsigned char *m=session_ui_menudata;
+				int menux=menus=item=items=itemy=0; BYTE *m=session_ui_menudata;
 				while (*m) // scan menu data for menus
 				{
 					if (menus==menu)
@@ -652,8 +652,7 @@ void session_ui_menu(void) // show the menu and set session_event accordingly
 					itemy=items-itemh; // keep within bounds
 				else if (itemy<0)
 					itemy=0; // keep within bounds
-				q=1; int i=0;
-				unsigned char *m=session_ui_menudata;
+				q=1; int i=0; BYTE *m=session_ui_menudata;
 				while (*m) // scan menu data for items
 				{
 					while (*m++) {} // skip menu name
@@ -1442,7 +1441,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	SDL_StartTextInput();
 
 	// translate menu data into internal format
-	unsigned char *t=session_ui_menudata; session_ui_menusize=0;
+	BYTE *t=session_ui_menudata; session_ui_menusize=0;
 	while (*s)
 	{
 		// scan and generate menu header
@@ -1451,7 +1450,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 		session_ui_menusize+=2;
 		t[-1]=0;
 		// first scan: maximum item width
-		char *r=s; int mxx=0;
+		char *r=s,mxx=0;
 		for (;;)
 		{
 			if (*r=='=') // separator?
@@ -1625,7 +1624,7 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 					switch (event.key.keysym.sym)
 					{
 						case SDLK_RETURN: // ALT+RETURN toggles fullscreen
-							session_fullblit=!session_fullblit,session_resize(); break;
+							session_fullblit^=1,session_resize(); break;
 						case SDLK_UP: //case SDLK_PLUS: case SDLK_KP_PLUS: // ALT+UP raises the zoom
 							if (!session_fullblit&&session_zoomblit<4) ++session_zoomblit,session_resize();
 							break;
@@ -1728,7 +1727,7 @@ INLINE void session_render(void) // update video, audio and timers
 	static BYTE r=0,q=0; if (++r>session_rhythm||session_wait) r=0; // force update after wait
 	if (!video_framecount) // do we need to hurry up?
 	{
-		if (++performance_b,((video_interlaces=!video_interlaces)||!video_interlaced))
+		if (++performance_b,((video_interlaces^=1)||!video_interlaced))
 			if (q) session_redraw(1),q=0; // redraw once between two pauses
 		if (session_stick&&!session_key2joy) // do we need to check the joystick?
 		{

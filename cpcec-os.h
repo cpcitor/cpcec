@@ -51,7 +51,7 @@ VIDEO_UNIT *video_target; // pointer to current video pixel
 AUDIO_UNIT *audio_target; // pointer to current audio sample
 char session_path[STRMAX],session_parmtr[STRMAX],session_tmpstr[STRMAX],session_substr[STRMAX],session_info[STRMAX]="";
 
-unsigned char session_focused=0; // ignore joysticks and certain events when unfocused
+char session_focused=0; // ignore joysticks and certain events when unfocused
 RECT session_ideal; // ideal rectangle where the window fits perfectly; `right` and `bottom` are actually width and height
 JOYINFOEX session_joy; // joystick+mouse buffers
 HWND session_hwnd,session_hdlg=NULL; // window handle
@@ -485,7 +485,7 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 						if (session_contextmenu()) return 0; // skip OS if the popup menu is allowed
 						break;
 					case VK_RETURN: // ALT+RETURN toggles fullscreen
-						return session_fullblit=!session_fullblit,session_resize(),0; // skip OS
+						return session_fullblit^=1,session_resize(),0; // skip OS
 					case VK_UP: //case VK_ADD: case 0XBB: // ALT+UP raises the zoom
 						if (!session_fullblit&&session_zoomblit<4) ++session_zoomblit,session_resize();
 						return 0;
@@ -506,7 +506,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	win32_version.dwOSVersionInfoSize=sizeof(win32_version); GetVersionEx(&win32_version);
 	sprintf(session_version,"%lu.%lu",win32_version.dwMajorVersion,win32_version.dwMinorVersion);
 	char c,*t; int i,j;
-	/*if (!session_softblit)*/ while (c=*s++)
+	while (c=*s++)
 	{
 		if (c=='=') // separator?
 		{
@@ -706,7 +706,7 @@ INLINE void session_render(void) // update video, audio and timers
 	static BYTE r=0,q=0; if (++r>session_rhythm||session_wait) r=0; // force update after wait
 	if (!video_framecount) // do we need to hurry up?
 	{
-		if (++performance_b,((video_interlaces=!video_interlaces)||!video_interlaced))
+		if (++performance_b,((video_interlaces^=1)||!video_interlaced))
 			if (q) session_redraw(session_hwnd,session_dc1),q=0; // redraw once between two pauses
 		if (session_stick&&!session_key2joy) // do we need to check the joystick?
 		{
