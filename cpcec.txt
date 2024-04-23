@@ -1277,3 +1277,7 @@ $6000-$BFFF area rather than just to $6000, $8000 and $A000) and the V9938 (the
 in the water scenes of "Maze of Galious" for MSX2), emulates the DAC in
 "Konami's Synthesizer" and allows patching the current virtual cartridge through
 IPS files.
+- 20240422 -- minor patch fixing bugs in the UTF-8 logic (string length, BOM
+header in text files) and the MSX2 V9938 (register 9 must set the screen
+geometry at once: "La Abadia del Crimen MSX2"), and modifying the combined
+X-masking and Y-masking dot matrix.

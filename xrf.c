@@ -7,7 +7,7 @@
  //  ####  ####      ####  #######   ####    ----------------------- //
 
 #define MY_CAPTION "XRF"
-#define MY_VERSION "20240328"//"2555"
+#define MY_VERSION "20240422"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2024 Cesar Nicolas-Gonzalez"
 
 #define GPL_3_INFO \
@@ -59,8 +59,8 @@ Contact information: <mailto:cngsoft@gmail.com> */
 
 // common data types -- mostly based on ARGB32 video and lLrR32 audio //
 
-#define MAXVIDEOBYTES (4096*512) // 2 MB > a frame of video at 800x600px 32bpp
-#define MAXAUDIOBYTES (4096*48) // 192 kB > a second of audio at 48000x2ch 16b
+#define MAXVIDEOBYTES (4096*512) // 2 MB > one frame of video at 800x600px 32bpp
+#define MAXAUDIOBYTES (4096*16) // 64 kB > 1/3 seconds of audio at 48000x2ch 16b
 BYTE *argb32,*diff32; // current and previous bitmap, respectively; the caller must assign them
 BYTE flags_audio[4]={1,2,2,4}; // sample size according to 16bits (bit 0) and stereo (bit1)
 BYTE wave32[MAXAUDIOBYTES]; // the current audio frame
@@ -110,14 +110,12 @@ int xrf_open(char *s) // opens a XRF file and sets the common parameters up; !0 
 		return 1; // cannot allocate video buffer!
 	if (!xrf_shadow&&!(xrf_shadow=malloc(MAXVIDEOBYTES)))
 		return 1; // cannot allocate audio buffer!
-
 	if (xrf_file) return 1; // already open!
 	if (!(xrf_file=fopen(s,"rb"))) return 1;
-
 	fseek(xrf_file,0,SEEK_END);
 	xrf_length=ftell(xrf_file);
 	fseek(xrf_file,0,SEEK_SET);
-	unsigned char id[9]; id[xrf_fread(id,8)]=0;
+	char id[9]; id[xrf_fread(id,8)]=0;
 	video_x=xrf_fgetcc();
 	video_y=xrf_fgetcc();
 	audio_z=xrf_fgetcc();
@@ -133,19 +131,15 @@ int xrf_open(char *s) // opens a XRF file and sets the common parameters up; !0 
 int xrf_read(void) // reads a XRF chunk and decodes the current video and audio frames; !0 ERROR/EOF
 {
 	if (!xrf_file) return 1; // file not open!
-
 	if (xrf_count>=count_z) return 1; // EOF!
-
 	if (!xrf_chunk&&!(xrf_chunk=malloc(XRF_CHUNKSIZE))) // pathological case XX.XX -> XX.XX.00 plus end marker
 		return 1; // cannot allocate memory!
-
 	int i,j,k,l=xrf_fgetcccc();
 	if (l<1||l>XRF_CHUNKSIZE)
 		return 1; // improper chunk size!
 	if (xrf_fread(xrf_chunk,l)!=l)
 		return 1; // file is truncated!
 	xrf_cursor+=4+l;
-
 	BYTE *s=xrf_chunk; i=0;
 	s+=xrf_decode(&diff32[0],s,&j,4); i+=j; // B
 	s+=xrf_decode(&diff32[1],s,&j,4); i+=j; // G
@@ -209,12 +203,10 @@ PAVIFILE vfw_file=NULL; IAVIStream *vfw_video,*vfw_codec,*vfw_audio;
 int vfw_create(char *s) // !0 ERROR
 {
 	if (vfw_file) return 1;
-
 	avi_videos=avi_audios=0; vfw_video=vfw_codec=vfw_audio=NULL;
 	AVIFileInit(); remove(s); // VFW needs erasing the file beforehand!
 	if (AVIFileOpen(&vfw_file,s,OF_CREATE|OF_WRITE,NULL))
 		return AVIFileExit(),1;
-
 	AVISTREAMINFO vhdr; memset(&vhdr,0,sizeof(vhdr));
 	vhdr.fccType=streamtypeVIDEO;
 	//vhdr.fccHandler=0;
@@ -225,7 +217,6 @@ int vfw_create(char *s) // !0 ERROR
 	vhdr.rcFrame.bottom=video_y;
 	if (AVIFileCreateStream(vfw_file,&vfw_video,&vhdr))
 		vfw_video=NULL;
-
 	AVICOMPRESSOPTIONS vopt; memset(&vopt,0,sizeof(vopt));
 	vopt.fccHandler=mmioFOURCC(vfw_fourcc[0],vfw_fourcc[1],vfw_fourcc[2],vfw_fourcc[3]);
 	vopt.dwFlags=AVICOMPRESSF_KEYFRAMES; vopt.dwKeyFrameEvery=clock_z*10; // 10 s/keyframe
@@ -237,7 +228,6 @@ int vfw_create(char *s) // !0 ERROR
 		vfw_codec=NULL;
 	else
 		AVIStreamSetFormat(vfw_codec,0,&bmi,sizeof(bmi));
-
 	if (audio_z)
 	{
 		AVISTREAMINFO ahdr; memset(&ahdr,0,sizeof(ahdr));
@@ -252,7 +242,6 @@ int vfw_create(char *s) // !0 ERROR
 		else
 			AVIStreamSetFormat(vfw_audio,0,&wfex,sizeof(wfex));
 	}
-
 	return 0;
 }
 int vfw_write(void) // !0 ERROR
@@ -343,12 +332,10 @@ int avi_create(char *s)
 	if (*vfw_fourcc) return vfw_create(s);
 	#endif
 	if (avi_file) return 1;
-
 	if (!strcmp(s,"-"))
 		avi_file=stdout; // STDOUT is always open!
 	else if (!(avi_file=fopen(s,"wb")))
 		return 1;
-
 	if (audio_z)
 	{
 		avi_mputcccc(&avi_header[0x0020],(1000000+clock_z/2)/clock_z);
@@ -376,7 +363,6 @@ int avi_create(char *s)
 		avi_mputcccc(&avi_header[0x0030],count_z); // avi_videos
 		avi_mputcccc(&avi_header[0x008C],count_z); // avi_videos
 		avi_mputcccc(&avi_header[0x0108],count_z*audio_z); // avi_audios
-
 		avi_length=avi_fwrite(avi_header,sizeof(avi_header))+12;
 		avi_fputcccc(0x5453494C); // "LIST"
 		avi_fputcccc(4+i); // "LIST:movi" size
@@ -392,7 +378,6 @@ int avi_create(char *s)
 		avi_mputcccc(&avi_h_mute[0x90],i); avi_mputcccc(&avi_h_mute[0xC0],i);
 		avi_mputcc(&avi_h_mute[0x00A0],video_x); avi_mputcc(&avi_h_mute[0x00A2],video_y);
 		avi_mputcccc(&avi_h_mute[0x00B0],video_x); avi_mputcccc(&avi_h_mute[0x00B4],video_y);
-
 		avi_mputcccc(&avi_h_mute[0x00D8],sizeof(avi_h_mute)-0x00DC); // "JUNK" size
 		// Notice that some fields need to know in advance the sizes;
 		// fortunately we know the number of frames and the size of each.
@@ -400,25 +385,21 @@ int avi_create(char *s)
 		avi_mputcccc(&avi_h_mute[0x0004],sizeof(avi_h_mute)+4+i+8+count_z*16); // "RIFF:AVI " size (movie+index)
 		avi_mputcccc(&avi_h_mute[0x0030],count_z); // avi_videos
 		avi_mputcccc(&avi_h_mute[0x008C],count_z); // avi_videos
-
 		avi_length=avi_fwrite(avi_h_mute,sizeof(avi_h_mute))+12;
 		avi_fputcccc(0x5453494C); // "LIST"
 		avi_fputcccc(4+i); // "LIST:movi" size
 		avi_fputcccc(0x69766F6D); // "movi"
 	}
-
 	return 0;
 }
 int avi_write(void)
 {
 	if (!avi_canvas&&!(avi_canvas=malloc(MAXVIDEOBYTES)))
 		return 1; // cannot allocate memory!
-
 	#ifdef _WIN32
 	if (*vfw_fourcc) return vfw_write();
 	#endif
 	if (!avi_file) return 1;
-
 	// it sucks, but the only raw compression is the ARGB32->RGB24 clipping
 	// and we still have to store the resulting bitmap upside down, too :-(
 	int l; BYTE *t=avi_canvas;
@@ -444,7 +425,6 @@ int avi_write(void)
 		avi_length+=l+8;
 	}
 	++avi_videos; avi_audios+=audio_z;
-
 	return 0;
 }
 int avi_finish(void)
@@ -453,17 +433,14 @@ int avi_finish(void)
 	if (*vfw_fourcc) return vfw_finish();
 	#endif
 	if (!avi_file) return 1;
-
 	avi_length+=8;
 	avi_fputcccc(0x31786469); // "idx1"
 	if (audio_z)
 		avi_fputcccc(count_z*32);
 	else
 		avi_fputcccc(count_z*16);
-
 	int z=4,j=video_x*video_y*3;
 	int k=audio_z*flags_audio[flags_z&3],l=k; if (l&1) ++l; // RIFF even-padding
-
 	for (int i=0;i<count_z;++i)
 	{
 		avi_fputcccc(0x62643030); // "00db"
@@ -480,7 +457,6 @@ int avi_finish(void)
 			z+=l+8; avi_length+=16;
 		}
 	}
-
 	if (avi_file!=stdout)
 		fclose(avi_file); // close file if it isn't STDOUT!
 	return avi_file=NULL,0;
@@ -522,7 +498,7 @@ int main(int argc,char *argv[])
 			ICINFO lpicinfo; ICInfo(0,-1,&lpicinfo); int n=lpicinfo.fccHandler;
 			for (int j=0;j<n;++j)
 				ICInfo(0,j,&lpicinfo),printf("%s%c%c%c%c",j?j%10?" ":"\n\t\t":"\n- fourcc codes: ",
-					(char)lpicinfo.fccHandler,(char)(lpicinfo.fccHandler>>8),(char)(lpicinfo.fccHandler>>16),(char)(lpicinfo.fccHandler>>24));
+					(BYTE)lpicinfo.fccHandler,(BYTE)(lpicinfo.fccHandler>>8),(BYTE)(lpicinfo.fccHandler>>16),(BYTE)(lpicinfo.fccHandler>>24));
 			printf("\n");
 			#endif
 		return 1;

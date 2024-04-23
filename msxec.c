@@ -1143,12 +1143,17 @@ void vdp_mode_update(void) // recalculate video mode and blitter budget on each 
 	}
 }
 
+void vdp_reload(void) // recalculate values that aren't exclusively tied to vdp_table[]
+{
+	vdp_legalsprites=vdp_legalsprites<32?vdp_memtype?8:4:32;
+	// alternating even/odd screens? "MAZE OF GALIOUS MSX2" uses this in water screens!
+	vdp_map_k32=((vdp_table[9]&4)?vdp_state[2]&2:vdp_flash<0)?~0X8000:~0; // see vdp_blink()
+}
 void vdp_update(void) // recalculate bitmap and sprite values
 {
 	if ((vdp_table[1]&24)==0&&(vdp_table[0]&10)==10) // i.e. if ((vdp_raster_mode&29)==5) ...
 		vdp_memtype=2; // G6/G7: memory is planar!
 	else vdp_memtype=(vdp_table[0]&12)&&!(vdp_table[1]&24); // memory is linear
-	vdp_legalsprites=vdp_legalsprites<32?vdp_memtype?8:4:32;
 	int i=((vdp_table[11]&  3)<<15)+(vdp_table[5]<<7);
 	vdp_map_sa1=&vdp_ram[i]; // SPRITES MODE 1
 	vdp_map_sa2=&vdp_ram[i&0X1FC00]; // MODE 2
@@ -1180,8 +1185,7 @@ void vdp_update(void) // recalculate bitmap and sprite values
 	vdp_bit_bmp=(vdp_table[2]&31)*8+7;
 	vdp_map_bm4=(vdp_table[2]&96)<<10;
 	vdp_map_bm8=(vdp_table[2]&32)<<10;
-	// alternating even/odd screens? "MAZE OF GALIOUS MSX2" uses this in water screens!
-	vdp_map_k32=((vdp_table[9]&4)?video_interlaces:vdp_flash<0)?~0X8000:~0;
+	vdp_reload();
 }
 void vdp_blink(void) // update blink and flash attributes, once per frame
 {
@@ -1498,7 +1502,7 @@ void vdp_table_send(BYTE r,BYTE b) // send byte `b` to register `r` (0-63, altho
 		case  0:
 			if (!(b&16)) // IE1 line event IRQ?
 				z80_irq&=+1;//~2
-			vdp_update(); // reduce clobbering
+			if (z!=b) vdp_update(); // reduce clobbering
 			break;
 		case  1:
 			if (vdp_state[0]&128) // IE0 frame event IRQ?
@@ -1511,12 +1515,13 @@ void vdp_table_send(BYTE r,BYTE b) // send byte `b` to register `r` (0-63, altho
 			// no `break`!
 		case  2: // PN
 		case  3: // CT
-		case 10: // CT2
 		case  4: // PG
 		case  5: // SA
-		case 11: // SA2
 		case  6: // SG
-		case 14:
+		case  9: // LN
+		case 10: // CT2
+		case 11: // SA2
+		case 14: // 16K
 			if (z!=b) vdp_update(); // reduce clobbering
 			break;
 		case 16:
@@ -1776,7 +1781,7 @@ INLINE void video_main(int t) // render video output for `t` Z80 clock ticks; t 
 					// "IO" expects MSX2 to raise this signal later, but why?
 					if (vdp_raster>=-1&&vdp_raster<vdp_finalraster-1)
 						video_sprites_calc(),video_sprites_test(vdp_raster_add8);
-					vdp_update();
+					vdp_reload();//vdp_update();
 					if ((i=(vdp_table[18]&15)*2)&16) i-=32; // horizontal offset is a signed nibble of square pixels!
 					if (vdp_raster_mode&16)
 						vdp_limit_x_l=VDP_LIMIT_X_H+VDP_LIMIT_X_6-i,
@@ -3332,7 +3337,9 @@ char session_menudata[]=
 	"=\n"
 	"0x4C00 Record YM file\tCtrl-Shift-F12\n"
 	"0x0C00 Record WAV file\tCtrl-F12\n"
+	#if AUDIO_BITDEPTH > 8
 	"0x8C03 High wavedepth\n"
+	#endif
 	"Video\n"
 	"0x8901 Onscreen status\tShift-F9\n"
 	"0x8B01 Monochrome\n"
@@ -3394,7 +3401,9 @@ void session_clean(void) // refresh options
 	session_menuradio((session_fast&1)?0x8600:0x8601+session_rhythm,0x8600,0x8604);
 	session_menucheck(0x8C01,!session_filmscale);
 	session_menucheck(0x8C02,!session_filmtimer);
+	#if AUDIO_BITDEPTH > 8
 	session_menucheck(0x8C03,!session_wavedepth);
+	#endif
 	session_menucheck(0x8C04,session_qoi3_flag);
 	session_menucheck(0xCC00,!!session_filmfile);
 	session_menucheck(0x0C00,!!session_wavefile);
@@ -3813,7 +3822,7 @@ void session_user(int k) // handle the user's commands
 				{ session_signal=SESSION_SIGNAL_DEBUG^(session_signal&~SESSION_SIGNAL_PAUSE),debug_clean(); break; }
 			// no `break`!
 		case 0x8901:
-			onscreen_flag=!onscreen_flag;
+			onscreen_flag^=1;
 			break;
 		case 0x8902: // Y-MASKING
 			video_filter^=VIDEO_FILTER_MASK_Y;
@@ -3840,7 +3849,7 @@ void session_user(int k) // handle the user's commands
 		#endif
 		#ifdef VIDEO_FILTER_BLUR0
 		case 0x8909: // FINE/COARSE X-BLENDING
-			video_fineblend=!video_fineblend; break;
+			video_fineblend^=1; break;
 		#endif
 		case 0x0900: // ^F9: TOGGLE FAST LOAD OR FAST TAPE
 			if (session_shift)
@@ -3852,7 +3861,7 @@ void session_user(int k) // handle the user's commands
 			tape_rewind=!tape_rewind;
 			break;
 		case 0x8A10: // FULL SCREEN
-			session_fullblit=!session_fullblit; session_resize();
+			session_fullblit^=1; session_resize();
 			break;
 		case 0x8A11: // WINDOW SIZE 100%, etc
 		case 0x8A12: case 0x8A14:
@@ -3892,18 +3901,20 @@ void session_user(int k) // handle the user's commands
 			break;
 		case 0x8C01:
 			if (!session_filmfile)
-				session_filmscale=!session_filmscale;
+				session_filmscale^=1;
 			break;
 		case 0x8C02:
 			if (!session_filmfile)
-				session_filmtimer=!session_filmtimer;
+				session_filmtimer^=1;
 			break;
+		#if AUDIO_BITDEPTH > 8
 		case 0x8C03:
 			if (!session_filmfile&&!session_wavefile)
-				session_wavedepth=!session_wavedepth;
+				session_wavedepth^=1;
 			break;
+		#endif
 		case 0X8C04: // OUTPUT AS QOI
-			session_qoi3_flag=!session_qoi3_flag;
+			session_qoi3_flag^=1;
 			break;
 		case 0x8C00: // F12: SAVE SCREENSHOT OR RECORD FILM
 			if (!session_shift)
@@ -3949,24 +3960,24 @@ void session_user(int k) // handle the user's commands
 
 void session_configreadmore(char *s)
 {
-	int i; if (!s||!*s||!session_parmtr[0]) {} // ignore if empty or internal!
-	else if (!strcasecmp(session_parmtr,"type")) { if ((i=*s&3)<length(bios_system)) type_id=i; }
-	else if (!strcasecmp(session_parmtr,"joy1")) joystick_bit=*s&1,key2joy_flag=(*s>>1)&1;
-	else if (!strcasecmp(session_parmtr,"bank")) ram_setcfg(*s&7);
-	else if (!strcasecmp(session_parmtr,"unit")) disc_filemode=*s&3,disc_disabled=(*s>>2)&1;
-	else if (!strcasecmp(session_parmtr,"misc")) snap_extended=*s&1,sccplus_internal=(*s>>1)&1,opll_internal=(*s>>2)&1;
-	else if (!strcasecmp(session_parmtr,"cmos")) cmos_import(s);
-	else if (!strcasecmp(session_parmtr,"file")) strcpy(autorun_path,s);
-	else if (!strcasecmp(session_parmtr,"snap")) strcpy(snap_path,s);
-	else if (!strcasecmp(session_parmtr,"tape")) strcpy(tape_path,s);
-	else if (!strcasecmp(session_parmtr,"disc")) strcpy(disc_path,s);
-	else if (!strcasecmp(session_parmtr,"bios")) strcpy(bios_path,s);
-	else if (!strcasecmp(session_parmtr,"cart")) strcpy(cart_path,s);
-	else if (!strcasecmp(session_parmtr,"rgbs")) strcpy(palette_path,s);
-	else if (!strcasecmp(session_parmtr,"vjoy")) { if (!hexa2byte(session_parmtr,s,KBD_JOY_UNIQUE)) usbkey2native(kbd_k2j,session_parmtr,KBD_JOY_UNIQUE); }
-	else if (!strcasecmp(session_parmtr,"palette")) { if ((i=*s&7)<5) video_type=i; }
-	else if (!strcasecmp(session_parmtr,"casette")) tape_rewind=*s&1,tape_skipload=(*s>>1)&1,tape_fastload=(*s>>2)&1;
-	else if (!strcasecmp(session_parmtr,"debug")) debug_configread(strtol(s,NULL,10));
+	int i; char *t=UTF8_BOM(session_parmtr); if (!s||!*s||!session_parmtr[0]) {} // ignore if empty or internal!
+	else if (!strcasecmp(t,"type")) { if ((i=*s&3)<length(bios_system)) type_id=i; }
+	else if (!strcasecmp(t,"joy1")) joystick_bit=*s&1,key2joy_flag=(*s>>1)&1;
+	else if (!strcasecmp(t,"bank")) ram_setcfg(*s&7);
+	else if (!strcasecmp(t,"unit")) disc_filemode=*s&3,disc_disabled=(*s>>2)&1;
+	else if (!strcasecmp(t,"misc")) snap_extended=*s&1,sccplus_internal=(*s>>1)&1,opll_internal=(*s>>2)&1;
+	else if (!strcasecmp(t,"cmos")) cmos_import(s);
+	else if (!strcasecmp(t,"file")) strcpy(autorun_path,s);
+	else if (!strcasecmp(t,"snap")) strcpy(snap_path,s);
+	else if (!strcasecmp(t,"tape")) strcpy(tape_path,s);
+	else if (!strcasecmp(t,"disc")) strcpy(disc_path,s);
+	else if (!strcasecmp(t,"bios")) strcpy(bios_path,s);
+	else if (!strcasecmp(t,"cart")) strcpy(cart_path,s);
+	else if (!strcasecmp(t,"rgbs")) strcpy(palette_path,s);
+	else if (!strcasecmp(t,"vjoy")) { if (!hexa2byte(session_parmtr,s,KBD_JOY_UNIQUE)) usbkey2native(kbd_k2j,session_parmtr,KBD_JOY_UNIQUE); }
+	else if (!strcasecmp(t,"palette")) { if ((i=*s&7)<5) video_type=i; }
+	else if (!strcasecmp(t,"casette")) tape_rewind=*s&1,tape_skipload=(*s>>1)&1,tape_fastload=(*s>>2)&1;
+	else if (!strcasecmp(t,"debug")) debug_configread(strtol(s,NULL,10));
 }
 void session_configwritemore(FILE *f)
 {
@@ -3985,8 +3996,7 @@ int main(int argc,char *argv[])
 {
 	FILE *f; session_detectpath(argv[0]); if ((f=session_configfile(1)))
 	{
-		while (fgets(session_parmtr,STRMAX-1,f))
-			session_configreadmore(session_configread(session_parmtr));
+		while (fgets(session_parmtr,STRMAX-1,f)) session_configreadmore(session_configread());
 		fclose(f);
 	}
 	all_setup(); all_reset();

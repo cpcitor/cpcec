@@ -20,21 +20,15 @@
 char tape_path[STRMAX]="";
 
 FILE *tape=NULL;
-int tape_type; // -1 RECORD, 0 WAV/NULL, 1 CSW, 2 TZX, 3 TAP/CAS, 4 PZX
+signed char tape_type; // -1 RECORD, 0 WAV/NULL, 1 CSW, 2 TZX, 3 TAP/CAS, 4 PZX
+signed char tape_signal; // signal set by the tape playback if something happens: >0 STOP, <0 END!
 int tape_filetell,tape_filesize,tape_filebase; // tape file offset, length and base
 int tape_playback,tape_step; // tape signal frequency and unit step
-int tape_signal; // signal set by the tape playback if something happens: >0 STOP, <0 END!
 char tape_rewind=0; // option: does the tape rewind after running out?
 char tape_status,tape_output,tape_record; // tape input and output values: 0 or 1, nothing else
 char tape_polarity=0; // do we need to invert the value of tape_status? yes (1) or no (0)
 char tape_feedable; // does the current block allow tape speedup operations? y(1) / n(0)
 int tape_seekcccc; // sanity check! for example BLOCK $19 may carry dummy data!
-
-#ifndef TAPE_KANSAS_CITY
-#ifdef DEBUG
-#define TAPE_KANSAS_CITY
-#endif
-#endif
 
 int tape_t,tape_n,tape_heads,tape_tones,tape_datas,tape_waves,tape_tails,tape_loops,tape_loop0,tape_calls,tape_call0;
 #ifdef TAPE_KANSAS_CITY
@@ -108,7 +102,7 @@ int tape_close(void) // closes the tape file, if any; 0 OK
 		#ifdef TAPE_KANSAS_CITY
 		tape_kansas=
 		#endif
-		tape_waves=tape_tails=tape_calls=tape_loops=tape_type=tape_seekcccc=0;
+		tape_waves=tape_tails=tape_calls=tape_loops=tape_type=tape_feedable=tape_seekcccc=0;
 }
 
 int tape_open(char *s) // opens a tape file `s` for input; 0 OK, !0 ERROR
