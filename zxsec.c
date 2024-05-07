@@ -334,16 +334,15 @@ char ula_sixteen=0,ula_pentagon=0,ula_latetiming=1; // 16K mode, Pentagon logic 
 void ula_setup_clash(int j,int l,int x0,int x1,int x2,int x3,int x4,int x5,int x6,int x7)
 {
 	MEMZERO(ula_clash); // non-contended areas lack clash
-	for (int y=0;y<192;j+=l-128,++y)
-		for (int x=0;x<16;++x)
-			ula_clash[1][j++]=x0,
-			ula_clash[1][j++]=x1,
-			ula_clash[1][j++]=x2,
-			ula_clash[1][j++]=x3,
-			ula_clash[1][j++]=x4,
-			ula_clash[1][j++]=x5,
-			ula_clash[1][j++]=x6,
-			ula_clash[1][j++]=x7;
+	for (int y=0;y<192;j+=l-128,++y) for (int x=0;x<16;++x)
+		ula_clash[1][j++]=x0,
+		ula_clash[1][j++]=x1,
+		ula_clash[1][j++]=x2,
+		ula_clash[1][j++]=x3,
+		ula_clash[1][j++]=x4,
+		ula_clash[1][j++]=x5,
+		ula_clash[1][j++]=x6,
+		ula_clash[1][j++]=x7;
 }
 #define ula_setup() ((void)0)
 void ula_update(void) // update ULA settings according to model
@@ -1216,10 +1215,10 @@ void z80_tape_trap(void)
 				#ifndef FASTTAPE_STABLE
 				if (z80_af2.b.l&0x40) if (z80_tape_testdump(z80_tape_spystack(0))==0)
 					while (FASTTAPE_CAN_DUMP()&&z80_de.b.l>1&&((WORD)(z80_ix.w-z80_sp.w)>2))
-						k=rev8u(fasttape_dump()), // RR L instead of RL L!
+						k=rbit8(fasttape_dump()), // RR L instead of RL L!
 						z80_hl.b.h^=POKE(z80_ix.w)=k,++z80_ix.w,--z80_de.w;
 				#endif
-				k=rev8u(fasttape_feed(z80_bc.b.l>>5,59)), // ditto!
+				k=rbit8(fasttape_feed(z80_bc.b.l>>5,59)), // ditto!
 				tape_skipping=z80_hl.b.l=1+(k<<1),z80_bc.b.h=(k&128)?-1:0;
 			}
 			else
@@ -1272,7 +1271,7 @@ void z80_tape_trap(void)
 				k=fasttape_feed(z80_bc.b.l>>5,54),tape_skipping=z80_hl.b.l=128+(k>>1),z80_bc.b.h=-(k&1);
 			}
 			else if (z80_hl.b.l==0x80&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==15) // "GARY LINEKER SUPER SKILLS" (TITLE + CODE)
-				k=rev8u(fasttape_feed(z80_bc.b.l>>5,54)),tape_skipping=z80_hl.b.l=1+(k<<1),z80_bc.b.h=(k&128)?-1:0; // RR L instead of RL L!
+				k=rbit8(fasttape_feed(z80_bc.b.l>>5,54)),tape_skipping=z80_hl.b.l=1+(k<<1),z80_bc.b.h=(k&128)?-1:0; // RR L instead of RL L!
 			else
 				fasttape_add8(z80_bc.b.l>>5,54,&z80_bc.b.h,1); // z80_r7+=...*9;
 			break;
@@ -1354,7 +1353,7 @@ void z80_tape_trap(void)
 			break;
 		case 29: // "GARY LINEKER SUPER SKILLS (LEVELS)"
 			if (z80_hl.b.l==0x80&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==15)
-				k=rev8u(fasttape_feed(z80_bc.b.l>>5,63)),tape_skipping=z80_hl.b.l=1+(k<<1),z80_bc.b.h=(k&128)?-1:0; // RR L instead of RL L!
+				k=rbit8(fasttape_feed(z80_bc.b.l>>5,63)),tape_skipping=z80_hl.b.l=1+(k<<1),z80_bc.b.h=(k&128)?-1:0; // RR L instead of RL L!
 			else
 				fasttape_add8(z80_bc.b.l>>5,63,&z80_bc.b.h,1); // z80_r7+=...*9;
 			break;
@@ -1582,18 +1581,20 @@ void debug_info(int q)
 	}
 }
 int grafx_mask(void) { return 0XFFFF; }
+BYTE grafx_peek(int w) { return debug_peek(w); }
+void grafx_poke(int w,BYTE b) { debug_poke(w,b); }
 int grafx_size(int i) { return i*8; }
 int grafx_show(VIDEO_UNIT *t,int g,int n,int w,int o)
 {
 	const VIDEO_UNIT p0=0,p1=0XFFFFFF; BYTE z=-(o&1); g-=8; do
 	{
-		w&=0XFFFF; BYTE b=debug_peek(w)^z; // readable only
+		BYTE b=grafx_peek(w)^z; // readable only
 		*t++=b&128?p1:p0; *t++=b& 64?p1:p0;
 		*t++=b& 32?p1:p0; *t++=b& 16?p1:p0;
 		*t++=b&  8?p1:p0; *t++=b&  4?p1:p0;
 		*t++=b&  2?p1:p0; *t++=b&  1?p1:p0;
 	}
-	while (++w,t+=g,--n); return w;
+	while (++w,t+=g,--n); return w&grafx_mask();
 }
 void grafx_info(VIDEO_UNIT *t,int g,int o)
 {
@@ -1614,7 +1615,7 @@ char txt_error_bios[]="Cannot load firmware!";
 void all_setup(void) // setup everything!
 {
 	//video_table_reset(); // const palette
-	debug_setup(),bios_magick(); // MAGICK follows DEBUG!
+	bios_magick(); // MAGICK follows DEBUG!
 	ula_setup();
 	tape_setup();
 	disc_setup();
@@ -2024,7 +2025,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 					fread1(mem_16k,q-3,f); // temp.buffer
 					if (q=(puff_zlib(t,0X4000,mem_16k,q-3)!=0X4000))
 					{
-						cprintf("ERROR %08X/%08X:%08X/%08X! ",puff_srco,puff_srcl,puff_tgto,puff_tgtl);
+						cprintf("ERROR %08X/%08X:%08X! ",puff_data-puff_src,puff_srcl,puff_tgtl);
 						break;
 					} //else q=0;
 				}
@@ -2445,7 +2446,7 @@ char session_menudata[]=
 	"0x8523 Sinclair 2 joystick\n" // 43125: ditto, this is port 1 of IF2
 	"0x8524 Cursor/AGF joystick\n" // 76580 (without CAPS SHIFT)
 	"0x8525 QAOP+Space joystick\n"
-	"0x4400 Gunstick (MHT)\n"
+	"0x8528 Gunstick (MHT)\n"
 	"0x8517 AY-Melodik audio\n"
 	#ifdef PSG_PLAYCITY
 	"0x8518 Turbosound audio\n"
@@ -2583,7 +2584,7 @@ void session_clean(void) // refresh options
 	session_menuradio(0x0601+multi_t,0x0601,0x0604);
 	session_menucheck(0x0605,power_boost-POWER_BOOST0);
 	session_menuradio(0x8521+joy1_type,0x8521,0x8525);
-	session_menucheck(0x4400,litegun);
+	session_menucheck(0x8528,litegun);
 	session_menucheck(0x8590,!(disc_filemode&2));
 	session_menucheck(0x8591,disc_filemode&1);
 	session_menucheck(0x8510,!(disc_disabled&1));
@@ -2780,7 +2781,7 @@ void session_user(int k) // handle the user's commands
 			audio_filter=k-0x8401;
 			break;
 		case 0x0400: // ^F4: TOGGLE JOYSTICK
-			session_shift?(litegun=!litegun):(session_key2joy=!session_key2joy); // MHT GUNSTICK
+			session_key2joy=!session_key2joy;
 			break;
 		case 0x0401: // REDEFINE VIRTUAL JOYSTICK
 			{
@@ -2799,6 +2800,9 @@ void session_user(int k) // handle the user's commands
 		case 0x8524: // CURSOR JOYSTICK
 		case 0x8525: // QAOP+M JOYSTICK
 			joy1_type=k-0x8521; // 0,1,2,3,4
+			break;
+		case 0x8528: // MHT GUNSTICK
+			litegun=!litegun;
 			break;
 		case 0x8590: // STRICT DISC WRITES
 			disc_filemode^=2;
@@ -2995,17 +2999,17 @@ void session_user(int k) // handle the user's commands
 			video_filter^=VIDEO_FILTER_MASK_Z;
 			break;
 		case 0x8905: // Y-BLENDING
-			video_lineblend=!video_lineblend;
+			video_lineblend^=1;
 			break;
 		case 0x8906: // FRAME BLENDING
-			video_pageblend=!video_pageblend;
+			video_pageblend^=1;
 			break;
 		case 0x8907: // MICROWAVES
-			video_microwave=!video_microwave;
+			video_microwave^=1;
 			break;
 		#ifndef RGB2LINEAR
 		case 0x8908: // GAMMA BLENDING/CORRECTION
-			video_gammaflag=!video_gammaflag; video_recalc();
+			video_gammaflag^=1; video_recalc();
 			break;
 		#endif
 		#ifdef VIDEO_FILTER_BLUR0
@@ -3014,12 +3018,12 @@ void session_user(int k) // handle the user's commands
 		#endif
 		case 0x0900: // ^F9: TOGGLE FAST LOAD OR FAST TAPE
 			if (session_shift)
-				tape_fastload=!tape_fastload;
+				tape_fastload^=1;
 			else
-				tape_skipload=!tape_skipload;
+				tape_skipload^=1;
 			break;
 		case 0x0901:
-			tape_rewind=!tape_rewind;
+			tape_rewind^=1;
 			break;
 		case 0x8A10: // FULL SCREEN
 			session_fullblit^=1; session_resize();
@@ -3030,7 +3034,7 @@ void session_user(int k) // handle the user's commands
 			session_fullblit=0,session_zoomblit=k-0x8A11; session_resize();
 			break;
 		case 0x8A00: // VIDEO ACCELERATION / SOFTWARE RENDER (*needs restart)
-			session_softblit=!session_softblit;
+			session_softblit^=1;
 			break;
 		case 0x8A01: case 0x8A02: case 0x8A03:
 		case 0x8A04: // AUDIO ACCELERATION (*needs restart)
@@ -3056,9 +3060,9 @@ void session_user(int k) // handle the user's commands
 			break;
 		case 0x0B00: // ^F11: SCANLINES
 			if (session_shift)
-				{ if (!(video_filter=(video_filter+1)&7)) video_lineblend=!video_lineblend; }
+				{ if (!(video_filter=(video_filter+1)&7)) video_lineblend^=1; }
 			else if ((video_scanline=video_scanline+1)>3)
-				{ if (video_scanline=0,video_pageblend=!video_pageblend) video_microwave=!video_microwave; }
+				{ if (video_scanline=0,video_pageblend^=1) video_microwave^=1; }
 			break;
 		case 0x8C01:
 			if (!session_filmfile)
@@ -3133,7 +3137,7 @@ void session_user(int k) // handle the user's commands
 	}
 }
 
-void session_configreadmore(char *s)
+void session_configreadmore(char *s) // parse a pre-processed configuration line: `session_parmtr` keeps the value name, `s` points to its value
 {
 	int i; char *t=UTF8_BOM(session_parmtr); if (!s||!*s||!session_parmtr[0]) {} // ignore if empty or internal!
 	else if (!strcasecmp(t,"type")) { if ((i=*s&7)<length(bios_system)) type_id=i; }
@@ -3157,7 +3161,7 @@ void session_configreadmore(char *s)
 	else if (!strcasecmp(t,"casette")) tape_rewind=*s&1,tape_skipload=(*s>>1)&1,tape_fastload=(*s>>2)&1;
 	else if (!strcasecmp(t,"debug")) debug_configread(strtol(s,NULL,10));
 }
-void session_configwritemore(FILE *f)
+void session_configwritemore(FILE *f) // update the configuration file `f` with emulator-specific names and values
 {
 	native2usbkey(kbd_k2j,kbd_k2j,KBD_JOY_UNIQUE); byte2hexa0(session_parmtr,kbd_k2j,KBD_JOY_UNIQUE);
 	fprintf(f,"type %d\njoy1 %d\nulas %d\nunit %d\nmisc %d\n"
@@ -3177,25 +3181,18 @@ void session_configwritemore(FILE *f)
 		#ifdef Z80_DANDANATOR
 		dandanator_path,
 		#endif
-		session_parmtr,video_type,(tape_rewind&1)+(tape_skipload&1)*2+(tape_fastload&1)*4,debug_configwrite());
+		session_parmtr,video_type,tape_rewind+tape_skipload*2+tape_fastload*4,debug_configwrite());
 }
 
 // START OF USER INTERFACE ========================================== //
 
 int main(int argc,char *argv[])
 {
-	FILE *f; session_detectpath(argv[0]); if ((f=session_configfile(1)))
-	{
-		while (fgets(session_parmtr,STRMAX-1,f)) session_configreadmore(session_configread());
-		fclose(f);
-	}
-	all_setup(); all_reset();
+	session_prae(argv[0]); all_setup(); all_reset();
 	int i=0,j,k=0; while (++i<argc)
-	{
 		if (argv[i][0]=='-')
 		{
 			j=1; do
-			{
 				switch (argv[i][j++])
 				{
 					case 'c':
@@ -3304,13 +3301,10 @@ int main(int argc,char *argv[])
 					default:
 						i=argc; // help!
 				}
-			}
 			while ((i<argc)&&(argv[i][j]));
 		}
-		else
-			if (any_load(argv[i],1))
-				i=argc; // help!
-	}
+		else if (any_load(argv[i],1))
+			i=argc; // help!
 	if (i>argc)
 		return
 			printfusage("usage: " my_caption " [option..] [file..]\n"
@@ -3434,7 +3428,7 @@ int main(int argc,char *argv[])
 			}
 			ula_snow_a=(!ula_snow_disabled&&(ula_clash_mreq[z80_ir.b.h>>6]!=ula_clash[0]))?31:0; // ULA snow is tied to memory contention: "Egghead 4"
 			ula_clash_z=ULA_GET_T(); // keep consistency across frames
-			if (ym3_file) { ym3_write(); ym3_flush(); }
+			if (ym3_file) ym3_write(),ym3_flush();
 			if (tape_type<0&&tape/*&&!z80_iff.b.l*/) // tape is recording? play always!
 				tape_enabled|=4;
 			else if (tape_enabled>0)
@@ -3461,8 +3455,7 @@ int main(int argc,char *argv[])
 	z80_close();
 	trdos_closeall(); disc_closeall(); if (!*trdos_path) strcpy(trdos_path,disc_path); else if (!*disc_path) strcpy(disc_path,trdos_path); // avoid accidental losses
 	tape_close(); ym3_close(); if (printer) printer_close();
-	if ((f=session_configfile(0))) session_configwritemore(f),session_configwrite(f),fclose(f);
-	return session_byebye(),0;
+	return session_byebye(),session_post();
 }
 
 BOOTSTRAP

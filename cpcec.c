@@ -1375,17 +1375,17 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 		if (!(p&0x0100))
 		{
 			if (plus_enabled) // PLUS ASIC UNLOCKING SEQUENCE
+			{
+				if (!plus_gate_counter)
+					plus_gate_counter=!b; // first byte must be nonzero
+				else if (b!=plus_gate_lock[plus_gate_counter]) // ignore repetitions (SWITCHBLADE)
 				{
-					if (!plus_gate_counter)
-						plus_gate_counter=!b; // first byte must be nonzero
-					else if (b!=plus_gate_lock[plus_gate_counter]) // ignore repetitions (SWITCHBLADE)
-					{
-						if (++plus_gate_counter>=length(plus_gate_lock))
-							plus_gate_counter=0,plus_gate_enabled=b==0xCD;
-						else if (b!=plus_gate_lock[plus_gate_counter])
-							plus_gate_counter=!b; // detect nonzero case (DICK TRACY)
-					}
+					if (++plus_gate_counter>=length(plus_gate_lock))
+						plus_gate_counter=0,plus_gate_enabled=b==0xCD;
+					else if (b!=plus_gate_lock[plus_gate_counter])
+						plus_gate_counter=!b; // detect nonzero case (DICK TRACY)
 				}
+			}
 			crtc_table_select(b); // 0xBC00: SELECT CRTC REGISTER
 		}
 		else
@@ -2430,12 +2430,14 @@ void debug_info(int q)
 	}
 }
 int grafx_mask(void) { return 0XFFFF; }
+BYTE grafx_peek(int w) { return debug_pook(debug_mode,w); }
+void grafx_poke(int w,BYTE b) { debug_poke(w,b); }
 int grafx_size(int i) { return i*4; }
 int grafx_show(VIDEO_UNIT *t,int g,int n,int w,int o)
 {
 	BYTE z=-(o&1); g-=4; do
 	{
-		w&=0XFFFF; BYTE b=debug_peekpook(w)^z; // readable/writeable (up to the user)
+		w&=0XFFFF; BYTE b=grafx_peek(w)^z; // readable/writeable (up to the user)
 		if (gate_mcr&1) // MODE 1
 		{
 			*t++=video_clut[gate_mode1[0][b]];
@@ -2458,7 +2460,7 @@ int grafx_show(VIDEO_UNIT *t,int g,int n,int w,int o)
 			*t++=p=video_clut[gate_mode0[1][b]]; *t++=p;
 		}
 	}
-	while (++w,t+=g,--n); return w;
+	while (++w,t+=g,--n); return w&grafx_mask();
 }
 void grafx_info(VIDEO_UNIT *t,int g,int o) // draw the palette and the PLUS sprites
 {
@@ -2489,7 +2491,7 @@ char txt_error_bios[]="Cannot load firmware!";
 void all_setup(void) // setup everything!
 {
 	//video_table_reset(); // const palette
-	debug_setup(),bios_magick(); // MAGICK follows DEBUG!
+	bios_magick(); // MAGICK follows DEBUG!
 	crtc_setup();
 	plus_setup();
 	gate_setup();
@@ -3240,7 +3242,7 @@ char session_menudata[]=
 	"0x0500 Reset emulation\tCtrl-F5\n"
 	"0x8F00 Pause\tPause\n"
 	"0x8900 Debug\tF9\n"
-	//"0x8910 NMI\n"
+	//"0x9000 NMI\n"
 	"=\n"
 	"0x8511 64K RAM\n"
 	"0x8512 128K RAM\n"
@@ -3803,34 +3805,34 @@ void session_user(int k) // handle the user's commands
 			video_filter^=VIDEO_FILTER_MASK_Z;
 			break;
 		case 0x8905: // Y-BLENDING
-			video_lineblend=!video_lineblend;
+			video_lineblend^=1;
 			break;
 		case 0x8906: // FRAME BLENDING
-			video_pageblend=!video_pageblend;
+			video_pageblend^=1;
 			break;
 		case 0x8907: // MICROWAVES
-			video_microwave=!video_microwave;
+			video_microwave^=1;
 			break;
 		#ifndef RGB2LINEAR
 		case 0x8908: // GAMMA BLENDING/CORRECTION
-			video_gammaflag=!video_gammaflag; video_recalc();
+			video_gammaflag^=1; video_recalc();
 			break;
 		#endif
 		#ifdef VIDEO_FILTER_BLUR0
 		case 0x8909: // FINE/COARSE X-BLENDING
 			video_fineblend^=1; break;
 		#endif
-		/*case 0x8910: // NMI
+		/*case 0x9000: // NMI
 			z80_nmi_throw;
 			break;*/
 		case 0x0900: // ^F9: TOGGLE FAST LOAD OR FAST TAPE
 			if (session_shift)
-				tape_fastload=!tape_fastload;
+				tape_fastload^=1;
 			else
-				tape_skipload=!tape_skipload;
+				tape_skipload^=1;
 			break;
 		case 0x0901:
-			tape_rewind=!tape_rewind;
+			tape_rewind^=1;
 			break;
 		case 0x8A10: // FULL SCREEN
 			session_fullblit^=1; session_resize();
@@ -3841,7 +3843,7 @@ void session_user(int k) // handle the user's commands
 			session_fullblit=0,session_zoomblit=k-0x8A11; session_resize();
 			break;
 		case 0x8A00: // VIDEO ACCELERATION / SOFTWARE RENDER (*needs restart)
-			session_softblit=!session_softblit;
+			session_softblit^=1;
 			break;
 		case 0x8A01: case 0x8A02: case 0x8A03:
 		case 0x8A04: // AUDIO ACCELERATION (*needs restart)
@@ -3867,9 +3869,9 @@ void session_user(int k) // handle the user's commands
 			break;
 		case 0x0B00: // ^F11: SCANLINES
 			if (session_shift)
-				{ if (!(video_filter=(video_filter+1)&7)) video_lineblend=!video_lineblend; }
+				{ if (!(video_filter=(video_filter+1)&7)) video_lineblend^=1; }
 			else if ((video_scanline=video_scanline+1)>3)
-				{ if (video_scanline=0,video_pageblend=!video_pageblend) video_microwave=!video_microwave; }
+				{ if (video_scanline=0,video_pageblend^=1) video_microwave^=1; }
 			break;
 		case 0x8C01:
 			if (!session_filmfile)
@@ -3944,7 +3946,7 @@ void session_user(int k) // handle the user's commands
 	}
 }
 
-void session_configreadmore(char *s)
+void session_configreadmore(char *s) // parse a pre-processed configuration line: `session_parmtr` keeps the value name, `s` points to its value
 {
 	int i; char *t=UTF8_BOM(session_parmtr); if (!s||!*s||!*t) {} // ignore if empty or internal!
 	else if (!strcasecmp(t,"type")) { if ((i=*s&7)<length(bios_system)) type_id=i; }
@@ -3968,7 +3970,7 @@ void session_configreadmore(char *s)
 	else if (!strcasecmp(t,"casette")) tape_rewind=*s&1,tape_skipload=(*s>>1)&1,tape_fastload=(*s>>2)&1;
 	else if (!strcasecmp(t,"debug")) debug_configread(strtol(s,NULL,10));
 }
-void session_configwritemore(FILE *f)
+void session_configwritemore(FILE *f) // update the configuration file `f` with emulator-specific names and values
 {
 	native2usbkey(kbd_k2j,kbd_k2j,KBD_JOY_UNIQUE); byte2hexa0(session_parmtr,kbd_k2j,KBD_JOY_UNIQUE);
 	fprintf(f,"type %d\ncrtc %d\nbank %d\nunit %d\nmisc %d\n"
@@ -3988,25 +3990,18 @@ void session_configwritemore(FILE *f)
 		#ifdef Z80_DANDANATOR
 		dandanator_path,
 		#endif
-		session_parmtr,video_type,(tape_rewind&1)+(tape_skipload&1)*2+(tape_fastload&1)*4,debug_configwrite());
+		session_parmtr,video_type,tape_rewind+tape_skipload*2+tape_fastload*4,debug_configwrite());
 }
 
 // START OF USER INTERFACE ========================================== //
 
 int main(int argc,char *argv[])
 {
-	FILE *f; session_detectpath(argv[0]); if ((f=session_configfile(1)))
-	{
-		while (fgets(session_parmtr,STRMAX-1,f)) session_configreadmore(session_configread());
-		fclose(f);
-	}
-	all_setup(); all_reset();
+	session_prae(argv[0]); all_setup(); all_reset();
 	int i=0,j,k=0; while (++i<argc)
-	{
 		if (argv[i][0]=='-')
 		{
 			j=1; do
-			{
 				switch (argv[i][j++])
 				{
 					case 'c':
@@ -4120,13 +4115,10 @@ int main(int argc,char *argv[])
 					default:
 						i=argc; // help!
 				}
-			}
 			while ((i<argc)&&(argv[i][j]));
 		}
-		else
-			if (any_load(argv[i],1))
-				i=argc; // help!
-	}
+		else if (any_load(argv[i],1))
+			i=argc; // help!
 	if (i>argc)
 		return
 			printfusage("usage: " my_caption " [option..] [file..]\n"
@@ -4266,7 +4258,7 @@ int main(int argc,char *argv[])
 				}
 				#endif
 			}
-			if (ym3_file) { ym3_write(); ym3_flush(); }
+			if (ym3_file) ym3_write(),ym3_flush();
 			if (tape_enabled)
 				{ if (tape_delay>0) --tape_delay; } // handle tape delays
 			else if (tape_delay<3) // the tape is temporarily "deaf":
@@ -4293,8 +4285,7 @@ int main(int argc,char *argv[])
 	z80_close(); if (ext_rom) free(ext_rom);
 	disc_closeall();
 	tape_close(); ym3_close(); if (printer) printer_close();
-	if ((f=session_configfile(0))) session_configwritemore(f),session_configwrite(f),fclose(f);
-	return session_byebye(),0;
+	return session_byebye(),session_post();
 }
 
 BOOTSTRAP

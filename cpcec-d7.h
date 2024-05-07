@@ -128,10 +128,11 @@ int disc_create(char *s) // create a clean formatted disc; 0 OK, !0 ERROR
 // disc operations -------------------------------------------------- //
 
 #define disc_setup() MEMZERO(disc_flip)
-#define disc_reset() { disc_motor=disc_phase=disc_delay=disc_timer=disc_overrun=disc_status=0; }
+#define disc_reset() { disc_motor=disc_phase=disc_delay=disc_timer=disc_overrun=disc_status=disc_sector_slow=0; }
 
 int disc_sector_last=0; // custom formats may have repeated CHRN IDs; this helps us tell them apart
 int disc_sector_weak=0; // custom sectors may include "weak" bytes distributed across multiple copies
+BYTE disc_sector_slow=0; // slow operations (for example SEEK) can make the controller miss a sector
 int disc_sector_size(int d,int j) // get size of sector `j` (0: first, 1: second...) at drive+side `d`
 {
 	return disc_track_table[d][j*8+0x1E]+disc_track_table[d][j*8+0x1F]*256;
@@ -514,6 +515,7 @@ void disc_data_send(BYTE b) // DATA I/O
 				disc_length=9;
 				break;
 			case 0x0A: // READ ID
+				disc_sector_last+=disc_sector_slow,disc_sector_slow=0; // the protected versions of "RENEGADE" and "ARKANOID 2" lose time between SEEK and READ ID
 				disc_length=2;
 				break;
 			case 0x0D: // FORMAT TRACK
@@ -523,7 +525,6 @@ void disc_data_send(BYTE b) // DATA I/O
 				disc_length=2;
 				break;
 			case 0x08: // SENSE INTERRUPT STATUS
-				++disc_sector_last; // the protected versions of "RENEGADE" and "ARKANOID 2" lose time between SEEK and READ ID
 				disc_result[0]&=~7;
 				disc_length=2;
 				int i;
@@ -561,6 +562,7 @@ void disc_data_send(BYTE b) // DATA I/O
 				disc_length=2;
 				break;
 			case 0x0F: // SEEK
+				disc_sector_slow=1;
 				disc_length=3;
 				break;
 			default: // INVALID COMMAND
@@ -852,8 +854,8 @@ BYTE disc_data_recv(void) // DATA I/O
 					}
 					else if ((disc_parmtr[4]==disc_parmtr[6])||((disc_result[1]|disc_result[2])&0x3F)) // is it the last requested sector? did any fatal errors happen?
 					{
-						if ((disc_result[1]|disc_result[2])&0x3F)
-							++disc_sector_last; // "BAD CAT" implies that errors waste enough time to miss the very next sector
+						//if ((disc_result[1]|disc_result[2])&0x3F) // "BAD CAT" implies that errors waste enough time to miss the very next sector
+							// ++disc_sector_last; // obsolete, see `disc_sector_slow`
 						disc_exitstate();
 						disc_length=7;
 						disc_phase=4;

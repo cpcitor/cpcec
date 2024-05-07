@@ -487,7 +487,7 @@ int sram_makepath(char *s) // build `sram_path` using string `s` as a base; NONZ
 	return t&&(!u||u<t)?strcpy(t,".srm"),1:0; // "dir/name.old" => "dir/name.new"
 }
 
-char cart_path[STRMAX]="",cart_sha1_file[]=my_caption ".sha"; // compatible with "carts.sha" from FMSX
+char cart_path[STRMAX]="";
 unsigned int cart_sha1_size=0,cart_sha1_list[2<<10][6];
 BYTE cart_bank[4],cart_id=0,cart_log=0; // cart_id is the mapper type, cart_log is the ceiling of the binary logarithm of the cartridge size
 BYTE cart_big=0; // overrides cart_id if nonzero: 1: 32K/48K/64K cartridges that "invade" $0000-$3FFF; 2: 16K/32K/48K cartridges that start at $4000
@@ -557,27 +557,27 @@ void cart_reset(void)
 }
 void cart_remove(void) // remove the cartridge
 {
-	int i=sram_dirt?sram_mask+1:0; sram_dirt=cart_log=0; if (cart)
+	int i=sram_dirt?sram_mask+1:0; sram_dirt=cart_log=cart_big=0; if (cart)
 	{
 		free(cart),cart=NULL,cart_reset();
-		if (sram_dirt&&sram_cart) if (sram_makepath(cart_path))
+		if (i&&sram_cart) if (sram_makepath(cart_path))
 			{ FILE *f=puff_fopen(sram_path,"wb"); if (f) fwrite1(sram,i<<13,f),puff_fclose(f); }
 	}
 }
 void cart_setup(void) // load the cartridge list, if available
 {
-	strcat(strcpy(session_substr,session_path),cart_sha1_file);
+	strcat(strcpy(session_substr,session_path),my_caption ".sha"); // sorta compatible with "carts.sha" from FMSX
 	cart_sha1_size=0; FILE *f=fopen(session_substr,"r"); if (f)
 	{
 		while (cart_sha1_size<length(cart_sha1_list)&&fgets(session_substr,STRMAX,f))
 		{
 			char *s=UTF8_BOM(session_substr); int k; unsigned int h[5]={0,0,0,0,0};
 			while ((k=eval_hex(*s))>=0) // build a 40-nibble value, even if the string isn't 40 chars!
-				h[0]=(h[0]<<4)+((h[1]>>28)&15),
-				h[1]=(h[1]<<4)+((h[2]>>28)&15),
-				h[2]=(h[2]<<4)+((h[3]>>28)&15),
-				h[3]=(h[3]<<4)+((h[4]>>28)&15),
-				h[4]=(h[4]<<4)+((k>>0)&15),++s;
+				h[0]=h[0]<<4|((h[1]>>28)&15),
+				h[1]=h[1]<<4|((h[2]>>28)&15),
+				h[2]=h[2]<<4|((h[3]>>28)&15),
+				h[3]=h[3]<<4|((h[4]>>28)&15),
+				h[4]=h[4]<<4|((k>>0)&15),++s;
 			if (s!=session_substr&&(k=eval_hex(*++s))>=0&&k<CART_IDS) // valid and supported?
 				cart_sha1_list[cart_sha1_size][0]=h[0]&0XFFFFFFFF,
 				cart_sha1_list[cart_sha1_size][1]=h[1]&0XFFFFFFFF,
@@ -585,7 +585,7 @@ void cart_setup(void) // load the cartridge list, if available
 				cart_sha1_list[cart_sha1_size][3]=h[3]&0XFFFFFFFF,
 				cart_sha1_list[cart_sha1_size][4]=h[4]&0XFFFFFFFF,
 				cart_sha1_list[cart_sha1_size][5]=k,
-				cprintf("%08X%08X%08X%08X%08X:%d\n",h[0],h[1],h[2],h[3],h[4],k), // perhaps too much
+				cprintf("%08X%08X%08X%08X%08X:%X\n",h[0],h[1],h[2],h[3],h[4],k), // perhaps too much
 				++cart_sha1_size;
 		}
 		cprintf("SHA-1 list: %d entries.\n",cart_sha1_size); // sufficient
@@ -665,7 +665,11 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 		;//{ /*if (equalsii(&mem_rom[0X10000],0X4443))*/ s=&mem_rom[0X1C000-0X0000]; }
 	mmu_rom[12]=mmu_rom[13]=mmu_rom[14]=mmu_rom[15]=s;
 	mmu_ram[12]=mmu_ram[13]=mmu_ram[14]=mmu_ram[15]=t;
-	if (cart_big) // small special cartridges go here
+	if (!cart) // no cartridge?
+	{
+		// nothing!
+	}
+	else if (cart_big) // small special cartridges go here
 	{
 		if (ps_slot[1]==slots_1st)
 		{
@@ -673,7 +677,7 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 		}
 	}
 	// cartridges bigger than 48k require more logic: mappers!
-	else if (cart) switch (cart_id)
+	else switch (cart_id) // always last!
 	{
 		case 0: // Generic 8K
 			if (ps_slot[1]==slots_1st)
@@ -871,12 +875,16 @@ void mmu_slowpoke(WORD w,BYTE b) // notice that the caller already filters out i
 		else if (w>=0XB800&&w<=0XBFFF) // primary Konami SCC+?
 			sccplus_table_send(w,b);
 	}
+	else if (!cart) // no cartridge?
+	{
+		// nothing!
+	}
 	else if (cart_big) // small special cartridges go here
 	{
 		if (w==0X4000&&equalsmmmm(&cart[0X7F64],0X37343120))
 			cart_synth=((b-128)*SCCPLUS_MAX+1)>>1; // "KONAMI'S SYNTHESIZER" DAC: unsigned 8-bit sample
 	}
-	else if (cart) switch (cart_id)
+	else switch (cart_id) // always last!
 	{
 		case 6: // Konami 8K + SRAM (GAME MASTER 2)
 		case 3: // Konami 8K: HML------------- HML=(0..3)+2
@@ -1764,7 +1772,7 @@ INLINE void video_main(int t) // render video output for `t` Z80 clock ticks; t 
 	else if (vdp_table[8]&32) // reg.8 bit 5 (TP): MSX2 LOGO and parts of METAL LIMIT set it; most games reset it!
 		video_clut[0]=video_clut_r3g3b3(vdp_palette,0),rz=video_clut[i&((vdp_raster_mode&31)==4?3:15)]; // "G5" limits borders to 2 colour bits!
 	else // inherited from MSX1: backdrop and border are one and the same; ZERO is transparent, in practice BLACK
-		rz=video_clut[0]=(i&=15)?video_clut[i]:video_clut_r3g3b3(vdp_palette,0); // MSX2: "OUTRUN" (G3), "CASTLEVANIA" and C-BIOS2 LOGO (G4), MSX2 LOGO (G5)...
+		rz=video_clut[0]=(i&=15)?video_clut[i]:type_id?video_clut_r3g3b3(vdp_palette,0):video_clut[1]; // MSX2: "OUTRUN" (G3), "CASTLEVANIA" and C-BIOS2 LOGO (G4), MSX2 LOGO (G5)...
 	int w=video_pos_x,z=w+t*3+vdp_limit_x_z; // the "goal" we must reach. Remember that each Z80 T becomes 3 UNITS!
 	while (w<z)
 		if (w<vdp_limit_x_l)
@@ -2814,18 +2822,20 @@ void debug_info(int q)
 	}
 }
 int grafx_mask(void) { return debug_mode?0XFFFF:0X1FFFF; }
+BYTE grafx_peek(int w) { return debug_mode?debug_peek(w):vdp_ram[w&0X1FFFF]; }
+void grafx_poke(int w,BYTE b) { if (debug_mode) debug_poke(w,b); else vdp_ram[w&0X1FFFF]=b; }
 int grafx_size(int i) { return i*8; }
 int grafx_show(VIDEO_UNIT *t,int g,int n,int w,int o)
 {
 	const VIDEO_UNIT p0=0,p1=0XFFFFFF; BYTE z=-(o&1); g-=8; do
 	{
-		w&=debug_grafx_m; BYTE b=(debug_mode?debug_peek(w):vdp_ram[w])^z; // Z80 or VDP!
+		BYTE b=grafx_peek(w)^z; // Z80 or VDP!
 		*t++=b&128?p1:p0; *t++=b& 64?p1:p0;
 		*t++=b& 32?p1:p0; *t++=b& 16?p1:p0;
 		*t++=b&  8?p1:p0; *t++=b&  4?p1:p0;
 		*t++=b&  2?p1:p0; *t++=b&  1?p1:p0;
 	}
-	while (++w,t+=g,--n); return w;
+	while (++w,t+=g,--n); return w&grafx_mask();
 }
 void grafx_info(VIDEO_UNIT *t,int g,int o) // draw the palette and the current sprites
 {
@@ -2873,7 +2883,7 @@ char txt_error_bios[]="Cannot load firmware!";
 void all_setup(void) // setup everything!
 {
 	video_table_reset(); // user palette
-	debug_setup(),bios_magick(); // MAGICK follows DEBUG!
+	bios_magick(); // MAGICK follows DEBUG!
 	ioctl_setup();
 	psg_setup();
 	z80_setup();
@@ -3570,7 +3580,7 @@ void session_user(int k) // handle the user's commands
 			break;
 		case 0x0100: // ^F1: ABOUT..
 			session_aboutme(
-				"MSX2+ emulator written by Cesar Nicolas-Gonzalez\n"
+				"MSX 1/2/2+ emulator written by Cesar Nicolas-Gonzalez\n"
 				"(UNED 2019 Master's Degree in Computer Engineering)\n"
 				"\nnews and updates: http://cngsoft.no-ip.org/cpcec.htm"
 				"\n\n" MY_LICENSE "\n\n" GPL_3_INFO
@@ -3834,17 +3844,17 @@ void session_user(int k) // handle the user's commands
 			video_filter^=VIDEO_FILTER_MASK_Z;
 			break;
 		case 0x8905: // Y-BLENDING
-			video_lineblend=!video_lineblend;
+			video_lineblend^=1;
 			break;
 		case 0x8906: // FRAME BLENDING
-			video_pageblend=!video_pageblend;
+			video_pageblend^=1;
 			break;
 		case 0x8907: // MICROWAVES
-			video_microwave=!video_microwave;
+			video_microwave^=1;
 			break;
 		#ifndef RGB2LINEAR
 		case 0x8908: // GAMMA BLENDING/CORRECTION
-			video_gammaflag=!video_gammaflag; video_recalc();
+			video_gammaflag^=1; video_recalc();
 			break;
 		#endif
 		#ifdef VIDEO_FILTER_BLUR0
@@ -3853,12 +3863,12 @@ void session_user(int k) // handle the user's commands
 		#endif
 		case 0x0900: // ^F9: TOGGLE FAST LOAD OR FAST TAPE
 			if (session_shift)
-				tape_fastload=!tape_fastload;
+				tape_fastload^=1;
 			else
-				tape_skipload=!tape_skipload;
+				tape_skipload^=1;
 			break;
 		case 0x0901:
-			tape_rewind=!tape_rewind;
+			tape_rewind^=1;
 			break;
 		case 0x8A10: // FULL SCREEN
 			session_fullblit^=1; session_resize();
@@ -3869,7 +3879,7 @@ void session_user(int k) // handle the user's commands
 			session_fullblit=0,session_zoomblit=k-0x8A11; session_resize();
 			break;
 		case 0x8A00: // VIDEO ACCELERATION / SOFTWARE RENDER (*needs restart)
-			session_softblit=!session_softblit;
+			session_softblit^=1;
 			break;
 		case 0x8A01: case 0x8A02: case 0x8A03:
 		case 0x8A04: // AUDIO ACCELERATION (*needs restart)
@@ -3895,9 +3905,9 @@ void session_user(int k) // handle the user's commands
 			break;
 		case 0x0B00: // ^F11: SCANLINES
 			if (session_shift)
-				{ if (!(video_filter=(video_filter+1)&7)) video_lineblend=!video_lineblend; }
+				{ if (!(video_filter=(video_filter+1)&7)) video_lineblend^=1; }
 			else if ((video_scanline=video_scanline+1)>3)
-				{ if (video_scanline=0,video_pageblend=!video_pageblend) video_microwave=!video_microwave; }
+				{ if (video_scanline=0,video_pageblend^=1) video_microwave^=1; }
 			break;
 		case 0x8C01:
 			if (!session_filmfile)
@@ -3958,7 +3968,7 @@ void session_user(int k) // handle the user's commands
 	}
 }
 
-void session_configreadmore(char *s)
+void session_configreadmore(char *s) // parse a pre-processed configuration line: `session_parmtr` keeps the value name, `s` points to its value
 {
 	int i; char *t=UTF8_BOM(session_parmtr); if (!s||!*s||!session_parmtr[0]) {} // ignore if empty or internal!
 	else if (!strcasecmp(t,"type")) { if ((i=*s&3)<length(bios_system)) type_id=i; }
@@ -3979,7 +3989,7 @@ void session_configreadmore(char *s)
 	else if (!strcasecmp(t,"casette")) tape_rewind=*s&1,tape_skipload=(*s>>1)&1,tape_fastload=(*s>>2)&1;
 	else if (!strcasecmp(t,"debug")) debug_configread(strtol(s,NULL,10));
 }
-void session_configwritemore(FILE *f)
+void session_configwritemore(FILE *f) // update the configuration file `f` with emulator-specific names and values
 {
 	native2usbkey(kbd_k2j,kbd_k2j,KBD_JOY_UNIQUE); byte2hexa0(session_parmtr,kbd_k2j,KBD_JOY_UNIQUE);
 	fprintf(f,"type %d\njoy1 %d\nbank %d\nunit %d\nmisc %d\ncmos %s\n"
@@ -3987,25 +3997,18 @@ void session_configwritemore(FILE *f)
 		"vjoy %s\npalette %d\ncasette %d\ndebug %d\n",
 		type_id,(joystick_bit&1)+(key2joy_flag&1)*2,ram_getcfg(),(disc_disabled&1)*4+disc_filemode,snap_extended+(sccplus_internal&1)*2+(opll_internal&1)*4,cmos_export(&session_parmtr[KBD_JOY_UNIQUE*2+2]),
 		autorun_path,snap_path,tape_path,disc_path,bios_path,cart_path,palette_path,
-		session_parmtr,video_type,(tape_rewind&1)+(tape_skipload&1)*2+(tape_fastload&1)*4,debug_configwrite());
+		session_parmtr,video_type,tape_rewind+tape_skipload*2+tape_fastload*4,debug_configwrite());
 }
 
 // START OF USER INTERFACE ========================================== //
 
 int main(int argc,char *argv[])
 {
-	FILE *f; session_detectpath(argv[0]); if ((f=session_configfile(1)))
-	{
-		while (fgets(session_parmtr,STRMAX-1,f)) session_configreadmore(session_configread());
-		fclose(f);
-	}
-	all_setup(); all_reset();
+	session_prae(argv[0]); all_setup(); all_reset();
 	int i=0,j,k=0; while (++i<argc)
-	{
 		if (argv[i][0]=='-')
 		{
 			j=1; do
-			{
 				switch (argv[i][j++])
 				{
 					case 'c':
@@ -4119,13 +4122,10 @@ int main(int argc,char *argv[])
 					default:
 						i=argc; // help!
 				}
-			}
 			while ((i<argc)&&(argv[i][j]));
 		}
-		else
-			if (any_load(argv[i],1))
-				i=argc; // help!
-	}
+		else if (any_load(argv[i],1))
+			i=argc; // help!
 	if (i>argc)
 		return
 			printfusage("usage: " my_caption " [option..] [file..]\n"
@@ -4236,7 +4236,7 @@ int main(int argc,char *argv[])
 			{
 				if (audio_pos_z<AUDIO_LENGTH_Z) audio_main(TICKS_PER_FRAME); // fill sound buffer to the brim!
 			}
-			if (ym3_file) { ym3_write(); ym3_flush(); }
+			if (ym3_file) ym3_write(),ym3_flush();
 			/*if (!tape_fastload) tape_song=0,tape_loud=1;
 			else if (tape_song) tape_loud=0,--tape_song;
 			else tape_loud=1; // expect song to play for several frames
@@ -4260,8 +4260,7 @@ int main(int argc,char *argv[])
 	z80_close(); cart_remove();
 	disc_closeall();
 	tape_close(); ym3_close(); if (printer) printer_close();
-	if ((f=session_configfile(0))) session_configwritemore(f),session_configwrite(f),fclose(f);
-	return session_byebye(),0;
+	return session_byebye(),session_post();
 }
 
 BOOTSTRAP

@@ -207,10 +207,10 @@ BYTE tape_enabled=0; // manual tape playback, i.e. the PLAY button
 #define tape_disabled ((mmu_cfg[1]&32)>=tape_enabled) // the machine can disable the tape even when we enable it
 BYTE tape_browsing=0; // the signal toggles when the tape deck rewinds or fast-forwards
 
-void mmu_setup(void) // by default, everything is RAM
+void mmu_setup(void)
 {
-	for (int i=0;i<256;++i) mmu_rom[i]=mmu_ram[i]=mem_ram;
-	MEMZERO(mmu_bit); mmu_bit[0]=1+2; // ZEROPAGE is always special!
+	for (int i=0;i<256;++i) mmu_rom[i]=mmu_ram[i]=mem_ram; // by default, everything is RAM...
+	MEMZERO(mmu_bit); mmu_bit[0]=1+2; // ...and only ZEROPAGE triggers events (non-dumb R/W)
 }
 
 // the REU and GeoRAM memory extensions are handled through the MMU, so their logic goes here
@@ -219,7 +219,7 @@ BYTE ram_depth=0; // REU memory extension
 int ram_kbyte[]={0,64,128,256,512}; // REU/GEORAM size in kb
 int ram_cap=0,ram_dirty=0; // up to ((8<<16)-1); see `ext_ram`
 HLII reu_word; int reu_addr,reu_size=0; // REU C64-extra offsets+length
-BYTE reu_table[31]={0,0,0,0,0,0,0,0,0,255,255}; // REU config.registers
+BYTE reu_table[32]; // REU config.registers
 BYTE georam_yes=0,georam_block=0,georam_page=0; // GEORAM configuration
 #define reu_ram ext_ram
 #define reu_cap ram_cap
@@ -2808,14 +2808,16 @@ void debug_info(int q)
 		}
 	}
 }
-VIDEO_UNIT grafx_show2b[4]={0,0X0080FF,0XFF8000,0XFFFFFF};
 int grafx_mask(void) { return 0XFFFF; }
+BYTE grafx_peek(int w) { return mem_ram[(WORD)w]; }
+void grafx_poke(int w,BYTE b) { mem_ram[(WORD)w]=b; }
+VIDEO_UNIT grafx_show2b[4]={0,0X0080FF,0XFF8000,0XFFFFFF};
 int grafx_size(int i) { return i*8; }
 int grafx_show(VIDEO_UNIT *t,int g,int n,int w,int o)
 {
 	BYTE z=-(o&1); g-=8; do
 	{
-		w&=0XFFFF; BYTE b=mem_ram[w]^z; // base RAM only
+		BYTE b=grafx_peek(w)^z; // base RAM only
 		if (o&2)
 		{
 			VIDEO_UNIT p;
@@ -2833,7 +2835,7 @@ int grafx_show(VIDEO_UNIT *t,int g,int n,int w,int o)
 			*t++=b&  2?p1:p0; *t++=b&  1?p1:p0;
 		}
 	}
-	while (++w,t+=g,--n); return w;
+	while (++w,t+=g,--n); return w&grafx_mask();
 }
 void grafx_info(VIDEO_UNIT *t,int g,int o) // draw the palette and the sprites
 {
@@ -2939,7 +2941,7 @@ char txt_error_bios[]="Cannot load firmware!";
 void all_setup(void) // setup everything!
 {
 	video_table_reset(); // user palette
-	debug_setup(),bios_magick(); // MAGICK follows DEBUG!
+	bios_magick(); // MAGICK follows DEBUG!
 	memset(&mem_ram[0X10000],0,sizeof(mem_ram)-0X10000); // REU/GEORAM must be ZERO!
 	mmu_setup(),m65xx_setup(); // 6510+6502!
 	sid_setup();
@@ -3980,17 +3982,17 @@ void session_user(int k) // handle the user's commands
 			video_filter^=VIDEO_FILTER_MASK_Z;
 			break;
 		case 0x8905: // Y-BLENDING
-			video_lineblend=!video_lineblend;
+			video_lineblend^=1;
 			break;
 		case 0x8906: // FRAME BLENDING
-			video_pageblend=!video_pageblend;
+			video_pageblend^=1;
 			break;
 		case 0x8907: // MICROWAVES
-			video_microwave=!video_microwave;
+			video_microwave^=1;
 			break;
 		#ifndef RGB2LINEAR
 		case 0x8908: // GAMMA BLENDING/CORRECTION
-			video_gammaflag=!video_gammaflag; video_recalc();
+			video_gammaflag^=1; video_recalc();
 			break;
 		#endif
 		#ifdef VIDEO_FILTER_BLUR0
@@ -4000,14 +4002,14 @@ void session_user(int k) // handle the user's commands
 		case 0x9000: // NMI (RESTORE key)
 			m6510_irq|=+128;
 			break;
-		case 0x0900: // ^F9: TOGGLE TAPE SONG OR FAST TAPE
+		case 0x0900: // ^F9: TOGGLE FAST LOAD OR FAST TAPE
 			if (session_shift)
-				tape_fastload=!tape_fastload;
+				tape_fastload^=1;
 			else
-				tape_skipload=!tape_skipload;
+				tape_skipload^=1;
 			break;
 		case 0x0901:
-			tape_rewind=!tape_rewind;
+			tape_rewind^=1;
 			break;
 		case 0x8A10: // FULL SCREEN
 			session_fullblit^=1; session_resize();
@@ -4018,7 +4020,7 @@ void session_user(int k) // handle the user's commands
 			session_fullblit=0,session_zoomblit=k-0x8A11; session_resize();
 			break;
 		case 0x8A00: // VIDEO ACCELERATION / SOFTWARE RENDER (*needs restart)
-			session_softblit=!session_softblit;
+			session_softblit^=1;
 			break;
 		case 0x8A01: case 0x8A02: case 0x8A03:
 		case 0x8A04: // AUDIO ACCELERATION (*needs restart)
@@ -4044,9 +4046,9 @@ void session_user(int k) // handle the user's commands
 			break;
 		case 0x0B00: // ^F11: SCANLINES
 			if (session_shift)
-				{ if (!(video_filter=(video_filter+1)&7)) video_lineblend=!video_lineblend; }
+				{ if (!(video_filter=(video_filter+1)&7)) video_lineblend^=1; }
 			else if ((video_scanline=video_scanline+1)>3)
-				{ if (video_scanline=0,video_pageblend=!video_pageblend) video_microwave=!video_microwave; }
+				{ if (video_scanline=0,video_pageblend^=1) video_microwave^=1; }
 			break;
 		case 0x8C01:
 			if (!session_filmfile)
@@ -4113,7 +4115,7 @@ void session_user(int k) // handle the user's commands
 	}
 }
 
-void session_configreadmore(char *s)
+void session_configreadmore(char *s) // parse a pre-processed configuration line: `session_parmtr` keeps the value name, `s` points to its value
 {
 	int i; char *t=UTF8_BOM(session_parmtr); if (!s||!*s||!*t) {} // ignore if empty or internal!
 	else if (!strcasecmp(t,"type")) cia_nouveau=*s&1,vic_nouveau=(*s>>1)&1;
@@ -4134,7 +4136,7 @@ void session_configreadmore(char *s)
 	else if (!strcasecmp(t,"casette")) tape_rewind=*s&1,tape_skipload=(*s>>1)&1,tape_fastload=(*s>>2)&1;
 	else if (!strcasecmp(t,"debug")) debug_configread(strtol(s,NULL,10));
 }
-void session_configwritemore(FILE *f)
+void session_configwritemore(FILE *f) // update the configuration file `f` with emulator-specific names and values
 {
 	native2usbkey(kbd_k2j,kbd_k2j,KBD_JOY_UNIQUE); byte2hexa0(session_parmtr,kbd_k2j,KBD_JOY_UNIQUE);
 	fprintf(f,"type %d\nsid1 %d\nbank %d\nunit %d\nmisc %d\nsids %d\n"
@@ -4142,25 +4144,18 @@ void session_configwritemore(FILE *f)
 		"vjoy %s\npalette %d\ncasette %d\ndebug %d\n",
 		cia_nouveau+vic_nouveau*2,(sid_filters?0:1)+(sid_samples?0:2),(ram_depth<<1)+(georam_yes&1),(disc_disabled&1)*4+disc_filemode,(key2joy_flag&1)*2+snap_extended,sid_extras*2+sid_nouveau,
 		autorun_path,snap_path,tape_path,disc_path,bios_path,cart_path,palette_path,
-		session_parmtr,video_type,(tape_rewind&1)+(tape_skipload&1)*2+(tape_fastload&1)*4,debug_configwrite());
+		session_parmtr,video_type,tape_rewind+tape_skipload*2+tape_fastload*4,debug_configwrite());
 }
 
 // START OF USER INTERFACE ========================================== //
 
 int main(int argc,char *argv[])
 {
-	FILE *f; session_detectpath(argv[0]); if ((f=session_configfile(1)))
-	{
-		while (fgets(session_parmtr,STRMAX-1,f)) session_configreadmore(session_configread());
-		fclose(f);
-	}
-	all_setup(); all_reset();
+	session_prae(argv[0]); all_setup(); all_reset();
 	int i=0,j,k=m6510_pc.w=0; while (++i<argc) // see later about m6510_pc
-	{
 		if (argv[i][0]=='-')
 		{
 			j=1; do
-			{
 				switch (argv[i][j++])
 				{
 					case 'c':
@@ -4275,13 +4270,10 @@ int main(int argc,char *argv[])
 					default:
 						i=argc; // help!
 				}
-			}
 			while ((i<argc)&&(argv[i][j]));
 		}
-		else
-			if (any_load(argv[i],1))
-				i=argc; // help!
-	}
+		else if (any_load(argv[i],1))
+			i=argc; // help!
 	if (i>argc)
 		return
 			printfusage("usage: " my_caption " [option..] [file..]\n"
@@ -4390,9 +4382,9 @@ int main(int argc,char *argv[])
 			{
 				if (audio_pos_z<AUDIO_LENGTH_Z) audio_main(TICKS_PER_FRAME); // fill sound buffer to the brim!
 			}
-			if (ym3_file) { ym3_write(); ym3_flush(); }
+			if (ym3_file) ym3_write(),ym3_flush();
 			sid_frame(); //sid_mute_dumb18(0),sid_mute_dumb18(1),sid_mute_dumb18(2); // force updates!
-			video_clut[31]=video_clut[video_pos_z&7]; // DEBUG COLOUR!
+			//video_clut[31]=video_clut[video_pos_z&7]; // DEBUG COLOUR!
 			//if (...) // do this always!
 			{
 				static BYTE mmu_old=0,mmu_fly=0;
@@ -4473,8 +4465,7 @@ int main(int argc,char *argv[])
 	m65xx_close(); cart_remove();
 	disc_closeall();
 	tape_close(); ym3_close(); if (printer) printer_close();
-	if ((f=session_configfile(0))) session_configwritemore(f),session_configwrite(f),fclose(f);
-	return session_byebye(),0;
+	return session_byebye(),session_post();
 }
 
 BOOTSTRAP

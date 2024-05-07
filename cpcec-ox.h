@@ -250,7 +250,7 @@ void session_backupvideo(VIDEO_UNIT *t); // make a clipped copy of the current s
 int session_r_x,session_r_y,session_r_w,session_r_h; // actual location and size of the bitmap
 int session_resize(void) // SDL2 handles almost everything, but we still have to keep a cache of the past state
 {
-	static char z=1; if (session_fullblit)
+	static BYTE z=~0; if (session_fullblit)
 	{
 		if (z)
 		{
@@ -1386,7 +1386,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 
 // create, handle and destroy session ------------------------------- //
 
-INLINE char *session_create(char *s) // create video+audio devices and set menu; 0 OK, !0 ERROR
+INLINE char *session_create(char *s) // create video+audio devices and set menu; NULL OK, *char ERROR!
 {
 	int i; SDL_version sdl_version; SDL_SetMainReady();
 	SDL_GetVersion(&sdl_version); sprintf(session_version,"%d.%d.%d",sdl_version.major,sdl_version.minor,sdl_version.patch);
@@ -1526,7 +1526,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 		//spec.samples=AUDIO_LENGTH_Z*1; // 0 = SDL2 default; users may try 1, 2, 3...
 		session_audio=SDL_OpenAudioDevice(NULL,0,&spec,NULL,0);
 	}
-	session_preset(); session_clean(); session_please();
+	session_clean(); session_please();
 	//session_timer=SDL_GetTicks();
 	return NULL;
 }
@@ -1789,7 +1789,6 @@ INLINE void session_render(void) // update video, audio and timers
 
 INLINE void session_byebye(void) // delete video+audio devices
 {
-	session_wrapup();
 	#if 0 // SDL_Quit cleans everything up
 	if (session_joy)
 		session_pad?SDL_GameControllerClose(session_joy):SDL_JoystickClose(session_joy);

@@ -91,7 +91,7 @@ void m65xx_setup(void) // unlike in the Z80, precalc'd tables are limited to the
 WORD debug_dasm_any(char *t,WORD p,BYTE q(WORD)) // where `BYTE q(WORD)` is a function that returns a byte from a memory map
 {
 	#define DEBUG_DASM_BYTE (w=q(p),++p,w)
-	#define DEBUG_DASM_REL8 (WORD)(w=q(p),++p+(signed char)w)
+	#define DEBUG_DASM_REL8 (WORD)(w=q(p),++p+(INT8)w)
 	#define DEBUG_DASM_WORD (w=q(p),++p,w+=q(p)<<8,++p,w)
 	const char opcodez[256][4]={
 		"BRK","ORA","JAM","SLO", "NOP","ORA","ASL","SLO", "PHP","ORA","ASL","ANC", "NOP","ORA","ASL","SLO",
@@ -472,7 +472,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 					if (!(M65XX_P&1)) //goto go_to_branch;
 					{
 						go_to_branch: // *!* GOTO!
-						M65XX_BADPC; q=M65XX_PC.b.h; M65XX_PC.w+=(signed char)o; if (UNLIKELY(q!=M65XX_PC.b.h))
+						M65XX_BADPC; q=M65XX_PC.b.h; M65XX_PC.w+=(INT8)o; if (UNLIKELY(q!=M65XX_PC.b.h))
 							{ a.b.l=M65XX_PC.b.l; M65XX_TOCK; M65XX_BADAW; break; }
 						break; // no M65XX_TOCK here!
 					}

@@ -143,8 +143,8 @@ void z80_reset(void) // reset the Z80
 #define Z80_WZ_PC z80_wz=Z80_PARMTR; ++z80_pc.w; z80_wz+=Z80_PARMTR<<8 // read WZ from WORD[PC++]
 #define Z80_RD_HL BYTE b=Z80_PEEK(z80_hl.w)
 #define Z80_WR_HL Z80_PEEKPOKE(z80_hl.w,b)
-#define Z80_WZ_XY z80_wz=xy->w+(signed char)(Z80_PARMTR); ++z80_pc.w // calculate WZ and XY from BYTE[PC++], without additional delays
-#define Z80_WZ_XY_1X(x) z80_wz=xy->w+(signed char)(Z80_PARMTR); Z80_MREQ_1X(x,z80_pc.w); ++z80_pc.w // calculate WZ and XY from BYTE[PC++]
+#define Z80_WZ_XY z80_wz=xy->w+(INT8)(Z80_PARMTR); ++z80_pc.w // calculate WZ and XY from BYTE[PC++], without additional delays
+#define Z80_WZ_XY_1X(x) z80_wz=xy->w+(INT8)(Z80_PARMTR); Z80_MREQ_1X(x,z80_pc.w); ++z80_pc.w // calculate WZ and XY from BYTE[PC++]
 #define Z80_RD_WZ BYTE b=Z80_PEEK(z80_wz)
 #define Z80_WR_WZ Z80_PEEKPOKE(z80_wz,b)
 #define Z80_LD2(x) x.l=Z80_PARMTR; ++z80_pc.w; x.h=Z80_PARMTR; ++z80_pc.w // load r16 from WORD[PC++]
@@ -179,7 +179,7 @@ void z80_reset(void) // reset the Z80
 #define Z80_RL1(x) do{ BYTE z=x>>7; Z80_Q_SET(z80_flags_xor[x=(x<<1)+(z80_af.b.l&1)]+z); }while(0)
 #define Z80_RR1(x) do{ BYTE z=x&1; Z80_Q_SET(z80_flags_xor[x=(x>>1)+(z80_af.b.l<<7)]+z); }while(0)
 #define Z80_SLA1(x) do{ BYTE z=x>>7; Z80_Q_SET(z80_flags_xor[x=x<<1]+z); }while(0)
-#define Z80_SRA1(x) do{ BYTE z=x&1; Z80_Q_SET(z80_flags_xor[x=((signed char)x)>>1]+z); }while(0)
+#define Z80_SRA1(x) do{ BYTE z=x&1; Z80_Q_SET(z80_flags_xor[x=((INT8)x)>>1]+z); }while(0)
 #define Z80_SLL1(x) do{ BYTE z=x>>7; Z80_Q_SET(z80_flags_xor[x=(x<<1)+1]+z); }while(0)
 #define Z80_SRL1(x) do{ BYTE z=x&1; Z80_Q_SET(z80_flags_xor[x=x>>1]+z); }while(0)
 #define Z80_BIT1(n,x,y) Z80_Q_SET((z80_flags_bit[x&(1<<n)]+(y&0x28))+(z80_af.b.l&1))
@@ -440,7 +440,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					Z80_WAIT_IR1X(1); if (--z80_bc.b.h)
 					{
 						Z80_STRIDE(0x110);
-						z80_wz=(signed char)Z80_PARMTR;
+						z80_wz=(INT8)Z80_PARMTR;
 						Z80_MREQ_1X_NEXT(5);
 						z80_pc.w=z80_wz+=z80_pc.w+1;
 						break;
@@ -451,7 +451,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					#endif
 					break;
 				case 0x18: // JR $RRRR
-					z80_wz=(signed char)Z80_PARMTR;
+					z80_wz=(INT8)Z80_PARMTR;
 					Z80_MREQ_1X_NEXT(5);
 					z80_pc.w=z80_wz+=z80_pc.w+1;
 					break;
@@ -459,7 +459,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					if (!(z80_af.b.l&0x40)) // don't use GOTOs here: unlike RET cc and CALL cc,$NNNN, the performance penalty is important!
 					{
 						Z80_STRIDE(0x120);
-						z80_wz=(signed char)Z80_PARMTR;
+						z80_wz=(INT8)Z80_PARMTR;
 						Z80_MREQ_1X_NEXT(5);
 						z80_pc.w=z80_wz+=z80_pc.w+1;
 						break;
@@ -470,7 +470,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					if (z80_af.b.l&0x40)
 					{
 						Z80_STRIDE(0x128);
-						z80_wz=(signed char)Z80_PARMTR;
+						z80_wz=(INT8)Z80_PARMTR;
 						Z80_MREQ_1X_NEXT(5);
 						z80_pc.w=z80_wz+=z80_pc.w+1;
 						break;
@@ -481,7 +481,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					if (!(z80_af.b.l&0x01))
 					{
 						Z80_STRIDE(0x130);
-						z80_wz=(signed char)Z80_PARMTR;
+						z80_wz=(INT8)Z80_PARMTR;
 						Z80_MREQ_1X_NEXT(5);
 						z80_pc.w=z80_wz+=z80_pc.w+1;
 						break;
@@ -492,7 +492,7 @@ INLINE void z80_main(int _t_) // emulate the Z80 for `_t_` clock ticks
 					if (z80_af.b.l&0x01)
 					{
 						Z80_STRIDE(0x138);
-						z80_wz=(signed char)Z80_PARMTR;
+						z80_wz=(INT8)Z80_PARMTR;
 						Z80_MREQ_1X_NEXT(5);
 						z80_pc.w=z80_wz+=z80_pc.w+1;
 						break;
