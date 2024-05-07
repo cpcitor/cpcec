@@ -51,7 +51,7 @@ VIDEO_UNIT *video_target; // pointer to current video pixel
 AUDIO_UNIT *audio_target; // pointer to current audio sample
 char session_path[STRMAX],session_parmtr[STRMAX],session_tmpstr[STRMAX],session_substr[STRMAX],session_info[STRMAX]="";
 
-char session_focused=0; // ignore joysticks and certain events when unfocused
+BYTE session_focused=0; // ignore joysticks and certain events when unfocused
 RECT session_ideal; // ideal rectangle where the window fits perfectly; `right` and `bottom` are actually width and height
 JOYINFOEX session_joy; // joystick+mouse buffers
 HWND session_hwnd,session_hdlg=NULL; // window handle
@@ -272,7 +272,7 @@ int session_r_x,session_r_y,session_r_w,session_r_h; // actual location and size
 void session_desktop(RECT *r) { SystemParametersInfo(SPI_GETWORKAREA,0,r,0); r->right-=r->left,r->bottom-=r->top; } // i.e. width and height
 int session_resize(void) // dunno why, but one 100% render must happen before the resizing; performance falls otherwise :-/
 {
-	static char z=1; if (session_fullblit)
+	static BYTE z=~0; if (session_fullblit)
 	{
 		if (z)
 		{
@@ -500,7 +500,7 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 	return 0;
 }
 
-INLINE char *session_create(char *s) // create video+audio devices and set menu; 0 OK, !0 ERROR
+INLINE char *session_create(char *s) // create video+audio devices and set menu; NULL OK, *char ERROR!
 {
 	OSVERSIONINFO win32_version; HMENU session_submenu=NULL;
 	win32_version.dwOSVersionInfoSize=sizeof(win32_version); GetVersionEx(&win32_version);
@@ -656,7 +656,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 			waveOutWrite(session_wo,&session_wh,sizeof(session_wh)); // should be zero!
 		}
 	}
-	session_preset(); session_clean(); session_please();
+	session_clean(); session_please();
 	session_redraw(session_hwnd,session_dc1); // dummy first redraw, session_resize() hinges on it
 	timeBeginPeriod(8); // WIN10 sets this value too high by default; 8 is recommended in multiple sources
 	return NULL;
@@ -803,7 +803,6 @@ INLINE void session_render(void) // update video, audio and timers
 
 INLINE void session_byebye(void) // delete video+audio devices
 {
-	session_wrapup();
 	if (session_wo)
 		waveOutReset(session_wo),waveOutUnprepareHeader(session_wo,&session_wh,sizeof(session_wh)),waveOutClose(session_wo);
 	if (session_menu)

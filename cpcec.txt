@@ -41,7 +41,7 @@ pixels must be 800x600 at least. A sound card is optional, as well as equipping
 a joystick. The mouse can emulate a lightgun to the user's choice.
 
 The emulators span several files: the runnable binaries (by default CPCEC.EXE,
-CSFEC.EXE, MSXEC.EXE, ZXSEC.EXE, RUNEC.EXE and XRF.EXE in Windows) and the
+CSFEC.EXE, MSXEC.EXE, ZXSEC.EXE, RUNEC.EXE and XRFEC.EXE in Windows) and the
 firmware files C1541.ROM, C64EN.ROM, CPC464.ROM, CPC664.ROM, CPC6128.ROM,
 CPCADOS.ROM, CPCPLUS.ROM, MSX.ROM, MSX2.ROM, MSX2P.ROM, MSXDISK.ROM, MSXEC.SHA,
 SPEC128K.ROM, SPEC-P-2.ROM, SPEC-P-3.ROM and SPECTRUM.ROM. All these files must
@@ -346,7 +346,7 @@ can write (RAM only; the separator is `\`);
 * O ("output") requests a length in bytes and a filename, and creates a file
 with a memory dump starting from the current location of the cursor;
 * P ("print") requests a length in bytes and a filename, and creates a file with
-a disassembly (disassembly panel) or a hex dump (memory dump panel) starting
+a disassembly (disassembly panel) or a hexa dump (memory dump panel) starting
 from the current location of the cursor;
 * Q ("IRQ") runs the emulation until reaching an interruption;
 * R ("run to") runs the emulation until reaching the operation under the cursor
@@ -383,26 +383,26 @@ Usage of upper and lower case is unimportant; the debugger isn't case sensitive.
 Videos are recorded as XRF files, a middle step (low compression, low CPU usage)
 previous to the generation of conventional video files.
 
-The included tool XRF turns a XRF-type file into an AVI-type file. It works in
+The included tool XRFEC turns a XRF-type file into an AVI-type file. It works in
 two different ways, one is exclusive of Windows, the other one is general.
 
 When compiling the tool for Windows (it needs the system library AVIFIL32: "gcc
--lavifil32 -lvfw32 -xc xrf.c -oxrf.exe") and running it (the syntax is "xrf
-source.xrf target.avi ABCD") it will read the file "source.xrf" and generate a
-file named "target.avi" with the help of the video codec ABCD, if it's
-available. Running the tool without parameters shows the help and the list of
-available codecs; running it without a target parameter prints the source file's
-parameters. It's advised to install and use the codec ZMBV developed by the
-DOSBOX project because it provides the best performance in pixellated recordings
-like these.
+-lavifil32 -lvfw32 -xc xrfec.c -oxrfec.exe") and running it (the syntax is
+"xrfec source.xrf target.avi ABCD") it will read the file "source.xrf" and
+generate a file named "target.avi" with the help of the video codec ABCD, if
+it's available. Running the tool without parameters shows the help and the list
+of available codecs; running it without a target parameter prints the source
+file's parameters. It's advised to install and use the codec ZMBV developed by
+the DOSBOX project because it provides the best performance in pixellated
+recordings like these.
 
-In other systems XRF cannot directly use any codec, so the outcome is an AVI
+In other systems XRFEC cannot directly use any codec, so the output is an AVI
 file without any compression (image is RGB 24 bpp, sound is stereo PCM);
 fortunately, it can generate it through the console by specifying "-" instead of
 "target.avi" and feed this way a video encoding tool, for example FFMPEG: the
-command line "xrf source.xrf - | ffmpeg -i - target.avi" will delegate on FFMPEG
-the task of encoding the AVI file. Read the documentation of FFMPEG on this
-matter.
+command line "xrfec source.xrf - | ffmpeg -i - target.avi" will delegate on
+FFMPEG the task of encoding the AVI file. Read the documentation of FFMPEG on
+this matter.
 
 ## ZXSEC ##
 
@@ -1281,3 +1281,16 @@ IPS files.
 header in text files) and the MSX2 V9938 (register 9 must set the screen
 geometry at once: "La Abadia del Crimen MSX2"), and modifying the combined
 X-masking and Y-masking dot matrix.
+- 20240505 -- minor patch adding functions I ("input") and O ("output") to the
+debugger's graphics viewer: they behave like their hexa dump counterparts, and
+combined with key M, can be used to load and save VDP memory on MSXEC. Further
+"char->BYTE/INT8" cleanup: CSFEC was mute in "unsigned char" systems because the
+SID channel flags never fell below zero. Fixed bugs in the MSX VDP (running MSX2
+hardware, setting ink 0 to any colour but black, then switching to MSX1 hardware
+wouldn't reset ink 0 to black) and the CPC FDC (the delays that could skip
+sectors in "Bad Cat" were harming "Strike Force Harrier"). Replaced the buggy
+MSX 2.1 firmware with a clean 2.0 version: "La Abadía del Crimen MSX2" now runs
+out of the box. Moved more boilerplate code from the emulators to the shared
+runtime, whose INFLATE and DEFLATE functions now reuse more code. The XRF tool
+is now called XRFEC for the sake of consistency: XRF is the format and XRFEC is
+the tool.

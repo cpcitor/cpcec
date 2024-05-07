@@ -20,8 +20,8 @@
 char tape_path[STRMAX]="";
 
 FILE *tape=NULL;
-signed char tape_type; // -1 RECORD, 0 WAV/NULL, 1 CSW, 2 TZX, 3 TAP/CAS, 4 PZX
-signed char tape_signal; // signal set by the tape playback if something happens: >0 STOP, <0 END!
+INT8 tape_type; // -1 RECORD, 0 WAV/NULL, 1 CSW, 2 TZX, 3 TAP/CAS, 4 PZX
+INT8 tape_signal; // signal set by the tape playback if something happens: >0 STOP, <0 END!
 int tape_filetell,tape_filesize,tape_filebase; // tape file offset, length and base
 int tape_playback,tape_step; // tape signal frequency and unit step
 char tape_rewind=0; // option: does the tape rewind after running out?
@@ -90,7 +90,7 @@ char tape_header_cas1[8]="\037\246\336\272\314\023\175\164"; // CAS uses this st
 
 #define tape_setup() tape_close()
 #define tape_reset() ((void)0)
-int tape_close(void) // closes the tape file, if any; 0 OK
+int tape_close(void) // closes the tape file, if any; 0 OK, !0 ERROR
 {
 	if (tape)
 	{
@@ -855,12 +855,12 @@ int fasttape_test(const BYTE *s,WORD p) // compares a chunk of memory against a 
 	for (WORD a,z;;)
 		if (*s==0x80) // relative word, f.e. the pair "-128,  -2" points at its first byte
 		{
-			z=PEEK(p); ++p; z+=PEEK(p)*256; ++p; a=p+(signed char)(*++s); // fetch the word
+			z=PEEK(p); ++p; z+=PEEK(p)*256; ++p; a=p+(INT8)(*++s); // fetch the word
 			{ if (a!=z) return 0; } ++s; // give up if they don't match
 		}
 		else // memory comparison, the two bytes are the offset (signed!) and the length
 		{
-			p+=(signed char)(*s++); if (!(z=*s++)) return 1; // zero length: end of pattern
+			p+=(INT8)(*s++); if (!(z=*s++)) return 1; // zero length: end of pattern
 			while (z>0) { if (PEEK(p)!=*s) return 0; ++p,++s,--z; }
 		}
 }

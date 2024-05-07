@@ -11,7 +11,7 @@
 // interface of variables and procedures that don't require particular
 // knowledge of the emulation's intrinsic properties.
 
-#define MY_VERSION "20240422" // all emulators share the same release date
+#define MY_VERSION "20240505" // all emulators share the same release date
 
 #define INLINE // 'inline' is useless in TCC and GCC4, and harmful in GCC5!
 #define UNUSED // '__attribute__((unused))' may be missing outside GCC
@@ -124,8 +124,6 @@ int debug_xlat(int); // translate debug keys into codes
 void session_debug_show(int); // redraw the debugger text
 int session_debug_user(int); // debug logic takes priority: 0 UNKNOWN COMMAND, !0 OK
 INLINE void audio_playframe(void); // handle the sound filters
-INLINE void session_preset(void); // configure runtime stuff
-INLINE void session_wrapup(void); // clean runtime stuff up
 
 #ifdef SDL2 // optional inside Win32, required elsewhere!
 #include "cpcec-ox.h"
@@ -241,7 +239,7 @@ int log2u(unsigned int x) { int i=0; while (x>>=1) ++i; return i; } // same here
 #endif
 int sqrtu(unsigned int x) { if (x<2) return x; unsigned int y=x>>1,z; while (y>(z=(x/y+y)>>1)) y=z; return y; } // kudos to Hero of Alexandria!
 
-const BYTE rev8b[256]= // ((i&128)>>7)+((i&64)>>5)+((i&32)>>3)+((i&16)>>1)+((i&8)<<1)+((i&4)<<3)+((i&2)<<5)+((i&1)<<7)
+const BYTE rbits[256]= // ((i&128)>>7)+((i&64)>>5)+((i&32)>>3)+((i&16)>>1)+((i&8)<<1)+((i&4)<<3)+((i&2)<<5)+((i&1)<<7)
 {
 	0,128,64,192,32,160, 96,224,16,144,80,208,48,176,112,240, 8,136,72,200,40,168,104,232,24,152,88,216,56,184,120,248,
 	4,132,68,196,36,164,100,228,20,148,84,212,52,180,116,244,12,140,76,204,44,172,108,236,28,156,92,220,60,188,124,252,
@@ -252,9 +250,11 @@ const BYTE rev8b[256]= // ((i&128)>>7)+((i&64)>>5)+((i&32)>>3)+((i&16)>>1)+((i&8
 	3,131,67,195,35,163, 99,227,19,147,83,211,51,179,115,243,11,139,75,203,43,171,107,235,27,155,91,219,59,187,123,251,
 	7,135,71,199,39,167,103,231,23,151,87,215,55,183,119,247,15,143,79,207,47,175,111,239,31,159,95,223,63,191,127,255,
 };
-BYTE rev8u(BYTE i) { return rev8b[i]; } // the bit reversal of a byte can be done with a simple lookup table;
-WORD rev16u(WORD i) { return (rev8b[i&255]<<8)+rev8b[i>>8]; } // words and dwords require additional operations.
-DWORD rev32u(DWORD i) { return (rev8b[i&255]<<24)+(rev8b[(i>>8)&255]<<16)+(rev8b[(i>>16)&255]<<8)+rev8b[i>>24]; }
+#define rbit8(i) rbits[(BYTE)(i)] // the bit reversal of a single byte can be done with a lookup table access;
+WORD rbit16(const WORD i) { return (rbits[i&255]<<8)|rbits[i>>8]; } // words and dwords require additional operations.
+//DWORD rbit32(const DWORD i) { return (rbits[i&255]<<24)|(rbits[(i>>8)&255]<<16)|(rbits[(i>>16)&255]<<8)|rbits[i>>24]; } // unused
+//QWORD rbit64(const QWORD i) { return (rbits[i&255]<<56)|(rbits[(i>>8)&255]<<48)|(rbits[(i>>16)&255]<<40)|(rbits[(i>>24)&255]<<32)
+	//|(rbits[(i>>32)&255]<<24)|(rbits[(i>>40)&255]<<16)|(rbits[(i>>48)&255]<<8)|rbits[i>>56]; } // do we need QWORD at all!?
 
 char *strrstr(char *h,const char *n) // = backwards `strstr` (case sensitive!)
 {
@@ -353,14 +353,14 @@ int sortedsearch(char *t,int z,const char *s) // look for string `s` in an alpha
 // - the end marker is "X,X,255"; X must NOT be the last source byte!
 // size checks aside, this codec has no way to catch errors in the streams!
 #if 0 // this isn't allowed anymore!
-int bin2rle(BYTE *t,int o,const BYTE *s,int i) // encode `i` exact bytes from source `s` onto up to `o` bytes at target `t`; >=0 OK (encoded bytes), <0 ERROR
+int bin2rle(BYTE *t,int o,const BYTE *s,int i) // encode `i` exact bytes from source `s` onto up to `o` bytes at target `t`; >=0 output length, <0 ERROR!
 {
 	const BYTE *u=t,*r=s+i; BYTE k=0; while (s!=r&&o>=3) // source error!
 	{ *t++=k=*s,i=0; while (++s!=r&&k==*s&&i<255) ++i; if (i) *t++=k,*t++=i-1,o-=3; else --o; }
 	return o>=3?*t++=(k=~k),*t++=k,*t++=255,t-u:-1; // OK! // target error!
 }
 #endif
-int rle2bin(BYTE *t,int o,const BYTE *s,int i) // decode up to `i` bytes from source `s` onto up to `o` bytes at target `t`; >=0 OK (decoded bytes), <0 ERROR
+int rle2bin(BYTE *t,int o,const BYTE *s,int i) // decode up to `i` bytes from source `s` onto up to `o` bytes at target `t`; >=0 output length, <0 ERROR!
 {
 	const BYTE *u=t; BYTE k; while (i>=3) // source error!
 	{ int r=1; if (k=*s,k!=*++s) --i; else { if ((r=s[1])==255) return t-u; i-=3,s+=2,r+=2; } if ((o-=r)<0) break; do *t++=k; while (--r); } // exit!
@@ -374,13 +374,13 @@ int rle2bin(BYTE *t,int o,const BYTE *s,int i) // decode up to `i` bytes from so
 // - 1..3 instances of a byte that is X become the pair "X,0..2";
 // - 4..255 instances of any byte Y become the series "X,3..254,Y";
 // - the end marker is "X,255,Y", where Y is a global 8-bit checksum.
-int bin2rlf(BYTE *t,int o,const BYTE *s,int i) // encode `i` exact bytes from source `s` onto up to `o` bytes at target `t`; >=0 OK (encoded bytes), <0 ERROR
+int bin2rlf(BYTE *t,int o,const BYTE *s,int i) // encode `i` exact bytes from source `s` onto up to `o` bytes at target `t`; >=0 output length, <0 ERROR!
 {
 	const BYTE *u=t,*r=s+i; BYTE k=255,x=255,c; int h[256]; for (int z=0;z<256;++z) h[z]=0; while (i) ++h[s[--i]]; do if (h[x]>=h[--k]) x=k; while (k); c=*t++=x; while (s!=r&&o>=3)
 	{ c+=k=*s,i=0; while (++s!=r&&k==*s&&i<254) c+=k,++i; if (i>=3) o-=3,*t++=x,*t++=i,*t++=k; else if (k==x) o-=2,*t++=k,*t++=i; else do --o,*t++=k; while (i--); }
 	return o>=3?*t++=x,*t++=255,*t++=c,t-u:-1; // OK! // target error!
 }
-int rlf2bin(BYTE *t,int o,const BYTE *s,int i) // decode up to `i` bytes from source `s` onto up to `o` bytes at target `t`; >=0 OK (decoded bytes), <0 ERROR
+int rlf2bin(BYTE *t,int o,const BYTE *s,int i) // decode up to `i` bytes from source `s` onto up to `o` bytes at target `t`; >=0 output length, <0 ERROR!
 {
 	const BYTE *u=t; BYTE k,x=*s++,c=x; while (i>=3) // source error!
 	{ int r=0; if (--i,(k=*s++)==x) if (--i,(r=*s++)>=3) if (--i,k=*s++,r==255) return c-k?-1:t-u; if ((o-=++r)<0) break; do c+=*t++=k; while (--r); } // exit!
@@ -403,13 +403,13 @@ int rlf2bin(BYTE *t,int o,const BYTE *s,int i) // decode up to `i` bytes from so
 #if !LEMPELZIV_RETRY
 #define bin2lze(t,o,s,i) ((t),(o),(s),(i),-1) // never compress!
 #else
-int bin2lze(BYTE *t,int o,const BYTE *s,int i) // encode `i` exact bytes from source `s` onto up to `o` bytes at target `t`; >=0 OK (encoded bytes), <0 ERROR
+int bin2lze(BYTE *t,int o,const BYTE *s,int i) // encode `i` exact bytes from source `s` onto up to `o` bytes at target `t`; >=0 output length, <0 ERROR!
 {
 	BYTE *u=t; int h=0,p=0,k=0,z,*hh,*pp; if (!(hh=(int*)malloc(sizeof(int[65536+65536])))) return -1; // memory error! maybe this could go to session_preset()...
 	{ for (pp=hh+65536,z=65536+65536;z;) hh[--z]=~65536; } while (p+2<i) // ~65536 < -65536, i.e. setup hashes with values beyond the search range
 		{ int g=0,m=0,r=0,n=p-65536; for (int q=hh[s[p+1]*256+s[p]],e=LEMPELZIV_RETRY;q>=n&&e;q=pp[q&65535],(LEMPELZIV_RETRY<65536&&--e)) if (s[q+m]==s[p+m])
-			{ int y; if ((z=65535+p)>i) z=i; const BYTE *v=s+q+1,*w=s+p+1,*x=s+z; while (*++v==*++w&&w!=x) {} // search in current minimum and maximum
-			if (z=w-s-p,g<(y=z-(p-q>256?1:0)-(z<18?0:z<256?1:z<512?2:3))) if (g=y,m=z,r=p-q,w==x) break; } // early break!
+			{ int y; if ((z=65535+p)>i) z=i; const BYTE *v=s+q+1,*w=s+p+1,*x=s+z; while (*++v==*++w&&w<x) {} // search in current minimum and maximum
+			if (z=w-s-p,g<(y=z-(p-q>256?1:0)-(z<18?0:z<256?1:z<512?2:3))) if (g=y,m=z,r=p-q,w>=x) break; } // early break!
 		if (m<3) ++p; else // the LZSA1 standard can't handle more than 65535 literals in a row, hence the better-safe-than-sorry 64K limit
 			{ if ((z=p-k)>65535||(o-=z+2)<8) break; *t++=(r>256?128:0)+(z<7?z*16:112)+(m<18?m-3:15);
 			if (z>=7) { if (--o,z<256) *t++=z-7; else if (--o,z<512) *t++=250,*t++=z; else --o,*t++=249,*t++=z,*t++=z>>8; } // literal length
@@ -420,10 +420,9 @@ int bin2lze(BYTE *t,int o,const BYTE *s,int i) // encode `i` exact bytes from so
 	if (z<7) *t++=z*16+15; else if (*t++=127,z<256) *t++=z-7; else if (z<512) *t++=250,*t++=z; else *t++=249,*t++=z,*t++=z>>8; // final literals
 	{ while (k<i) *t++=s[k++]; } for (z=0;k;) z+=s[--k]; return *t++=z,*t++=238,*t++=0,*t++=0,t-u; // calculate checksum and store end marker
 }
-#undef bin2lze_n
 #endif
 #endif
-int lze2bin(BYTE *t,int o,const BYTE *s,int i) // decode up to `i` bytes from source `s` onto up to `o` bytes at target `t`; >=0 OK (encoded bytes), <0 ERROR
+int lze2bin(BYTE *t,int o,const BYTE *s,int i) // decode up to `i` bytes from source `s` onto up to `o` bytes at target `t`; >=0 output length, <0 ERROR!
 {
 	BYTE c=0,*u=t,z; while (i>4) // the shortest possible end marker is five bytes long (15, checksum, 238, 0, 0)
 		{ int r,m=((z=*s++)>>4)&7; if (m>=7&&(--i,(m+=*s++)>=256)) { if (--i,m>256) m=*s+++256; else if (--i,m=*s++,(m+=*s++<<8)<512) break; } // bad header!
@@ -432,7 +431,6 @@ int lze2bin(BYTE *t,int o,const BYTE *s,int i) // decode up to `i` bytes from so
 		const BYTE *v=t+r; if (v<u||(o-=m)<0) break; do c+=*t++=*v++; while (--m); } // bad offset/target!
 	return -1; // something went wrong!
 }
-#undef lze2bin_n
 #endif
 #ifdef LEMPELZIV_ENCODING
 // quick'n'dirty implementation of Emmanuel Marty's nibblewise 64K-ranged Lempel-Ziv encoding LZSA2, https://github.com/emmanuel-marty/lzsa (BlockFormat_LZSA2.md)
@@ -442,13 +440,13 @@ int lze2bin(BYTE *t,int o,const BYTE *s,int i) // decode up to `i` bytes from so
 #else
 void bin2lzf_encode(BYTE **t,int *o,BYTE *a,BYTE **b,int n) { if (*a) *a=0,**b|=n&15; else --*o,*(*b=(*t)++)=n<<(*a=4); } // store a nibble; see below bin2lzf_n(n)
 #define bin2lzf_n(n) bin2lzf_encode(&t,&o,&a,&b,(n)) // without bin2lzf_encode(): (a?a=0,*b|=(n)&15:(--o,*(b=t++)=(n)<<(a=4)))
-int bin2lzf(BYTE *t,int o,const BYTE *s,int i) // encode `i` exact bytes from source `s` onto up to `o` bytes at target `t`; >=0 OK (encoded bytes), <0 ERROR
+int bin2lzf(BYTE *t,int o,const BYTE *s,int i) // encode `i` exact bytes from source `s` onto up to `o` bytes at target `t`; >=0 output length, <0 ERROR!
 {
 	BYTE *u=t,a=0,*b; int h=0,p=0,k=0,rr=0,z,*hh,*pp; if (!(hh=(int*)malloc(sizeof(int[65536+65536])))) return -1; // memory error! maybe this should go to session_preset()...
 	{ for (pp=hh+65536,z=65536+65536;z;) hh[--z]=~65536; } while (p+1<i) // ~65536 < -65536, i.e. setup hashes with values beyond the search range
 		{ int g=0,m=0,r=0,n=p-65536; for (int q=hh[s[p+1]*256+s[p]],e=LEMPELZIV_RETRY;q>=n&&e;q=pp[q&65535],(LEMPELZIV_RETRY<65536&&--e)) if (p-q==rr||s[q+m]==s[p+m])
-			{ int y; if ((z=65535+p)>i) z=i; const BYTE *v=s+q+1,*w=s+p+1,*x=s+z; while (*++v==*++w&&w!=x) {} // search in current minimum and maximum
-			if (z=w-s-p,g<(y=z*2-(p-q==rr?1:p-q>512?p-q>8704?5:4:p-q>32?3:2)-(z<24?z<9?1:2:z<256?4:8))) if (g=y,m=z,r=p-q,w==x) break; } // early break!
+			{ int y; if ((z=65535+p)>i) z=i; const BYTE *v=s+q+1,*w=s+p+1,*x=s+z; while (*++v==*++w&&w<x) {} // search in current minimum and maximum
+			if (z=w-s-p,g<(y=z*2-(p-q==rr?1:p-q>512?p-q>8704?5:4:p-q>32?3:2)-(z<24?z<9?1:2:z<256?4:8))) if (g=y,m=z,r=p-q,w>=x) break; } // early break!
 		if (m<2) ++p; else // the LZSA2 standard can't handle more than 65535 literals in a row, hence the better-safe-than-sorry 64K limit
 			{ if ((z=p-k)>65535||(o-=z+1)<7) break; *t++=(r==rr?224:r>512?r>8704?192:160-((-r>>3)&32):r>32?96-((-r>>3)&32):((~r&1)<<5))+(z<3?z*8:24)+(m<9?m-2:7);
 			if (z>=3) { if (z<18) bin2lzf_n(z-3); else if (bin2lzf_n(15),z<256) --o,*t++=z-18; else o-=3,*t++=239,*t++=z,*t++=z>>8; } // literal length
@@ -464,7 +462,7 @@ int bin2lzf(BYTE *t,int o,const BYTE *s,int i) // encode `i` exact bytes from so
 #endif
 int lzf2bin_decode(BYTE *a,BYTE *b,const BYTE **s,int *i) { return *a?*a=0,*b&15:(--*i,((*b=*(*s)++)>>(*a=4))); } // fetch a nibble; see below lzf2bin_n()
 #define lzf2bin_n() lzf2bin_decode(&a,&b,&s,&i) // without lzf2bin_decode(): (a?a=0,b&15:(--i,((b=*s++)>>(a=4))))
-int lzf2bin(BYTE *t,int o,const BYTE *s,int i) // decode up to `i` bytes from source `s` onto up to `o` bytes at target `t`; >=0 OK (encoded bytes), <0 ERROR
+int lzf2bin(BYTE *t,int o,const BYTE *s,int i) // decode up to `i` bytes from source `s` onto up to `o` bytes at target `t`; >=0 output length, <0 ERROR!
 {
 	BYTE c=0,*u=t,a=0,b,z; for (int r=0;i>2;) // the shortest possible end marker is three bytes long (103, checksum, 232; the nibble after the header may have been preloaded)
 		{ int m=((z=*s++)>>3)&3; if (m>=3&&((m+=lzf2bin_n())>=18)) { if (--i,(m+=*s++)>256) if (i-=2,m=*s++,(m+=*s++<<8)<256) break; } // bad header!
@@ -484,7 +482,7 @@ int lzf2bin(BYTE *t,int o,const BYTE *s,int i) // decode up to `i` bytes from so
 // 3.- sha1_exit(s,0..63) processes the last bytes in the stream,
 // and stores the 160-bit result in the 32-bit vars sha1_o[0..4],
 // where [0] stores the top 32 bits and [4] stores the bottom 32;
-// the "&0XFFFFFFFF" operations are required on a 64-bit machine!
+// the "&0XFFFFFFFF" operations are essential on 64-bit machines!
 unsigned int sha1_o[5]; long long int sha1_i;
 void sha1_init(void)
 	{ sha1_o[0]=0x67452301,sha1_o[1]=0xEFCDAB89,sha1_o[2]=0x98BADCFE,sha1_o[3]=0x10325476,sha1_o[4]=0xC3D2E1F0; sha1_i=0; }
@@ -493,9 +491,9 @@ void sha1_hash(const BYTE *s)
 	static unsigned int z[80]; // don't abuse the poor stack! we don't have to allocate and release this buffer again and again!
 	unsigned int a=sha1_o[0]&0XFFFFFFFF,b=sha1_o[1]&0XFFFFFFFF,c=sha1_o[2]&0XFFFFFFFF,d=sha1_o[3]&0XFFFFFFFF,e=sha1_o[4]&0XFFFFFFFF,f,i=0;
 	for (;i<16;++i) // first 16 fields
-		z[i]=(s[i*4+0]<<24)+(s[i*4+1]<<16)+(s[i*4+2]<<8)+s[i*4+3];
+		z[i]=s[i*4+0]<<24|s[i*4+1]<<16|s[i*4+2]<<8|s[i*4+3];
 	for (;i<80;++i) // up to 80 fields
-		f=(z[i-3]^z[i-8]^z[i-14]^z[i-16])&0XFFFFFFFF,z[i]=(f<<1)+(f>>31);
+		f=(z[i-3]^z[i-8]^z[i-14]^z[i-16])&0XFFFFFFFF,z[i]=((f<<1)&0XFFFFFFFF)|f>>31;
 	for (i=0;i<80;++i)
 	{
 		if (i<40)
@@ -570,22 +568,23 @@ VIDEO_UNIT *video_xlat_all(VIDEO_UNIT *t,VIDEO_UNIT const *s,int n) // turn pale
 char video_gammaflag=1; // keep it even if we disable this on compile-time!
 #ifndef RGB2LINEAR // working with non-linear sRGB looks better but is slow;
 BYTE srgb[1<<16],crt1[256],crt2[256]; // the sRGB-to-linear-and-back operations need precalculated tables, they're too expensive otherwise :-(
-void video_recalc(void)
+void video_recalc(void) // redo the video filter tables
 {
 	if (video_gammaflag)
 		for (int h=0;h<256;++h)
 		{
-			int z=h*h;
-			crt1[h]=z<128*255?0:sqrtu(z*2-255*255),
-			crt2[h]=z<128*255?sqrtu(  z*2):   255 ;
+			int z=h*h*2;
+			crt1[h]=z<255*255?0:sqrtu(z-255*255),
+			crt2[h]=z<255*255?sqrtu(  z):   255 ;
 			for (int l=0;l<256;++l)
 				srgb[h*256+l]=sqrtu((h*h+l*l+h+l)>>1);
 		}
 	else
 		for (int h=0;h<256;++h)
 		{
-			crt1[h]=(h<128?0:h*2-255), // i.e. (255*2=510)-255=255
-			crt2[h]=(h<128?  h*2:255);
+			int z=h*2;
+			crt1[h]=(z<255?0:z-255),
+			crt2[h]=(z<255?  z:255);
 			for (int l=0;l<256;++l)
 				srgb[h*256+l]=(h+l+1)>>1;
 		}
@@ -615,12 +614,12 @@ void video_recalc(void)
 //#define VIDEO_FILTER_DOT0(x) ((((x)>>2)&0X3F3F3F)*3+0X212121) // (6+1)/8: 00->21,FF->DE
 #define VIDEO_FILTER_DOT0(x) ((x)-(((x)>>2)&0X3F3F3F)+0X202020) // no mult: 00->20,FF->E0
 #ifndef RGB2LINEAR
-//#define VIDEO_FILTER_DOT1(x) ((crt1[(x)>>16]<<16)+(crt1[((x)>>8)&255]<<8)+(crt1[(x)&255]))
-//#define VIDEO_FILTER_DOT2(x) ((crt2[(x)>>16]<<16)+(crt2[((x)>>8)&255]<<8)+(crt2[(x)&255]))
-#define VIDEO_FILTER_DOT1(x) ((crt1[(x)>>16]<<16)+(crt1[((x)>>8)&255]<<8)+(crt1[(x)&255])) // without colour aberration (fewer artifacts)
-#define VIDEO_FILTER_DOT2(x) ((crt2[(x)>>16]<<16)+(crt2[((x)>>8)&255]<<8)+(crt2[(x)&255]))
-//#define VIDEO_FILTER_DOT1(x) ((crt1[(x)>>16]<<16)+(crt2[((x)>>8)&255]<<8)+(crt1[(x)&255])) // with colour aberration (closer to true CRT)
-//#define VIDEO_FILTER_DOT2(x) ((crt2[(x)>>16]<<16)+(crt1[((x)>>8)&255]<<8)+(crt2[(x)&255]))
+//#define VIDEO_FILTER_DOT1(x) ((crt1[(x)>>16]<<16)|(crt1[((x)>>8)&255]<<8)|crt1[(x)&255])
+//#define VIDEO_FILTER_DOT2(x) ((crt2[(x)>>16]<<16)|(crt2[((x)>>8)&255]<<8)|crt2[(x)&255])
+#define VIDEO_FILTER_DOT1(x) ((crt1[(x)>>16]<<16)|(crt1[((x)>>8)&255]<<8)|crt1[(x)&255]) // without colour aberration (fewer artifacts)
+#define VIDEO_FILTER_DOT2(x) ((crt2[(x)>>16]<<16)|(crt2[((x)>>8)&255]<<8)|crt2[(x)&255])
+//#define VIDEO_FILTER_DOT1(x) ((crt1[(x)>>16]<<16)|(crt2[((x)>>8)&255]<<8)|crt1[(x)&255]) // with colour aberration (closer to true CRT)
+//#define VIDEO_FILTER_DOT2(x) ((crt2[(x)>>16]<<16)|(crt1[((x)>>8)&255]<<8)|crt2[(x)&255])
 #define VIDEO_FILTER_DOT3(x) ((x)-(((x)>>1)&0X7F7F7F)+0X404040) // (4+2:4+2:4+2)/8
 //#define VIDEO_FILTER_DOT3(x) ((x)-(((x)>>2)&0X3F3F3F)+0X202020) // (6+1:6+1:6+1)/8
 //#define VIDEO_FILTER_DOT3 // checkerboard, quick but not very visible
@@ -676,7 +675,7 @@ void video_callscanline(VIDEO_UNIT *vl)
 				break;
 		}
 	}
-	else switch ((video_filter&(VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y))+((video_pos_y&1)?VIDEO_FILTER_MASK_Z:0))
+	else switch ((video_filter&(VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y))|((video_pos_y&1)?VIDEO_FILTER_MASK_Z:0))
 	{
 		// half/single/double scanlines: bottom lines add VIDEO_FILTER_MASK_Z
 		case VIDEO_FILTER_MASK_X:
@@ -993,158 +992,136 @@ INLINE void session_update(void) // render video+audio thru OS and handle realti
 // the INFLATE method! ... or more properly a terribly simplified mess
 // based on the RFC1951 standard and PUFF.C from the ZLIB project.
 
-BYTE *puff_src,*puff_tgt; // source and target buffers
-int puff_srcl,puff_tgtl,puff_srco,puff_tgto,puff_word,puff_bits;
-#define puff_get() (puff_src[puff_srco++]) // receive a byte from source
-#define puff_put(i) (puff_tgt[puff_tgto++]=(i)) // send a byte to target
-#define puff_cpy(i) (memcpy(puff_tgt+puff_tgto,puff_src+puff_srco,(i)),puff_tgto+=(i),puff_srco+=(i))
-// Huffman-bitwise operations
-struct puff_huff { short *cnt,*sym; }; // Huffman table element
-int puff_recv(int n) // receives `n` bits from source; <0 ERROR
+BYTE *puff_data; int puff_size,puff_word,puff_bits; // stream cursor
+int puff_len_c[16+288],puff_off_c[16+32]; // length and offset Huffman tables
+char puff_cnt_c[288+32]; // bit counts: 0..287 length codes, 288..319 offset codes
+
+const int puff_len_k[2][32]={ // length constants; 0, 30 and 31 are reserved
+	{ 0,3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258,0,0 },
+	{ 0,0,0,0,0,0,0,0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4,  4,  5,  5,  5,  5,  0,0,0 }};
+const int puff_off_k[2][32]={ // offset constants; 30 and 31 are reserved
+	{ 1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577,0,0 },
+	{ 0,0,0,0,1,1,2, 2, 3, 3, 4, 4, 5, 5,  6,  6,  7,  7,  8,  8,   9,   9,  10,  10,  11,  11,  12,   12,   13,   13,0,0 }};
+const char puff_cnt_k[19]={ 16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15 }; // custom Huffman indices
+void puff_default(void) // generate the default static Huffman bit counts
 {
-	int w=puff_word,b=puff_bits; while (b<n) // local copies are faster... are they?
-	{
-		if (puff_srco>=puff_srcl) return -1; // source overrun!
-		w+=puff_get()<<b,b+=8; // read byte from source
-	}
-	puff_word=w>>n; puff_bits=b-n; return w&((1<<n)-1); // adjust target and flush bits
+	int i=0; // lengths: 8 x144, 9 x112, 7 x24, 8 x8; offsets: 5 x32
+	for (;i<144;++i) puff_cnt_c[i]=8; // 000..143 : 00110000...10111111.
+	for (;i<256;++i) puff_cnt_c[i]=9; // 144..255 : 110010000..111111111
+	for (;i<280;++i) puff_cnt_c[i]=7; // 256..279 : 0000000....0010111..
+	for (;i<288;++i) puff_cnt_c[i]=8; // 280..287 : 11000000...11000111.
+	for (;i<320;++i) puff_cnt_c[i]=5; // notice that the reserved codes take part in the calculations!
 }
-int puff_decode(struct puff_huff *h) // decodes Huffman code from source; <0 ERROR
+// Huffman-bitwise operations
+int puff_recv(int n) // receive `n` bits from source; <0 ERROR, >=0 OUTPUT
 {
-	int w=puff_word,b=puff_bits; // local copies are faster
-	short *next=h->cnt; int l=1,i=0,base=0,code=0;
-	for (;;) // extract bits until they fit within an interval
+	int w=puff_word; while (puff_bits<n) // we'll need `w` later
+	{
+		if (--puff_size<0) return -1; // source underrun!
+		w+=*puff_data++<<puff_bits,puff_bits+=8; // read byte from source
+	}
+	puff_word=w>>n; puff_bits-=n; return w&((1<<n)-1); // adjust target and flush bits
+}
+int puff_decode(int *h) // receive code from Huffman source; <0 ERROR, >=0 OUTPUT
+{
+	int w=puff_word,b=puff_bits; // local copies are faster... are they?
+	for (int *s=h,l=1,i=0,base=0,code=0;;) // extract bits until they fit within an interval
 	{
 		while (b--)
 		{
-			int o=*++next; if (code+=w&1,w>>=1,code<base+o) // does the code fit the interval?
-				return puff_word=w,puff_bits=(puff_bits-l)&7,h->sym[i+(code-base)]; // result!
+			int o=*++s; if (code+=w&1,w>>=1,code<base+o) // does the code fit the interval?
+				return puff_word=w,puff_bits=(puff_bits-l)&7,h[16+i+(code-base)]; // yes!
 			i+=o,base=(base+o)<<1,code<<=1,++l; // calculate next interval
 		}
-		if (!(b=(15+1)-l)||puff_srco>=puff_srcl) return -1; // bad value! source overrun!
-		if (w=puff_get(),b>8) b=8; // copy byte from source and flush bits
+		if (!(b=16-l)||--puff_size<0) return -1; // too many bits! source underrun!
+		if (w=*puff_data++,b>8) b=8; // read byte from source and drop any bits left
 	}
 }
-int puff_tables(struct puff_huff *h,short *l,int n) // generates Huffman input tables from canonical length table; !0 ERROR
+int puff_tables(int *h,char *l,int n) // generate Huffman input tables from canonical length table; 0 OK, !0 ERROR
 {
-	short o[15+1]; int i,a; for (i=0;i<=15;++i) h->cnt[i]=0; // reset all bit counts
-	for (i=0;i<n;++i) ++(h->cnt[l[i]]); // increase relevant bit counts
-	if (h->cnt[0]==n) return 0; // nothing to do!
-	for (a=i=1;i<=15;++i) if ((a=(a<<1)-(h->cnt[i]))<0) return a; // bad value!
-	for (o[i=1]=0;i<15;++i) o[i+1]=o[i]+h->cnt[i]; // reset all bit offsets
-	for (i=0;i<n;++i) if (l[i]) h->sym[o[l[i]]++]=i; // define symbols from bit offsets
+	int o[16],i,a; for (i=0;i<16;++i) h[i]=0; // reset intervals
+	for (i=0;i<n;++i) ++h[l[i]]; // calculate intervals
+	if (h[0]==n) return 0; // empty table, nothing to do!
+	for (a=i=1;i<16;++i) if ((a=(a<<1)-h[i])<0) return a; // bad value!
+	for (o[i=1]=0;i<15;++i) o[i+1]=o[i]+h[i]; // calculate base for each bit count
+	for (i=0;i<n;++i) if (l[i]) h[16+o[l[i]]++]=i; // assign values to all symbols
 	return a; // 0 if complete, >0 otherwise!
 }
-short puff_lencnt[15+1],puff_lensym[288]; // 286 and 287 are reserved
-short puff_offcnt[15+1],puff_offsym[32]; // 30 and 31 are reserved
-struct puff_huff puff_lcode={ puff_lencnt,puff_lensym };
-struct puff_huff puff_ocode={ puff_offcnt,puff_offsym };
-const short puff_huff_l[2][32]={ // length constants; 0, 30 and 31 are reserved
-	{ 0,3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258,0,0 },
-	{ 0,0,0,0,0,0,0,0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4,  4,  5,  5,  5,  5,  0,0,0 }};
-const short puff_huff_o[2][32]={ // offset constants; 30 and 31 are reserved
-	{ 1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577,0,0 },
-	{ 0,0,0,0,1,1,2, 2, 3, 3, 4, 4, 5, 5,  6,  6,  7,  7,  8,  8,   9,   9,  10,  10,  11,  11,  12,   12,   13,   13,0,0 }};
-int puff_expand(void) // decodes source into target; !0 ERROR
+int puff_main(BYTE *t,int o,BYTE *s,int i) // inflate source `s[i]` into target `t[o]`; >=0 output length, <0 ERROR!
 {
-	for (int a,l,o;;)
+	puff_data=s,puff_size=i,puff_word=puff_bits=0;
+	BYTE *u=t; int j,q; do
 	{
-		if ((a=puff_decode(&puff_lcode))<0||a>256+29) return -1; // bad value!
-		if (a<256) // literal?
+		if (q=puff_recv(1),!(i=puff_recv(2))) // stored block?
 		{
-			if (puff_tgto>=puff_tgtl) return -1; // target overrun!
-			puff_put(a); // copy literal
+			if ((puff_size-=4)<0) return -1; // source underrun!
+			i=*puff_data++,i+=*puff_data++<<8; j=*puff_data++,j+=*puff_data++<<8;
+			if (i+j!=0XFFFF||(puff_size-=i)<0||(o-=i)<0) return -1; // bad value! source underrun! target overflow!
+			// length zero is allowed: `...This completes the current deflate block and follows it with an empty stored block that is
+			// three bits plus filler bits to the next byte, followed by four bytes (00 00 ff ff)...` http://www.zlib.net/manual.html
+			memcpy(t,puff_data,i),puff_data+=i,t+=i,puff_word=puff_bits=0; // copy data, update pointers and drop any bits left
 		}
-		else if (a-=256) // length:offset pair?
+		else if (i>0&&i<3) // packed block?
 		{
-			if (puff_tgto+(l=puff_huff_l[0][a]+puff_recv(puff_huff_l[1][a]))>puff_tgtl) return -1; // target overrun!
-			if ((a=puff_decode(&puff_ocode))<0||a>29) return a; // bad value!
-			if ((o=puff_tgto-puff_huff_o[0][a]-puff_recv(puff_huff_o[1][a]))<0) return o; // source underrun!
-			do puff_put(puff_tgt[o++]); while (--l);
-		}
-		else return 0; // end of block
-	}
-}
-// block type handling
-INLINE int puff_stored(void) // copies raw uncompressed byte block from source to target; !0 ERROR
-{
-	if (puff_srco+4>puff_srcl) return -1; // source overrun!
-	int l=puff_get(); l+=puff_get()<<8; int k=puff_get(); k+=puff_get()<<8;
-	if (l+k!=0XFFFF||puff_srco+l>puff_srcl||puff_tgto+l>puff_tgtl) return -1; // bad value! source/target overrun!
-	// length zero is allowed: `...This completes the current deflate block and follows it with an empty stored block that is
-	// three bits plus filler bits to the next byte, followed by four bytes (00 00 ff ff)...` http://www.zlib.net/manual.html
-	return puff_cpy(l),puff_word=puff_bits=0; // copy source to target, update pointers and discard any bits left
-}
-short puff_tablez[288+32]; // 0..287 lengths, 288..319 offsets
-const short puff_table0[19]={ 16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15 }; // Huffman indices
-void puff_tablezero(void) // generates the default static Huffman bit counts
-{
-	int i=0; // lengths: 8 x144, 9 x112, 7 x24, 8 x8; offsets: 5 x32
-	for (;i<144;++i) puff_tablez[i]=8; // 000..143 : 00110000...10111111.
-	for (;i<256;++i) puff_tablez[i]=9; // 144..255 : 110010000..111111111
-	for (;i<280;++i) puff_tablez[i]=7; // 256..279 : 0000000....0010111..
-	for (;i<288;++i) puff_tablez[i]=8; // 280..287 : 11000000...11000111.
-	for (;i<288+32;++i) puff_tablez[i]=5; // notice that the reserved codes take part in the calculations!
-}
-INLINE int puff_static(void) // generates default Huffman codes and expands block from source to target; !0 ERROR
-{
-	puff_tablezero(); // default static Huffman tables
-	puff_tables(&puff_lcode,puff_tablez,288); // THERE MUST BE EXACTLY 288 LENGTH CODES!!
-	puff_tables(&puff_ocode,puff_tablez+288,32); // DITTO: THERE MUST BE 32 OFFSET CODES!
-	return puff_expand();
-}
-INLINE int puff_dynamic(void) // generates custom Huffman codes and expands block from source to target; !0 ERROR
-{
-	int l,o,h,i=0; if ((l=puff_recv(5)+257)<257||l>286||(o=puff_recv(5)+1)<1||o>30||(h=puff_recv(4)+4)<4)
-		return -1; // bad match/range/huffman values!
-	while (i<h) puff_tablez[puff_table0[i++]]=puff_recv(3); // read bit counts for the Huffman-encoded header
-	while (i<19) puff_tablez[puff_table0[i++]]=0; // padding: clear the remainder of this header
-	if (puff_tables(&puff_lcode,puff_tablez,19)) return -1; // invalid table!
-	for (l+=o,i=0;i<l;)
-	{
-		int a; if ((a=puff_decode(&puff_lcode))<16) // literal?
-			puff_tablez[i++]=a; // copy literal
-		else
-		{
-			if (a<17)
+			if (i==1) // default Huffman trees?
 			{
-				if (i<1) return -1; // bad value!
-				h=puff_tablez[i-1],a=3+puff_recv(2); // copy last value 3..6 times
+				puff_default(); // default static Huffman tables
+				puff_tables(puff_len_c,puff_cnt_c,288); // THERE MUST BE EXACTLY 288 LENGTH CODES!!
+				puff_tables(puff_off_c,puff_cnt_c+288,32); // DITTO: THERE MUST BE 32 OFFSET CODES!
 			}
-			else if (h=0,a==17)
-				a=3+puff_recv(3); // store zero 3..10 times
-			else // (a>17)
-				a=11+puff_recv(7); // store zero 11..138 times
-			if (i+a>l) return -1; // overrun!
-			while (a--) puff_tablez[i++]=h; // copy or store value
+			else // custom Huffman trees!
+			{
+				int len,off,a;
+				if ((len=puff_recv(5)+257)>286||(off=puff_recv(5)+1)>30||(j=puff_recv(4)+4)<4)
+					return -1; // bad match/range/huffman values!
+				for (a=0,i=0;i<j;) a|=puff_cnt_c[puff_cnt_k[i++]]=puff_recv(3); // read bit counts for the Huffman-encoded header
+				while (i<19) puff_cnt_c[puff_cnt_k[i++]]=0; // padding: clear the remainder of this header
+				if (a<0||puff_tables(puff_len_c,puff_cnt_c,19)) return -1; // bad values! invalid table!
+				for (len+=off,i=0;i<len;)
+					if ((a=puff_decode(puff_len_c))<16) // literal?
+						if (a<0) return a; else puff_cnt_c[i++]=a; // bad value!
+					else
+					{
+						if (a<17) // copy last value 3..6 times?
+						{
+							if (i<1) return -1; // bad value!
+							j=puff_cnt_c[i-1],a=3+puff_recv(2);
+						}
+						else // store zero 3..10 or 11..138 times?
+							j=0,a=a==17?3+puff_recv(3):11+puff_recv(7);
+						if (puff_size<0||i+a>len) return -1; // source underrun! bad value!
+						do puff_cnt_c[i++]=j; while (--a);
+					}
+				if ((len-=off,puff_tables(puff_len_c,puff_cnt_c,len)&&len-puff_len_c[0]!=1)|| // bad length table!
+					(puff_tables(puff_off_c,puff_cnt_c+len,off)&&off-puff_off_c[0]!=1)) return -1; // bad offset table!
+			}
+			for (;;) // beware: custom trees cannot generate lenght codes >=286 or offset codes >=30, but default trees can!
+			{
+				if ((i=puff_decode(puff_len_c))<256) // literal?
+					if (i<0||--o<0) return -1; else *t++=i; // bad value! target overflow!
+				else if (i-=256) // length:offset pair?
+				{
+					if (i>=30||(o-=(i=puff_len_k[0][i]+puff_recv(puff_len_k[1][i])))<0|| // target overflow!
+						(j=puff_decode(puff_off_c))<0||j>=30|| // bad value!
+						(j=puff_off_k[0][j]+puff_recv(puff_off_k[1][j]))>t-u) return -1; // source underrun!
+					s=t-j; do *t++=*s++; while (--i);
+				}
+				else break; // end of block!
+			}
 		}
+		else return -1; // unsupported block!
 	}
-	if (l-=o,puff_tables(&puff_lcode,puff_tablez,l)&&(l-puff_lcode.cnt[0]!=1)) return -1; // invalid length tables!
-	if (puff_tables(&puff_ocode,puff_tablez+l,o)&&(o-puff_ocode.cnt[0]!=1)) return -1; // invalid offset tables!
-	return puff_expand();
-}
-int puff_main(void) // inflates source into target; !0 ERROR
-{
-	int q,e; puff_word=puff_bits=0; // caller sets puff_srcX and puff_tgtX
-	do switch (q=puff_recv(1),puff_recv(2)) // which type of block it is?
-	{
-		case 0: e=puff_stored(); break; // uncompressed raw bytes
-		case 1: e=puff_static(); break; // default Huffman coding
-		case 2: e=puff_dynamic(); break; // custom Huffman coding
-		default: e=1; // bad value, either -1 or 3!
-	}
-	while (!(q|e)); return e; // is this the last block? did something go wrong?
+	while (!q); return t-u; // OK, output length
 }
 #ifdef INFLATE_RFC1950
 // RFC1950 standard data decoder
-DWORD puff_adler32(const BYTE *t,int o) // calculates Adler32 checksum of a block `t` of size `o`
-	{ int j=1,k=0; do if ((k+=(j+=*t++))>=65521) k%=65521,j%=65521; while (--o); return (k<<16)+j; }
-int puff_zlib(BYTE *t,int o,BYTE *s,int i) // decodes a RFC1950 standard ZLIB object; <0 ERROR, >=0 LENGTH
+DWORD puff_adler32(const BYTE *t,int o) // calculates Adler-32 checksum of a block `t` of size `o`
+	{ int j=1,k=0; while (o-->0) { if ((k+=(j+=*t++))>=65521) k%=65521,j%=65521; } return (k<<16)+j; }
+int puff_zlib(BYTE *t,int o,BYTE *s,int i) // decodes a RFC1950 standard ZLIB object; >=0 output length, <0 ERROR!
 {
 	if (!s||!t||i<6||o<0) return -1; // NULL or empty source or target!
 	if (s[0]!=120||s[1]&32||(s[0]*256+s[1])%31) return -1; // no ZLIB prefix!
-	puff_tgt=t,puff_tgtl=o,puff_src=s+2,puff_srcl=i-4,puff_srco=puff_tgto=0;
-	return puff_main()||puff_adler32(t,o)!=mgetmmmm(&s[i-4])?-1:puff_tgto;
+	return s+=2,i-=6,(o=puff_main(t,o,s,i))<0||puff_adler32(t,o)!=mgetmmmm(&s[i])?-1:o;
 }
 #endif
 
@@ -1157,17 +1134,21 @@ int puff_zlib(BYTE *t,int o,BYTE *s,int i) // decodes a RFC1950 standard ZLIB ob
 // = 0 never performs any compression at all
 // = 1 downgrades Lempel-Ziv into Run-Length
 // = 2..9 go from fast-n-weak to hard-n-slow
+
 #ifdef DEFLATE_LEVEL
-#ifndef DEFLATE_NOSTORE // this tag is obviously incompatible with DEFLATE_LEVEL = 0 ...
-int huff_stored(void) // the storage part of DEFLATE; !0 ERROR
+#if DEFLATE_LEVEL < 1
+#undef DEFLATE_NOSTORE // this tag is obviously incompatible with DEFLATE_LEVEL = 0
+#endif
+#ifndef DEFLATE_NOSTORE
+int huff_stored(BYTE *t,int o,BYTE *s,int i) // the storage part of DEFLATE; >=0 output length, <0 ERROR!
 {
-	while (puff_srco+65535<puff_srcl) // cuts source into 64K-1B blocks
+	BYTE *u=t; while (i>65535) // cuts source into 64K-1B non-final blocks
 	{
-		if (puff_tgto+65535+5>puff_tgtl) return -1; // not enough room!
-		puff_put(0),puff_put(~0),puff_put(~0),puff_put(0),puff_put(0),puff_cpy(65535); // non-final block
+		if ((o-=65535+5)<0) return -1; // not enough room!
+		*t++=0,*t++=~0,*t++=~0,*t++=0,*t++=0,memcpy(t,s,65535),t+=65535,s+=65535,i-=65535;
 	}
-	int i=puff_srcl-puff_srco; if (puff_tgto+i+5>puff_tgtl) return -1; // not enough room!
-	return puff_put(1),puff_put(i),puff_put(i>>8),puff_put(~i),puff_put(~i>>8),puff_cpy(i),0; // final block!
+	if ((o-=i+5)<0) return -1; // not enough room!
+	return *t++=1,*t++=i,*t++=i>>8,*t++=~i,*t++=~i>>8,memcpy(t,s,i),t-u+i; // final block!
 }
 #endif
 #if DEFLATE_LEVEL > 0 // if you must save DEFLATE data and perform compression on it!
@@ -1175,116 +1156,106 @@ int huff_stored(void) // the storage part of DEFLATE; !0 ERROR
 void huff_send(int n,int i) // sends the `n`-bit word `i` to target
 {
 	puff_word|=i<<puff_bits; puff_bits+=n; while (puff_bits>=8)
-		puff_put(puff_word),puff_word>>=8,puff_bits-=8;
+		--puff_size,*puff_data++=puff_word,puff_word>>=8,puff_bits-=8;
 }
-void huff_encode(struct puff_huff *h,int i) { huff_send(h->cnt[i],h->sym[i]); }
-void huff_append(const short h[2][32],int i,int z) { huff_send(h[1][i],z-h[0][i]); }
+void huff_encode(int *h,int i) { huff_send(h[i]&15,h[i]>>4); } // send value to Huffman target
+void huff_append(const int h[2][32],int i,int z) { huff_send(h[1][i],z-h[0][i]); }
 #define huff_flush() huff_send(7,0) // flush the last bits in the bitstream!
-// notice that these function ignore target overruns; the caller must know that the pathological case (longest possible code) is 48 bits long
-struct puff_huff huff_lcode={ &puff_tablez[  0],puff_lensym }; // precalc'd length count+value tables, different to puff_lcode
-struct puff_huff huff_ocode={ &puff_tablez[288],puff_offsym }; // precalc'd offset count+value tables, different to puff_ocode
-void huff_tables(struct puff_huff *h,short *l,int n) // generates Huffman output table from canonical length table
+// notice that these function ignore target overflows; the caller must know that the pathological case (longest possible code) is 48 bits long
+void huff_tables(int *h,char *l,int n) // generates Huffman output table from canonical length table
 {
 	for (int j=1,k=0;j<16;++j,k<<=1) for (int i=0;i<n;++i)
 		if (l[i]==j) // do the bit counts match?
-		{
-			int t=0,s=k++; // select Huffman item
-			for (int m=h->cnt[i]=j;m>0;--m) t=(t<<1)+(s&1),s>>=1;
-			h->sym[i]=t; // Huffman bits must be stored backwards
-		}
+			h[i]=((rbit16(k++)>>(16-j))<<4)+j; // store Huffman bits backwards
 }
 #if DEFLATE_LEVEL > 1
 #define DEFLATE_RANGE 32768 // we're better off sticking to 32K: DEFLATE_RETRY provides a better power/speed ratio
-//#define DEFLATE_RANGE (64<<DEFLATE_LEVEL) // this spans from 64<<2=256 to 64<<9=32768
+//#define DEFLATE_RANGE (64<<DEFLATE_LEVEL) // this spans from 64<<2=256 to 64<<9=32768 but it's a generally bad idea
 #define DEFLATE_RETRY (1<<(DEFLATE_LEVEL*2-2)) // i.e. from 4 to 16K retries for LEVELS 2..8; LEVEL >= 9 means RETRY >= RANGE
 #endif
-int huff_static(void) // the static compression of DEFLATE; !0 ERROR
+int huff_static(BYTE *t,int o,BYTE *s,int i) // the static compression of DEFLATE; >=0 output length, <0 ERROR!
 {
+	puff_data=t,puff_size=o,puff_word=puff_bits=0; // beware, a bitstream isn't a bytestream!
 	#if DEFLATE_LEVEL > 1
 	#define HUFF_HASH_MAX 65536 // =256*256, 2-byte hash
 	#if SDL_BYTEORDER == SDL_BIG_ENDIAN // PPC, ARM...
-		#define HUFF_HASH(x) hh[(puff_src[x]<<8)+puff_src[x+1]] // big-endian hash function
+		#define HUFF_HASH(x) hh[(s[x]<<8)+s[x+1]] // big-endian hash function
 	#else // i86, x64... following Z80, MOS 6502, etc.
-		#define HUFF_HASH(x) hh[(puff_src[x+1]<<8)+puff_src[x]] // lil-endian hash function
+		#define HUFF_HASH(x) hh[(s[x+1]<<8)+s[x]] // lil-endian hash function
 	#endif
 	int *hh=(int*)malloc(sizeof(int[HUFF_HASH_MAX+DEFLATE_RANGE])); if (!hh) return -1; // no memory!
-	int p=puff_srco,h=p; int *pp=hh+HUFF_HASH_MAX; // the table is too big to be local or static, but without it
+	int p=0,h=p; int *pp=hh+HUFF_HASH_MAX; // the table is too big to be local or static, but without it
 	for (int q=0;q<HUFF_HASH_MAX+DEFLATE_RANGE;++q) hh[q]=~DEFLATE_RANGE; // compression would be just too slow!
 	#else // run-length mode
-	int p=puff_srco; // ranges 1..4 = hash table is useless!
+	int p=0; // ranges 1..4 = hash table is useless!
 	#endif
 	// in static compression, default sizes are assumed, and no Huffman analysis is performed
 	huff_send(3,3); // tag the single block as final static ("3,5" would be final dynamic)
-	puff_tablezero(); // default static Huffman tables
-	huff_tables(&huff_lcode,puff_tablez,288); // 288 codes, but the last two are reserved
-	huff_tables(&huff_ocode,puff_tablez+288,32); // ditto, 32 codes but only 30 are valid
-	while (p+3<=puff_srcl) // the minimum match length is 3 bytes, a match can't begin any later!
+	puff_default(); // default static Huffman tables
+	huff_tables(puff_len_c,puff_cnt_c,288); // 288 codes, but the last two are reserved
+	huff_tables(puff_off_c,puff_cnt_c+288,32); // ditto, 32 codes but only 30 are valid
+	while (p+3<=i) // the minimum match length is 3 bytes, a match can't begin any later!
 	{
-		if (puff_tgto+6>puff_tgtl) break; // target overrun!
+		if (6>puff_size) break; // target overflow!
 		#ifdef HUFF_HASH_MAX
-		while (h<p) pp[(h%DEFLATE_RANGE)]=HUFF_HASH(h),HUFF_HASH(h)=h,++h; // walk hash table
-		int len=0,off=p+258,x=p-DEFLATE_RANGE; if (off>puff_srcl) off=puff_srcl; const BYTE *y=puff_src+off;
-		for (int q=HUFF_HASH(p),e=DEFLATE_RETRY;q>=x&&e;q=pp[+(q%DEFLATE_RANGE)],(DEFLATE_RETRY<32768&&--e)) // search for matches
+		while (h<p) pp[h%DEFLATE_RANGE]=HUFF_HASH(h),HUFF_HASH(h)=h,++h; // walk hash table
+		int len=0,off=p+258,x=p-DEFLATE_RANGE; if (off>i) off=i; const BYTE *y=s+off;
+		for (int q=HUFF_HASH(p),e=DEFLATE_RETRY;q>=x&&e;q=pp[q%DEFLATE_RANGE],(DEFLATE_RETRY<32768&&--e)) // search for matches
 		{
-			const BYTE *cmp1=puff_src+q,*cmp2=puff_src+p; if (cmp1[len]==cmp2[len]) // can this match be an improvement?
-				{ for (++cmp1,++cmp2;++cmp2<y&&*++cmp1==*cmp2;) {} int z=cmp2-puff_src-p; if (len<z) if (len=z,off=p-q,cmp2>=y) break; }
+			const BYTE *cmp1=s+q,*cmp2=s+p; if (cmp1[len]==cmp2[len]) // can this match be an improvement?
+				{ for (++cmp1,++cmp2;++cmp2<y&&*++cmp1==*cmp2;) {} int z=cmp2-s-p; if (len<z) if (len=z,off=p-q,cmp2>=y) break; }
 		}
 		if (len>=(off>32*64?4:3)) // was there a match? is it beneficial? (empirical 24*64<<<x<=32*64; one case favours 29, another 31, another one 32...)
 		#else // run-length!
-		int len=0,off=p+258,x; if (off>puff_srcl) off=puff_srcl; BYTE *y=puff_src+off;
+		int len=0,off=p+258,x; if (off>i) off=i; BYTE *y=s+off;
 		for (int q=0;q<4&&q<p;++q) // ranges 1..4 = four possible types of run-length encoding!
 		{
-			const BYTE *cmp1=puff_src+p-q-1,*cmp2=puff_src+p; while (*cmp1==*cmp2&&++cmp2<y) ++cmp1;
-			x=cmp2-puff_src-p; if (len<x) if (len=x,off=q,cmp2>=y) break;
+			const BYTE *cmp1=s+p-q-1,*cmp2=s+p; while (*cmp1==*cmp2&&++cmp2<y) ++cmp1;
+			x=cmp2-s-p; if (len<x) if (len=x,off=q,cmp2==y) break;
 		}
 		if (len>=3) // was there a match at all?
 		#endif
 		{
 			p+=len; // greedy algorithm: grab the longest match and move on
-			if (len<11) x=len-2; else if (len>=258) x=29; else x=log2u(len-3)*4-3,x+=(len-puff_huff_l[0][x])>>puff_huff_l[1][x];
-			//for (x=log2u(len-3)*4;len<puff_huff_l[0][x];--x) {}
-			huff_encode(&huff_lcode,256+x),huff_append(puff_huff_l,x,len);
+			if (len<11) x=len-2; else if (len>=258) x=29; else //for (x=log2u(len-3)*4;len<puff_len_k[0][x];--x) {}
+				x=log2u(len-3)*4-3,x+=(len-puff_len_k[0][x])>>puff_len_k[1][x];
+			huff_encode(puff_len_c, 256+x),huff_append(puff_len_k,x,len);
 			#ifdef HUFF_HASH_MAX
-			if (off<5) x=off-1; else x=log2u(off-1)*2,x+=(off-puff_huff_o[0][x])>>puff_huff_o[1][x];
-			//for (x=log2u(off-1)*2+1;off<puff_huff_o[0][x];--x) {}
-			huff_encode(&huff_ocode,    x),huff_append(puff_huff_o,x,off);
+			if (off<5) x=off-1; else //for (x=log2u(off-1)*2+1;off<puff_off_k[0][x];--x) {}
+				x=log2u(off-1)*2,x+=(off-puff_off_k[0][x])>>puff_off_k[1][x];
+			huff_encode(puff_off_c,     x),huff_append(puff_off_k,x,off);
 			#else // run-length!
-			huff_encode(&huff_ocode,  off); // ranges 1..4 = huff_ocode[0..3] without suffix!
+			huff_encode(puff_off_c,   off); // ranges 1..4 = huff_ocode[0..3] without suffix!
 			#endif
 		}
 		else
-			huff_encode(&huff_lcode,puff_src[p++]); // too short, store a literal
+			huff_encode(puff_len_c,s[p++]); // too short, store a literal
 	}
 	#if DEFLATE_LEVEL > 1
 	free(hh);
 	#undef HUFF_HASH_MAX
 	#undef HUFF_HASH
 	#endif
-	if ((puff_srcl-p)*2+puff_tgto+6>puff_tgtl) return -1; // target overrun!
-	while (p<puff_srcl) huff_encode(&huff_lcode,puff_src[p++]); // last bytes (if any) are always literals
-	huff_encode(&huff_lcode,256); huff_flush(); return puff_srco=p,0; // store end marker
+	if ((i-p)*2+6>puff_size) return -1; // target overflow!
+	while (p<i) huff_encode(puff_len_c,s[p++]); // last bytes (if any) are always literals
+	huff_encode(puff_len_c,256); huff_flush(); return puff_data-t; // store end marker
 }
-int huff_main(void) // deflates source into target; !0 ERROR
-{
-	puff_word=puff_bits=0; // beware, a bitstream isn't a bytestream!
-	int s=puff_srco,t=puff_tgto; if (!huff_static()) return 0; puff_srco=s,puff_tgto=t;
-	#ifdef DEFLATE_NOSTORE
-	return -1; // falling back is forbidden! fail!
-	#else
-	return huff_stored(); // fall back to storage!
-	#endif
-}
+#ifdef DEFLATE_NOSTORE
+#define huff_main huff_static // falling back is forbidden!
+#else
+int huff_main(BYTE *t,int o,BYTE *s,int i) // deflates source into target; >=0 output length, <0 ERROR!
+	{ int z=huff_static(t,o,s,i); return z<0?huff_stored(t,o,s,i):z; } // fall back to storage!
+#endif
 #else // if you must save DEFLATE data but don't want to perform any compression at all
 #define huff_main huff_stored
 #endif
 #ifdef DEFLATE_RFC1950
 // RFC1950 standard data encoder
-int huff_zlib(BYTE *t,int o,BYTE *s,int i) // encodes a RFC1950 standard ZLIB object; <0 ERROR, >=0 LENGTH
+int huff_zlib(BYTE *t,int o,BYTE *s,int i) // encodes a RFC1950 standard ZLIB object; >=0 output length, <0 ERROR!
 {
 	if (!t||!s||(o-=6)<=0||i<=0) return -1; // NULL or empty!
 	*t++=120,*t++=218; // ZLIB prefix: compression type 8, default mode
-	puff_tgt=t,puff_tgtl=o,puff_src=s,puff_srcl=i,puff_srco=puff_tgto=0;
-	return huff_main()?-1:(mputmmmm(t+=puff_tgto,puff_adler32(s,i)),puff_tgto+6);
+	return (o=huff_main(t,o,s,i))<0?-1:(mputmmmm(t+o,puff_adler32(s,i)),o+6);
 }
 #endif
 #endif
@@ -1293,6 +1264,7 @@ int huff_zlib(BYTE *t,int o,BYTE *s,int i) // encodes a RFC1950 standard ZLIB ob
 // the main directory at the end of the ZIP archive;
 // it includes a RFC1952 standard GZIP file handler.
 
+BYTE *puff_src,*puff_tgt; int puff_srcl,puff_tgtl;
 FILE *puff_file=NULL;
 unsigned char puff_name[256],puff_type,puff_gzip;
 unsigned int puff_skip,puff_next,puff_diff,puff_hash;//,puff_time
@@ -1301,7 +1273,7 @@ void puff_close(void) // closes the current ZIP archive
 	if (puff_file)
 		fclose(puff_file),puff_file=NULL;
 }
-int puff_open(const char *s) // opens a new ZIP archive; !0 ERROR
+int puff_open(const char *s) // opens a new ZIP archive; 0 OK, !0 ERROR
 {
 	puff_close();
 	if (!(puff_file=fopen(s,"rb"))) return -1;
@@ -1340,7 +1312,7 @@ int puff_open(const char *s) // opens a new ZIP archive; !0 ERROR
 	puff_diff=l-mgetiiii(&session_scratch[i+12])-(puff_next=mgetiiii(&session_scratch[i+16]))-k+i; // actual archive header offset
 	return 0;
 }
-int puff_head(void) // reads a ZIP file header, if any; !0 ERROR
+int puff_head(void) // reads a ZIP file header, if any; 0 OK, !0 ERROR
 {
 	if (!puff_file) return -1;
 	if (puff_gzip) return --puff_gzip!=1; // header is already pre-made; can be read once, but not twice
@@ -1357,14 +1329,11 @@ int puff_head(void) // reads a ZIP file header, if any; !0 ERROR
 	puff_next+=46+h[28]+mgetii(&h[30])+mgetii(&h[32]); // next ZIP file header
 	puff_name[fread1(puff_name,h[28],puff_file)]=0;
 	#if PATHCHAR != '/' // ZIP archives use the UNIX style
-	char *s=puff_name; // this will never be blank
-	do
-		if (*s=='/') *s=PATHCHAR;
-	while (*++s);
+	for (char *s=puff_name;*s;++s) if (*s=='/') *s=PATHCHAR;
 	#endif
 	return 0;
 }
-int puff_body(int q) // loads (!0) or skips (0) a ZIP file body; !0 ERROR
+int puff_body(int q) // loads (!0) or skips (0) a ZIP file body; 0 OK, !0 ERROR
 {
 	if (!puff_file) return -1;
 	if (puff_tgtl<1) q=0; // no data, can safely skip the source
@@ -1374,7 +1343,7 @@ int puff_body(int q) // loads (!0) or skips (0) a ZIP file body; !0 ERROR
 			return -1; // cannot get data from nothing! cannot write negative data!
 		if (puff_gzip)
 			return fseek(puff_file,puff_diff+puff_skip,SEEK_SET),
-				fread1(puff_src,puff_srcl,puff_file),puff_tgto=puff_srco=0,puff_main();
+				puff_main(puff_tgt,puff_tgtl,puff_src,fread1(puff_src,puff_srcl,puff_file))!=puff_tgtl;
 		unsigned char h[30];
 		fseek(puff_file,puff_diff+puff_skip,SEEK_SET);
 		fread1(h,sizeof(h),puff_file);
@@ -1382,14 +1351,14 @@ int puff_body(int q) // loads (!0) or skips (0) a ZIP file body; !0 ERROR
 		{
 			fseek(puff_file,mgetii(&h[26])+mgetii(&h[28]),SEEK_CUR); // skip name+xtra
 			if (!puff_type)
-				return fread1(puff_tgt,puff_tgto=puff_srco=puff_srcl,puff_file),puff_tgtl!=puff_srcl;
+				return fread1(puff_tgt,puff_srcl,puff_file)!=puff_tgtl;
 			if (puff_type==8)
-				return fread1(puff_src,puff_srcl,puff_file),puff_tgto=puff_srco=0,puff_main();
+				return puff_main(puff_tgt,puff_tgtl,puff_src,fread1(puff_src,puff_srcl,puff_file))!=puff_tgtl;
 		}
 	}
 	return q; // 0 skipped=OK, !0 unknown=ERROR
 }
-// compact CRC-32 algorithm by Karl Malbrain; the caller must handle whether the first/last values are 0/0XFFFFFFFF
+// compact CRC-32 algorithm by Karl Malbrain; the caller must manage the initial and final values, either 0 or 0XFFFFFFFF
 unsigned int puff_dohash(unsigned int k,const unsigned char *s,int l) // incremental function: run it on each data chunk
 {
 	static const unsigned int z[16]={0,0X1DB71064,0X3B6E20C8,0X26D930AC,0X76DC4190,0X6B6B51F4,0X4DB26158,0X5005713C,
@@ -1432,8 +1401,7 @@ FILE *puff_fopen(char *s,const char *m) // mimics fopen(), so NULL on error, *FI
 				return puff_close(),NULL; // file failure!
 			puff_src=puff_tgt=NULL;
 			if (!(!puff_type||(puff_src=malloc(puff_srcl)))||!(puff_tgt=malloc(puff_tgtl))
-				||puff_body(1)||(puff_srco^puff_srcl)||(puff_tgto^puff_tgtl)
-				||(puff_dohash(0XFFFFFFFF,puff_tgt,puff_tgtl)^puff_hash^0XFFFFFFFF))
+				||puff_body(1)||(puff_dohash(0XFFFFFFFF,puff_tgt,puff_tgtl)^puff_hash^0XFFFFFFFF))
 				fclose(puff_ffile),puff_ffile=NULL; // memory or data failure!
 			if (puff_ffile)
 				fwrite1(puff_tgt,puff_tgtl,puff_ffile),fseek(puff_ffile,0,SEEK_SET); // fopen() expects ftell()=0!
@@ -1622,11 +1590,11 @@ int main_t=0,stop_t=0; // the global tick counter, used by the debugger, and opt
 
 FILE *debug_logfile; int debug_logsize; BYTE debug_logtemp[1<<9]; // the byte recorder datas
 
-#define debug_setup() (MEMZERO(debug_point),debug_logfile=NULL,debug_dirty=session_signal&SESSION_SIGNAL_DEBUG)
+#define debug_setup() (debug_dirty=session_signal&SESSION_SIGNAL_DEBUG,MEMZERO(debug_point),debug_logfile=NULL)
 #define debug_configread(i) (debug_config=(i)/4,debug_break=(i)&2,debug_mode=(i)&1)
 #define debug_configwrite() (debug_config*4+(debug_break?2:0)+(debug_mode?1:0))
 
-int debug_logbyte(BYTE z) // log a byte, if possible; !0 ERROR, 0 OK
+int debug_logbyte(BYTE z) // log a byte, if possible; 0 OK, !0 ERROR
 {
 	if (!debug_logfile) // try creating a log file?
 	{
@@ -1681,6 +1649,8 @@ WORD debug_that(void); // get the stack pointer
 // these functions must be provided by the hardware code
 int grafx_mask(void); // VRAM address mask, usually 64K-1
 int grafx_size(int); // how many pixels wide is one byte?
+BYTE grafx_peek(int); // receive the value BYTE from address `int`
+void grafx_poke(int,BYTE); // send the value BYTE to address `int`
 int grafx_show(VIDEO_UNIT*,int,int,int,int); // blit a set of pixels
 void debug_info(int); // write a page of hardware information between the disassembly and the register table
 void grafx_info(VIDEO_UNIT*,int,int); // draw additional infos on the top right corner
@@ -1968,11 +1938,41 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 		else if (k==KBDBG_NEXT)
 			debug_grafx_i+=debug_grafx_l*16;
 		else if (k=='G') // GO TO..
-			{
-				sprintf(session_parmtr,(debug_grafx_m>0XFFFF)?"%05X":"%04X",debug_grafx_i&debug_grafx_m);
-				if (session_input("Go to")>0)
-					debug_grafx_i=session_debug_eval(session_parmtr);
-			}
+		{
+			sprintf(session_parmtr,(debug_grafx_m>0XFFFF)?"%05X":"%04X",debug_grafx_i&debug_grafx_m);
+			if (session_input("Go to")>0)
+				debug_grafx_i=session_debug_eval(session_parmtr)&debug_grafx_m;
+		}
+		else if (k=='I') // INPUT BYTES FROM FILE..
+		{
+			char *s; FILE *f; int w=debug_grafx_i;
+			if (s=puff_session_getfile(NULL,"*","Input file"))
+				if (f=puff_fopen(s,"rb"))
+				{
+					while (i=fread1(session_substr,256,f)) // better than fgetc()
+						for (int j=0;j<i;++j)
+							grafx_poke(w++,session_substr[j]);
+					puff_fclose(f);
+					//debug_grafx_i=w&debug_grafx_m; // auto increase; not everyone likes it
+				}
+		}
+		else if (k=='O') // OUTPUT BYTES INTO FILE..
+		{
+			char *s; FILE *f; int w=debug_grafx_i;
+			if (*session_parmtr=0,session_input("Output length")>=0)
+				if ((i=session_debug_eval(session_parmtr))>0&&i<=(debug_grafx_m+1))
+					if (s=session_newfile(NULL,"*","Output file"))
+						if (f=fopen(s,"wb"))
+						{
+							while (i)
+							{
+								int j; for (j=0;j<i&&j<256;++j)
+									session_substr[j]=grafx_peek(w++);
+								fwrite1(session_substr,j,f); i-=j;
+							}
+							fclose(f);
+						}
+		}
 		else
 			k=0; // default!
 	}
@@ -2118,7 +2118,7 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 		case 'I': // INPUT BYTES FROM FILE..
 			if (!(debug_panel&1))
 			{
-				char *s; FILE *f; WORD w=i=debug_panel?debug_panel2_w:debug_panel0_w;
+				char *s; FILE *f; WORD w=debug_panel?debug_panel2_w:debug_panel0_w;
 				if (s=puff_session_getfile(NULL,"*","Input file"))
 					if (f=puff_fopen(s,"rb"))
 					{
@@ -2126,7 +2126,7 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 							for (int j=0;j<i;++j)
 								debug_poke(w++,session_substr[j]);
 						puff_fclose(f);
-						if (debug_panel) debug_panel2_w=w; else debug_panel0_w=w; // auto increase!
+						//if (debug_panel) debug_panel2_w=w; else debug_panel0_w=w; // auto increase; not everyone likes it
 					}
 			}
 			break;
@@ -2146,9 +2146,9 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 		case 'O': // OUTPUT BYTES INTO FILE..
 			if (!(debug_panel&1))
 			{
-				char *s; FILE *f; WORD w=i=debug_panel?debug_panel2_w:debug_panel0_w;
+				char *s; FILE *f; WORD w=debug_panel?debug_panel2_w:debug_panel0_w;
 				if (*session_parmtr=0,session_input("Output length")>=0)
-					if (i=(WORD)session_debug_eval(session_parmtr))
+					if ((i=session_debug_eval(session_parmtr))>0&&i<=65536)
 						if (s=session_newfile(NULL,"*","Output file"))
 							if (f=fopen(s,"wb"))
 							{
@@ -2171,7 +2171,7 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 				if (*session_parmtr=0,session_input(debug_panel?"Hexa dump length":"Disassembly length")>=0)
 				{
 					char *s,*t; FILE *f; WORD w=debug_panel?debug_panel2_w:debug_panel0_w,u;
-					if (i=(WORD)session_debug_eval(session_parmtr))
+					if ((i=session_debug_eval(session_parmtr))>0&&i<=65536)
 						if (s=session_newfile(NULL,"*.TXT",debug_panel?"Print hexa dump":"Print disassembly"))
 							if (f=fopen(s,"w"))
 							{
@@ -2223,7 +2223,7 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 		case 'Y': // FILL BYTES WITH BYTE..
 			if (!(debug_panel&1))
 			{
-				WORD w=i=debug_panel?debug_panel2_w:debug_panel0_w; BYTE b;
+				WORD w=debug_panel?debug_panel2_w:debug_panel0_w; BYTE b;
 				if (*session_parmtr=0,session_input("Fill length")>=0)
 					if (i=(WORD)session_debug_eval(session_parmtr))
 						if (*session_parmtr=0,session_input("Filler byte")>=0)
@@ -2267,7 +2267,7 @@ BYTE session_wavedepth=0; // let the user reduce 16-bit audio to 8-bit
 #else
 #define session_wavedepth 0 // audio bitrate never changes
 #endif
-int session_createwave(void) // create a wave file; !0 ERROR
+int session_createwave(void) // create a wave file; 0 OK, !0 ERROR
 {
 	if (session_wavefile)
 		return 1; // file already open!
@@ -2304,7 +2304,7 @@ void session_writewave(void)
 		}
 	}
 }
-int session_closewave(void) // close a wave file; !0 ERROR
+int session_closewave(void) // close a wave file; 0 OK, !0 ERROR
 {
 	if (!session_wavefile) return 1;
 	#if (AUDIO_CHANNELS*AUDIO_BITDEPTH) <= 8
@@ -2363,7 +2363,7 @@ int xrf_encode(BYTE *t,BYTE *s,int l,int x) // terribly hacky encoder based on a
 	return xrf_encode1(256),t-u; // END MARKER is the special case "100000000"!
 }
 
-int session_createfilm(void) // start recording video and audio; !0 ERROR
+int session_createfilm(void) // start recording video and audio; 0 OK, !0 ERROR
 {
 	if (session_filmfile) return 1; // file already open!
 	if (!session_filmvideo&&!(session_filmvideo=malloc(sizeof(VIDEO_UNIT[SESSION_FILMVIDEO_LENGTH]))))
@@ -2494,7 +2494,7 @@ void session_writefilm(void) // record one frame of video and audio
 		memcpy(session_filmaudio,audio_frame,AUDIO_LENGTH_Z*AUDIO_BYTESTEP); // keep audio block for later!
 	session_filmalign=video_pos_y;
 }
-int session_closefilm(void) // stop recording video and audio; !0 ERROR
+int session_closefilm(void) // stop recording video and audio; 0 OK, !0 ERROR
 {
 	if (xrf_chunk) free(xrf_chunk),xrf_chunk=NULL;
 	if (session_filmvideo) free(session_filmvideo),session_filmvideo=NULL;
@@ -2516,7 +2516,7 @@ unsigned int session_nextbitmap=1;
 // 3.- session_qoi3_exit() flushes any pending data and generates the footer of the QOI file.
 // For the interested, https://qoiformat.org/ (format specification) + https://github.com/phoboslab/qoi (reference codec)
 #define session_qoi3_temp (session_scratch+VIDEO_LENGTH_X*sizeof(VIDEO_UNIT)) // this should never overflow :-X
-#define session_qoi3_calc(x) ((((x)>>16)*3+(((x)>>8)&255)*5+((x)&255)*7+255*11)&63)
+#define session_qoi3_calc(x) ((((x)>>16)*3+((x)>>8)*5+(x)*7+53)&63) // Alpha is always 255, so (255*11)&63= 53
 VIDEO_UNIT session_qoi3_hash[64],session_qoi3_prev; char session_qoi3_size;
 int session_qoi3_init(int x,int y)
 {
@@ -2549,7 +2549,7 @@ int session_qoi3_exit(void)
 }
 
 char session_qoi3_flag=0;
-INLINE int session_savebitmap(void) // save a RGB888 BMP/QOI file; !0 ERROR
+INLINE int session_savebitmap(void) // save a RGB888 BMP/QOI file; 0 OK, !0 ERROR
 {
 	if (!(session_nextbitmap=session_savenext(session_qoi3_flag?"%s%08u.qoi":"%s%08u.bmp",session_nextbitmap)))
 		return 1; // too many files!
@@ -2639,13 +2639,6 @@ int session_qoi3_foot(BYTE *s,int i) // process the footer: NEGATIVE if bad, foo
 
 char *UTF8_BOM(char *s) // skip UTF8 BOM if present
 	{ return (239==(BYTE)*s&&187==(BYTE)s[1]&&191==(BYTE)s[2])?s+3:s; }
-void session_detectpath(char *s) // detects session path using argv[0] as reference
-{
-	if (s=strrchr(strcpy(session_path,s),PATHCHAR))
-		s[1]=0; // keep separator
-	else
-		*session_path=0; // no path (?)
-}
 FILE *session_configfile(int q) // returns handle to configuration file, `q`?read:write
 {
 	return fopen(strcat(strcpy(session_parmtr,session_path),
@@ -2669,7 +2662,7 @@ char *session_configread(void) // reads configuration file; session_parmtr holds
 		if (!strcasecmp(t,"hardvideo")) return video_scanline=(*s>>1)&3,video_pageblend=*s&1,NULL;
 		if (!strcasecmp(t,"softvideo")) return video_filter=*s&7,NULL;
 		if (!strcasecmp(t,"zoomvideo")) return session_zoomblit=(*s>>1)&7,session_zoomblit=session_zoomblit>4?4:session_zoomblit,video_lineblend=*s&1,NULL;
-		if (!strcasecmp(t,"safevideo")) return session_softblit=*s&1,video_gammaflag=!(*s&2),video_microwave=(*s&4),NULL;
+		if (!strcasecmp(t,"safevideo")) return session_softblit=*s&1,video_gammaflag=!(*s&2),video_microwave=(*s>>2)&1,NULL;
 		if (!strcasecmp(t,"safeaudio")) return session_softplay=(~*s)&3,NULL; // stay compatible with old configs (ZERO was accelerated, NONZERO wasn't)
 		if (!strcasecmp(t,"film")) return session_filmscale=*s&1,session_filmtimer=(*s>>1)&1,session_wavedepth=(*s>>2)&1,NULL;
 		if (!strcasecmp(t,"info")) return onscreen_flag=*s&1,session_qoi3_flag=(*s>>1)&1,video_fineblend=(*s>>2)&1,NULL;
@@ -2679,24 +2672,42 @@ char *session_configread(void) // reads configuration file; session_parmtr holds
 void session_configwrite(FILE *f) // save common parameters
 {
 	fprintf(f,"film %d\ninfo %d\n"
-		"hardaudio %d\nsoftaudio %d\nhardvideo %d\nsoftvideo %X\nzoomvideo %d\nsafevideo %d\nsafeaudio %d\n"
-		,session_filmscale*1+session_filmtimer*2+session_wavedepth*4,(onscreen_flag*1)+(session_qoi3_flag*2)+(video_fineblend*4)
-		,audio_mixmode,audio_filter,(video_scanline<<1)+(video_pageblend?1:0),video_filter,(video_lineblend?1:0)+(session_zoomblit<<1),session_softblit+(video_gammaflag?0:2)+(video_microwave?4:0),session_softplay^3);
+		"hardaudio %d\nsoftaudio %d\nhardvideo %d\nsoftvideo %X\n"
+		"zoomvideo %d\nsafevideo %d\nsafeaudio %d\n"
+		,session_filmscale+session_filmtimer*2+session_wavedepth*4,onscreen_flag+session_qoi3_flag*2+video_fineblend*4
+		,audio_mixmode,audio_filter,video_scanline*2+video_pageblend,video_filter,
+		video_lineblend+session_zoomblit*2,session_softblit+(video_gammaflag?0:2)+video_microwave*4,session_softplay^3);
 }
 
-void session_preset(void) // first operations after `session_create`
+void session_configreadmore(char*); // must be defined by the emulator!
+int session_prae(char *s) // load configuration and set stuff up; `s` is argv[0]
 {
-#ifndef RGB2LINEAR
+	if (s=strrchr(strcpy(session_path,s),PATHCHAR)) // detect session path using argv[0] as reference
+		s[1]=0; // keep separator
+	else
+		*session_path=0; // no path (?)
+	FILE *f; if ((f=session_configfile(1)))
+	{
+		while (fgets(session_parmtr,STRMAX-1,f)) session_configreadmore(session_configread());
+		fclose(f);
+	}
+	#ifndef RGB2LINEAR
 	video_recalc();
-#endif
+	#endif
+	return debug_setup(),0; // set debugger up as soon as possible
 }
-
-void session_wrapup(void) // final operations before `session_byebye`
+void session_configwritemore(FILE*); // ditto!
+int session_post(void) // save configuration and shut stuff down; always 0 OK
 {
 	puff_byebye();
-	debug_close();
 	session_closefilm();
 	session_closewave();
+	FILE *f; if ((f=session_configfile(0)))
+	{
+		session_configwritemore(f),session_configwrite(f);
+		fclose(f);
+	}
+	return debug_close(),0; // shut debugger down as late as possible
 }
 
 char txt_error[]="Error!";

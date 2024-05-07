@@ -29,7 +29,7 @@ char sid_nouveau=1; // MOS 8580 (new) and 6581 (old) have slighly different wave
 #define SID_STEP_SLOW_ADSR (512-6)
 
 // the normalised range [-128..+127] is a reasonable margin, but the mixer must remember to shift right!
-const char sid_shape_model[2][4][256]={ // crudely adapted from several tables: FRODO 4.1, SIDPLAYER 4.4...
+const INT8 sid_shape_model[2][4][256]={ // crudely adapted from several tables: FRODO 4.1, SIDPLAYER 4.4...
 { // MOS 6581
 	{ // 3: hybrid
 		-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,-128,
@@ -179,7 +179,7 @@ const char sid_shape_model[2][4][256]={ // crudely adapted from several tables: 
 	},
 },
 };
-char sid_shape_table[8][512]; // shapes: +1 TRIANGLE +2 SAWTOOTH +4 PULSE; +8 NOISE goes elsewhere
+INT8 sid_shape_table[8][512]; // shapes: +1 TRIANGLE +2 SAWTOOTH +4 PULSE; +8 NOISE goes elsewhere
 void sid_shape_setup(void)
 {
 	sid_nouveau&=1; for (int i=0;i<512;++i)
@@ -210,7 +210,7 @@ void sid_setup(void)
 	sid_shape_setup();
 }
 
-char sid_filters=1,sid_samples=1,sid_filter_raw[3][3],sid_filter_flt[3][3]; // filter states, mixing bitmasks and output values
+char sid_filters=1,sid_samples=1; INT8 sid_filter_raw[3][3],sid_filter_flt[3][3]; // filter states, mixing bitmasks and output values
 int sid_mixer[3],sid_voice[3],sid_digis[3],sid_digiz[3],sid_filtered[3]; // sampled speech and digidrums
 double sid_filter_hw[3],sid_filter_bw[3],sid_filter_lw[3]; // I hate mixing [long] ints and [double] floats...
 double sid_filter_qu[3],sid_filter_fu[3]; // Chamberlin filter parameters; they're always above 0.0 and below 2.0 but they need precision
@@ -279,7 +279,7 @@ void sid_reg_update(int x,int i)
 			// no `break`!
 		case 23: // filter resonance control
 			for (c=0,i=(sid_filters&&(SID_TABLE[x][24]&112))?SID_TABLE[x][23]:0;c<3;i>>=1,++c)
-				sid_filter_raw[x][c]=~(sid_filter_flt[x][c]=0-(i&1)); // channel output masks
+				sid_filter_flt[x][c]=~(sid_filter_raw[x][c]=(i&1)-1); // channel output masks
 			if (SID_TABLE[x][24]&128) sid_filter_raw[x][2]=sid_filter_flt[x][2]=0; // bit 7: channel 3 is disabled!!
 			// the following expression is just a guess :-(
 			sid_filter_qu[x]=1.44-(SID_TABLE[x][23]>>4)/16.0; // "Eliminator", "LED Storm" and "Turbo Out Run" are very sensible to this!
@@ -320,7 +320,7 @@ void sid_main(int t/*,int d*/)
 	#endif
 	do
 	{
-		static unsigned int crash[3]={1,1,1},smash[3];
+		static unsigned int crash[3]={1,1,1};
 		#if AUDIO_CHANNELS > 1
 		static int n=0,o0=0,o1=0; // output averaging variables
 		#else
@@ -336,7 +336,7 @@ void sid_main(int t/*,int d*/)
 			for (int x=sid_chips;x--;)
 			{
 				// notice that the "real" LFSR is handled outside this function, as it must "tick" even when sound is off
-				smash[x]=crash[x]; crash[x]<<=1; crash[x]+=(((crash[x]>>23)^(crash[x]>>18))&1); // 23-bit LFSR randomizer
+				crash[x]<<=1; crash[x]+=(((crash[x]>>23)^(crash[x]>>18))&1); // 23-bit LFSR randomizer
 				// "On shifting, bit 0 is filled with bit 22 EXOR bit 17." ( http://www.oxyron.de/html/registers_sid.html )
 				for (int c=0,u,v;c<3;++c)
 				{
@@ -373,7 +373,7 @@ void sid_main(int t/*,int d*/)
 						else if (u<8) // PULSE?
 							sid_tone_value[x][c]=(sid_tone_count[x][c]>=sid_tone_pulse[x][c]?sid_shape_table[u][sid_tone_count[x][c]>>11]:-128)*sid_tone_power[x][c];
 						else // NOISE? beware, a noisy channel pointed by "ringg" cannot do `sid_tone_count[x][c]&=0XFFFF`: "Rasputin", "Swingers"...
-							{ if ((v^sid_tone_count[x][c])&~0XFFFF) sid_tone_noisy[x][c]=(signed char)smash[x]; sid_tone_value[x][c]=sid_tone_noisy[x][c]*sid_tone_power[x][c]; }
+							{ { if ((v^sid_tone_count[x][c])&~0XFFFF) sid_tone_noisy[x][c]=(INT8)crash[x]; } sid_tone_value[x][c]=sid_tone_noisy[x][c]*sid_tone_power[x][c]; }
 					}
 					//else // NONE? (already set by sid_reg_update)
 						//sid_tone_value[x][c]=0;
