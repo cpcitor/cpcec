@@ -23,20 +23,21 @@
 #include <SDL2/SDL.h>
 
 #ifdef _WIN32
-	#define STRMAX 288 // widespread in Windows
+	#define STRMAX 640 // 288 // widespread in Windows
 	#define PATHCHAR '\\' // WIN32
 	#include <windows.h> // FindFirstFile...
 	#include <io.h> // _chsize(),_fileno()...
 	#define fsetsize(f,l) _chsize(_fileno(f),(l))
 	#define strcasecmp _stricmp // see also SDL_strcasecmp
 	// WIN32 is never UTF-8; it's either ANSI (...A) or UNICODE (...W)
-	#define I18N_MULTIPLY "\327"
-	#define I18N_DIVISION "\367"
+	#define ARGVZERO (GetModuleFileName(NULL,session_substr,sizeof(session_substr))?session_substr:argv[0])
+	#define I18N_MULTIPLY "x" //"\327"
+	//#define I18N_DIVISION "\367"
 #else
 	#ifdef PATH_MAX
 		#define STRMAX PATH_MAX
 	#else
-		#define STRMAX 512 // MacOS lacks PATH_MAX; TCC's LIMITS.H sets it to 512 and seems safe, with the exception of realpath()
+		#define STRMAX 640 // 512 // MacOS lacks PATH_MAX; TCC's LIMITS.H sets it to 512 and seems safe, with the exception of realpath()
 	#endif
 	#define PATHCHAR '/' // POSIX
 	#include <sys/stat.h> // stat()...
@@ -48,8 +49,9 @@
 	#define WORD Uint16 // can this be safely reduced to "unsigned short"?
 	#define DWORD Uint32 // this CANNOT be safely reduced to "unsigned int"!
 	#define SDL2_UTF8 // is there any *NIX system that does NOT rely on UTF-8?
-	#define I18N_MULTIPLY "\303\227"
-	#define I18N_DIVISION "\303\267"
+	#define ARGVZERO argv[0] // is there a better way to know the binary's path?
+	#define I18N_MULTIPLY "x" //"\303\227"
+	//#define I18N_DIVISION "\303\267"
 #endif
 
 #define MESSAGEBOX_WIDETAB "\t\t" // rely on monospace font
@@ -188,8 +190,8 @@ char session_path[STRMAX],session_parmtr[STRMAX],session_tmpstr[STRMAX],session_
 #define KBCODE_X_SUB	 86
 #define KBCODE_X_MUL	 85
 #define KBCODE_X_DIV	 84
-void usbkey2native(BYTE *t,const BYTE *s,int n) { memcpy(t,s,n); } // no translation is needed;
-void native2usbkey(BYTE *t,const BYTE *s,int n) { memcpy(t,s,n); } // the SDL2 keyboard is USB!
+#define usbkey2native memcpy // no translation is needed;
+#define native2usbkey(str,n) // the SDL2 keyboard is USB!
 BYTE kbd_k2j[]= // these keys can simulate a 4-button joystick
 	{ KBCODE_UP, KBCODE_DOWN, KBCODE_LEFT, KBCODE_RIGHT, KBCODE_Z, KBCODE_X, KBCODE_C, KBCODE_V };
 
@@ -197,16 +199,21 @@ unsigned char kbd_map[256]; // key-to-key translation map
 
 // general engine functions and procedures -------------------------- //
 
-void session_please(void) // stop activity for a short while
-{
-	if (!session_wait) //video_framecount=1;
-		if (session_wait=1,session_audio) SDL_PauseAudioDevice(session_audio,1);
-}
+#ifdef _WIN32
+char basepath[STRMAX]; // is this long enough for the GetFullPathName() target buffer?
+char *makebasepath(const char *s) // fetch the absolute path of a relative path; returns NULL on error
+	{ char *m; return GetFullPathName(s,sizeof(basepath),basepath,&m)?basepath:NULL; }
+#else
+char basepath[8<<9];  // the buffer of realpath() is unlike other STRMAX-length strings, it depends on the irregular PATH_MAX definition:
+#define makebasepath(s) realpath((s),basepath) // the target must be at least 4096 bytes long in Linux 4.10.0-38-generic, Linux 4.15.0-96-generic...!
+#endif
 
-void session_kbdclear(void)
-{
-	MEMZERO(kbd_bit); MEMZERO(joy_bit); session_joybits=0;
-}
+void session_please(void) // stop activity for a short while
+	{ if (!session_wait) if (session_wait=1,session_audio) SDL_PauseAudioDevice(session_audio,1); }
+void session_thanks(void) // resume activity after a "please"
+	{ if (session_wait) if (session_wait=0,session_audio) SDL_PauseAudioDevice(session_audio,0); }
+void session_kbdclear(void) // wipe keyboard and joystick bits, for example on focus loss
+	{ MEMZERO(kbd_bit); MEMZERO(joy_bit); session_joybits=0; }
 #define session_kbdreset() MEMBYTE(kbd_map,~~~0) // init and clean key map up
 void session_kbdsetup(const unsigned char *s,int l) // maps a series of virtual keys to the real ones
 {
@@ -235,7 +242,7 @@ SDL_Window *session_hwnd=NULL;
 // the graphical debugger effectively behaves as a temporary substitute of the emulation canvas.
 // notice that SDL_Texture, unlike SDL_Surface, doesn't rely on anything like SDL_GetWindowSurface()
 
-VIDEO_UNIT *debug_frame; BYTE debug_dirty; // !0 (new redraw required) or 0 (redraw not required)
+VIDEO_UNIT *debug_frame;
 BYTE session_hidemenu=0; // positive or negative UI
 SDL_Renderer *session_blitter=NULL; // (==null?software:hardware)
 SDL_Texture *session_dib=NULL,*session_gui=NULL,*session_dbg=NULL; // we can abuse these pointers in software mode by casting them into (SDL_Surface*)
@@ -246,6 +253,7 @@ SDL_Rect session_ideal; // used for calculations, see below
 #else
 #define session_clrscr() (session_hardblit?SDL_RenderClear(session_blitter):0) // defaults to black
 #endif
+#define session_clock (1000) // the SDL2 internal tick count unit is the millisecond
 void session_backupvideo(VIDEO_UNIT *t); // make a clipped copy of the current screen. Must be defined later on!
 int session_r_x,session_r_y,session_r_w,session_r_h; // actual location and size of the bitmap
 int session_resize(void) // SDL2 handles almost everything, but we still have to keep a cache of the past state
@@ -318,6 +326,21 @@ void session_redraw(int q) // redraw main canvas (!0) or user interface (0)
 				session_reveal(); // update window!
 	}
 }
+#define session_drawme() session_redraw(1) // video shortcut!
+void session_playme(void) // audio shortcut!
+{
+	static BYTE s=1; if (s!=!!audio_disabled) if (s=!s) MEMBYTE(audio_frame,AUDIO_ZERO); // mute mode cleanup!
+	int i=audio_session/((4-session_softplay)<<(AUDIO_L2BUFFER+AUDIO_BYTESTEP/2-(2)-3));
+	if (i<=8) // 0 void... 4 half... 8 full
+	{
+		//session_timer+=i-4; // stronger: -4 -3 -2 -1 =0 +1 +2 +3 +4
+		if (i<3) session_timer+=i-3; else if (i>5) session_timer+=i-5; // average: -3 -2 -1 =0 =0 =0 +1 +2 +3
+		//session_timer+=(i-4)/2; // softer: -2 -1 -1 =0 =0 =0 +1 +1 +2
+		SDL_QueueAudio(session_audio,audio_frame,AUDIO_LENGTH_Z*AUDIO_BYTESTEP);
+	}
+	audio_session=SDL_GetQueuedAudioSize(session_audio); // ensure that the first `audio_session` is zero
+}
+char *session_blitinfo(void) { return session_hardblit?"SDL":"sdl"; }
 
 #ifdef SDL2_UTF8
 // SDL2 relies on the UTF-8 encoding for character and string manipulation; hence the following functions. //
@@ -530,6 +553,7 @@ void session_ui_drawcaption(char *s,int x,int y,int w)
 	session_ui_printasciz(s,x,y,1,w,1,0,+0);
 	session_ui_setstyle(0);
 	session_ui_bottomline(x,y,w); // the border under the caption (cfr. "HEIGHT/2-2" above)
+	//SDL_SetWindowTitle(session_hwnd,(s)); // replicate the dialog caption on the window
 }
 
 int session_ui_base_x,session_ui_base_y,session_ui_size_x,session_ui_size_y; // used to calculate mouse clicks relative to widget
@@ -868,7 +892,7 @@ int session_ui_text(char *s,char *t,char q) // see session_message
 		}
 }
 
-int session_ui_input(char *t) // see session_input
+int session_ui_line(char *t) // see session_line
 {
 	int i=0,j=strlen(session_parmtr),q,dirty=1,textw=SESSION_UI_MAXX;
 	if ((q=utf8len(session_parmtr))>=textw) return -1; // error!
@@ -1206,17 +1230,16 @@ void session_ui_filedialog_tabkey(void)
 }
 int getftype(const char *s) // <0 = invalid path / nothing, 0 = file, >0 = directory
 {
-	if (!s||!*s) return -1; // invalid path
 	#ifdef _WIN32
-	int i=GetFileAttributes(s); return i>0?i&FILE_ATTRIBUTE_DIRECTORY:i; // not i>=0!
+	int i; return (!s||!*s)?-1:(i=GetFileAttributes(s))>0?i&FILE_ATTRIBUTE_DIRECTORY:i;
 	#else
-	struct stat a; int i=stat(s,&a); return i>=0?S_ISDIR(a.st_mode):i; // not i>0!
+	struct stat a; int i; return (!s||!*s)?-1:(i=stat(s,&a))>=0?S_ISDIR(a.st_mode):i;
 	#endif
 }
 int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_filedialog; q here means TAB is available or not, and f means the starting TAB value (q) or whether we're reading (!q)
 {
 	if (!*s) return 0; // empty!
-	int i; char *m,*n,basepath[8<<9],pastname[STRMAX],pastfile[STRMAX],basefind[STRMAX]; // realpath() is an exception, see below
+	int i; char *m,*n,pastname[STRMAX],pastfile[STRMAX],basefind[STRMAX];
 	session_ui_fileflags=f;
 	if (!r) r=session_path; // NULL path = default!
 	if (m=strrchr(r,PATHCHAR))
@@ -1323,6 +1346,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 			if (session_parmtr[1]==':') // the user chose a drive root directory
 				strcpy(pastname,strcpy(basepath,session_parmtr)); // return to itself (what else?)
 			else
+			#endif
 			{
 				if (!strcmp(session_parmtr,strcpy(pastname,prevpath)))
 				{
@@ -1333,29 +1357,15 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 					}
 					else *pastname=0; // nowhere to return
 				}
-				if (GetFullPathName(session_scratch,STRMAX,basepath,&m)) // is this long enough for the GetFullPathName() target buffer?
-					session_ui_filedialog_sanitize(basepath);
+				session_ui_filedialog_sanitize(makebasepath(session_scratch)); // can this ever fail?
 			}
-			#else
-			if (!strcmp(session_parmtr,strcpy(pastname,prevpath)))
-			{
-				if (m=strrchr(basepath,PATHCHAR))
-				{
-					while (m!=basepath&&*--m!=PATHCHAR) {}
-					strcpy(pastname,&m[1]); // allow returning to previous directory
-				}
-				else *pastname=0; // nowhere to return
-			}
-			if (realpath(session_scratch,basepath)) // realpath() requires the target to be at least 4096 bytes long in Linux 4.10.0-38-generic, Linux 4.15.0-96-generic...!
-				session_ui_filedialog_sanitize(basepath);
-			#endif
 		}
 		else // the user chose a file
 		{
 			if (*session_parmtr=='*') // the user wants to create a file
 			{
 				strcpy(session_parmtr,pastfile); // reuse previous name if possible
-				if (session_ui_input(t)>0)
+				if (session_ui_line(t)>0)
 				{
 					if (!multiglobbing(s,session_parmtr,1)) // unknown extension?
 					{
@@ -1558,28 +1568,47 @@ int session_pad2bit(int i) // translate motions and buttons into codes
 			return 0;
 	}
 }
-INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
+
+INLINE void session_byebye(void) // delete video+audio devices
 {
-	static int s=-1; if (s!=session_signal) // catch DEBUG and PAUSE
-		s=session_signal,session_dirty=debug_dirty=2;
-	if (session_signal&(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE))
+	#if 0 // SDL_Quit cleans everything up
+	if (session_joy)
+		session_pad?SDL_GameControllerClose(session_joy):SDL_JoystickClose(session_joy);
+	if (session_audio)
+		SDL_ClearQueuedAudio(session_audio),SDL_CloseAudioDevice(session_audio);
+	SDL_StopTextInput();
+	if (session_hardblit)
 	{
-		session_signal_frames&=~(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE);
-		session_signal_scanlines&=~(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE); // reset traps!
-		if (session_signal&SESSION_SIGNAL_DEBUG)
-			if (debug_dirty)
-			{
-				session_please(),session_debug_show(debug_dirty!=1),
-				session_redraw(1),debug_dirty=0;
-			}
-		if (!session_paused) // set the caption just once
-		{
-			sprintf(session_tmpstr,"%s | %s | PAUSED",session_caption,session_info);
-			SDL_SetWindowTitle(session_hwnd,session_tmpstr);
-			session_please(),session_paused=1; //session_redraw(1); // enabling pause or debug taints the screen!
-		}
-		SDL_WaitEvent(NULL); // sleep till next event
+		SDL_UnlockTexture(session_dib);
+		SDL_DestroyTexture(session_dib);
+		SDL_UnlockTexture(session_gui);
+		SDL_DestroyTexture(session_gui);
+		SDL_UnlockTexture(session_dbg);
+		SDL_DestroyTexture(session_dbg);
+		SDL_DestroyRenderer(session_blitter);
 	}
+	else
+	{
+		SDL_FreeSurface(session_dib);
+		SDL_FreeSurface(session_gui);
+		SDL_FreeSurface(session_dbg);
+	}
+	SDL_DestroyWindow(session_hwnd);
+	SDL_FreeSurface(session_ui_icon);
+	#endif
+	SDL_Quit();
+	free(video_blend);
+}
+
+// operations summonned by session_listen() and session_update()
+
+#define session_title(s) SDL_SetWindowTitle(session_hwnd,(s)) // set the window caption
+#define session_sleep() SDL_WaitEvent(NULL) // sleep till a system event happens
+#define session_delay(i) SDL_Delay(i) // wait for approx `i` milliseconds
+#define audio_mustsync() // nothing to do here;
+#define audio_resyncme() // SDL2 handles the sync!
+int session_queue(void) // walk message queue: NONZERO = QUIT
+{
 	int k; for (SDL_Event event;SDL_PollEvent(&event);)
 	{
 		switch (event.type)
@@ -1630,6 +1659,12 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 							break;
 						case SDLK_DOWN: //case SDLK_MINUS: case SDLK_KP_MINUS: // ALT+DOWN lowers it
 							if (!session_fullblit&&session_zoomblit>0) --session_zoomblit,session_resize();
+							break;
+						case SDLK_LEFT: // ALT+LEFT slows the emulation down
+							if (session_rhythm>0) session_wait=session_dirty=1,--session_rhythm; // shall we do session_fast&=~1 too?
+							break;
+						case SDLK_RIGHT: // ALT+RIGHT speeds it up (fast-forward)
+							if (session_rhythm<3) session_wait=session_dirty=1,++session_rhythm; // ditto?
 							break;
 					}
 					break; // reject other ALT-combinations; notice that SDL2 overrides parts of the Win32 ALT+key logic
@@ -1710,113 +1745,19 @@ INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
 			session_ui_menu(); // can assign new values to session_event
 		if (session_event)
 		{
-			if (0X0080==session_event) // Exit
+			if (0X0080==session_event) // Menu entry "Exit"
 				return 1;
 			if (!((session_signal&SESSION_SIGNAL_DEBUG)&&session_debug_user(session_event)))
 				session_dirty=1,session_user(session_event);
 			session_event=0; //if (session_paused) ...?
 		}
 	}
-	if (session_dirty) session_dirty=0,session_clean();
-	return 0;
+	return 0; // OK
 }
-
-INLINE void session_render(void) // update video, audio and timers
-{
-	int i; static int performance_t=0,performance_f=0,performance_b=0; ++performance_f;
-	static BYTE r=0,q=0; if (++r>session_rhythm||session_wait) r=0; // force update after wait
-	if (!video_framecount) // do we need to hurry up?
-	{
-		if (++performance_b,((video_interlaces^=1)||!video_interlaced))
-			if (q) session_redraw(1),q=0; // redraw once between two pauses
-		if (session_stick&&!session_key2joy) // do we need to check the joystick?
-		{
-			MEMZERO(joy_bit); /*if (session_joybits)*/ for (i=0;i<length(kbd_joy);++i)
-				if (session_joybits&(1<<i)) // joystick bit is set?
-					{ int k=kbd_joy[i]; joy_bit[k>>3]|=1<<(k&7); }
-		}
-	}
-	if (audio_required&&audio_filter) audio_playframe(); // audio filter: sample averaging
-	session_writewave(); session_writefilm(); // record wave+film frame
-
-	if (!r) // check timers and pauses
-	{
-		i=SDL_GetTicks(); // stick to system clock; unlike Win32, the audio clock is unreliable in SDL2 :-(
-		if (i-performance_t>=0) // update performance percentage?
-		{
-			sprintf(session_tmpstr,"%s | %s | %s %s %d:%d%%",
-				session_caption,session_info,
-				session_hardblit?"SDL":"sdl",session_version,
-				(performance_b*100+VIDEO_PLAYBACK/2)/VIDEO_PLAYBACK,(performance_f*100+VIDEO_PLAYBACK/2)/VIDEO_PLAYBACK);
-			SDL_SetWindowTitle(session_hwnd,session_tmpstr);
-			performance_t=i+1000,performance_f=performance_b=session_paused=0;
-		}
-		q=1; if (session_wait|session_fast)
-		{
-			if (audio_fastmute) audio_disabled|=+8;
-			session_timer=i; // ensure that the next frame can be valid!
-		}
-		else
-		{
-			audio_disabled&=~8;
-			int s; if (VIDEO_PLAYBACK==50) // always true on pure PAL systems
-				s=1000/50; // PAL never needs any adjusting (a frame always lasts exactly 20 ms)
-			else // (we avoid a warning here) always true on pure NTSC systems
-				{ static int s0=0; s=(s0+=1000)/VIDEO_PLAYBACK; s0%=VIDEO_PLAYBACK; } // 60 Hz: [16,17,17]
-			if ((i=(session_timer+=s)-i)>=0)
-				{ if (i) SDL_Delay(i>s?s:i); } // avoid zero and overflows!
-			else if (i<-s&&!session_filmfile)//&&!video_framecount) // *!* threshold?
-				video_framecount=video_framelimit+2; // skip frame on timeout!
-		}
-	}
-	if (session_audio) // manage audio buffer
-	{
-		static BYTE s=1; if (s!=audio_disabled)
-			if (s=audio_disabled) // silent mode needs cleanup
-				MEMBYTE(audio_frame,AUDIO_ZERO);
-		if ((i=audio_session/((4-session_softplay)<<(AUDIO_L2BUFFER+AUDIO_BYTESTEP/2-(2)-3)))<=8) // 0 void, 4 half, 8 full
-		{
-			//session_timer+=i-4; // stronger: -4 -3 -2 -1 =0 +1 +2 +3 +4
-			if (i<3) session_timer+=i-3; else if (i>5) session_timer+=i-5; // average: -3 -2 -1 =0 =0 =0 +1 +2 +3
-			//session_timer+=(i-4)/2; // softer: -2 -1 -1 =0 =0 =0 +1 +1 +2
-			SDL_QueueAudio(session_audio,audio_frame,AUDIO_LENGTH_Z*AUDIO_BYTESTEP);
-		}
-		audio_session=SDL_GetQueuedAudioSize(session_audio); // ensure that the first `audio_session` is zero
-	}
-	if (session_wait) // resume activity after a pause
-		if (session_wait=0,session_audio) SDL_PauseAudioDevice(session_audio,0);
-}
-
-INLINE void session_byebye(void) // delete video+audio devices
-{
-	#if 0 // SDL_Quit cleans everything up
-	if (session_joy)
-		session_pad?SDL_GameControllerClose(session_joy):SDL_JoystickClose(session_joy);
-	if (session_audio)
-		SDL_ClearQueuedAudio(session_audio),SDL_CloseAudioDevice(session_audio);
-	SDL_StopTextInput();
-	if (session_hardblit)
-	{
-		SDL_UnlockTexture(session_dib);
-		SDL_DestroyTexture(session_dib);
-		SDL_UnlockTexture(session_gui);
-		SDL_DestroyTexture(session_gui);
-		SDL_UnlockTexture(session_dbg);
-		SDL_DestroyTexture(session_dbg);
-		SDL_DestroyRenderer(session_blitter);
-	}
-	else
-	{
-		SDL_FreeSurface(session_dib);
-		SDL_FreeSurface(session_gui);
-		SDL_FreeSurface(session_dbg);
-	}
-	SDL_DestroyWindow(session_hwnd);
-	SDL_FreeSurface(session_ui_icon);
-	#endif
-	SDL_Quit();
-	free(video_blend);
-}
+int session_joy2k(void) // turn the joystick status into bits
+	{ return session_joybits; }
+int session_ticks(void) // get the `session_clock` tick count
+	{ return SDL_GetTicks(); } // stick to system clock; unlike Win32, the audio clock is unreliable in SDL2 :-(
 
 // menu item functions ---------------------------------------------- //
 
@@ -1849,7 +1790,7 @@ int session_aboutme(char *s,char *t) { return session_ui_text(s,t,1); } // speci
 
 // input dialog ----------------------------------------------------- //
 
-#define session_input(t) session_ui_input((t)) // `t` is the caption; returns -1 on error or LENGTH on success; both the source and target strings are in `session_parmtr`
+#define session_line(t) session_ui_line((t)) // `t` is the caption; returns -1 on error or LENGTH on success; both the source and target strings are in `session_parmtr`
 
 // list dialog ------------------------------------------------------ //
 

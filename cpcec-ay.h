@@ -15,6 +15,11 @@
 
 // BEGINNING OF PSG AY-3-8910 EMULATION ============================== //
 
+int psg_outputs[17]={0,(PSG_MAX_VOICE*65536)>>23,(PSG_MAX_VOICE*46341)>>22,(PSG_MAX_VOICE*65536)>>22, // 16 static levels...
+	(PSG_MAX_VOICE*46341)>>21,(PSG_MAX_VOICE*65536)>>21,(PSG_MAX_VOICE*46341)>>20,(PSG_MAX_VOICE*65536)>>20,
+	(PSG_MAX_VOICE*46341)>>19,(PSG_MAX_VOICE*65536)>>19,(PSG_MAX_VOICE*46341)>>18,(PSG_MAX_VOICE*65536)>>18,
+	(PSG_MAX_VOICE*46341)>>17,(PSG_MAX_VOICE*65536)>>17,(PSG_MAX_VOICE*46341)>>16,(PSG_MAX_VOICE*65536)>>16,0}; // + dynamic level
+
 const BYTE psg_valid[16]={ 255,15,255,15,255,15,31,255,31,31,31,255,255,15,255,255 }; // bit masks
 BYTE psg_index,psg_table[16]; // index and table
 BYTE psg_hard_log=0xFF; // default mode: drop and stay
@@ -149,16 +154,16 @@ BYTE playcity_recv(BYTE x)
 		#else
 			x<PSG_PLAYCITY
 		#endif
-		&&playcity_index[x]<16)?playcity_table[x][playcity_index[x]]:0xFF;
+		&&playcity_index[x]<16)?playcity_table[x][playcity_index[x]]:0XFF;
 }
 void playcity_reset(void)
 {
 	MEMZERO(playcity_table);
 	PSG_PLAYCITY_RESET;
 	#if PSG_PLAYCITY == 1
-	playcity_table[0][7]=0x3F; // channels+noise off
+	playcity_table[0][7]=0XFF; // channels+noise off
 	#else
-	playcity_table[0][7]=playcity_table[1][7]=0x3F;
+	playcity_table[0][7]=playcity_table[1][7]=0XFF;
 	#endif
 }
 #endif
@@ -167,7 +172,8 @@ void psg_reset(void) // reset the PSG AY-3-8910
 {
 	psg_index=0;
 	MEMZERO(psg_table);
-	psg_table[7]=0x38; // all channels enabled, all noise disabled
+	//psg_table[7]=0x38; // all channels enabled, all noise disabled
+	psg_table[7]=0XFF; // everything disabled
 	psg_all_update();
 	#ifdef PSG_PLAYCITY
 	playcity_reset();
@@ -181,17 +187,17 @@ void psg_main(int t,int d) // render audio output for `t` clock ticks, with `d` 
 	static int r=0; // audio clock is slower, so remainder is kept here
 	if (audio_pos_z>=AUDIO_LENGTH_Z||(r+=t<<PSG_MAIN_EXTRABITS)<0) return; // nothing to do!
 	#if AUDIO_CHANNELS > 1
-	d=-d<<8;
+	d=-d<<8; // flip DAC sign!
 	#else
-	d=-d;
+	d=-d; // flip DAC sign!
 	#endif
 	do
 	{
 		static unsigned int smash=0,crash=1;
 		#if AUDIO_CHANNELS > 1
-		static int n=0,o0=0,o1=0; // output averaging variables
+		static int n=0,o0=0,o1=0; // output averages
 		#else
-		static int n=0,o=0; // output averaging variables
+		static int n=0,o=0; // output average
 		#endif
 		#if PSG_MAIN_EXTRABITS
 		static int a=1; if (!--a)
@@ -234,7 +240,7 @@ void psg_main(int t,int d) // render audio output for `t` clock ticks, with `d` 
 		o0+=d,
 		o1+=d;
 		#else
-					o+=   psg_outputs[psg_tone_power[c]];
+				o+=psg_outputs[psg_tone_power[c]];
 		o+=d;
 		#endif
 		++n;
@@ -242,14 +248,14 @@ void psg_main(int t,int d) // render audio output for `t` clock ticks, with `d` 
 		{
 			b+=TICKS_PER_SECOND;
 			#if AUDIO_CHANNELS > 1
-			*audio_target++=(o0*2+n)/(n<<(25-AUDIO_BITDEPTH))+AUDIO_ZERO, // rounded average (left)
-			*audio_target++=(o1*2+n)/(n<<(25-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average (right)
-			n=o0=o1=0; // reset output averaging variables
+			int dd=n<<(24-AUDIO_BITDEPTH),qq;
+			*audio_target++=(qq=o0/dd)+AUDIO_ZERO,o0-=qq*dd, // rounded average (left)
+			*audio_target++=(qq=o1/dd)+AUDIO_ZERO,o1-=qq*dd; // rounded average (right)
 			#else
-			*audio_target++=(o*2+n)/(n<<(17-AUDIO_BITDEPTH))+AUDIO_ZERO; // rounded average
-			n=o=0; // reset output averaging variables
+			int dd=n<<(16-AUDIO_BITDEPTH),qq;
+			*audio_target++=(qq=o /dd)+AUDIO_ZERO,o -=qq*dd; // rounded average
 			#endif
-			if (++audio_pos_z>=AUDIO_LENGTH_Z) r%=PSG_TICK_STEP; // end of buffer!
+			if (n=0,++audio_pos_z>=AUDIO_LENGTH_Z) r%=PSG_TICK_STEP; // end of buffer!
 		}
 	}
 	while ((r-=PSG_TICK_STEP)>=0);
@@ -265,11 +271,11 @@ void playcity_main(AUDIO_UNIT *t,int l)
 	static int playcity_tone_count[PSG_PLAYCITY][3],playcity_noise_count[PSG_PLAYCITY],playcity_hard_power[PSG_PLAYCITY];
 	#if PSG_PLAYCITY == 1
 	static int playcity_tone_state[PSG_PLAYCITY][3]={{0,0,0}}; static unsigned int smash[PSG_PLAYCITY]={0},crash[PSG_PLAYCITY]={1};
-	if (playcity_table[0][7]==0x3F||l<=0) return; // nothing to do? quit!
+	if (playcity_table[0][7]==0XFF||l<=0) return; // nothing to do? quit!
 	const int x=0;
 	#else
 	static int playcity_tone_state[PSG_PLAYCITY][3]={{0,0,0},{0,0,0}}; static unsigned int smash[PSG_PLAYCITY]={0,0},crash[PSG_PLAYCITY]={1,1};
-	int dirty_l=playcity_table[0][7]==0x3F,dirty_h=playcity_table[1][7]!=0x3F;
+	int dirty_l=playcity_table[0][7]==0XFF,dirty_h=playcity_table[1][7]!=0XFF;
 	if (dirty_l>dirty_h||l<=0) return; // disabled chips? no buffer? quit!
 	for (int x=dirty_l;x<=dirty_h;++x)
 	#endif
@@ -287,14 +293,14 @@ void playcity_main(AUDIO_UNIT *t,int l)
 			playcity_hard_limit[x]=1;
 	}
 	#if AUDIO_CHANNELS > 1
-	static int n=0,o0=0,o1=0,p=0;
+	static int n=0,o0=0,o1=0; // output averages
 	#else
-	static int n=0,o=0,p=0;
+	static int n=0,o=0; // output average
 	#endif
-	const int hiclk=playcity_hiclock,loclk=playcity_loclock; // redundant in systems where these values are constant
 	for (;;)
 	{
-		p+=hiclk; while (p>=0)
+		const int hiclk=playcity_hiclock,loclk=playcity_loclock; // redundant in systems where these values are constant
+		static int p=0; p+=hiclk; while (p>=0)
 		{
 			#if PSG_PLAYCITY == 1
 			static char q=0; // see below
@@ -337,11 +343,11 @@ void playcity_main(AUDIO_UNIT *t,int l)
 							if (z&16)
 								z=playcity_hard_power[x];
 							#if AUDIO_CHANNELS > 1
-							int o=PSG_PLAYCITY_XLAT(psg_outputs[z]);
+							int o=PSG_PLAYCITY_XLAT(z);
 							o0+=o*playcity_stereo[x][c][0],
 							o1+=o*playcity_stereo[x][c][1];
 							#else
-							o+=   PSG_PLAYCITY_XLAT(psg_outputs[z]);
+							o+=PSG_PLAYCITY_XLAT(z);
 							#endif
 						}
 				}
@@ -352,15 +358,14 @@ void playcity_main(AUDIO_UNIT *t,int l)
 		if (n) // enough data to write a sample? unlike the basic PSG, `n` is >1 at 44100 Hz (5 or 6)
 		{
 			#if AUDIO_CHANNELS > 1
-			*t++-=(o0*2+n)/(n<<(25-AUDIO_BITDEPTH));
-			*t++-=(o1*2+n)/(n<<(25-AUDIO_BITDEPTH));
-			n=o0=o1=0;
+			int dd=n<<(24-AUDIO_BITDEPTH),qq;
+			*t++-=qq=o0/dd,o0-=qq*dd, // rounded average (left)
+			*t++-=qq=o1/dd,o1-=qq*dd; // rounded average (right)
 			#else
-			*t++-=(o*2+n)/(n<<(17-AUDIO_BITDEPTH));
-			n=o=0;
+			int dd=n<<(16-AUDIO_BITDEPTH),qq;
+			*t++-=qq=o /dd,o -=qq*dd; // rounded average
 			#endif
-			if (!--l)
-				break;
+			if (n=0,!--l) break;
 		}
 	}
 }

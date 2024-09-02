@@ -1,14 +1,14 @@
- //  ####  ######    ####  #######   ####    ----------------------- //
+ //  ####  ######    ####  #######   ####  ------------------------- //
 //  ##  ##  ##  ##  ##  ##  ##   #  ##  ##  CPCEC, plain text Amstrad //
 // ##       ##  ## ##       ## #   ##       CPC emulator written in C //
 // ##       #####  ##       ####   ##       as a postgraduate project //
 // ##       ##     ##       ## #   ##       by Cesar Nicolas-Gonzalez //
 //  ##  ##  ##      ##  ##  ##   #  ##  ##  since 2018-12-01 till now //
- //  ####  ####      ####  #######   ####    ----------------------- //
+ //  ####  ####      ####  #######   ####  ------------------------- //
 
 #define MY_CAPTION "XRFEC"
 #define my_caption "xrfec"
-#define MY_VERSION "20240505"//"2555"
+#define MY_VERSION "20240707"//"2555"
 #define MY_LICENSE "Copyright (C) 2019-2024 Cesar Nicolas-Gonzalez"
 
 #define GPL_3_INFO \
@@ -45,9 +45,11 @@ Contact information: <mailto:cngsoft@gmail.com> */
 
 #ifdef _WIN32 // "BYTE", "WORD", "DWORD" and (unused) "QWORD" are always exactly 8, 16, 32 and 64 bits long
 
+#ifndef RAWWW // disable VFW!
 #define WIN32_LEAN_AND_MEAN 1
 #include <windows.h>
 #include <vfw.h>
+#endif
 
 #else // "char", "short int" and "long long int" are 8, 16 and 64 bits, but "long int" can be 32 or 64 bits
 
@@ -58,11 +60,18 @@ Contact information: <mailto:cngsoft@gmail.com> */
 
 #endif
 
+#if __GNUC__ >= 4 // optional branch prediction hints
+#define LIKELY(x) __builtin_expect(!!(x),1) // see 'likely' from Linux
+#define UNLIKELY(x) __builtin_expect((x),0) // see 'unlikely'
+#else // branch prediction hints are unreliable outside GCC!!
+#define LIKELY(x) (x) // not ready, fall back
+#define UNLIKELY(x) (x) // ditto
+#endif
+
 // common data types -- mostly based on ARGB32 video and lLrR32 audio //
 
-#define MAXVIDEOBYTES (4096*512) // 2 MB > one frame of video at 800x600px 32bpp
-#define MAXAUDIOBYTES (4096*16) // 64 kB > 1/3 seconds of audio at 48000x2ch 16b
-BYTE *argb32,*diff32; // current and previous bitmap, respectively; the caller must assign them
+#define MAXVIDEOBYTES (32<<16) // 2 MB > one frame of video at 800x600px 32bpp
+#define MAXAUDIOBYTES (1<<16) // 64 kB > 1/3 seconds of audio at 48000x2ch 16b
 BYTE flags_audio[4]={1,2,2,4}; // sample size according to 16bits (bit 0) and stereo (bit1)
 BYTE wave32[MAXAUDIOBYTES]; // the current audio frame
 
@@ -71,33 +80,53 @@ int video_x,video_y,audio_z,clock_z,flags_z,count_z; // dimensions and features 
 // open and read a XRF file ----------------------------------------- //
 
 FILE *xrf_file=NULL; int xrf_length,xrf_cursor,xrf_count,xrf_dummy;
-BYTE *xrf_bitmap=NULL,*xrf_shadow=NULL,*xrf_chunk=NULL; // buffers
-#define XRF_CHUNKSIZE ((MAXVIDEOBYTES+MAXAUDIOBYTES)*9/8+32) // pathological case XX.XX -> XX.XX.00 plus end marker
-#define xrf_decode0 do{ if (!(a>>=1)) b=*w++,a=128; }while(0)
-#define xrf_decode1() ((b&a)?*w++:0)
-int xrf_decode(BYTE *t,BYTE *s,int *l,int x) // equally hacky decoder based on an 8-bit RLE and an interleaved pseudo Huffman filter!
+BYTE *xrf_argb32=NULL,*xrf_diff32=NULL,*xrf_chunk=NULL; // buffers
+int xrf_version; // experimental support for additional encodings!!
+int xrf_chunksize(void) // get the maximum chunk length in bytes
 {
-	BYTE *w=s,*z=t,a=0,b=0; int m=-1,n;
-	for (;;)
+	return xrf_version?MAXVIDEOBYTES+MAXAUDIOBYTES+8*8: // all 100% literal streams (video R,G,B + audio l,L,r,R) plus headers and footers
+	((MAXVIDEOBYTES+MAXAUDIOBYTES)*19/16+8*4); // pathological case xxxxxxxx.xxxxxxxx -> 1xxxxxxxx.1xxxxxxxx.0 plus 8 end markers
+}
+int xrf_decodebool(BYTE **s,BYTE *a,BYTE *b) // fetch zero or nonzero
+	{ { if (UNLIKELY(!(*a>>=1))) *b=*((*s)++),*a=128; } return *b&*a; }
+int xrf_decode1(BYTE *t,int o,BYTE *s,int *l,int x) // equally hacky decoder based on an 8-bit RLE and an interleaved pseudo Huffman filter!
+{
+	#define xrf_decode1n() (xrf_decodebool(&v,&a,&b)?*v++:0)
+	BYTE *v=s,*w=t,a=0,b=0; for (int m=-1;o>=0;)
 	{
-		xrf_decode0; if (b&a) // special case of xrf_decode1()
-			{ if (!(n=*w++)) return *l=(z-t)/x,w-s; } // "100000000" is EOF!
-		else
-			n=0;
-		*z=n,z+=x; if (n==m) // string?
+		int n; if (xrf_decodebool(&v,&a,&b)) // special case of xrf_decode1n()
+			{ if (!(n=*v++)) return *l=(w-t)/x,v-s; } // long zero "100000000" is EOF!
+		else n=0; // short zero
+		--o,*w=n,w+=x; if (n==m) // string?
 		{
-			xrf_decode0; if ((n=xrf_decode1())==255)
-				{ xrf_decode0; n=510+(xrf_decode1()<<8); }
-			if (n>=254)
-				{ xrf_decode0; n+=xrf_decode1(); }
-			for (;n;--n)
-				*z=m,z+=x;
+			n=xrf_decode1n(); if (n==255) n=510+(xrf_decode1n()<<8);
+			if (n>=254) n+=xrf_decode1n();
+			if ((o-=n)>=0) for (;n;--n) *w=m,w+=x; // avoid overruns; the error is handled later
 			m=-1; // avoid accidental repetitions
 		}
-		else
-			m=n; // literal
+		else m=n; // new literal
 	}
+	#undef xrf_decode1n
+	return *l=-1; // false values = automatic errors!
 }
+int xrf_decode2(BYTE *t,int o,BYTE *s,int *l,int x) // slightly improved version of the original hacky decoder!
+{
+	#define xrf_decode1n() xrf_decodebool(&v,&a,&b)
+	BYTE *v=s,*w=t,a=0,b=0,r=128; for (;o>=0;)
+	{
+		int n=1; while (n>0&&xrf_decode1n()) if ((n<<=1)<1) goto failure; else if (xrf_decode1n()) ++n;
+		if ((o-=--n)<0) break; else for (;n;--n) *w=*v++,w+=x; // avoid overruns!
+		BYTE c=xrf_decode1n(); // 00: fetch byte; 01: reuse byte; 10: set 0; 11: set 255
+		n=1; while (n>0&&xrf_decode1n()) if ((n<<=1)<1) goto failure; else if (xrf_decode1n()) ++n;
+		if (c) c=xrf_decode1n()?255:0; else if (xrf_decode1n()) c=r; else
+			if ((c=*v++)==255) break; else if (!c) return *l=(w-t)/x,v-s; else r=c;
+		if ((o-=++n)<0) break; else do *w=c,w+=x; while (--n); // avoid overruns!
+	}
+	failure: return *l=1; // false values = automatic errors!
+	#undef xrf_decode1n
+}
+int xrf_decode(BYTE *t,int o,BYTE *s,int *l,int x)
+	{ return xrf_version?xrf_decode2(t,o,s,l,x):xrf_decode1(t,o,s,l,x); }
 
 #define xrf_fgetc() fgetc(xrf_file)
 int xrf_fgetcc(void) { int m=xrf_fgetc()<<8; return m+xrf_fgetc(); } // Motorola order, (*(WORD*))(x) is no use
@@ -107,9 +136,9 @@ int xrf_fgetcccc(void) { int m=xrf_fgetc()<<24; m+=xrf_fgetc()<<16; m+=xrf_fgetc
 
 int xrf_open(char *s) // opens a XRF file and sets the common parameters up; !0 ERROR
 {
-	if (!xrf_bitmap&&!(xrf_bitmap=malloc(MAXVIDEOBYTES)))
+	if (!xrf_argb32&&!(xrf_argb32=malloc(MAXVIDEOBYTES)))
 		return 1; // cannot allocate video buffer!
-	if (!xrf_shadow&&!(xrf_shadow=malloc(MAXVIDEOBYTES)))
+	if (!xrf_diff32&&!(xrf_diff32=malloc(MAXVIDEOBYTES)))
 		return 1; // cannot allocate audio buffer!
 	if (xrf_file) return 1; // already open!
 	if (!(xrf_file=fopen(s,"rb"))) return 1;
@@ -125,75 +154,78 @@ int xrf_open(char *s) // opens a XRF file and sets the common parameters up; !0 
 	count_z=xrf_fgetcccc();
 	xrf_cursor=8+8+4; // the bytes we've read so far
 	xrf_count=xrf_dummy=0;
-	argb32=xrf_bitmap; diff32=xrf_shadow; // this speeds things up later: swapping pointers instead of their contents
 	// reject obsolete files: XRF-1 was limited to 8-bit RLE lengths, and XRF+1 didn't store the amount of frames!
-	return (!(video_x>0&&video_y>0&&clock_z>0&&audio_z>=0)||strcmp(id,"XRF1!\015\012\032"))?fclose(xrf_file),1:0;
+	xrf_version=id[3]-'1'; id[3]='1'; // experimental support for additional encodings!!
+	return video_x<=0||video_y<=0||clock_z<=0||audio_z<0||xrf_version<0||xrf_version>1||
+		strcmp(id,"XRF1!\015\012\032")?fclose(xrf_file),1:0;
 }
 int xrf_read(void) // reads a XRF chunk and decodes the current video and audio frames; !0 ERROR/EOF
 {
 	if (!xrf_file) return 1; // file not open!
 	if (xrf_count>=count_z) return 1; // EOF!
-	if (!xrf_chunk) return 1; // buffer error!
-	int i,j,k,l=xrf_fgetcccc();
-	if (l<1||l>XRF_CHUNKSIZE)
-		return 1; // improper chunk size!
-	if (xrf_fread(xrf_chunk,l)!=l)
-		return 1; // file is truncated!
-	xrf_cursor+=4+l;
-	BYTE *s=xrf_chunk; i=0;
-	s+=xrf_decode(&diff32[0],s,&j,4); i+=j; // B
-	s+=xrf_decode(&diff32[1],s,&j,4); i+=j; // G
-	s+=xrf_decode(&diff32[2],s,&j,4); i+=j; // R
-	// s+=xrf_decode(&diff32[3],s,&j,4); i+=j; // A
-	if (i)
+	//if (!xrf_chunk||!xrf_chunk2) return 1; // buffer error!
+	int i,j,l=xrf_fgetcccc();
 	{
-		if (i!=video_x*video_y*3) return 1; // damaged video frame!
-		BYTE *xyz=argb32; argb32=diff32; diff32=xyz;
-		for (int z=video_x*video_y;z--;) ((DWORD*)argb32)[z]^=((DWORD*)diff32)[z]; // apply changes!
+		if (l<1||l>xrf_chunksize()) return 1; // improper chunk size!
+		if (xrf_fread(xrf_chunk,l)!=l) return 1; // file is truncated!
 	}
-	else
-		++xrf_dummy;
+	xrf_cursor+=4+l;
+	BYTE *s=xrf_chunk; i=0; l=video_x*video_y>>((flags_z&12)==4);
+	s+=xrf_decode(&xrf_diff32[0],l,s,&j,4); i+=j; // B
+	s+=xrf_decode(&xrf_diff32[1],l,s,&j,4); i+=j; // G
+	s+=xrf_decode(&xrf_diff32[2],l,s,&j,4); i+=j; // R
+	// s+=xrf_decode(&xrf_diff32[3],l,s,&j,4); i+=j; // A
+	if (!i) ++xrf_dummy; // empty frame
+	else if (i!=l*3) return 1; // damaged video frame!
+	else // apply changes!
+	{
+		int zi=0,zo=video_y*video_x; // doing the vertical flipping here saves some overhead later
+		if ((flags_z&12)==4) // vertical scaling? 00xx = normal, 01xx = vertical scaling, 1Zxx = interleaved
+			for (zo-=video_x*2;zo>=0;zo-=video_x*3) for (int z=video_x;z;++zi,++zo,--z)
+					((DWORD*)xrf_argb32)[zo+video_x]=((DWORD*)xrf_argb32)[zo]^=((DWORD*)xrf_diff32)[zi];
+		else // no vertical scaling, copy
+			for (zo-=video_x*1;zo>=0;zo-=video_x*2) for (int z=video_x;z;++zi,++zo,--z)
+					((DWORD*)xrf_argb32)[zo]^=((DWORD*)xrf_diff32)[zi];
+	}
 	if (audio_z)
 	{
-		i=0;
 		switch(flags_z&3)
 		{
 			case 0: // 8-bit mono
-				s+=xrf_decode(&wave32[0],s,&k,1); i+=k; // M
-				i-=audio_z;
+				i=audio_z;
+				s+=xrf_decode(&wave32[0],audio_z,s,&j,1); i-=j; // M
 				break;
 			case 1: // 16-bit mono
 			case 2: // 8-bit stereo: equal to 16-bit mono on the lil-endian AVI!
-				s+=xrf_decode(&wave32[0],s,&k,2); i+=k; // m/L
-				s+=xrf_decode(&wave32[1],s,&k,2); i+=k; // M/R
-				i-=audio_z*2;
+				i=audio_z*2;
+				s+=xrf_decode(&wave32[0],audio_z,s,&j,2); i-=j; // m/L
+				s+=xrf_decode(&wave32[1],audio_z,s,&j,2); i-=j; // M/R
 				break;
 			case 3: // 16-bit stereo
-				s+=xrf_decode(&wave32[0],s,&k,4); i+=k; // l
-				s+=xrf_decode(&wave32[1],s,&k,4); i+=k; // L
-				s+=xrf_decode(&wave32[2],s,&k,4); i+=k; // r
-				s+=xrf_decode(&wave32[3],s,&k,4); i+=k; // R
-				i-=audio_z*4;
+				i=audio_z*4;
+				s+=xrf_decode(&wave32[0],audio_z,s,&j,4); i-=j; // l
+				s+=xrf_decode(&wave32[1],audio_z,s,&j,4); i-=j; // L
+				s+=xrf_decode(&wave32[2],audio_z,s,&j,4); i-=j; // r
+				s+=xrf_decode(&wave32[3],audio_z,s,&j,4); i-=j; // R
 				break;
 		}
 		if (i) return 1; // damaged audio frame!
 	}
-
 	return ++xrf_count,0;
 }
 int xrf_close(void) // close and clean up; always 0 OK
 {
-	if (xrf_bitmap) free(xrf_bitmap),xrf_bitmap=NULL;
-	if (xrf_shadow) free(xrf_shadow),xrf_shadow=NULL;
+	if (xrf_argb32) free(xrf_argb32),xrf_argb32=NULL;
+	if (xrf_diff32) free(xrf_diff32),xrf_diff32=NULL;
 	if (xrf_chunk) free(xrf_chunk),xrf_chunk=NULL;
 	if (xrf_file) fclose(xrf_file),xrf_file=NULL;
 	return 0;
 }
 
 int avi_videos,avi_audios; // video/audio counters
-BYTE *avi_canvas=NULL; // upside-down ARGB32 canvas
 
 #ifdef _WIN32
+#ifndef RAWWW // disable VFW!
 
 // create and write an AVI file through Windows' AVIFILE API -------- //
 
@@ -249,10 +281,8 @@ int vfw_write(void) // !0 ERROR
 	if (!vfw_file) return 1;
 	if (vfw_video&&vfw_codec)
 	{
-		// it sucks, but we must turn the bitmap upside down, negative height won't do :-(
-		for (int y=0,yy=video_y;--yy,y<video_y;++y)
-			memcpy(&avi_canvas[y*video_x*4],&argb32[yy*video_x*4],video_x*4);
-		AVIStreamWrite(vfw_codec,avi_videos++,1,avi_canvas,video_x*video_y*4,0,NULL,NULL);
+		// unlike in past versions, the bitmap is already upside down :-)
+		AVIStreamWrite(vfw_codec,avi_videos++,1,xrf_argb32,video_x*video_y*4,0,NULL,NULL);
 		if (vfw_audio)
 		{
 			AVIStreamWrite(vfw_audio,avi_audios,audio_z,wave32,audio_z*flags_audio[flags_z&3],0,NULL,NULL);
@@ -264,7 +294,6 @@ int vfw_write(void) // !0 ERROR
 }
 int vfw_finish(void) // close and clean up; always 0 OK
 {
-	if (avi_canvas) free(avi_canvas),avi_canvas=NULL;
 	if (vfw_audio) AVIStreamRelease(vfw_audio),vfw_audio=NULL;
 	if (vfw_codec) AVIStreamRelease(vfw_codec),vfw_codec=NULL;
 	if (vfw_video) AVIStreamRelease(vfw_video),vfw_video=NULL;
@@ -272,6 +301,7 @@ int vfw_finish(void) // close and clean up; always 0 OK
 	AVIFileExit(); return 0;
 }
 
+#endif
 #endif
 
 // create and write an AVI file by hand, no compression ------------- //
@@ -318,6 +348,7 @@ BYTE avi_h_mute[0x0200]= // see above
 	   0,   0,   0,   0,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, // 0x00C#
 	0x00,0x00,0x00,0x00,0x4A,0x55,0x4E,0x4B,   0,   0,   0,   0,0x00,0x00,0x00,0x00, // 0x00D#
 };
+BYTE avi_canvas[1<<12]; // scanline interleaving buffer -- no need to allocate a whole frame!
 
 #define avi_fputc(x) fputc(x,avi_file)
 int avi_fputcccc(int i) { avi_fputc(i); avi_fputc(i>>8); avi_fputc(i>>16); return avi_fputc(i>>24); }
@@ -329,7 +360,9 @@ void avi_mputcccc(BYTE *x,int i) { *x=i; x[1]=i>>8; x[2]=i>>16; x[3]=i>>24; } //
 int avi_create(char *s)
 {
 	#ifdef _WIN32
+	#ifndef RAWWW // disable VFW!
 	if (*vfw_fourcc) return vfw_create(s);
+	#endif
 	#endif
 	if (avi_file) return 1;
 	if (!strcmp(s,"-"))
@@ -390,27 +423,27 @@ int avi_create(char *s)
 }
 int avi_write(void)
 {
-	if (!avi_canvas&&!(avi_canvas=malloc(MAXVIDEOBYTES)))
-		return 1; // cannot allocate memory!
 	#ifdef _WIN32
+	#ifndef RAWWW // disable VFW!
 	if (*vfw_fourcc) return vfw_write();
 	#endif
+	#endif
 	if (!avi_file) return 1;
-	// it sucks, but the only raw compression is the ARGB32->RGB24 clipping
-	// and we still have to store the resulting bitmap upside down, too :-(
-	int l; BYTE *t=avi_canvas;
+	// the bitmap is already upside down, but we still have to compress it,
+	// and the only available compression is the ARGB32->RGB24 clipping :-(
+	int l=(video_x*3+3)&-4;
+	avi_fputcccc(0x62643030); // "00db"
+	avi_fputcccc(l*video_y);
 	for (int y=0;y<video_y;++y)
 	{
-		BYTE *s=&argb32[(video_y-y-1)*4*video_x];
+		BYTE *t=avi_canvas,*s=&xrf_argb32[y*video_x*4];
 		for (int x=0;x<video_x;++x)
 			*t++=*s++, // copy B
 			*t++=*s++, // copy G
 			*t++=*s++, // copy R
 			++s; // skip A!
+		if (l!=avi_fwrite(avi_canvas,l)) return 1;
 	}
-	avi_fputcccc(0x62643030); // "00db"
-	avi_fputcccc(l=t-avi_canvas);
-	if (l!=avi_fwrite(avi_canvas,l)) return 1;
 	avi_length+=l+8;
 	if (audio_z)
 	{
@@ -426,7 +459,9 @@ int avi_write(void)
 int avi_finish(void)
 {
 	#ifdef _WIN32
+	#ifndef RAWWW // disable VFW!
 	if (*vfw_fourcc) return vfw_finish();
+	#endif
 	#endif
 	if (!avi_file) return 1;
 	avi_length+=8;
@@ -469,8 +504,10 @@ int main(int argc,char *argv[])
 		else if (!t)
 			t=argv[i];
 		#ifdef _WIN32
+		#ifndef RAWWW // disable VFW!
 		else if (!*vfw_fourcc&&strlen(argv[i])==4)
 			strcpy(vfw_fourcc,argv[i]);
+		#endif
 		#endif
 		else i=argc; // help!
 	}
@@ -480,7 +517,9 @@ int main(int argc,char *argv[])
 			"\n"
 			"usage: " my_caption " source.xrf [target.avi"
 			#ifdef _WIN32
+			#ifndef RAWWW // disable VFW!
 			" [fourcc]"
+			#endif
 			#endif
 			"]\n"
 			"       " my_caption " source.xrf - | ffmpeg [filters] -i - [options] target\n"
@@ -488,11 +527,13 @@ int main(int argc,char *argv[])
 			GPL_3_INFO
 			"\n");
 			#ifdef _WIN32
+			#ifndef RAWWW // disable VFW!
 			ICINFO lpicinfo; ICInfo(0,-1,&lpicinfo); int n=lpicinfo.fccHandler;
 			for (int j=0;j<n;++j)
 				ICInfo(0,j,&lpicinfo),printf("%s%c%c%c%c",j?j%10?" ":"\n\t\t":"\n- fourcc codes: ",
 					(BYTE)lpicinfo.fccHandler,(BYTE)(lpicinfo.fccHandler>>8),(BYTE)(lpicinfo.fccHandler>>16),(BYTE)(lpicinfo.fccHandler>>24));
 			printf("\n");
+			#endif
 			#endif
 		return 1;
 	}
@@ -506,20 +547,22 @@ int main(int argc,char *argv[])
 	#define filesize_lower(x) ((((int)(x>>15))&31)*3+3)
 	if (t) // process
 	{
-		if (!(xrf_chunk=malloc(XRF_CHUNKSIZE)))
+		if (!(xrf_chunk=malloc(xrf_chunksize())))
 			return xrf_close(),avi_finish(),fprintf(stderr,"error: cannot setup decoder!\n"),1;
 		if (avi_create(t))
 			return xrf_close(),avi_finish(),fprintf(stderr,"error: cannot create target!\n"),1;
 		while (!xrf_read()&&!avi_write())
-			fprintf(stderr,"%05.02f\015",xrf_cursor*100.0/xrf_length);
+			if (!(xrf_count&15)) fprintf(stderr,"%d/%d\015",xrf_count,count_z);//(stderr,"%05.02f\015",xrf_cursor*100.0/xrf_length)
 		if (avi_finish(),xrf_cursor!=xrf_length)
 			return xrf_close(),fprintf(stderr,"error: something went wrong!\n"),1;
 		else
 		{
 			#ifdef _WIN32
+			#ifndef RAWWW // disable VFW!
 			if (!avi_length) // using VFW32.DLL means we cannot know the output length in advance
 				if (avi_file=fopen(t,"rb"))
 					fseek(avi_file,0,SEEK_END),avi_length=ftell(avi_file),fclose(avi_file);
+			#endif
 			#endif
 			fprintf(stderr,"%d frames (%d unused), " filesize_style ".\n",xrf_count,xrf_dummy,filesize_upper(avi_length),filesize_lower(avi_length));
 		}

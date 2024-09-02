@@ -44,14 +44,17 @@ Contact information: <mailto:cngsoft@gmail.com> */
 #define VIDEO_PLAYBACK 50
 #define VIDEO_LENGTH_X (64<<4)
 #define VIDEO_LENGTH_Y (39<<4)
+#ifndef VIDEO_BORDERLESS
 #define VIDEO_OFFSET_X (15<<4)
 #define VIDEO_OFFSET_Y (17<<2) // ( 4<<4) //
 #define VIDEO_PIXELS_X (48<<4)
 #define VIDEO_PIXELS_Y (67<<3) // (34<<4) //
-//#define VIDEO_OFFSET_X (19<<4) // show the default 640x400 screen without the border
-//#define VIDEO_OFFSET_Y ( 9<<4)
-//#define VIDEO_PIXELS_X (40<<4)
-//#define VIDEO_PIXELS_Y (25<<4)
+#else
+#define VIDEO_OFFSET_X (19<<4) // show the default 640x400 screen without the border
+#define VIDEO_OFFSET_Y ( 9<<4)
+#define VIDEO_PIXELS_X (40<<4)
+#define VIDEO_PIXELS_Y (25<<4)
+#endif
 #define VIDEO_HSYNC_LO (62<<4)
 #define VIDEO_HSYNC_HI (66<<4)
 #define VIDEO_VSYNC_LO (37<<4)
@@ -65,19 +68,19 @@ unsigned short session_icon32xx16[32*32] = {
 #endif
 
 // The CPC 6128 and PLUS keyboard; older models had the cursors (00,02,08,01) and COPY (09) on the right edge.
-// +--------------------------------------------------------------------------+--------------+
+// +-----------------------------------------------------------------------------------------+
 // | ESC| 1! | 2" | 3# | 4$ | 5% | 6& | 7' | 8( | 9) | 0_ | -= | ^~ | CLR| DEL| F7 | F8 | F9 |
 // | 42 | 40 | 41 | 39 | 38 | 31 | 30 | 29 | 28 | 21 | 20 | 19 | 18 | 10 | 4F | 0A | 0B | 03 | Amstrad joystick
-// +--------------------------------------------------------------------------+----+----+----+      +----+
+// +-----------------------------------------------------------------------------------------+      +----+
 // | TAB   | Q  | W  | E  | R  | T  | Y  | U  | I  | O  | P  | @| | [{ |      | F4 | F5 | F6 |      | UP |
 // | 44    | 43 | 3B | 3A | 32 | 33 | 2B | 2A | 23 | 22 | 1B | 1A | 11 |RETURN| 14 | 0C | 04 |      | 48 |
-// +--------------------------------------------------------------------+ 12  +----+----+----+ +----+----+----+
-// | CAPS   | A  | S  | D  | F  | G  | H  | J  | K  | L  | :* | ;+ | ]} |     | F1 | F2 | F3 | | LT | // | RT |
+// +--------------------------------------------------------------------+     +--------------+ +--------------+
+// | CAPS   | A  | S  | D  | F  | G  | H  | J  | K  | L  | :* | ;+ | ]} | 12  | F1 | F2 | F3 | | LT | // | RT |
 // | 46     | 45 | 3C | 3D | 35 | 34 | 2C | 2D | 25 | 24 | 1D | 1C | 13 |     | 0D | 0E | 05 | | 4A | // | 4B |
-// +--------------------------------------------------------------------------+----+----+----+ +----+----+----+
+// +-----------------------------------------------------------------------------------------+ +--------------+
 // | SHIFT   | Z  | X  | C  | V  | B  | N  | M  | ,< | .> | /? | \` | SHIFT   | F0 | UP | F. |      | DN |
 // | 15      | 47 | 3F | 3E | 37 | 36 | 2E | 26 | 27 | 1F | 1E | 16 | 15      | 0F | 00 | 07 |      | 49 |
-// +---------+----------------------------------------------------------------+----+----+----+ +----+----+----+
+// +-----------------------------------------------------------------------------------------+ +--------------+
 // | CONTROL | COPY  | SPACE                                 | ENTER          | LT | DN | RT | | F1 | F2 | F3 |
 // | 17      | 09    | 2F                                    | 06             | 08 | 02 | 01 | | 4C | 4D | 4E |
 // +-----------------------------------------------------------------------------------------+ +--------------+
@@ -85,21 +88,22 @@ unsigned short session_icon32xx16[32*32] = {
 #define KBD_JOY_UNIQUE 6 // four sides + two fires
 unsigned char kbd_joy[]= // ATARI norm: up, down, left, right, fire1-fire4
 	{ 0X48,0X49,0X4A,0X4B,0X4C,0X4D,0X4C,0X4D }; // side bits are hard-wired, but the fire bits can be chosen
+#define DEBUG_LONGEST 4 // Z80 opcodes can be up to 4 bytes long
 #define MAUS_EMULATION // emulation can examine the mouse
 #define MAUS_LIGHTGUNS // lightguns are emulated with the mouse
 //#define VIDEO_LO_X_RES // the normal MODE 2 is monochrome, but the PLUS ASIC can scroll in MODE 2 steps :-(
 //#define INFLATE_RFC1950 // no file needs inflating RFC1950 data
 //#define DEFLATE_RFC1950 // no file needs deflating RFC1950 data
-//#define DEFLATE_NOSTORE // unused
+//#define SHA1_CALCULATOR // unused
+#define PNG_OUTPUT_MODE 0 // PNG_OUTPUT_MODE implies DEFLATE_RFC1950 and forbids QOI
 #define POWER_BOOST1 1 // power_boost default value (enabled)
 #define POWER_BOOST0 0
-#define DEBUG_LONGEST 4 // Z80 opcodes can be up to 4 bytes long
 #include "cpcec-rt.h" // emulation framework!
 
 int litegun=0; // 0 = standard joystick, 1 = Trojan Light Phaser, 2 = Gunstick (MHT), 3 = Westphaser (Loriciel)
 const unsigned char kbd_map_xlt[]=
 {
-	// control keys
+	// control keys (range 0X81..0XBF)
 	KBCODE_F1	,0x81,	KBCODE_F2	,0x82,	KBCODE_F3	,0x83,	KBCODE_F4	,0x84,
 	KBCODE_F5	,0x85,	KBCODE_F6	,0x86,	KBCODE_F7	,0x87,	KBCODE_F8	,0x88,
 	KBCODE_F9	,0x89,	KBCODE_HOLD	,0x8F,	KBCODE_F11	,0x8B,	KBCODE_F12	,0x8C,
@@ -107,7 +111,7 @@ const unsigned char kbd_map_xlt[]=
 	#ifdef DEBUG
 	KBCODE_PRIOR	,0x95,	KBCODE_NEXT	,0x96,	KBCODE_HOME	,0x97,	KBCODE_END	,0x98,
 	#endif
-	// actual keys
+	// actual keys, also in hexadecimal
 	KBCODE_1	,0x40,	KBCODE_Q	,0x43,	KBCODE_A	,0x45,	KBCODE_Z	,0x47,
 	KBCODE_2	,0x41,	KBCODE_W	,0x3B,	KBCODE_S	,0x3C,	KBCODE_X	,0x3F,
 	KBCODE_3	,0x39,	KBCODE_E	,0x3A,	KBCODE_D	,0x3D,	KBCODE_C	,0x3E,
@@ -128,7 +132,7 @@ const unsigned char kbd_map_xlt[]=
 	KBCODE_X_0	,0x0F,	KBCODE_X_DOT	,0x07,	KBCODE_X_ENTER	,0x06,
 	KBCODE_UP	,0x00,	KBCODE_DOWN	,0x02,	KBCODE_LEFT	,0x08,	KBCODE_RIGHT	,0x01,
 	// key mirrors
-	KBCODE_R_SHIFT	,0x15,	KBCODE_R_CTRL	,0x17,	KBCODE_CHR4_4	,0x16, // KBCODE_CHR4_4 105-K!
+	KBCODE_R_SHIFT	,0x15,	KBCODE_R_CTRL	,0x17,	KBCODE_CHR4_4	,0x16, // KBCODE_CHR4_4 is missing in 104-key layouts!
 };
 
 const int video_asic_table[32]= // the 0GRB format used in ASIC PLUS
@@ -201,6 +205,7 @@ int multi_t=0,multi_u=0; // overclocking shift+bitmask
 
 // HARDWARE DEFINITIONS ============================================= //
 
+#define ram_maxcfg 6 // 0 = 64K, 1 = 128K, 2 = 192K, 3 = 320K, 4 = 576K, 5 = 1088K, 6 = 2112K
 BYTE mem_ram[33<<16],mem_rom[33<<14]; // RAM (BASE 64K BANK + 32x 64K BANKS) and ROM (512K ASIC PLUS CARTRIDGE + 16K BDOS)
 BYTE *ext_rom=NULL; // external 257x 16K EXTENDED ROMS
 BYTE mmu_xtr[257]; // ROM bit masks: nonzero reads from EXTENDED rather than from DEFAULT/CARTRIDGE
@@ -438,8 +443,8 @@ BYTE ram_depth=1; // RAM configuration: 0 = 64K, 1 = 128K, 2 = 192K, 3 = 320K, 4
 BYTE ram_extra=0; // extended RAM hardware uses one or two extra bits; they're taken from the port address, so some 128K-only softwares will fail
 int ram_dirty; // actually used RAM space, in kb
 void ram_setcfg(int x) { ram_depth=(x),ram_extra=ram_depth<5?0:ram_depth<6?64:192; } // `ram_extra` is zero unless RAM size goes beyond 576k!
+int ram_kbytes(int x) { return ((32<<x)&-64)+64; }
 #define ram_getcfg() (ram_depth)
-const int ram_kbyte[]={64,128,192,320,576,1088,2112};// (x?(32<<x)+64:64)
 VIDEO_UNIT *video_clut_index,video_clut_value; // slow colour update buffer
 
 const int mmu_ram_mode[8][4]= // relative offsets of every bank for each +128K RAM mode
@@ -457,8 +462,8 @@ void mmu_update(void) // update the MMU tables with all the new offsets
 {
 	// classic CPC RAM/ROM paging
 	int i=gate_ram&(ram_depth?(4<<ram_depth)-1:0),j;
-	if (ram_dirty<(j=i?128+64*(i>>3):64)) // tag memory as dirty?
-		session_dirty|=ram_dirty=j;
+	if (ram_dirty<(j=i?(i>>3)*64+128:64)) // tag memory as dirty?
+		session_dirty|=i,ram_dirty=j;
 	int k=(i>>3)<<16; i&=7; // k = bank offset, i = paging mode
 	// page 0x0000-0x3FFF
 	if ((j=mmu_ram_mode[i][0])>=0x10000-0x0000) j+=k;
@@ -623,35 +628,36 @@ void printer_close(void) { printer_flush(),fclose(printer),printer=NULL; }
 
 // behind the PIO: PSG AY-3-8910 ------------------------------------ //
 
-// sound table, 16 static levels + 1 dynamic level, 16-bit sample style
-int psg_outputs[17]={0,85,121,171,241,341,483,683,965,1365,1931,2731,3862,5461,7723,10922,0};
-
+#define PSG_MAX_VOICE 10922 // 32768/3= 10922
 #define PSG_TICK_STEP 8 // 1 MHz /2 /8 = 62500 Hz
 #define PSG_KHZ_CLOCK 1000 // compare with the 2000 kHz YM3 standard
 #define PSG_MAIN_EXTRABITS 0 // not even the mixer-banging beepers from "STORMBRINGER" and "TERMINUS" improve with >0!
 #define PSG_PLAYCITY 2 // the PLAYCITY card contains two chips...
-#define PSG_PLAYCITY_XLAT(x) ((x)>>1) // ...playing at 50% intensity each!
+#define PSG_PLAYCITY_XLAT(x) playcity_outputs[(x)] // ...playing at 50% intensity each!
 int playcity_clock=0,playcity_hiclock,playcity_loclock; // the PLAYCITY clock is dynamic...
 #define playcity_getcfg() (playcity_clock)
 void playcity_setcfg(BYTE b) { if (b<16) playcity_clock=b,playcity_hiclock=(b?b*2-1:2)*TICKS_PER_SECOND,playcity_loclock=(b?b:1)*2*AUDIO_PLAYBACK*4; }
 #define PSG_PLAYCITY_RESET (playcity_setcfg(0)) // ...and it must be reset!
 int playcity_disabled=0,playcity_dirty,playcity_ctc_state[4]={0,0,0,0},playcity_ctc_flags[4]={0,0,0,0},playcity_ctc_count[4]={0,0,0,0},playcity_ctc_limit[4]={0,0,0,0};
 int dac_disabled=1; // Digiblaster DAC, disabled by default to avoid trouble with the printer
+int playcity_outputs[16]; // to be filled following psg_outputs[]
 
 #include "cpcec-ay.h"
 
 #include "cpcec-ym.h"
 void ym3_write(void) { ym3_write_ay(psg_table,&psg_hard_log,PSG_KHZ_CLOCK); }
 
+int dac_delay=0,dac_voice=0,tape_loud=1,tape_song=0; // DAC and tape levels and flags
+#define dac_frame() (dac_delay?dac_voice=dac_voice*63/64:++dac_delay) // soften signal as time passes, if required
+
 // behind the PIO: TAPE --------------------------------------------- //
 
 #define tape_enabled (pio_port_c&16)
 #define tape_disabled tape_delay // the machine can disable the tape even when we enable it
-#define TAPE_MAIN_TZX_STEP (35<<0) // amount of T units per packet // highest value before "MARMALADE" breaks down is 197, but remainder isn't 0
-//#define TAPE_ZXS_MODE // useless outside Spectrum
-//#define TAPE_MSX_MODE // useless outside MSX
-//#define TAPE_KANSAS_CITY // useless outside MSX AFAIK, are there any non-MSX protections using this method?
-#define FASTTAPE_STABLE // overkill!
+//#define TAPE_TAP_FORMAT // useless outside Spectrum
+//#define TAPE_CAS_FORMAT // useless outside MSX
+//#define TAPE_TZX_KANSAS // useless outside MSX AFAIK, are there any non-MSX protections using this method?
+//#define FASTTAPE_DUMPER // overkill!
 #include "cpcec-k7.h"
 
 // 0xFA7E, 0xFB7E, 0xFB7F: FDC 765 ---------------------------------- //
@@ -1155,9 +1161,10 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 			plus_sprite_target=NULL;
 			if (gate_count_r3y>0?vsync_match>=video_vsync_min:vsync_match>video_vsync_max) // VBLANK?
 			{
-				vsync_match=0; if (!((BYTE)video_pos_z)&&crtc_type==1) crtc_syncs_update(); // "PHEELONE" watchdog
+				vsync_match=0; if (!(video_pos_z&255)&&crtc_type==1) crtc_syncs_update(); // "PHEELONE" watchdog
 				// all calculations are ready: feed everything to the video engine!
 				video_newscanlines(video_pos_x,(((VIDEO_LENGTH_Y-vsync_limit)/2)&-2)+((crtc_status&CRTC_STATUS_REG_8)?2:0)); // end of frame!
+				video_threshold=VIDEO_LENGTH_X/4; // soft horizontal threshold
 			}
 			vsync_count+=2; vsync_match+=2;
 			// "PREHISTORIK 2", "EDGE GRINDER" and the like perform smooth horizontal scrolling with the low nibble of REG3.
@@ -1183,11 +1190,8 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 	if (plus_sprite_target) if (video_pos_x>plus_sprite_latest) video_main_sprites();
 }
 
-int dac_level=0,tape_loud=1,tape_song=0;
-#define dac_level_byte(x) dac_level=(x)<<7
-#define dac_level_zero() (dac_level=dac_level*3/4) // soften signal as time passes
 void audio_main(int t) // render audio output for `t` clock ticks; t is always nonzero!
-	{ psg_main(t,(((tape_status^tape_output)&tape_loud)<<12)+dac_level); } // merge tape signals
+	{ psg_main(t,(((tape_status^tape_output)&tape_loud)<<12)+dac_voice); } // merge tape signals
 
 // autorun runtime logic -------------------------------------------- //
 
@@ -1357,7 +1361,7 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 					else
 					{
 						if (b&16)
-							cprintf("%08X: RESET IRQ!\n",z80_pc.w), // something must go here!?
+							//cprintf("%08X: RESET IRQ!\n",z80_pc.w), // something must go here!?
 							z80_irq&=~128,irq_timer=0;
 						gate_mcr=b&15; // 0x80-0xBF: MULTICONFIGURATION REGISTER
 						if (!(b&4)&&z80_pc.w==5) // warm reset?
@@ -1397,7 +1401,7 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 	{
 		#ifdef PSG_PLAYCITY
 		if (!printer&&!dac_disabled)
-			audio_dirty=1,dac_level_byte(b^128); // Digiblaster DAC, signed 8-bit audio
+			audio_dirty=1,dac_delay=0,dac_voice=(((signed char)b)*10922)>>7; // Digiblaster DAC, signed 8-bit audio; "BORDELIK 4.1" used as reference
 		else
 		#endif
 		if (printer&&(b&128)&&!(printer_z&128))
@@ -1497,7 +1501,7 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 		{
 			//disc_reset();
 			#ifdef PSG_PLAYCITY
-			playcity_reset(); MEMZERO(playcity_ctc_count); playcity_dirty=dac_level=0;
+			playcity_reset(); MEMZERO(playcity_ctc_count); session_dirty|=playcity_dirty,playcity_dirty=dac_voice=0;
 		}
 		if (p==0xF880)
 			//cprintf("F880:%02X ",b),
@@ -1527,8 +1531,8 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 			//else if (p==0xF882) cprintf("F882:%02X ",b); // *!* todo *!*
 			//else if (p==0xF883) cprintf("F883:%02X ",b); // *!* todo *!*
 			//#endif
-			else if (p==0xF884) dac_level=0,playcity_dirty|=2,playcity_send(0,b); // YMZ RIGHT CHANNEL WRITE
-			else if (p==0xF888) dac_level=0,playcity_dirty|=1,playcity_send(1,b); // YMZ LEFT CHANNEL WRITE
+			else if (p==0xF884) dac_voice=0,session_dirty|=1&~playcity_dirty,playcity_dirty|=1,playcity_send(0,b); // YMZ RIGHT CHANNEL WRITE
+			else if (p==0xF888) dac_voice=0,session_dirty|=2&~playcity_dirty,playcity_dirty|=2,playcity_send(1,b); // YMZ LEFT CHANNEL WRITE
 			else if (p==0xF984) playcity_select(0,b); // YMZ RIGHT CHANNEL SELECT
 			else if (p==0xF988) playcity_select(1,b); // YMZ LEFT CHANNEL SELECT
 			#endif
@@ -1611,7 +1615,7 @@ BYTE z80_tape_fastfeed[][32] = { // codes that build bytes
 /* 22 */ {  -5,   1,0X3E,  +4,   2,0XD0,0X3E,  +1,   4,0XBA,0XCB,0X13,0X16,  +1,   2,0X30,0XF1 }, // CODEMASTERS 2/3
 /* 23 */ {  -0,   3,0X0E,0X01,0X18 }, // UNILODE
 };
-#ifndef FASTTAPE_STABLE
+#ifdef FASTTAPE_DUMPER
 BYTE z80_tape_fastdump[][32] = { // codes that fill blocks
 /*  0 */ {  -0,  10,0XD0,0XDD,0X77,0X00,0XDD,0X23,0X15,0X1D,0X20,0XF3 }, // AMSTRAD CPC FIRMWARE
 /*  1 */ { -29,   8,0X08,0X20,0X05,0XDD,0X75,0X00,0X18,0X0A, +10,   5,0XDD,0X23,0X1B,0X08,0X06, +16,   7,0X7C,0XAD,0X67,0X7A,0XB3,0X20,0XD2 }, // TOPO
@@ -1642,7 +1646,7 @@ int z80_tape_testfeed(WORD p)
 	}
 	return i;
 }
-#ifndef FASTTAPE_STABLE
+#ifdef FASTTAPE_DUMPER
 int z80_tape_testdump(WORD p)
 {
 	int i; if ((i=z80_tape_index[p-1])>length(z80_tape_fastdump)) // the offset avoid conflicts with TABLE2
@@ -1666,7 +1670,7 @@ void z80_tape_fastload_ccitt(int mask8) // the AMSTRAD CPC firmware keeps its ow
 
 void z80_tape_trap(void)
 {
-	int i,j; BYTE k; if ((i=z80_tape_index[z80_pc.w])>length(z80_tape_fastload))
+	int i,j; WORD w; BYTE k; if ((i=z80_tape_index[z80_pc.w])>length(z80_tape_fastload))
 	{
 		for (i=0;i<length(z80_tape_fastload)&&!fasttape_test(z80_tape_fastload[i],z80_pc.w);++i) {}
 		z80_tape_index[z80_pc.w]=i; cprintf("FASTLOAD: %04X=%02d\n",z80_pc.w,(i<length(z80_tape_fastload))?i:-1);
@@ -1678,11 +1682,11 @@ void z80_tape_trap(void)
 		case  0: // AMSTRAD CPC FIRMWARE, CASSYS ("WONDER BOY"), HEWSON ("EXOLON", "NEBULUS")
 			if (z80_de.b.l==0x08&&FASTTAPE_CAN_FEED()&&(((j=z80_tape_testfeed(z80_tape_spystack(0)))==0&&!(gate_mcr&4))||j==15))
 			{
-				#ifndef FASTTAPE_STABLE
+				#ifdef FASTTAPE_DUMPER
 				if (z80_tape_testdump(z80_tape_spystack(4))==0)
-					while (FASTTAPE_CAN_DUMP()&&POKE(z80_sp.w+2)>1)
+					while (FASTTAPE_CAN_DUMP()&&(w=z80_sp.w+2,POKE(w)>1)
 					{
-						k=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--POKE(z80_sp.w+2),--POKE(z80_sp.w+3);
+						k=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--POKE(w),++w,--POKE(w);
 						if (j==0) z80_tape_fastload_ccitt((k<<8)+1); // handle all 8 bits in a single step
 					}
 				#endif
@@ -1699,7 +1703,7 @@ void z80_tape_trap(void)
 		case  1: // TOPO ("DESPERADO", "MAD MIX GAME", "VIAJE AL CENTRO DE LA TIERRA")
 			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==1)
 			{
-				#ifndef FASTTAPE_STABLE
+				#ifdef FASTTAPE_DUMPER
 				if (z80_af2.b.l&0x40) if (z80_tape_testdump(z80_tape_spystack(0))==1)
 					while (FASTTAPE_CAN_DUMP()&&z80_de.b.l>1)
 						z80_hl.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de.w;
@@ -1712,7 +1716,7 @@ void z80_tape_trap(void)
 		case  2: // DINAMIC ("ABU SIMBEL PROFANATION", "GAME OVER", "PHANTIS"), GRANDSLAM ("PACMANIA"), HI-TEC ("CRYSTAL KINGDOM DIZZY")
 			if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&((j=z80_tape_testfeed(z80_tape_spystack(0)))==1||j==2||j==5))
 			{
-				#ifndef FASTTAPE_STABLE
+				#ifdef FASTTAPE_DUMPER
 				if (z80_af2.b.l&0x40) if ((k=z80_tape_testdump(z80_tape_spystack(0)))==2||k==3||k==5)
 					while (FASTTAPE_CAN_DUMP()&&z80_de2.b.l>1)
 						z80_hl2.b.h^=POKE(z80_ix.w)=fasttape_dump(),k==3?--z80_ix.w:++z80_ix.w,--z80_de2.w;
@@ -1722,8 +1726,8 @@ void z80_tape_trap(void)
 			else
 				fasttape_add8(z80_bc2.b.l>>6,16,&z80_bc2.b.h,1); // z80_r7+=...*10;
 			break;
-		case  3: // ALKATRAZ ("E-MOTION"), HEXAGON ("ALIEN STORM")
-			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&((j=z80_tape_testfeed(z80_tape_spystack(0)))==3||j==14))
+		case  3: // ALKATRAZ ("E-MOTION"), HEXAGON ("ALIEN STORM"), "OLLI & LISA" (j==5)
+			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&((j=z80_tape_testfeed(z80_tape_spystack(0)))==3||j==5||j==14))
 				k=fasttape_feed(z80_bc.b.l>>6,17),tape_skipping=z80_hl.b.l=128+(k>>1),z80_bc.b.h=-(k&1);
 			else
 				fasttape_add8(z80_bc.b.l>>6,17,&z80_bc.b.h,1); // z80_r7+=...*9;
@@ -1731,10 +1735,10 @@ void z80_tape_trap(void)
 		case  4: // "LA ABADIA DEL CRIMEN"
 			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==4)
 			{
-				#ifndef FASTTAPE_STABLE
+				#ifdef FASTTAPE_DUMPER
 				if (z80_tape_testdump(z80_tape_spystack(2))==4)
-					while (FASTTAPE_CAN_DUMP()&&POKE(z80_sp.w+4)>1)
-						POKE(z80_ix.w)=fasttape_dump(),--z80_ix.w,--POKE(z80_sp.w+4);
+					while (FASTTAPE_CAN_DUMP()&&(w=z80_sp.w+4,POKE(w)>1))
+						POKE(z80_ix.w)=fasttape_dump(),--z80_ix.w,--POKE(w);
 				#endif
 				k=fasttape_feed(z80_de.b.h>>7,13),tape_skipping=z80_hl.b.l=128+(k>>1),z80_de.b.l=-(k&1);
 			}
@@ -1748,14 +1752,14 @@ void z80_tape_trap(void)
 			z80_r7|=128; fasttape_add8(1,12,&z80_r7,6);
 			break;
 		case  7: // OPERA V1+V2 2/2
-			if (PEEK(z80_sp.w+3)==0x08&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==6)
+			if (w=z80_sp.w+3,PEEK(w)==0x08&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==6)
 			{
-				#ifndef FASTTAPE_STABLE
+				#ifdef FASTTAPE_DUMPER
 				if ((k=z80_tape_testdump(z80_tape_spystack(0)))==6||k==7)
 					while (FASTTAPE_CAN_DUMP()&&z80_de.b.l>1)
 						z80_hl2.w+=POKE(z80_ix.w)=fasttape_dump(),--z80_ix.w,--z80_de.w; // k==6 doesn't touch Z80_HL2
 				#endif
-				k=fasttape_feed(0,13),POKE(z80_sp.w+3)=1,z80_hl.b.h=tape_skipping=(k>>1),z80_hl.b.l=k&1?-2:0; // -2 avoids the later INC L!
+				k=fasttape_feed(0,13),POKE(w)=1,z80_hl.b.h=tape_skipping=(k>>1),z80_hl.b.l=k&1?-2:0; // -2 avoids the later INC L!
 			}
 			else
 				fasttape_add8(0,13,&z80_hl.b.l,1); // z80_r7+=...*7;
@@ -1764,14 +1768,14 @@ void z80_tape_trap(void)
 			z80_r7|=128; fasttape_add8(1,7,&z80_r7,3); // "MARMELADE" uses R as counter!
 			break;
 		case  9: // OPERA V3 2/2
-			if (PEEK(z80_sp.w+3)==0x08&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==6)
+			if (w=z80_sp.w+3,PEEK(w)==0x08&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==6)
 			{
-				#ifndef FASTTAPE_STABLE
+				#ifdef FASTTAPE_DUMPER
 				if (z80_tape_testdump(z80_tape_spystack(0))==7)
 					while (FASTTAPE_CAN_DUMP()&&z80_de.b.l>1)
 						z80_hl2.w+=POKE(z80_ix.w)=fasttape_dump(),--z80_ix.w,--z80_de.w;
 				#endif
-				k=fasttape_feed(0,8),POKE(z80_sp.w+3)=1,z80_hl.b.h=tape_skipping=(k>>1),z80_hl.b.l=-(k&1);
+				k=fasttape_feed(0,8),POKE(w)=1,z80_hl.b.h=tape_skipping=(k>>1),z80_hl.b.l=-(k&1);
 			}
 			else
 				fasttape_add8(0,8,&z80_hl.b.l,1); // z80_r7+=...*4;
@@ -1785,14 +1789,14 @@ void z80_tape_trap(void)
 		case 11: // SPEEDLOCK (V1+V1.5+V2+V3: "DONKEY KONG", "ARKANOID", "WIZBALL", "THE ADDAMS FAMILY"), RICOCHET ("RICK DANGEROUS 2")
 			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&((j=z80_tape_testfeed(z80_tape_spystack(0)))==7||j==8||j==9||j==12))
 			{
-				#ifndef FASTTAPE_STABLE
+				#ifdef FASTTAPE_DUMPER
 				if ((k=z80_tape_testdump(z80_tape_spystack(0)))==8||k==9||k==15)
 					while (FASTTAPE_CAN_DUMP()&&z80_de.b.l>1)
 						z80_af2.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de.w; // some Ricochet versions ("OCTOPLEX") don't touch Z80_AF2
 				#endif
 				k=fasttape_feed(z80_bc.b.l>>7,15);
 				if (j==7) // SPEEDLOCK V1 uses the stack
-					POKE(z80_sp.w+2)=tape_skipping=128+(k>>1),POKE(z80_sp.w+3)=-(k&1);
+					w=z80_sp.w+2,POKE(w)=tape_skipping=128+(k>>1),++w,POKE(w)=-(k&1);
 				else // all other versions use registers
 					tape_skipping=z80_hl.b.l=128+(k>>1),z80_hl.b.h=-(k&1);
 			}
@@ -1815,33 +1819,19 @@ void z80_tape_trap(void)
 		case 15: // MIKRO-GEN ("FROST BYTE")
 		case 16: // HI-TEC ("INTERCHANGE")
 			if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&((j=z80_tape_testfeed(z80_tape_spystack(0)))==13||j==5))
-			{
 				k=fasttape_feed(z80_bc2.b.l>>7,15),tape_skipping=z80_hl2.b.l=128+(k>>1),z80_bc2.b.h=-(k&1);
-			}
 			else
 				fasttape_add8(z80_bc2.b.l>>7,15,&z80_bc2.b.h,1);
 			break;
 		case 17: // ZYDROLOAD ("HOSTAGES")
 			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==5)
-			{
 				k=fasttape_feed(z80_bc.b.l>>5,16),tape_skipping=z80_hl.b.l=128+(k>>1),z80_bc.b.h=-(k&1);
-			}
 			else
 				fasttape_add8(z80_bc.b.l>>5,16,&z80_bc.b.h,1);
 			break;
 		case 18: // MINILOAD-CPC
 			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&((j=z80_tape_testfeed(z80_tape_spystack(0)))==18||j==19))
-			{
-				#ifndef FASTTAPE_STABLE
-				if (z80_tape_testdump(k=z80_tape_spystack(0))==13) // MINILOAD 1/2 doesn't check the length
-				{
-					k-=12; k=PEEK(k)&8?-1:1; // 0X23: ++; 0X2B: --
-					while (FASTTAPE_CAN_DUMP()&&z80_de.b.l>1)
-						z80_hl.b.h^=POKE(z80_ix.w)=fasttape_dump(),z80_ix.w+=k,--z80_de.w;
-				}
-				#endif
 				k=fasttape_feed(z80_bc.b.l>>7,14),tape_skipping=z80_hl.b.l=128+(k>>1),z80_bc.b.h=-(k&1);
-			}
 			else
 				fasttape_add8(z80_bc.b.l>>7,14,&z80_bc.b.h,1); // z80_r7+=...*7;
 			break;
@@ -1857,7 +1847,7 @@ void z80_tape_trap(void)
 		case 21: // BINARY DESIGN ("DEFCOM"), CODEMASTERS ("MAGICLAND DIZZY")
 			if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==5)
 			{
-				#ifndef FASTTAPE_STABLE
+				#ifdef FASTTAPE_DUMPER
 				if (z80_af2.b.l&0x40) if (z80_tape_testdump(z80_tape_spystack(0))==5)
 					while (FASTTAPE_CAN_DUMP()&&z80_de2.b.l>1)
 						z80_hl2.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de2.w;
@@ -1871,7 +1861,7 @@ void z80_tape_trap(void)
 		case 30: // RAINBOW ARTS ("ROCK'N ROLL")
 			if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==5)
 			{
-				#ifndef FASTTAPE_STABLE
+				#ifdef FASTTAPE_DUMPER
 				if (z80_tape_testdump(z80_tape_spystack(0))==10) // CODEMASTERS
 					while (FASTTAPE_CAN_DUMP()&&z80_de2.b.l>1)
 						z80_hl2.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de2.w;
@@ -1887,7 +1877,7 @@ void z80_tape_trap(void)
 		case 23: // CODEMASTERS 2/3 ("TREASURE ISLAND DIZZY"), OCEAN LEVELS ("THE VINDICATOR")
 			if (z80_de.b.l==0x01&&FASTTAPE_CAN_FEED()&&((j=z80_tape_testfeed(z80_tape_spystack(0)))==16||j==22))
 			{
-				#ifndef FASTTAPE_STABLE
+				#ifdef FASTTAPE_DUMPER
 				if (z80_tape_testdump(z80_tape_spystack(0))==14)
 					while (FASTTAPE_CAN_DUMP()&&z80_de2.b.l>1)
 						POKE(z80_hl.w)=fasttape_dump(),++z80_hl.w,--z80_de2.w;
@@ -1900,7 +1890,7 @@ void z80_tape_trap(void)
 		case 24: // CODEMASTERS 3/3 ("KWIK SNAX")
 			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==5)
 			{
-				#ifndef FASTTAPE_STABLE
+				#ifdef FASTTAPE_DUMPER
 				if (z80_af2.b.l&0x40) if (z80_tape_testdump(z80_tape_spystack(0))==5)
 					while (FASTTAPE_CAN_DUMP()&&z80_de.b.l>1)
 						z80_hl.b.h^=POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de.w;
@@ -1913,7 +1903,7 @@ void z80_tape_trap(void)
 		case 25: // SPEEDLOCK LEVELS ("RAINBOW ISLANDS")
 			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==17)
 			{
-				#ifndef FASTTAPE_STABLE
+				#ifdef FASTTAPE_DUMPER
 				if (z80_tape_testdump(z80_tape_spystack(0))==11)
 					while (FASTTAPE_CAN_DUMP()&&z80_de.b.l>1)
 						POKE(z80_ix.w)=fasttape_dump(),++z80_ix.w,--z80_de.w;
@@ -1936,17 +1926,13 @@ void z80_tape_trap(void)
 			break;
 		case 31: // GREMLIN OLD ("WAY OF THE TIGER" V1)
 			if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&((j=z80_tape_testfeed(z80_tape_spystack(0)))==2||j==5))
-			{
 				k=fasttape_feed(z80_bc2.b.l>>6,17),tape_skipping=z80_hl2.b.l=128+(k>>1),z80_bc2.b.h=-(k&1);
-			}
 			else
 				fasttape_add8(z80_bc2.b.l>>6,17,&z80_bc2.b.h,1);
 			break;
 		case 32: // ICON DESIGN ("RECKLESS RUFUS", "NETHER EARTH")
 			if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&((j=z80_tape_testfeed(z80_tape_spystack(0)))==1||j==5))
-			{
 				k=fasttape_feed(z80_bc2.b.l>>6,21),tape_skipping=z80_hl2.b.l=128+(k>>1),z80_bc2.b.h=-(k&1);
-			}
 			else
 				fasttape_add8(z80_bc2.b.l>>6,21,&z80_bc2.b.h,1);
 			break;
@@ -1965,9 +1951,7 @@ void z80_tape_trap(void)
 			break;
 		case 35: // "SUPERTRUX" (2/2)
 			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==5)
-			{
 				k=fasttape_feed(z80_bc.b.l>>7,15),tape_skipping=z80_hl.b.l=128+(k>>1),z80_bc.b.h=-(k&1);
-			}
 			else
 				fasttape_add8(z80_bc.b.l>>7,15,&z80_bc.b.h,1); // z80_r7+=...*8;
 			break;
@@ -1979,9 +1963,7 @@ void z80_tape_trap(void)
 			break;
 		case 39: // "BOMBFUSION"
 			if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==5)
-			{
 				k=fasttape_feed(z80_bc2.b.l>>5,16),tape_skipping=z80_hl2.b.l=128+(k>>1),z80_bc2.b.h=-(k&1);
-			}
 			else
 				fasttape_add8(z80_bc2.b.l>>5,17,&z80_bc2.b.h,1);
 			break;
@@ -1995,7 +1977,7 @@ void z80_tape_trap(void)
 		case 44: // "LOTUS ESPRIT TURBO CHALLENGE"
 			if (z80_hl2.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==1)
 			{
-				#ifndef FASTTAPE_STABLE
+				#ifdef FASTTAPE_DUMPER
 				if (z80_af2.b.l&0x40) if ((k=z80_tape_testdump(z80_tape_spystack(0)))==...)
 					while (FASTTAPE_CAN_DUMP()&&z80_de2.b.l>1)
 						z80_hl2.b.h^=POKE(z80_ix.w)=fasttape_dump(),k==3?--z80_ix.w:++z80_ix.w,--z80_de2.w;
@@ -2051,6 +2033,7 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 			{
 				if ((pio_control&2)||plus_enabled) // PLUS ASIC CRTC3 has a PIO bug!
 				{
+					//static int zzz=0; if (z80_pc.w<0XBB00) if (mmu_rom[0]==mem_ram) { if (zzz!=z80_pc.w) zzz=z80_pc.w,cprintf("$F5:%04X  ",z80_pc.w); else cputchar('.'); }
 					#if 1 // TAPE_FASTLOAD
 					if (tape)//&&!z80_iff.b.l) // at least one tape loader enables interrupts: "INVASION OF THE ZOMBIE MONSTERS"
 						if (tape_fastload&&tape_loud) z80_tape_trap(); // handle tape analysis upon status
@@ -2295,7 +2278,6 @@ const BYTE z80_delays[]= // precalc'd coarse timings
 	2,0,0,0,0,0,0,0,2,2,0,0,0,0,0,0, // 0xF0-0xFF
 };
 
-BYTE z80_ack_delay=0; // unlike Z80_LOCAL it cannot be local, it must stick :-(
 // input/output
 #define Z80_SYNC() ( _t_-=z80_t, z80_sync(z80_t), z80_t=0 )
 #define Z80_SYNC_IO ( _t_-=z80_t, z80_sync(z80_t) ) // see Z80_STRIDE_IO for the missing "z80_t=0"
@@ -2313,10 +2295,10 @@ BYTE z80_ack_delay=0; // unlike Z80_LOCAL it cannot be local, it must stick :-(
 #define Z80_MREQ_1X_NEXT(t)
 #define Z80_WAIT(t)
 #define Z80_WAIT_IR1X(t)
-#define Z80_DUMB1(w) ((void)0) // 4-T dumb PEEK
-#define Z80_DUMB Z80_DUMB1 // 3-T dumb PEEK
-#define Z80_NEXT1 PEEK // 4-T PC FETCH
-#define Z80_NEXT Z80_NEXT1 // 3-T PC FETCH
+#define Z80_DUMB_M1(w) ((void)0) // 4-T dumb PEEK
+#define Z80_DUMB Z80_DUMB_M1 // 3-T dumb PEEK
+#define Z80_NEXT_M1 PEEK // 4-T PC FETCH
+#define Z80_NEXT PEEK // 3-T PC FETCH
 #define Z80_PEEK PEEK // trappable single read
 #define Z80_PEEK0 Z80_PEEK // untrappable single read, use with care
 #define Z80_PEEK1WZ Z80_PEEK // 1st twin read from LD rr,($hhll)
@@ -2325,7 +2307,7 @@ BYTE z80_ack_delay=0; // unlike Z80_LOCAL it cannot be local, it must stick :-(
 #define Z80_PEEK2SP Z80_PEEK // 2nd twin read
 #define Z80_PEEK1EX Z80_PEEK // 1st twin read from EX rr,(SP)
 #define Z80_PEEK2EX Z80_PEEK // 2nd twin read
-#define Z80_PRAE_NEXTXY Z80_NEXT1 // special DD/FD PEEK (1/2)
+#define Z80_PRAE_NEXTXY PEEK // special DD/FD PEEK (1/2)
 #define Z80_POST_NEXTXY // special DD/FD PEEK (2/2)
 #define Z80_POKE(w,b) do{ BYTE z80_aux=w>>14; if (mmu_bit[z80_aux]) Z80_SYNC_IO, z80_t=0, z80_trap(w,b); else mmu_ram[z80_aux][w]=(b); }while(0) // trappable single write
 #define Z80_PEEKPOKE Z80_POKE // a POKE that follows a same-address PEEK, f.e. INC (HL)
@@ -2337,18 +2319,19 @@ BYTE z80_ack_delay=0; // unlike Z80_LOCAL it cannot be local, it must stick :-(
 #define Z80_POKE1EX Z80_PEEKPOKE // 1st twin write from EX rr,(SP)
 #define Z80_POKE2EX Z80_POKE // 2nd twin write
 // coarse timings
-#define Z80_STRIDE(o) z80_t+=z80_delays[o]
-#define Z80_STRIDE_0 z80_ack_delay=1 // default "slow ACK" behavior
-#define Z80_STRIDE_1 z80_ack_delay=0 // special "fast ACK" behavior
-#define Z80_STRIDE_ZZ(o) z80_t+=z80_delays[o]+z80_ack_delay
-#define Z80_STRIDE_IO(o) z80_t=z80_delays[o] // "z80_t=XXX" makes "z80_t=0" redundant in Z80_SYNC_IO
+#define Z80_STRIDE(o) (z80_t+=z80_delays[o])
+#define Z80_STRIDE_ZZ(o) (z80_t+=z80_delays[o]+z80_ack) // the slow/fast ACK quirk! cfr. "Z80 quirks"
+#define Z80_STRIDE_IO(o) (z80_t=z80_delays[o]) // "z80_t=XXX" makes "z80_t=0" redundant in Z80_SYNC_IO
 #define Z80_LIST_PEEKXY(o) z80_delays[o+0x600] // defined, this makes the Z80 DD/FD boolean list redundant
-
 #define Z80_SLEEP(t) z80_t+=(t) // `t` must be nonzero!
 #define Z80_HALT_STRIDE 1 // i.e. optimal HALT step, handled in a single go
-#define Z80_XCF_BUG 0 // replicate the SCF/CCF quirk -- seen on Spectrum, but on CPC!?
-#define Z80_0XED71 0 // whether OUT (C) sends 0 (NMOS) or 255 (CMOS)
-//#define Z80_TRAP_0XCF do{ ; }while(0)
+// Z80 quirks
+BYTE z80_xcf=0,z80_ack=0; // the XCF and ACK quirk flags
+#define Z80_QUIRK(x) do{ if ((x)&1) z80_xcf=2; if ((x)&2) z80_ack=0; }while(0) // XCF (+1) and ACK (+2) quirks
+#define Z80_QUIRK_M1 (z80_xcf>>=1,z80_ack=1) // refresh XCF and ACK quirks; the order is critical both here and above (!)
+#define Z80_XCF_BUG (z80_xcf?0:z80_af.b.l) // replicate the XCF quirk -- seen on Spectrum, and on CPC too AFAIK
+#define Z80_0XED71 (0) // whether OUT (C) sends 0 (NMOS) or 255 (CMOS)
+#define Z80_0XED5X (1) // whether LD A,I/R checks the IRQ in-opcode
 
 #define bios_magick() (debug_point[0XC154]=debug_point[0XC14D]=DEBUG_MAGICK)
 void z80_magick(void) // virtual magick!
@@ -2515,16 +2498,14 @@ void all_reset(void) // reset everything!
 	pio_reset();
 	psg_reset();
 	#ifdef PSG_PLAYCITY
-	MEMZERO(playcity_ctc_count); playcity_dirty=dac_level=0;
+	MEMZERO(playcity_ctc_count); session_dirty|=playcity_dirty,playcity_dirty=dac_voice=0;
 	#endif
 	z80_reset();
 	z80_sp.w=0xC000; // implicit in "No Exit" PLUS!
 	z80_imd=1; // implicit in "Pro Tennis Tour" PLUS!
 	debug_reset();
 	disc_disabled&=1,z80_irq=snap_done=autorun_mode=autorun_t=0; // avoid accidents!
-	#if 1 // TAPE_FASTLOAD, avoid false positives!
-	MEMBYTE(z80_tape_index,-1);
-	#endif
+	MEMBYTE(z80_tape_index,-1); // TAPE_FASTLOAD, avoid false positives!
 }
 
 // firmware/cartridge ROM file handling operations ------------------ //
@@ -2601,8 +2582,8 @@ int bios_load(char *s) // load a cartridge file or a firmware ROM file. 0 OK, !0
 					}
 					else if (!strcasecmp("bank",t))
 					{
-						if ((ram_depth=(*uu)&7)>=length(ram_kbyte))
-							ram_depth=length(ram_kbyte)-1;
+						if ((ram_depth=(*uu-'0')&15)>ram_maxcfg)
+							ram_depth=ram_maxcfg;
 						ram_setcfg(ram_depth);
 					}
 					else if (!strcasecmp("fddc",t))
@@ -2661,12 +2642,6 @@ int bios_load(char *s) // load a cartridge file or a firmware ROM file. 0 OK, !0
 			cprintf("PLUS cartridge %dK.\n",i>>10);
 		}
 	}
-	#if 0 // fast tape hack!!
-	if (equalsmmmm(&mem_rom[0x2BFD],0x78B120FB))
-		mem_rom[0x2BF9+2]=1; // 664+6128+PLUS HACK: reduced initial tape reading delay!
-	else if (equalsmmmm(&mem_rom[0x2A8D],0x78B120FB))
-		mem_rom[0x2A89+2]=1; // ditto, for CPC464
-	#endif
 	if (!memcmp(&mem_rom[0xCE07],"\x1B\xBB\x30\xF0\xFE\x81\x28\x0C\xEE\x82",10))
 		mem_rom[0xCE07]=0x09,mem_rom[0xCE0C]=0x31,mem_rom[0xCE10]=0x32; // PLUS HACK: boot menu accepts '1' and '2'!
 	if (session_substr!=s) STRCOPY(bios_path,s);
@@ -2697,6 +2672,8 @@ int dandanator_load(char *s) // inserts Dandanator cartridge, performs several t
 	dandanator_remove(); if (dandanator_insert(s)) return 1;
 	STRCOPY(dandanator_path,s); return 0;
 }
+#else
+#define dandanator_remove() (0)
 #endif
 
 // snapshot file handling operations -------------------------------- //
@@ -2818,15 +2795,12 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 		}
 	}
 	else // no compression
-	{
-		fwrite1(header,256,f); fwrite1(mem_ram,ram_dirty<<10,f);
-	}
+		{ fwrite1(header,256,f); fwrite1(mem_ram,ram_dirty<<10,f); }
 	if (plus_enabled) // PLUS ASIC?
 	{
 		kputmmmm(0x4350432B,f); // "CPC+"
 		kputiiii(0x08F8,f);
-		for (i=0;i<16*16*8;++i) // 0x4000-0x4FFF nibbles => 0x000-0x7FF byte
-			session_scratch[i]=(plus_sprite_bmp[i*2+0]<<4)+(plus_sprite_bmp[i*2+1]&15);
+		nibble2byte(&session_scratch[0X000],plus_sprite_bmp,16*16*8); // 0x4000-0x4FFF nibbles => 0x000-0x7FF byte
 		MEMNCPY(&session_scratch[0x800],plus_sprite_xyz,128); // 0x6000-0x607F => 0x800-0x87F
 		MEMNCPY(&session_scratch[0x880],plus_palette, 64); // 0x6400-0x643F => 0x880-0x8BF
 		memset(&session_scratch[0x8C0],0,0x20);
@@ -2875,12 +2849,8 @@ int snap_save(char *s) // save a snapshot. `s` path, NULL to resave; 0 OK, !0 ER
 void snap_load_plus(FILE *f,int i)
 {
 	BYTE *s=session_scratch,*t=plus_sprite_bmp;
-	if (i<sizeof(session_scratch)) // the buffer is very big, but we must avoid accidents!
-		fread1(s,i,f),memset(&session_scratch[i],0,sizeof(session_scratch)-i);
-	else
-		fread1(s,sizeof(session_scratch),f),fseek(f,i-sizeof(session_scratch),SEEK_CUR);
-	for (i=0;i<16*16*8;++i)
-		*t++=*s>>4,*t++=15&*s++; // 0x000-0x7FF bytes => 0x4000-0x4FFF nibbles
+	fread1(s,i,f),memset(&session_scratch[i],0,0X0900-i);
+	byte2nibble(t,s,16*16*8); // 0x000-0x7FF bytes => 0x4000-0x4FFF nibbles
 	//MEMNCPY(plus_sprite_xyz,&session_scratch[0x800],128); // 0x800-0x87F => 0x6000-0x607F
 	for (i=0;i<16*8;i+=8) // sanitize sprite values
 	{
@@ -2921,7 +2891,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 	if ((fread1(header,256,f)!=256)||(memcmp(snap_magic8,header,8)))
 		return puff_fclose(f),1;
 	int dumpsize=mgetii(&header[0x6B]);
-	if (dumpsize>ram_kbyte[length(ram_kbyte)-1]||dumpsize&15)
+	if (dumpsize>(sizeof(mem_ram)>>10)||dumpsize&15)
 		return puff_fclose(f),1; // improper memory length!
 	if (dumpsize&&dumpsize<64)
 		dumpsize=64; // avoid bugs with very old snapshots!
@@ -2961,7 +2931,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 	MEMLOAD(psg_table,&header[0x5B]);
 	#ifdef PSG_PLAYCITY
 	if (psg_table[14]>=240)
-		playcity_disabled=0,playcity_setcfg(psg_table[14]-240); // Playcity kludge, see snap_save()
+		playcity_dirty=playcity_disabled=0,playcity_setcfg(psg_table[14]-240); // Playcity kludge, see snap_save()
 	else
 		playcity_reset();
 	#endif
@@ -3037,7 +3007,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 			else
 				return puff_fclose(f),1; // improperly sized snapshot!
 		}
-		else if (k==0x4350432B) // PLUS ASIC "CPC+"
+		else if (k==0x4350432B&&l<0X0900) // PLUS ASIC "CPC+"
 			q|=1,type_id=3,snap_load_plus(f,l);
 		#ifdef Z80_DANDANATOR
 		else if (k==0x444E5452&&l>=sizeof(dandanator_cfg)) // DANDANATOR flags "DNTR"
@@ -3079,9 +3049,8 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 	if (dumpsize>(ram_dirty=64))
 	{
 		q=0; // look for lowest RAM limit that fits
-		while ((ram_dirty=ram_kbyte[++q])<dumpsize&&q<length(ram_kbyte)) {}
-		if (ram_depth<q)
-			ram_setcfg(q); // expand RAM limit if required
+		while ((ram_dirty=ram_kbytes(++q))<dumpsize&&q<ram_maxcfg) {}
+		if (ram_depth<q) ram_setcfg(q); // expand RAM limit if required
 	}
 	bios_reload();
 	video_xlat_clut(); // sync both Old and Plus palettes
@@ -3093,9 +3062,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 	if (!plus_enabled) z80_irq&=128; // reset unused bits recorded by some emus
 
 	debug_reset();
-	#if 1 // TAPE_FASTLOAD, avoid false positives!
-	MEMBYTE(z80_tape_index,-1);
-	#endif
+	MEMBYTE(z80_tape_index,-1); // TAPE_FASTLOAD, avoid false positives!
 	STRCOPY(snap_path,s);
 	return snap_done=!puff_fclose(f),0;
 }
@@ -3116,18 +3083,17 @@ int any_load_catalog(int t,int r) // load track `t` and sectors from `r` to `r+3
 
 int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` autorun; 0 OK, !0 ERROR
 {
-	autorun_mode=0; // cancel any autoloading yet
+	autorun_mode=0; if (!s||!*s) return -1; // cancel any autoloading yet; reject invalid paths
 	if (snap_load(s))
 	{
 		#ifdef Z80_DANDANATOR
 		if (dandanator_load(s))
-		{
 		#endif
 			if (bios_load(s))
 			{
 				if (tape_open(s))
 				{
-					if (disc_open(s,0,0))
+					if (disc_open(s,0,!(disc_filemode&1))) // use same setting as DEFAULT READ-ONLY
 						return 1; // everything failed!
 					if (q)
 					{
@@ -3188,12 +3154,9 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 					autorun_mode=type_id<3?disc_disabled?1:3:4; autorun_t=55; // the PLUS menu must be handled separately
 				}
 			}
-			else // load bios? reset!
-				dandanator_remove(),all_reset();
+			else dandanator_remove(),all_reset(); // load bios? reset!
 		#ifdef Z80_DANDANATOR
-		}
-		else // dandanator? reset!
-			all_reset();
+		else all_reset(); // dandanator? reset!
 		#endif
 	}
 	if (q) STRCOPY(autorun_path,s);
@@ -3338,12 +3301,9 @@ char session_menudata[]=
 	"0x0B02 Average scanlines\n"
 	"0x8904 X-blending\n"
 	"0x8905 Y-blending\n"
-	"0x8906 Frame blending\n"
+	"0x8906 Gigascreen\n"
 	#ifdef VIDEO_FILTER_BLUR0
-	"0x8909 Narrow X-blending\n"
-	#endif
-	#ifndef RGB2LINEAR
-	"0x8908 Gamma correction\n"
+	"0x8909 Fine Giga/X-blend\n"
 	#endif
 	"=\n"
 	"0x9100 Raise frameskip\tNum.+\n"
@@ -3352,7 +3312,7 @@ char session_menudata[]=
 	"0x9400 No frameskip\tNum./\n"
 	"=\n"
 	"0x8C00 Save screenshot\tF12\n"
-	"0x8C04 Output QOI format\n"
+	"0x8C04 Output " SESSION_SCRN_EXT " format\n"
 	"0xCC00 Record film\tShift-F12\n"
 	"0x8C02 High framerate\n"
 	"0x8C01 High resolution\n"
@@ -3381,7 +3341,7 @@ void session_clean(void) // refresh options
 	#if AUDIO_BITDEPTH > 8
 	session_menucheck(0x8C03,!session_wavedepth);
 	#endif
-	session_menucheck(0x8C04,session_qoi3_flag);
+	session_menucheck(0x8C04,session_scrn_flag);
 	session_menucheck(0xCC00,!!session_filmfile);
 	session_menucheck(0x0C00,!!session_wavefile);
 	session_menucheck(0x4C00,!!ym3_file);
@@ -3423,9 +3383,6 @@ void session_clean(void) // refresh options
 	session_menucheck(0x8905,video_lineblend);
 	session_menucheck(0x8906,video_pageblend);
 	session_menucheck(0x8907,video_microwave);
-	#ifndef RGB2LINEAR
-	session_menucheck(0x8908,video_gammaflag);
-	#endif
 	#ifdef VIDEO_FILTER_BLUR0
 	session_menucheck(0x8909,video_fineblend);
 	#endif
@@ -3443,17 +3400,28 @@ void session_clean(void) // refresh options
 	for (int i=0;i<3;++i)
 		psg_stereo[i][0]=256+audio_stereos[audio_mixmode][i],psg_stereo[i][1]=256-audio_stereos[audio_mixmode][i]; // built-in stereo is L:M:R
 	#ifdef PSG_PLAYCITY
-	if (!playcity_disabled)
+	if (!playcity_disabled&&playcity_dirty)
 	{
-		for (int i=0;i<3;++i)
-			playcity_stereo[0][i][0]=psg_stereo[2][0],playcity_stereo[0][i][1]=psg_stereo[2][1], // PlayCity chip 0 is RIGHT
-			playcity_stereo[1][i][0]=psg_stereo[0][0],playcity_stereo[1][i][1]=psg_stereo[0][1]; // PlayCity chip 1 is LEFT
-		psg_stereo[0][0]=psg_stereo[2][0]=psg_stereo[1][0]; psg_stereo[0][1]=psg_stereo[2][1]=psg_stereo[1][1]; // AY chip is MIDDLE
+		if (playcity_dirty<3) // "ALCON 2020: SLAP FIGHT" uses just one Playcity chip, as stereo as the PSG!
+		{
+			for (int i=0;i<16;++i) playcity_outputs[i]=psg_outputs[i]; // 100% single chip
+			for (int i=0;i<3;++i)
+				playcity_stereo[0][i][0]=playcity_stereo[1][i][0]=psg_stereo[i][0], // as long as just one chip (whichever) is on,
+				playcity_stereo[0][i][1]=playcity_stereo[1][i][1]=psg_stereo[i][1]; // it doesn't matter how the other is config'd
+		}
+		else
+		{
+			for (int i=0;i<16;++i) playcity_outputs[i]=psg_outputs[i]>>1; // 50% double chip
+			for (int i=0;i<3;++i)
+				playcity_stereo[0][i][0]=psg_stereo[2][0],playcity_stereo[0][i][1]=psg_stereo[2][1], // PlayCity chip 0 is RIGHT
+				playcity_stereo[1][i][0]=psg_stereo[0][0],playcity_stereo[1][i][1]=psg_stereo[0][1]; // PlayCity chip 1 is LEFT
+			psg_stereo[0][0]=psg_stereo[2][0]=psg_stereo[1][0]; psg_stereo[0][1]=psg_stereo[2][1]=psg_stereo[1][1]; // AY chip is MIDDLE
+		}
 	}
 	#endif
 	#endif
 	video_resetscanline(),debug_dirty=1; sprintf(session_info,"%d:%dK %s%c %d.0MHz"//" | disc %s | tape %s | %s"
-		,ram_dirty,ram_kbyte[ram_depth],plus_enabled?"ASIC":"CRTC",'0'+crtc_type,4<<multi_t);
+		,ram_dirty,ram_kbytes(ram_depth),plus_enabled?"ASIC":"CRTC",'0'+crtc_type,4<<multi_t);
 }
 void session_user(int k) // handle the user's commands
 {
@@ -3529,10 +3497,13 @@ void session_user(int k) // handle the user's commands
 				"Num./\tNo frameskip"
 				"\n"
 				"Pause\tPause/continue" MESSAGEBOX_WIDETAB
-				"*Return\tMaximize/restore" "\t"
+				"*Return\tMaximize/restore" "\t" // this `t` sets the window width
 				"\n"
 				"*Up\tIncrease zoom" MESSAGEBOX_WIDETAB
-				"*Down\tDecrease zoom" "\t"
+				"*Down\tDecrease zoom"
+				"\n"
+				"*Right\tSpeed action up" MESSAGEBOX_WIDETAB
+				"*Left\tSlow action down"
 				// "\n" "^Key =\tControl+Key" MESSAGEBOX_WIDETAB "*Key =\tAlt+Key\n"
 			,"Help");
 			break;
@@ -3577,7 +3548,7 @@ void session_user(int k) // handle the user's commands
 		case 0x8400: // F4: TOGGLE SOUND
 			#if AUDIO_CHANNELS > 1
 			if (session_shift) // next stereo mode
-				{ if (++audio_mixmode>=length(audio_stereos)) audio_mixmode=0; }
+				{ if (!session_filmfile) { if (++audio_mixmode>=length(audio_stereos)) audio_mixmode=0; } }
 			else
 			#endif
 			if (session_audio)
@@ -3589,7 +3560,7 @@ void session_user(int k) // handle the user's commands
 		case 0x8404:
 			#if AUDIO_CHANNELS > 1
 			if (session_shift) // SET STEREO MODE
-				audio_mixmode=k-0x8401;
+				{ if (!session_filmfile) audio_mixmode=k-0x8401; }
 			else
 			#endif
 			audio_filter=k-0x8401;
@@ -3652,7 +3623,7 @@ void session_user(int k) // handle the user's commands
 			break;
 		case 0x8519: // DIGIBLASTER
 			if (dac_disabled=!dac_disabled)
-				dac_level=0;
+				dac_voice=0;
 			break;
 		#endif
 		case 0x8521: // JOYSTICK, NO LIGHTGUN
@@ -3796,10 +3767,10 @@ void session_user(int k) // handle the user's commands
 			onscreen_flag^=1;
 			break;
 		case 0x8902: // Y-MASKING
-			video_filter^=VIDEO_FILTER_MASK_Y;
+			if (!session_filmfile) video_filter^=VIDEO_FILTER_MASK_Y;
 			break;
 		case 0x8903: // X-MASKING
-			video_filter^=VIDEO_FILTER_MASK_X;
+			if (!session_filmfile) video_filter^=VIDEO_FILTER_MASK_X;
 			break;
 		case 0x8904: // X-BLENDING
 			video_filter^=VIDEO_FILTER_MASK_Z;
@@ -3807,23 +3778,19 @@ void session_user(int k) // handle the user's commands
 		case 0x8905: // Y-BLENDING
 			video_lineblend^=1;
 			break;
-		case 0x8906: // FRAME BLENDING
+		case 0x8906: // FRAME BLENDING (GIGASCREEN)
 			video_pageblend^=1;
 			break;
 		case 0x8907: // MICROWAVES
 			video_microwave^=1;
 			break;
-		#ifndef RGB2LINEAR
-		case 0x8908: // GAMMA BLENDING/CORRECTION
-			video_gammaflag^=1; video_recalc();
-			break;
-		#endif
 		#ifdef VIDEO_FILTER_BLUR0
 		case 0x8909: // FINE/COARSE X-BLENDING
-			video_fineblend^=1; break;
+			video_fineblend^=1;
+			break;
 		#endif
 		/*case 0x9000: // NMI
-			z80_nmi_throw;
+			Z80_NMI_SET;
 			break;*/
 		case 0x0900: // ^F9: TOGGLE FAST LOAD OR FAST TAPE
 			if (session_shift)
@@ -3865,10 +3832,10 @@ void session_user(int k) // handle the user's commands
 		case 0x0B03: // SIMPLE INTERLACE
 		case 0x0B04: // DOUBLE INTERLACE
 		case 0x0B02: // AVG. SCANLINES
-			video_scanline=k-0x0B01;
+			if (!session_filmfile) video_scanline=k-0x0B01;
 			break;
 		case 0x0B00: // ^F11: SCANLINES
-			if (session_shift)
+			if (session_filmfile) {} else if (session_shift)
 				{ if (!(video_filter=(video_filter+1)&7)) video_lineblend^=1; }
 			else if ((video_scanline=video_scanline+1)>3)
 				{ if (video_scanline=0,video_pageblend^=1) video_microwave^=1; }
@@ -3887,8 +3854,8 @@ void session_user(int k) // handle the user's commands
 				session_wavedepth^=1;
 			break;
 		#endif
-		case 0X8C04: // OUTPUT AS QOI
-			session_qoi3_flag^=1;
+		case 0X8C04: // OUTPUT AS BMP
+			session_scrn_flag^=1;
 			break;
 		case 0x8C00: // F12: SAVE SCREENSHOT OR RECORD FILM
 			if (!session_shift)
@@ -3949,13 +3916,13 @@ void session_user(int k) // handle the user's commands
 void session_configreadmore(char *s) // parse a pre-processed configuration line: `session_parmtr` keeps the value name, `s` points to its value
 {
 	int i; char *t=UTF8_BOM(session_parmtr); if (!s||!*s||!*t) {} // ignore if empty or internal!
-	else if (!strcasecmp(t,"type")) { if ((i=*s&7)<length(bios_system)) type_id=i; }
-	else if (!strcasecmp(t,"crtc")) { if ((i=*s&7)<5) crtc_type=i; }
-	else if (!strcasecmp(t,"bank")) { if ((i=*s&7)<length(ram_kbyte)) ram_setcfg(i); }
-	else if (!strcasecmp(t,"unit")) disc_filemode=*s&3,disc_disabled=(*s>>2)&1;
-	else if (!strcasecmp(t,"misc")) snap_extended=*s&1,key2joy_flag=(*s>>1)&1;
+	else if (i=eval_hex(*s)&31,!strcasecmp(t,"type")) { if (i<length(bios_system)) type_id=i; }
+	else if (!strcasecmp(t,"crtc")) { if (i<5) crtc_type=i; }
+	else if (!strcasecmp(t,"bank")) { if (i<=ram_maxcfg) ram_setcfg(i); }
+	else if (!strcasecmp(t,"unit")) disc_filemode=i&3,disc_disabled=(i>>2)&1;
+	else if (!strcasecmp(t,"misc")) snap_extended=i&1,key2joy_flag=(i>>1)&1;
 	#ifdef PSG_PLAYCITY
-	else if (!strcasecmp(t,"play")) playcity_disabled=~*s&1,dac_disabled=(~*s>>1)&1;
+	else if (!strcasecmp(t,"play")) playcity_disabled=~i&1,dac_disabled=(~i>>1)&1;
 	#endif
 	else if (!strcasecmp(t,"file")) strcpy(autorun_path,s);
 	else if (!strcasecmp(t,"snap")) strcpy(snap_path,s);
@@ -3966,14 +3933,13 @@ void session_configreadmore(char *s) // parse a pre-processed configuration line
 	else if (!strcasecmp(t,"cart")) strcpy(dandanator_path,s);
 	#endif
 	else if (!strcasecmp(t,"vjoy")) { if (!hexa2byte(session_parmtr,s,KBD_JOY_UNIQUE)) usbkey2native(kbd_k2j,session_parmtr,KBD_JOY_UNIQUE); }
-	else if (!strcasecmp(t,"palette")) { if ((i=*s&7)<5) video_type=i; }
-	else if (!strcasecmp(t,"casette")) tape_rewind=*s&1,tape_skipload=(*s>>1)&1,tape_fastload=(*s>>2)&1;
+	else if (!strcasecmp(t,"palette")) { if (i<5) video_type=i; }
+	else if (!strcasecmp(t,"casette")) tape_rewind=i&1,tape_skipload=(i>>1)&1,tape_fastload=(i>>2)&1;
 	else if (!strcasecmp(t,"debug")) debug_configread(strtol(s,NULL,10));
 }
 void session_configwritemore(FILE *f) // update the configuration file `f` with emulator-specific names and values
 {
-	native2usbkey(kbd_k2j,kbd_k2j,KBD_JOY_UNIQUE); byte2hexa0(session_parmtr,kbd_k2j,KBD_JOY_UNIQUE);
-	fprintf(f,"type %d\ncrtc %d\nbank %d\nunit %d\nmisc %d\n"
+	native2usbkey(kbd_k2j,KBD_JOY_UNIQUE); fprintf(f,"type %d\ncrtc %d\nbank %d\nunit %d\nmisc %d\n"
 		#ifdef PSG_PLAYCITY
 		"play %d\n"
 		#endif
@@ -3990,14 +3956,14 @@ void session_configwritemore(FILE *f) // update the configuration file `f` with 
 		#ifdef Z80_DANDANATOR
 		dandanator_path,
 		#endif
-		session_parmtr,video_type,tape_rewind+tape_skipload*2+tape_fastload*4,debug_configwrite());
+		byte2hexa0(session_parmtr,kbd_k2j,KBD_JOY_UNIQUE),video_type,tape_rewind+tape_skipload*2+tape_fastload*4,debug_configwrite());
 }
 
 // START OF USER INTERFACE ========================================== //
 
 int main(int argc,char *argv[])
 {
-	session_prae(argv[0]); all_setup(); all_reset();
+	session_prae(ARGVZERO); all_setup(); all_reset();
 	int i=0,j,k=0; while (++i<argc)
 		if (argv[i][0]=='-')
 		{
@@ -4034,7 +4000,7 @@ int main(int argc,char *argv[])
 						break;
 					case 'k':
 						ram_depth=(BYTE)(argv[i][j++]-'0');
-						if (ram_depth<0||ram_depth>=length(ram_kbyte))
+						if (ram_depth<0||ram_depth>ram_maxcfg)
 							i=argc; // help!
 						else
 							ram_setcfg(ram_depth);
@@ -4117,7 +4083,7 @@ int main(int argc,char *argv[])
 				}
 			while ((i<argc)&&(argv[i][j]));
 		}
-		else if (any_load(argv[i],1))
+		else if (any_load(puff_makebasepath(argv[i]),1))
 			i=argc; // help!
 	if (i>argc)
 		return
@@ -4128,7 +4094,7 @@ int main(int argc,char *argv[])
 			"  -gN\tset CRTC type (0..4)\n"
 			"  -j\tenable joystick keys\n"
 			"  -J\tdisable joystick\n"
-			"  -k0\t64K RAM\n"
+			"  -k0\t64K RAM\n"//"-K"
 			"  -k1\t128K RAM\n"
 			"  -k2\t192K RAM\n"
 			"  -k3\t320K RAM\n"
@@ -4162,19 +4128,26 @@ int main(int argc,char *argv[])
 	session_kbdreset();
 	session_kbdsetup(kbd_map_xlt,length(kbd_map_xlt)/2);
 	video_target=&video_frame[video_pos_y*VIDEO_LENGTH_X+video_pos_x]; audio_target=audio_frame;
-	video_main_xlat(),video_xlat_clut(); onscreen_inks(0xAA0000,0x55FF55); session_resize();
-	audio_disabled=!session_audio;
+	video_main_xlat(),video_xlat_clut(); session_resize();
 	// it begins, "alea jacta est!"
-	while (!session_listen())
+	for (audio_disabled=!session_audio;!session_listen();)
 	{
 		while (!session_signal)
-			z80_main(( // clump Z80 instructions together to gain speed...
-				(session_fast&-2)?VIDEO_LENGTH_X>>4: // tape loading allows simpler timings, but some sync is still needed
-				video_pos_x<video_threshold?1:(VIDEO_LENGTH_X+15-video_pos_x)>>4 // VRAM effects' threshold ("Chapelle Sixteen")
-			)<<multi_t); // ...without missing any IRQ and CRTC deadlines!
+			z80_main( // clump Z80 instructions together to gain speed...
+				UNLIKELY(video_pos_x<video_threshold)?0: // VRAM threshold ("Chapelle Sixteen") and IRQ events
+				((VIDEO_LENGTH_X+15-video_pos_x)>>4)<<multi_t); // ...without missing any IRQ and CRTC deadlines!
 		if (session_signal&SESSION_SIGNAL_FRAME) // end of frame?
 		{
-			if (!video_framecount&&onscreen_flag)
+			if (audio_required)
+			{
+				if (audio_pos_z<AUDIO_LENGTH_Z) audio_main(TICKS_PER_FRAME); // fill sound buffer to the brim!
+				#ifdef PSG_PLAYCITY
+				if (!playcity_disabled)
+					playcity_main(audio_frame,AUDIO_LENGTH_Z);
+				#endif
+				audio_playframe();
+			}
+			if (video_required&&onscreen_flag)
 			{
 				if (disc_disabled)
 					onscreen_text(+1,-3,"--\t--",0);
@@ -4196,87 +4169,49 @@ int main(int argc,char *argv[])
 				}
 				if (session_stick|session_key2joy)
 				{
-					if (autorun_mode)
-					{
-						onscreen_bool(-5,-7,3,1,autorun_t>0),
-						onscreen_bool(-5,-4,3,1,autorun_t>0),
-						onscreen_bool(-6,-6,1,5,autorun_t>0),
-						onscreen_bool(-2,-6,1,5,autorun_t>0);
-					}
+					if (autorun_mode) // big letter "A"
+						onscreen_bool(-7,-7,3,1,autorun_t>0),
+						onscreen_bool(-7,-4,3,1,autorun_t>0),
+						onscreen_bool(-8,-6,1,5,autorun_t>0),
+						onscreen_bool(-4,-6,1,5,autorun_t>0);
 					else
 					{
-						onscreen_bool(-4,-8,1,2,kbd_bit_tst(kbd_joy[0])),
-						onscreen_bool(-4,-5,1,2,kbd_bit_tst(kbd_joy[1])),
-						onscreen_bool(-6,-6,2,1,kbd_bit_tst(kbd_joy[2])),
-						onscreen_bool(-3,-6,2,1,kbd_bit_tst(kbd_joy[3])),
-						onscreen_bool(-6,-2,2,1,kbd_bit_tst(kbd_joy[4])),
-						onscreen_bool(-3,-2,2,1,kbd_bit_tst(kbd_joy[5]));
+						onscreen_bool(-6,-8,1,2,kbd_bit_tst(kbd_joy[0])),
+						onscreen_bool(-6,-5,1,2,kbd_bit_tst(kbd_joy[1])),
+						onscreen_bool(-8,-6,2,1,kbd_bit_tst(kbd_joy[2])),
+						onscreen_bool(-5,-6,2,1,kbd_bit_tst(kbd_joy[3])),
+						onscreen_bool(-8,-2,2,1,kbd_bit_tst(kbd_joy[4])),
+						onscreen_bool(-5,-2,2,1,kbd_bit_tst(kbd_joy[5]));
 						if (video_threshold>VIDEO_LENGTH_X/4)
-							onscreen_bool(-4,-6,1,1,0);
+							onscreen_bool(-6,-6,1,1,0);
 					}
 				}
 				#ifdef DEBUG
 				onscreen_byte(+1,+1,plus_dma_delay1,0);
 				onscreen_byte(+4,+1,plus_dma_delay0,0);
-				if (session_audio) // Win32 audio cycle / SDL2 audio queue
-				{
-					//onscreen_byte(+11,-3,(audio_session/10000)%100,1);
-					//onscreen_byte(+13,-3,(audio_session/  100)%100,1);
-					//onscreen_byte(+15,-3, audio_session       %100,1);
-					onscreen_hgauge(+11,-2,1<<(AUDIO_L2BUFFER-10),1,(audio_session/AUDIO_BYTESTEP)>>10);
-				}
 				#endif
+				session_status();
 			}
-			video_threshold=VIDEO_LENGTH_X/4; // soft horizontal threshold
 			// update session and continue
 			if (!--autorun_t) autorun_next();
-			if (audio_required)
-			{
-				if (audio_pos_z<AUDIO_LENGTH_Z) audio_main(TICKS_PER_FRAME); // fill sound buffer to the brim!
-				#ifdef PSG_PLAYCITY
-				dac_level_zero();
-				if (!playcity_disabled)
-				{
-					if (playcity_dirty<2) // "ALCON 2020: SLAP FIGHT" uses just one Playcity chip!
-					{
-						for (i=0;i<3;++i)
-							playcity_stereo[1][i][0]+=playcity_stereo[0][i][0],playcity_stereo[1][i][1]+=playcity_stereo[0][i][1];
-					}
-					playcity_main(audio_frame,AUDIO_LENGTH_Z);
-					if (playcity_dirty<2) // when just one Playcity chip is active, the main PSG is fully stereo
-					{
-						for (i=0;i<3;++i)
-							playcity_stereo[1][i][0]-=playcity_stereo[0][i][0],playcity_stereo[1][i][1]-=playcity_stereo[0][i][1];
-						psg_stereo[0][0]=playcity_stereo[1][1][0]; psg_stereo[0][1]=playcity_stereo[1][1][1];
-						psg_stereo[2][0]=playcity_stereo[0][1][0]; psg_stereo[2][1]=playcity_stereo[0][1][1];
-					}
-					else // when both Playcity chips are active (RIGHT and LEFT), the main PSG becomes MIDDLE
-					{
-						psg_stereo[0][0]=psg_stereo[2][0]=psg_stereo[1][0];
-						psg_stereo[0][1]=psg_stereo[2][1]=psg_stereo[1][1];
-					}
-				}
-				#endif
-			}
-			if (ym3_file) ym3_write(),ym3_flush();
+			dac_frame(); if (ym3_file) ym3_write(),ym3_flush();
+			tape_skipping=audio_queue=0; // reset tape and audio flags
 			if (tape_enabled)
 				{ if (tape_delay>0) --tape_delay; } // handle tape delays
 			else if (tape_delay<3) // the tape is temporarily "deaf":
 				++tape_delay; // OPERA SOFT tapes need this delay! [3..]
-			if (!tape_fastload) tape_song=0,tape_loud=1;
-			else if (tape_song) tape_loud=0,--tape_song;
-			else tape_loud=1; // expect song to play for several frames
+			if (!tape_fastload) tape_song=0,tape_loud=1; else if (!tape_song) tape_loud=1;
+			else tape_loud=0,--tape_song; // expect song to play for several frames
+			tape_output=tape_type<0&&(pio_port_c&32); // keep tape output consistent
 			if (tape_signal)
 			{
 				//if (tape_signal<2||!ram_depth) pio_port_c&=~16; // stop tape if required
 				tape_signal=0,session_dirty=1; // update config
 			}
-			tape_output=tape_type<0&&(pio_port_c&32); // keep tape consistent
-			tape_skipping=audio_queue=0; // reset tape and audio flags
 			if (tape&&tape_filetell<tape_filesize&&tape_skipload&&!session_filmfile&&!tape_disabled&&tape_loud) // `tape_loud` implies `!tape_song`
-				video_framelimit|=(MAIN_FRAMESKIP_MASK+1),session_fast|=2,video_interlaced|=2/*,audio_disabled|=2*/; // abuse binary logic to reduce activity
+				session_fast|=+2,audio_disabled|=+2,video_framelimit|=MAIN_FRAMESKIP_MASK+1; // abuse binary logic to reduce activity
 			else
-				video_framelimit&=~(MAIN_FRAMESKIP_MASK+1),session_fast&=~2,video_interlaced&=~2/*,audio_disabled&=~2*/; // ditto, to restore normal activity
+				session_fast&=~2,audio_disabled&=~2,video_framelimit&=MAIN_FRAMESKIP_MASK  ; // ditto, to restore normal activity
 			session_update();
 			//if (!audio_disabled) audio_main(1+(video_pos_x>>4)); // preload audio buffer
 		}

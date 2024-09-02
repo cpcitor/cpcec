@@ -1,11 +1,10 @@
-# CSFEC palette: simple RGB333
-
+# MSXEC palette: simple RGB333
 # values # colour
 00 00 00 # black
 24 DB 24 # green
 6D FF 6D # high green
 24 24 FF # blue
-4D 6D FF # high blue
+49 6D FF # high blue
 B6 24 24 # brown
 49 DB FF # cyan
 FF 24 24 # red

@@ -84,8 +84,8 @@ int main(int argc,char *argv[])
 		{
 			/**/ if (l==0X5000&&c64chr(&tmp[0X4008],&tmp[0X4408],0XD0)&&c64chr(&tmp[0X4808],&tmp[0X4C08],0XD0)) // C64 firmware
 				o=2;
-			else if (l>=0X4000&&(
-				(!memcmp(tmp,"AB",2)&&(/*!tmp[3]||*/(tmp[3]>=64&&tmp[3]<192)))|| // MSX cartridge (99% titles) (1/3)
+			else if (l>=0X2000&&(
+				(!memcmp(tmp,"AB",2)&&(!tmp[3]||(tmp[3]>=64&&tmp[3]<192)))|| // MSX cartridge (99% titles) (1/3)
 				(l>=0X8000&&!memcmp(&tmp[0x4000],"AB",2)&&tmp[0x4003]>=64&&tmp[0x4003]<192)|| // MSX cartridge (2/3)
 				(l>=0X8000&&!memcmp(&tmp[0],"\010\200\151\215",4))|| // MSX cartridge (special case "R-TYPE"!) (3/3)
 				!memcmp(&tmp[4],"\277\033\230\230",4))) // MSX firmware
@@ -99,6 +99,7 @@ int main(int argc,char *argv[])
 					o=(tmp[0]<<24)+(tmp[1]<<16)+(tmp[2]<<8)+tmp[3]==0x01897FED?0:1; // CPC firmware fingerprint
 			}
 		}
+		if (o<0) break; // unknown file!
 	}
 	if (o<0) return puts("usage: runec file.. [option..]"),1;
 	#ifdef _WIN32

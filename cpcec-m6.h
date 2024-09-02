@@ -37,7 +37,6 @@
 // void M65XX_DUMBPOKE(WORD,BYTE) -- "dumb" send to address
 // M65XX_HLT -- negative READY signal (optional)
 // M65XX_SHW -- negative !READY-to-READY event (optional)
-// M65XX_XVS -- external OVERFLOW signal (optional)
 // M65XX_WAIT -- name of the wait-till-READY clock tick procedure
 // M65XX_TICK -- name of the single clock tick procedure (++m65xx_t, etc)
 // M65XX_TOCK -- name of the INT=IRQ procedure (M65XX_INT=M65XX_IRQ, etc)
@@ -172,7 +171,7 @@ WORD debug_dasm_any(char *t,WORD p,BYTE q(WORD)) // where `BYTE q(WORD)` is a fu
 
 #define M65XX_MERGE_P (M65XX_P=(z?48:50)+(n&128)+(M65XX_P&77)) // 77 = 64+8+4+1, i.e. the flags V+D+I+C
 #define M65XX_BREAK_P (M65XX_P=(z?32:34)+(n&128)+(M65XX_P&77)) // used by the IRQ/NMI handler to reset flag B
-#define M65XX_SPLIT_P (z=~M65XX_P&2,n=M65XX_P&128) // `z` and `n` are the latest relevant zero-value and sign-value
+#define M65XX_SPLIT_P (z=~M65XX_P&2,n=M65XX_P) // `z` and `n` are the latest relevant zero-value and sign-value
 
 // the memory access modes! notice that only the immediate mode feeds the value proper; other modes expect the operation to do the PEEKs and POKEs
 
@@ -436,47 +435,6 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 				case 0XE8: // INX
 					z=n=++M65XX_X; M65XX_TOCK; M65XX_BADPC;
 					break;
-				case 0X10: // BPL $RRRR
-					#ifdef M65XX_TRAP_0X10
-					M65XX_TRAP_0X10;
-					#endif
-					M65XX_TOCK; M65XX_FETCH(o);
-					if (n<128) goto go_to_branch;
-					break;
-				case 0X30: // BMI $RRRR
-					#ifdef M65XX_TRAP_0X30
-					M65XX_TRAP_0X30;
-					#endif
-					M65XX_TOCK; M65XX_FETCH(o);
-					if (n>=128) goto go_to_branch;
-					break;
-				case 0X50: // BVC $RRRR
-					#ifdef M65XX_TRAP_0X50 // special case: the C1541 relies on the M65XX OVERFLOW pin!
-					M65XX_TRAP_0X50;
-					#endif
-					M65XX_TOCK; M65XX_FETCH(o);
-					if (!((M65XX_P&64)|M65XX_XVS)) goto go_to_branch;
-					break;
-				case 0X70: // BVS $RRRR
-					#ifdef M65XX_TRAP_0X70
-					M65XX_TRAP_0X70;
-					#endif
-					M65XX_TOCK; M65XX_FETCH(o);
-					if ( ((M65XX_P&64)|M65XX_XVS)) goto go_to_branch;
-					break;
-				case 0X90: // BCC $RRRR
-					#ifdef M65XX_TRAP_0X90
-					M65XX_TRAP_0X90;
-					#endif
-					M65XX_TOCK; M65XX_FETCH(o);
-					if (!(M65XX_P&1)) //goto go_to_branch;
-					{
-						go_to_branch: // *!* GOTO!
-						M65XX_BADPC; q=M65XX_PC.b.h; M65XX_PC.w+=(INT8)o; if (UNLIKELY(q!=M65XX_PC.b.h))
-							{ a.b.l=M65XX_PC.b.l; M65XX_TOCK; M65XX_BADAW; break; }
-						break; // no M65XX_TOCK here!
-					}
-					break;
 				case 0XB0: // BCS $RRRR
 					#ifdef M65XX_TRAP_0XB0
 					M65XX_TRAP_0XB0;
@@ -484,12 +442,12 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 					M65XX_TOCK; M65XX_FETCH(o);
 					if (M65XX_P&1) goto go_to_branch;
 					break;
-				case 0XD0: // BNE $RRRR
-					#ifdef M65XX_TRAP_0XD0
-					M65XX_TRAP_0XD0;
+				case 0X90: // BCC $RRRR
+					#ifdef M65XX_TRAP_0X90
+					M65XX_TRAP_0X90;
 					#endif
 					M65XX_TOCK; M65XX_FETCH(o);
-					if (z) goto go_to_branch;
+					if (!(M65XX_P&1)) goto go_to_branch;
 					break;
 				case 0XF0: // BEQ $RRRR
 					#ifdef M65XX_TRAP_0XF0
@@ -497,6 +455,47 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 					#endif
 					M65XX_TOCK; M65XX_FETCH(o);
 					if (!z) goto go_to_branch;
+					break;
+				case 0XD0: // BNE $RRRR
+					#ifdef M65XX_TRAP_0XD0
+					M65XX_TRAP_0XD0;
+					#endif
+					M65XX_TOCK; M65XX_FETCH(o);
+					if (z)
+					{
+						go_to_branch: // *!* GOTO!
+						M65XX_BADPC; q=M65XX_PC.b.h; M65XX_PC.w+=(INT8)o; if (UNLIKELY(q!=M65XX_PC.b.h))
+							{ a.b.l=M65XX_PC.b.l; M65XX_TOCK; M65XX_BADAW; }
+						/*break;*/ // redundant!
+					}
+					break;
+				case 0X70: // BVS $RRRR
+					#ifdef M65XX_TRAP_0X70 // likewise! (the original C1541 ROM does not use this tho')
+					M65XX_TRAP_0X70;
+					#endif
+					M65XX_TOCK; M65XX_FETCH(o);
+					if (M65XX_P&64) goto go_to_branch;
+					break;
+				case 0X50: // BVC $RRRR
+					#ifdef M65XX_TRAP_0X50 // special case: the C1541 relies on the M6502 OVERFLOW pin!
+					M65XX_TRAP_0X50;
+					#endif
+					M65XX_TOCK; M65XX_FETCH(o);
+					if (!(M65XX_P&64)) goto go_to_branch;
+					break;
+				case 0X30: // BMI $RRRR
+					#ifdef M65XX_TRAP_0X30
+					M65XX_TRAP_0X30;
+					#endif
+					M65XX_TOCK; M65XX_FETCH(o);
+					if (n&128) goto go_to_branch;
+					break;
+				case 0X10: // BPL $RRRR
+					#ifdef M65XX_TRAP_0X10
+					M65XX_TRAP_0X10;
+					#endif
+					M65XX_TOCK; M65XX_FETCH(o);
+					if (!(n&128)) goto go_to_branch;
 					break;
 				case 0X18: // CLC
 					M65XX_P&=~1; M65XX_TOCK; M65XX_BADPC;
@@ -1340,6 +1339,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 #ifdef DEBUG_HERE
 
 char *debug_list(void) { return " PAXYS"; }
+WORD debug_where(void) { return M65XX_PC.w; }
 void debug_jump(WORD w) { M65XX_PC.w=w; }
 WORD debug_this(void) { return M65XX_PC.w; }
 WORD debug_that(void) { return 256+M65XX_S; }
@@ -1465,7 +1465,6 @@ void debug_clean(void) // reset the machine if we're leaving the debugger and th
 #undef M65XX_TRAP_0XB0
 #undef M65XX_TRAP_0XD0
 #undef M65XX_TRAP_0XF0
-#undef M65XX_XVS
 #undef M65XX_MAGICK
 #undef M65XX_REU
 
