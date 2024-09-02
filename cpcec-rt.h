@@ -11,7 +11,7 @@
 // interface of variables and procedures that don't require particular
 // knowledge of the emulation's intrinsic properties.
 
-#define MY_VERSION "20240505" // all emulators share the same release date
+#define MY_VERSION "20240830" // all emulators share the same release date
 
 #define INLINE // 'inline' is useless in TCC and GCC4, and harmful in GCC5!
 #define UNUSED // '__attribute__((unused))' may be missing outside GCC
@@ -53,9 +53,11 @@
 #define STRCOPY(x,y) ((x)!=(y)?strcpy((x),(y)):(x)) // avoid accidents!
 INLINE int lcase(int i) { return i>='A'&&i<='Z'?i+32:i; }
 INLINE int ucase(int i) { return i>='a'&&i<='z'?i-32:i; }
+#define STRINGIFZ(m) #m // turning labels into strings requires two steps;
+#define STRINGIFY(m) STRINGIFZ(m) // `#define STRINGIFY(m) (#m)` won't work
 
-//#define MAIN_FRAMESKIP_BITS 4 // 1<<4=16 < 25 < 30 < 1<<5=32
-#define MAIN_FRAMESKIP_BITS 5 // 1<<5=32 < 50 < 60 < 1<<6=64
+#define MAIN_FRAMESKIP_BITS 4 // 1<<4=16 < 25 < 30 < 1<<5=32
+//#define MAIN_FRAMESKIP_BITS 5 // 1<<5=32 < 50 < 60 < 1<<6=64
 #define AUDIO_PLAYBACK 44100 // 22050, 24000, 44100, 48000
 //#define AUDIO_L2BUFFER 15 // =32K samples (667..750 ms)
 #define AUDIO_L2BUFFER 14 // =16K samples (333..375 ms)
@@ -69,9 +71,9 @@ unsigned char session_scratch[1<<18]; // at least 256k
 
 int video_pos_x=0,video_pos_y=0,frame_pos_y=0,audio_pos_z=0; // for keeping pointers within range
 int video_pos_z=0; // frame counter for timekeeping, statistics and debugging
-char video_interlaced=0,video_interlaces=0; // video scanline status (on or off, odd or even)
-signed char video_framelimit=0,video_framecount=0; // video frameskip counters; they must be signed!
-char audio_disabled=0,audio_required=0; int audio_session=0; // audio playing/recording status and counter
+char video_interlaced=0,video_interlaces=0; // video scanline field (odd or even)
+char video_framelimit=0,video_framecount=0; // video frameskip counters: 0 = 100%, 1 = 50%, 2 = 33%...
+char audio_disabled=0,audio_required=0,video_required=0; int audio_session=0; // audio/video status and audio buffer
 // "disabled" and "required" are independent because audio recording on wave and film files must happen even if the emulator is mute or sped-up
 #ifndef audio_fastmute
 #define audio_fastmute 1 // is there any reason to play sound back at full speed? :-(
@@ -90,7 +92,7 @@ int session_maus_z=0; // optional mouse and lightgun
 char video_filter=0,audio_filter=0,video_fineblend=0; // filter flags
 char session_fullblit=0,session_zoomblit=0,session_version[16]; // OS label, [8] was too short
 char session_paused=0,session_signal=0,session_signal_frames=0,session_signal_scanlines=0;
-char session_dirty=0; // cfr. session_clean()
+char session_dirty=0,debug_dirty=0; // cfr. session_clean()
 
 #define session_getscanline(i) (&video_frame[i*VIDEO_LENGTH_X+VIDEO_OFFSET_X]) // pointer to scanline `i`
 FILE *session_wavefile=NULL,*session_filmfile=NULL; // audio + video recording is done on each done frame
@@ -102,7 +104,7 @@ int session_ntsc(int q) // sets NTSC (60 Hz) mode if `q` is nonzero, sets PAL (5
 {
 	int c=q?60:50; if (VIDEO_PLAYBACK!=c)
 	{
-		session_closefilm(); session_dirty=1; // films can't run multiple framerates!
+		session_closefilm(); session_dirty=1; // abort recording: films can't run multiple framerates!
 		AUDIO_LENGTH_Z=AUDIO_PLAYBACK/(VIDEO_PLAYBACK=c); // division must be exact!
 	}
 	return q;
@@ -120,10 +122,9 @@ unsigned char txt_session_scan[]="Press a key or ESCAPE"; // cfr. redefine virtu
 
 void session_clean(void); // "clean" dirty settings; will be defined later on!
 void session_user(int); // handle the user's commands; will be defined later on, too!
-int debug_xlat(int); // translate debug keys into codes
-void session_debug_show(int); // redraw the debugger text
+void session_debug_show(void); // redraw the debugger text, reloading it if required
 int session_debug_user(int); // debug logic takes priority: 0 UNKNOWN COMMAND, !0 OK
-INLINE void audio_playframe(void); // handle the sound filters
+int debug_xlat(int); // translate debug keys into codes (f.e. cursors)
 
 #ifdef SDL2 // optional inside Win32, required elsewhere!
 #include "cpcec-ox.h"
@@ -227,9 +228,22 @@ int fwrite1(void *t,int l,FILE *f) { int i,j=0; while ((i=fwrite((char*)t+j,1,l-
 const char hexa1[16]="0123456789ABCDEF"; // handy for `*t++=` operations
 int eval_hex(int c) { return (c>='0'&&c<='9')?c-'0':((c|=32)>='a'&&c<='f')?c-'a'+10:-1; } // 0..15 OK, <0 ERROR!
 int eval_dec(int c) { return (c>='0'&&c<='9')?c-'0':-1; } // 0..9 OK, <0 ERROR!
-void byte2hexa(char *t,const BYTE *s,int n) { int z; while (n-->0) z=*s++,*t++=hexa1[z>>4],*t++=hexa1[z&15]; } // string-unfriendly function!
-int byte2hexa0(char *t,const BYTE *s,int n) { if (n>0) { byte2hexa(t,s,n); t[n*=2]=0; } return n; } // string-friendly function (trailing NUL)
-int hexa2byte(BYTE *t,const char *s,int n) { int h,l; while (n>0&&(h=eval_hex(*s++))>=0&&(l=eval_hex(*s++))>=0) *t++=(h<<4)+l,--n; return n; }
+//int dtoi(char *s) { int i=eval_dec(*s),j; { while (i>=0&&(j=eval_dec(*++s))>=0) i=i*10+j; } return i; } // like atoi(s), but returns <0 if the number is malformed
+//int xtoi(char *s) { int i=eval_hex(*s),j; { while (i>=0&&(j=eval_hex(*++s))>=0) i=i*16+j; } return i; } // ditto, but the string is hexadecimal instead of decimal
+void byte2hexa(char *t,const BYTE *s,int n) { int z; while (n>0) z=*s++,*t++=hexa1[z>>4],*t++=hexa1[z&15],--n; } // string-unfriendly function!
+char *byte2hexa0(char *t,const BYTE *s,int n) { return n<0?NULL:(byte2hexa(t,s,n),t[n*2]=0,t); } // string-friendly function (trailing NUL)
+int hexa2byte(BYTE *t,const char *s,int n) { int h,l; while (n>0&&(h=eval_hex(*s++))>=0&&(l=eval_hex(*s++))>=0) *t++=(h<<4)+l,--n; return n; } // nonzero ERROR!
+// similar, but with nibbles instead of bytes (f.e. reading and writing the MSX CMOS values)
+void nibble2hexa(char *t,const BYTE *s,int n) { while (n>0) *t++=hexa1[*s++&15],--n; } // string-unfriendly function!
+char *nibble2hexa0(char *t,const BYTE *s,int n) { return n<0?NULL:(nibble2hexa(t,s,n),t[n]=0,t); } // string-friendly function (trailing NUL)
+int hexa2nibble(BYTE *t,const char *s,int n) { int z; while (n>0&&(z=eval_hex(*s++))>=0) *t++=z,--n; return n; } // nonzero ERROR!
+// related: block of `2n` nibbles A,B,C,D... <==> block of `n` bytes 0XAB,0XCD...
+void nibble2byte(BYTE *t,const BYTE *s,int n) { while (n>0) *t=*s++<<4,*t++|=*s++&15,--n; }
+void byte2nibble(BYTE *t,const BYTE *s,int n) { while (n>0) *t++=*s>>4,*t++=*s++&15,--n; }
+
+// are there any intrinsics for these operations?
+int xtoy(int x,int y) { return (x+y+(x<y))>>1; } // average of `x` and `y`; the average is biased towards `y`
+unsigned int uxtoy(unsigned int x,unsigned int y) { return (x+y+(x<y))>>1; } // = `cmp x,y: adc x,y: shr x,1`
 
 #if __GNUC__ >= 4 // GCC4+ intrinsic!
 #define log2u(x) (__builtin_clz(x)^(sizeof(unsigned int)*8-1)) // `x` must be >0!
@@ -238,7 +252,7 @@ int hexa2byte(BYTE *t,const char *s,int n) { int h,l; while (n>0&&(h=eval_hex(*s
 int log2u(unsigned int x) { int i=0; while (x>>=1) ++i; return i; } // same here!
 #endif
 int sqrtu(unsigned int x) { if (x<2) return x; unsigned int y=x>>1,z; while (y>(z=(x/y+y)>>1)) y=z; return y; } // kudos to Hero of Alexandria!
-
+#if 1 // precalc'd
 const BYTE rbits[256]= // ((i&128)>>7)+((i&64)>>5)+((i&32)>>3)+((i&16)>>1)+((i&8)<<1)+((i&4)<<3)+((i&2)<<5)+((i&1)<<7)
 {
 	0,128,64,192,32,160, 96,224,16,144,80,208,48,176,112,240, 8,136,72,200,40,168,104,232,24,152,88,216,56,184,120,248,
@@ -250,11 +264,14 @@ const BYTE rbits[256]= // ((i&128)>>7)+((i&64)>>5)+((i&32)>>3)+((i&16)>>1)+((i&8
 	3,131,67,195,35,163, 99,227,19,147,83,211,51,179,115,243,11,139,75,203,43,171,107,235,27,155,91,219,59,187,123,251,
 	7,135,71,199,39,167,103,231,23,151,87,215,55,183,119,247,15,143,79,207,47,175,111,239,31,159,95,223,63,191,127,255,
 };
-#define rbit8(i) rbits[(BYTE)(i)] // the bit reversal of a single byte can be done with a lookup table access;
-WORD rbit16(const WORD i) { return (rbits[i&255]<<8)|rbits[i>>8]; } // words and dwords require additional operations.
-//DWORD rbit32(const DWORD i) { return (rbits[i&255]<<24)|(rbits[(i>>8)&255]<<16)|(rbits[(i>>16)&255]<<8)|rbits[i>>24]; } // unused
-//QWORD rbit64(const QWORD i) { return (rbits[i&255]<<56)|(rbits[(i>>8)&255]<<48)|(rbits[(i>>16)&255]<<40)|(rbits[(i>>24)&255]<<32)
-	//|(rbits[(i>>32)&255]<<24)|(rbits[(i>>40)&255]<<16)|(rbits[(i>>48)&255]<<8)|rbits[i>>56]; } // do we need QWORD at all!?
+BYTE rbit8(const BYTE i) { return rbits[i]; } // the bitwise reversal of a byte can be done with a lookup table access;
+WORD rbit16(const WORD i) { return (rbits[i&255]<<8)|rbits[i>>8]; } // words require two accesses; dwords, four accesses.
+//DWORD rbit32(const DWORD i) { return (rbits[i&255]<<24)|(rbits[(i>>8)&255]<<16)|(rbits[(i>>16)&255]<<8)|rbits[i>>24]; }
+#else // table-less
+BYTE rbit8(BYTE i) { return i=(i&0X55)<<1|(i&0XAA)>>1,i=(i&0X33)<<2|(i&0XCC)>>2,i<<4|i>>4; } // some C compilers for ARM reduce this into an 8-bit RBIT
+WORD rbit16(WORD i) { return i=(i&0X5555)<<1|(i&0XAAAA)>>1,i=(i&0X3333)<<2|(i&0XCCCC)>>2,i=(i&0X0F0F)<<4|(i&0XF0F0)>>4,i<<8|i>>8; } // likewise, 16-bit
+//DWORD rbit32(DWORD i) { return i=(i&0X55555555)<<1|(i&0XAAAAAAAA)>>1,i=(i&0X33333333)<<2|(i&0XCCCCCCCC)>>2,i=(i&0X0F0F0F0F)<<4|(i&0XF0F0F0F0)>>4,i=(i&0X00FF00FF)<<8|(i&0XFF00FF00)>>8,i<<16|i>>16; }
+#endif
 
 char *strrstr(char *h,const char *n) // = backwards `strstr` (case sensitive!)
 {
@@ -388,6 +405,15 @@ int rlf2bin(BYTE *t,int o,const BYTE *s,int i) // decode up to `i` bytes from so
 }
 #endif
 
+// our built-in compressors rely on 2-byte hashes: faster than 1-byte hashes, lighter than 3-byte hashes, simpler than non-byte-aligned hashes!
+#define H16MAX 65536 // =256*256, the hash table length
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN // PPC, ARM...
+	#define H16GET(s,x) ((s)[(x)]<<8|(s)[(x)+1]) // big-endian hash function
+#else // i86, x64... following Z80, MOS 6502, etc.
+	#define H16GET(s,x) ((s)[(x)+1]<<8|(s)[(x)]) // lil-endian hash function
+#endif
+BYTE *session_h16lz=NULL; // shared buffer for all hash-based operations (they never happen at once!)
+
 #ifndef LEMPELZIV_LEVEL
 #define LEMPELZIV_LEVEL 6 // catch when LEMPELZIV_ENCODING is enabled but LEMPELZIV_LEVEL is missing!
 #endif
@@ -403,11 +429,14 @@ int rlf2bin(BYTE *t,int o,const BYTE *s,int i) // decode up to `i` bytes from so
 #if !LEMPELZIV_RETRY
 #define bin2lze(t,o,s,i) ((t),(o),(s),(i),-1) // never compress!
 #else
+#ifndef LEMPELZIV_ALLOC
+#define LEMPELZIV_ALLOC 65536
+#endif
 int bin2lze(BYTE *t,int o,const BYTE *s,int i) // encode `i` exact bytes from source `s` onto up to `o` bytes at target `t`; >=0 output length, <0 ERROR!
 {
-	BYTE *u=t; int h=0,p=0,k=0,z,*hh,*pp; if (!(hh=(int*)malloc(sizeof(int[65536+65536])))) return -1; // memory error! maybe this could go to session_preset()...
-	{ for (pp=hh+65536,z=65536+65536;z;) hh[--z]=~65536; } while (p+2<i) // ~65536 < -65536, i.e. setup hashes with values beyond the search range
-		{ int g=0,m=0,r=0,n=p-65536; for (int q=hh[s[p+1]*256+s[p]],e=LEMPELZIV_RETRY;q>=n&&e;q=pp[q&65535],(LEMPELZIV_RETRY<65536&&--e)) if (s[q+m]==s[p+m])
+	BYTE *u=t; int h=0,p=0,k=0,z,*hh=(int*)session_h16lz,*pp; if (!hh) return -1; // memory error!
+	{ for (pp=hh+H16MAX,z=H16MAX+65536;z;) hh[--z]=~65536; } while (p+2<i) // ~65536 < -65536, i.e. setup hashes with values beyond the search range
+		{ int g=0,m=0,r=0,n=p-65536; for (int q=hh[H16GET(s,p)],e=LEMPELZIV_RETRY;q>=n&&e;q=pp[q&65535],(LEMPELZIV_RETRY<65536&&--e)) if (s[q+m]==s[p+m])
 			{ int y; if ((z=65535+p)>i) z=i; const BYTE *v=s+q+1,*w=s+p+1,*x=s+z; while (*++v==*++w&&w<x) {} // search in current minimum and maximum
 			if (z=w-s-p,g<(y=z-(p-q>256?1:0)-(z<18?0:z<256?1:z<512?2:3))) if (g=y,m=z,r=p-q,w>=x) break; } // early break!
 		if (m<3) ++p; else // the LZSA1 standard can't handle more than 65535 literals in a row, hence the better-safe-than-sorry 64K limit
@@ -415,8 +444,8 @@ int bin2lze(BYTE *t,int o,const BYTE *s,int i) // encode `i` exact bytes from so
 			if (z>=7) { if (--o,z<256) *t++=z-7; else if (--o,z<512) *t++=250,*t++=z; else --o,*t++=249,*t++=z,*t++=z>>8; } // literal length
 			{ while (k<p) *t++=s[k++]; } if (k=p+=m,*t++=-r,r>256) --o,*t++=-r>>8; // flush literals; LZSA1 stores offsets as negative bytes
 			if (m>=18) { if (--o,m<256) *t++=m-18; else if (--o,m<512) *t++=239,*t++=m; else --o,*t++=238,*t++=m,*t++=m>>8; } } // match length
-		do z=s[h+1]*256+s[h],pp[h&65535]=hh[z],hh[z]=h; while (++h<p); } // update hashes and continue
-	if (free(hh),(z=i-k)>65535||o-z<8) return -1; // the end marker's checksum is a byte-sized pseudo-offset, hence the 8-bit range
+		do z=H16GET(s,h),pp[h&65535]=hh[z],hh[z]=h; while (++h<p); } // update hashes and continue
+	if ((z=i-k)>65535||o-z<8) return -1; // the end marker's checksum is a byte-sized pseudo-offset, hence the 8-bit range
 	if (z<7) *t++=z*16+15; else if (*t++=127,z<256) *t++=z-7; else if (z<512) *t++=250,*t++=z; else *t++=249,*t++=z,*t++=z>>8; // final literals
 	{ while (k<i) *t++=s[k++]; } for (z=0;k;) z+=s[--k]; return *t++=z,*t++=238,*t++=0,*t++=0,t-u; // calculate checksum and store end marker
 }
@@ -438,13 +467,16 @@ int lze2bin(BYTE *t,int o,const BYTE *s,int i) // decode up to `i` bytes from so
 #if !LEMPELZIV_RETRY
 #define bin2lzf(t,o,s,i) ((t),(o),(s),(i),-1) // never compress!
 #else
+#ifndef LEMPELZIV_ALLOC
+#define LEMPELZIV_ALLOC 65536
+#endif
 void bin2lzf_encode(BYTE **t,int *o,BYTE *a,BYTE **b,int n) { if (*a) *a=0,**b|=n&15; else --*o,*(*b=(*t)++)=n<<(*a=4); } // store a nibble; see below bin2lzf_n(n)
 #define bin2lzf_n(n) bin2lzf_encode(&t,&o,&a,&b,(n)) // without bin2lzf_encode(): (a?a=0,*b|=(n)&15:(--o,*(b=t++)=(n)<<(a=4)))
 int bin2lzf(BYTE *t,int o,const BYTE *s,int i) // encode `i` exact bytes from source `s` onto up to `o` bytes at target `t`; >=0 output length, <0 ERROR!
 {
-	BYTE *u=t,a=0,*b; int h=0,p=0,k=0,rr=0,z,*hh,*pp; if (!(hh=(int*)malloc(sizeof(int[65536+65536])))) return -1; // memory error! maybe this should go to session_preset()...
-	{ for (pp=hh+65536,z=65536+65536;z;) hh[--z]=~65536; } while (p+1<i) // ~65536 < -65536, i.e. setup hashes with values beyond the search range
-		{ int g=0,m=0,r=0,n=p-65536; for (int q=hh[s[p+1]*256+s[p]],e=LEMPELZIV_RETRY;q>=n&&e;q=pp[q&65535],(LEMPELZIV_RETRY<65536&&--e)) if (p-q==rr||s[q+m]==s[p+m])
+	BYTE *u=t,a=0,*b; int h=0,p=0,k=0,rr=0,z,*hh=(int*)session_h16lz,*pp; if (!hh) return -1; // memory error!
+	{ for (pp=hh+H16MAX,z=H16MAX+65536;z;) hh[--z]=~65536; } while (p+1<i) // ~65536 < -65536, i.e. setup hashes with values beyond the search range
+		{ int g=0,m=0,r=0,n=p-65536; for (int q=hh[H16GET(s,p)],e=LEMPELZIV_RETRY;q>=n&&e;q=pp[q&65535],(LEMPELZIV_RETRY<65536&&--e)) if (p-q==rr||s[q+m]==s[p+m])
 			{ int y; if ((z=65535+p)>i) z=i; const BYTE *v=s+q+1,*w=s+p+1,*x=s+z; while (*++v==*++w&&w<x) {} // search in current minimum and maximum
 			if (z=w-s-p,g<(y=z*2-(p-q==rr?1:p-q>512?p-q>8704?5:4:p-q>32?3:2)-(z<24?z<9?1:2:z<256?4:8))) if (g=y,m=z,r=p-q,w>=x) break; } // early break!
 		if (m<2) ++p; else // the LZSA2 standard can't handle more than 65535 literals in a row, hence the better-safe-than-sorry 64K limit
@@ -453,8 +485,8 @@ int bin2lzf(BYTE *t,int o,const BYTE *s,int i) // encode `i` exact bytes from so
 			{ while (k<p) *t++=s[k++]; } k=p+=m; // flush literals; LZSA2 stores offsets as negative bytes plus a bit in the header, hence the new algebra
 			if (rr!=r) { if ((rr=r)>32) { if (r>512) { if (r>8704) *t++=-r>>8; else bin2lzf_n((512-r)>>9); } *t++=-r; } else bin2lzf_n(-r>>1); }
 			if (m>=9) { if (m<24) bin2lzf_n(m-9); else if (bin2lzf_n(15),m<256) --o,*t++=m-24; else o-=3,*t++=233,*t++=m,*t++=m>>8; } } // match length
-		do z=s[h+1]*256+s[h],pp[h&65535]=hh[z],hh[z]=h; while (++h<p); } // update hashes and continue
-	if (free(hh),(z=i-k)>65535||o-z<7) return -1; // the end marker's checksum is a byte-sized pseudo-offset, hence the 9-bit range (bit 8 always set!)
+		do z=H16GET(s,h),pp[h&65535]=hh[z],hh[z]=h; while (++h<p); } // update hashes and continue
+	if ((z=i-k)>65535||o-z<7) return -1; // the end marker's checksum is a byte-sized pseudo-offset, hence the 9-bit range (bit 8 always set!)
 	if (z<3) *t++=z*8+103; else if (*t++=127,z<18) bin2lzf_n(z-3); else if (bin2lzf_n(15),z<256) *t++=z-18; else *t++=239,*t++=z,*t++=z>>8; // final literals
 	{ while (k<i) *t++=s[k++]; } for (z=0;k;) z+=s[--k]; return *t++=z,bin2lzf_n(15),*t++=232,t-u; // calculate checksum and store end marker
 }
@@ -533,7 +565,7 @@ void sha1_exit(const BYTE *s,int n)
 const int audio_stereos[][3]={{0,0,0},{+64,0,-64},{+128,0,-128},{+256,0,-256}}; // left, middle and right relative to 100% = 256
 #endif
 BYTE video_lineblend=0,video_pageblend=0,video_microwave=0,audio_mixmode=length(audio_stereos)-1; // 0 = pure mono... n-1 = pure stereo
-BYTE video_scanline=0,video_scanlinez=8; // 0 = all scanlines, 1 = avg. scanlines, 2 = full interlace, 3 = half interlace
+BYTE video_scanline=0,frame_scanline=8; // 0 = all scanlines, 1 = avg. scanlines, 2 = full interlace, 3 = half interlace
 int video_microwavez=1; // the microwave noise
 #ifdef MAUS_LIGHTGUNS
 VIDEO_UNIT video_litegun; // lightgun data
@@ -559,40 +591,34 @@ VIDEO_UNIT *video_xlat_all(VIDEO_UNIT *t,VIDEO_UNIT const *s,int n) // turn pale
 	{ for (;n>0;--n) *t++=video_xlat_rgb(*s++); return t; }
 #define video_main_xlat() (video_xlat_all(video_xlat,video_table,length(video_xlat))) // it's always the same operation
 
-#define VIDEO_FILTER_5050(x,y) (((((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00))>>1) // neutral: it doesn't favour `x` over `y` in case of draw
-//#define VIDEO_FILTER_5050(x,y) (((((x&0XFF00FF)+(y&0XFE00FE)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFE00)+0X100)&0X1FE00))>>1) // a possible way to favour `x` over `y`
 //#define VIDEO_FILTER_5050(x,y) ((((x&0XFEFEFE)+(y&0XFEFEFE))>>1)+(x&0X10101)) // fast but coarse: it favours `x` by copying its least significant bits
+//#define VIDEO_FILTER_5050(x,y) (((((x&0XFF00FF)+(y&0XFE00FE)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFE00)+0X100)&0X1FE00))>>1) // more precise way to favour `x` over `y`
+#define VIDEO_FILTER_5050(x,y) (((((x&0XFF00FF)+(y&0XFF00FF)+0X10001)&0X1FE01FE)+(((x&0XFF00)+(y&0XFF00)+0X100)&0X1FE00))>>1) // neutral: it doesn't favour `x` over `y` in case of draw
 #define VIDEO_FILTER_7525(x,y) (((((x&0XFF00FF)*3+(y&0XFF00FF)+0X30003)&0X3FC03FC)+(((x&0XFF00)*3+(y&0XFF00)+0X300)&0X3FC00))>>2) // 75% 1st + 25% 2nd; always raw RGB!
 
-//#define RGB2LINEAR // uncomment this for linear sRGB gamma correction
-char video_gammaflag=1; // keep it even if we disable this on compile-time!
-#ifndef RGB2LINEAR // working with non-linear sRGB looks better but is slow;
-BYTE srgb[1<<16],crt1[256],crt2[256]; // the sRGB-to-linear-and-back operations need precalculated tables, they're too expensive otherwise :-(
+//#define RAWWW // couples of X and Y instead of (X+Y)/2
+#define VIDEO_FILTER_DOT1(x) ((crt1[(x)>>16]<<16)|(crt1[((x)>>8)&255]<<8)|crt1[(x)&255]) // south-west pixel
+#define VIDEO_FILTER_DOT2(x) ((crt2[(x)>>16]<<16)|(crt2[((x)>>8)&255]<<8)|crt2[(x)&255]) // north-east pixel
+#define VIDEO_FILTER_DOT3 // south-east pixel
+//#define VIDEO_FILTER_DOT4(x) ((x)-(((x)>>1)&0X7F7F7F)+0X202020)
+#define VIDEO_FILTER_DOT4(x) ((x)-(((x)>>2)&0X3F3F3F)) // even +0X101010 is too bright :-/
+#define VIDEO_FILTER_DOT5(x) ((crt5[(x)>>16]<<16)|(crt5[((x)>>8)&255]<<8)|crt5[(x)&255]) // south-west pixel
+#define VIDEO_FILTER_DOT6 VIDEO_FILTER_DOT2 // north-east pixel
+#define VIDEO_FILTER_DOT7 VIDEO_FILTER_DOT4 // south-east pixel
+BYTE srgb[1<<16],crt1[256],crt2[256],crt5[256]; // the sRGB-to-linear-and-back operations need precalculated tables, they're too expensive otherwise :-(
 void video_recalc(void) // redo the video filter tables
 {
-	if (video_gammaflag)
-		for (int h=0;h<256;++h)
-		{
-			int z=h*h*2;
-			crt1[h]=z<255*255?0:sqrtu(z-255*255),
-			crt2[h]=z<255*255?sqrtu(  z):   255 ;
-			for (int l=0;l<256;++l)
-				srgb[h*256+l]=sqrtu((h*h+l*l+h+l)>>1);
-		}
-	else
-		for (int h=0;h<256;++h)
-		{
-			int z=h*2;
-			crt1[h]=(z<255?0:z-255),
-			crt2[h]=(z<255?  z:255);
-			for (int l=0;l<256;++l)
-				srgb[h*256+l]=(h+l+1)>>1;
-		}
+	for (int h=0;h<256;++h)
+	{
+		int z=h*h*2;
+		crt1[h]=z<255*255?0:sqrtu(z-255*255);
+		crt2[h]=z<255*255?sqrtu(  z):   255 ;
+		crt5[h]=VIDEO_FILTER_DOT4(crt1[h]);
+		for (int l=0;l<256;++l)
+			srgb[h*256+l]=sqrtu((h*h+l*l+h+l)>>1);
+	}
 }
 #define VIDEO_FILTER_SRGB(x,y) (srgb[((x>>8)&0XFF00)+(y>>16)]<<16)|(srgb[(x&0XFF00)+((y>>8)&255)]<<8)|srgb[((x&255)<<8)+(y&255)] // old-new avg.
-#else // working with linear RGB is faster, but the image loses brightness!
-#define VIDEO_FILTER_SRGB VIDEO_FILTER_5050
-#endif
 #define VIDEO_FILTER_HALF(x,y) (x==y?x:VIDEO_FILTER_SRGB(x,y))
 
 #ifdef VIDEO_LO_X_RES
@@ -609,33 +635,6 @@ void video_recalc(void) // redo the video filter tables
 #define VIDEO_FILTER_BLUR2(r,z) v2z=VIDEO_FILTER_HALF(z,v0z),r=VIDEO_FILTER_HALF(v2z,v4z),v0z=z,v3z=v1z // = ((B+C)/2+(D+E)/2)/2
 #endif
 
-//#define VIDEO_FILTER_DOT0(x) ((((x)>>1)&0X7F7F7F)+0X404040) // (4+2)/8: 00->40,FF->BF
-//#define VIDEO_FILTER_DOT0(x) ((x)-(((x)>>1)&0X7F7F7F)+0X404040) // no mult: 00->40,FF->C0
-//#define VIDEO_FILTER_DOT0(x) ((((x)>>2)&0X3F3F3F)*3+0X212121) // (6+1)/8: 00->21,FF->DE
-#define VIDEO_FILTER_DOT0(x) ((x)-(((x)>>2)&0X3F3F3F)+0X202020) // no mult: 00->20,FF->E0
-#ifndef RGB2LINEAR
-//#define VIDEO_FILTER_DOT1(x) ((crt1[(x)>>16]<<16)|(crt1[((x)>>8)&255]<<8)|crt1[(x)&255])
-//#define VIDEO_FILTER_DOT2(x) ((crt2[(x)>>16]<<16)|(crt2[((x)>>8)&255]<<8)|crt2[(x)&255])
-#define VIDEO_FILTER_DOT1(x) ((crt1[(x)>>16]<<16)|(crt1[((x)>>8)&255]<<8)|crt1[(x)&255]) // without colour aberration (fewer artifacts)
-#define VIDEO_FILTER_DOT2(x) ((crt2[(x)>>16]<<16)|(crt2[((x)>>8)&255]<<8)|crt2[(x)&255])
-//#define VIDEO_FILTER_DOT1(x) ((crt1[(x)>>16]<<16)|(crt2[((x)>>8)&255]<<8)|crt1[(x)&255]) // with colour aberration (closer to true CRT)
-//#define VIDEO_FILTER_DOT2(x) ((crt2[(x)>>16]<<16)|(crt1[((x)>>8)&255]<<8)|crt2[(x)&255])
-#define VIDEO_FILTER_DOT3(x) ((x)-(((x)>>1)&0X7F7F7F)+0X404040) // (4+2:4+2:4+2)/8
-//#define VIDEO_FILTER_DOT3(x) ((x)-(((x)>>2)&0X3F3F3F)+0X202020) // (6+1:6+1:6+1)/8
-//#define VIDEO_FILTER_DOT3 // checkerboard, quick but not very visible
-#else
-//#define VIDEO_FILTER_DOT1(x) ((x)-(((x)>>1)&0X7F0000)+0X400000) // red
-//#define VIDEO_FILTER_DOT2(x) ((x)-(((x)>>1)&0X00007F)+0X000040) // blue
-//#define VIDEO_FILTER_DOT3(x) ((x)-(((x)>>1)&0X007F00)+0X004000) // green
-#define VIDEO_FILTER_DOT1(x) ((x)-(((x)>>1)&0X007F00)+0X004000) // (8+0:4+2:8+0)/8
-//#define VIDEO_FILTER_DOT2(x) ((x)-(((x)>>1)&0X00007F)+0X000040) // (8+0:8+0:4+2)/8
-//#define VIDEO_FILTER_DOT3(x) ((x)-(((x)>>1)&0X7F0000)+0X400000) // (4+2:8+0:8+0)/8
-#define VIDEO_FILTER_DOT2(x) ((x)-(((x)>>1)&0X7F007F)+0X400040) // (4+2:8+0:4+2)/8
-//#define VIDEO_FILTER_DOT3(x) ((x)-(((x)>>1)&0X7F7F7F)+0X404040) // (4+2:4+2:4+2)/8
-#define VIDEO_FILTER_DOT3(x) ((x)-(((x)>>2)&0X3F3F3F)+0X202020) // (6+1:6+1:6+1)/8
-//#define VIDEO_FILTER_DOT3 // checkerboard, quick but not very visible
-#endif
-
 #define MAIN_FRAMESKIP_MASK ((1<<MAIN_FRAMESKIP_BITS)-1)
 void video_resetscanline(void) // reset configuration values on new video options
 {
@@ -648,7 +647,7 @@ void video_resetscanline(void) // reset configuration values on new video option
 // do not manually unroll the following operations, GCC is smart enough to do a better job on its own!
 void video_callscanline(VIDEO_UNIT *vl)
 {
-	VIDEO_UNIT *vi=vl-VIDEO_PIXELS_X; if (video_scanlinez<2) // all scanlines + avg. scanlines in final line
+	VIDEO_UNIT *vi=vl-VIDEO_PIXELS_X; if (frame_scanline<2) // all scanlines + avg. scanlines in final line
 	{
 		VIDEO_UNIT *vo=vi+VIDEO_LENGTH_X;
 		switch (video_filter&(VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y))
@@ -656,21 +655,21 @@ void video_callscanline(VIDEO_UNIT *vl)
 			case 0:
 				MEMNCPY(vo,vi,VIDEO_PIXELS_X);
 				break;
-			case VIDEO_FILTER_MASK_X:
-				do
-					*vo=*vi,++vi,++vo,
-					*vi=*vo=VIDEO_FILTER_DOT0(*vi);
-				while (++vo,++vi<vl);
-				break;
 			case VIDEO_FILTER_MASK_Y:
 				do
-					*vo=VIDEO_FILTER_DOT0(*vi);
+					*vo=VIDEO_FILTER_DOT4(*vi);
+				while (++vo,++vi<vl);
+				break;
+			case VIDEO_FILTER_MASK_X:
+				do
+					*vo=VIDEO_FILTER_DOT1(*vi),++vi,++vo,
+					*vo=VIDEO_FILTER_DOT3(*vi),*vi=VIDEO_FILTER_DOT2(*vi);
 				while (++vo,++vi<vl);
 				break;
 			case VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y:
 				do
-					*vo=VIDEO_FILTER_DOT1(*vi),++vi,++vo,
-					*vo=VIDEO_FILTER_DOT3(*vi),*vi=VIDEO_FILTER_DOT2(*vi);
+					*vo=VIDEO_FILTER_DOT5(*vi),++vi,++vo,
+					*vo=VIDEO_FILTER_DOT7(*vi),*vi=VIDEO_FILTER_DOT6(*vi);
 				while (++vo,++vi<vl);
 				break;
 		}
@@ -678,29 +677,33 @@ void video_callscanline(VIDEO_UNIT *vl)
 	else switch ((video_filter&(VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y))|((video_pos_y&1)?VIDEO_FILTER_MASK_Z:0))
 	{
 		// half/single/double scanlines: bottom lines add VIDEO_FILTER_MASK_Z
-		case VIDEO_FILTER_MASK_X:
-		case VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Z:
-			do
-				++vi,
-				*vi=VIDEO_FILTER_DOT0(*vi);
-			while (++vi<vl);
-			break;
 		case VIDEO_FILTER_MASK_Y+VIDEO_FILTER_MASK_Z:
 			do
-				*vi=VIDEO_FILTER_DOT0(*vi);
+				*vi=VIDEO_FILTER_DOT4(*vi);
 			while (++vi<vl);
 			break;
-		case VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y:
+		case VIDEO_FILTER_MASK_X:
 			do
 				++vi,
 				*vi=VIDEO_FILTER_DOT2(*vi);
 			while (++vi<vl);
 			break;
+		case VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Z:
+			do
+				*vi=VIDEO_FILTER_DOT1(*vi),++vi,
+				*vi=VIDEO_FILTER_DOT3(*vi);
+			while (++vi<vl);
+			break;
+		case VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y:
+			do
+				++vi,
+				*vi=VIDEO_FILTER_DOT6(*vi);
+			while (++vi<vl);
+			break;
 		case VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y+VIDEO_FILTER_MASK_Z:
 			do
-				*vi=VIDEO_FILTER_DOT1(*vi),
-				++vi,
-				*vi=VIDEO_FILTER_DOT3(*vi);
+				*vi=VIDEO_FILTER_DOT5(*vi),++vi,
+				*vi=VIDEO_FILTER_DOT7(*vi);
 			while (++vi<vl);
 			break;
 	}
@@ -717,7 +720,7 @@ void video_callmicrowave(VIDEO_UNIT *vl)
 			memmove(vo,vi,(VIDEO_PIXELS_X-1)*sizeof(VIDEO_UNIT));
 		}
 		video_microwavez=(video_microwavez>>2)^((video_microwavez&3)*(0X90000000U>>2));
-		if (video_scanlinez<2) // second line of non-interlaced modes
+		if (frame_scanline<2) // second line of non-interlaced modes
 		{
 			if (video_microwavez&1)
 			{
@@ -729,7 +732,7 @@ void video_callmicrowave(VIDEO_UNIT *vl)
 		#else // fine: shake individual pixels
 		unsigned int vv=video_microwavez; *vl=vl[-1]; vi=vl-VIDEO_PIXELS_X;
 		#if 0 // harder
-		static const int vu[5]={2,1,0,1,2}; if (video_scanlinez<2)
+		static const int vu[5]={2,1,0,1,2}; if (frame_scanline<2)
 		{
 			vl[VIDEO_LENGTH_X]=vl[VIDEO_LENGTH_X-1]; do
 			{
@@ -746,7 +749,7 @@ void video_callmicrowave(VIDEO_UNIT *vl)
 			}
 			while (vi<vl);
 		#else // softer
-		static const int vu[9]={4,3,2,1,0,1,2,3,4}; if (video_scanlinez<2)
+		static const int vu[9]={4,3,2,1,0,1,2,3,4}; if (frame_scanline<2)
 		{
 			vl[VIDEO_LENGTH_X]=vl[VIDEO_LENGTH_X-1]; do
 			{
@@ -799,26 +802,31 @@ INLINE void video_drawscanline(void) // call after each drawn scanline; memory c
 		}
 	}
 	// the order is important: doing PAGEBLEND before LINEBLEND is slow :-(
-	if (video_pageblend) // blend scanlines from previous and current frame!
+	if (video_pageblend) // gigascreen: blend scanlines from previous and current frame!
 	{
 		vo=&video_blend[((video_pos_y-VIDEO_OFFSET_Y)>>1)*VIDEO_PIXELS_X]; // gigascreen
 		#ifdef RAWWW // quick'n'dirty
 		if (video_pos_z&1) // give each gigascreen side its own half
-			do
-				*vo=*vi,++vo,++vi,vs=*vo,*vo=*vi,*vi=vs;
-			while (++vo,++vi<vl);
+			do *vo=*vi,++vo,++vi,vs=*vo,*vo=*vi,*vi=vs; while (++vo,++vi<vl);
 		else
-			do
-				vs=*vo,*vo=*vi,*vi=vs,++vo,++vi,*vo=*vi;
-			while (++vo,++vi<vl);
+			do vs=*vo,*vo=*vi,*vi=vs,++vo,++vi,*vo=*vi; while (++vo,++vi<vl);
 		#else // standard half'n'half
-		do
-			if ((vt=*vo)!=(vs=*vi))
+		if (!video_fineblend)
+			do if ((vt=*vo)!=(vs=*vi))
 			#ifdef VIDEO_LO_X_RES // will cause data loss in hi-res!
-				*vo=vs,vi[1]=*vi=VIDEO_FILTER_SRGB(vs,vt);
+				*vo=vi[1]=*vi=VIDEO_FILTER_SRGB(vs,vt); // accumulative
 			while (vo+=2,(vi+=2)<vl);
 			#else
-				*vo=vs,*vi=VIDEO_FILTER_SRGB(vs,vt);
+				*vo=*vi=VIDEO_FILTER_SRGB(vs,vt); // accumulative
+			while (++vo,++vi<vl);
+			#endif
+		else
+			do if ((vt=*vo)!=(vs=*vi))
+			#ifdef VIDEO_LO_X_RES // will cause data loss in hi-res!
+				*vo=vs,vi[1]=*vi=VIDEO_FILTER_SRGB(vs,vt); // simple
+			while (vo+=2,(vi+=2)<vl);
+			#else
+				*vo=vs,*vi=VIDEO_FILTER_SRGB(vs,vt); // simple
 			while (++vo,++vi<vl);
 			#endif
 		#endif
@@ -867,7 +875,7 @@ INLINE void video_drawscanline(void) // call after each drawn scanline; memory c
 	if (video_pos_y>=VIDEO_OFFSET_Y+2) // handle scanlines with 50:50 neighbours
 	{
 		vi=(vl-=VIDEO_LENGTH_X*2)-VIDEO_PIXELS_X; // we modify the previous scanline, rather than the current one!
-		if (video_scanlinez==1) // avg. scanlines!
+		if (frame_scanline==1) // avg. scanlines!
 		{
 			VIDEO_UNIT *vj=(vo=vi+VIDEO_LENGTH_X)+VIDEO_LENGTH_X;
 			switch(video_filter&(VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y))
@@ -881,26 +889,16 @@ INLINE void video_drawscanline(void) // call after each drawn scanline; memory c
 						#endif
 					while (++vj,++vo,++vi<vl);
 					break;
-				case VIDEO_FILTER_MASK_X:
-					do
-						#ifdef RAWWW // quick'n'dirty
-						*vo=*vi,++vj,++vo,++vi,*vi=VIDEO_FILTER_DOT0(*vi),*vo=VIDEO_FILTER_DOT0(*vj);
-						#else // standard half'n'half
-						*vo=VIDEO_FILTER_HALF(*vi,*vj),++vj,++vo,++vi,
-						vt=VIDEO_FILTER_HALF(*vi,*vj),*vo=VIDEO_FILTER_DOT0(vt),*vi=VIDEO_FILTER_DOT0(*vi);
-						#endif
-					while (++vj,++vo,++vi<vl);
-					break;
 				case VIDEO_FILTER_MASK_Y:
 					do
 						#ifdef RAWWW // quick'n'dirty
-						*vo=VIDEO_FILTER_DOT0(*vi),++vj,++vo,++vi,*vo=VIDEO_FILTER_DOT0(*vj);
+						*vo=VIDEO_FILTER_DOT4(*vi),++vj,++vo,++vi,*vo=VIDEO_FILTER_DOT4(*vj);
 						#else // standard half'n'half
-						vt=VIDEO_FILTER_HALF(*vi,*vj),*vo=VIDEO_FILTER_DOT0(vt);
+						vt=VIDEO_FILTER_HALF(*vi,*vj),*vo=VIDEO_FILTER_DOT4(vt);
 						#endif
 					while (++vj,++vo,++vi<vl);
 					break;
-				case VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y:
+				case VIDEO_FILTER_MASK_X:
 					do
 						#ifdef RAWWW // quick'n'dirty
 						*vo=VIDEO_FILTER_DOT1(*vi),++vj,++vo,++vi,
@@ -908,6 +906,17 @@ INLINE void video_drawscanline(void) // call after each drawn scanline; memory c
 						#else // standard half'n'half
 						vt=VIDEO_FILTER_HALF(*vi,*vj),*vo=VIDEO_FILTER_DOT1(vt),++vj,++vo,++vi,
 						vt=VIDEO_FILTER_HALF(*vi,*vj),*vo=VIDEO_FILTER_DOT3(vt),*vi=VIDEO_FILTER_DOT2(*vi);
+						#endif
+					while (++vj,++vo,++vi<vl);
+					break;
+				case VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y:
+					do
+						#ifdef RAWWW // quick'n'dirty
+						*vo=VIDEO_FILTER_DOT5(*vi),++vj,++vo,++vi,
+						*vo=VIDEO_FILTER_DOT7(*vj),*vi=VIDEO_FILTER_DOT6(*vi);
+						#else // standard half'n'half
+						vt=VIDEO_FILTER_HALF(*vi,*vj),*vo=VIDEO_FILTER_DOT5(vt),++vj,++vo,++vi,
+						vt=VIDEO_FILTER_HALF(*vi,*vj),*vo=VIDEO_FILTER_DOT7(vt),*vi=VIDEO_FILTER_DOT6(*vi);
 						#endif
 					while (++vj,++vo,++vi<vl);
 					break;
@@ -921,29 +930,29 @@ INLINE void video_nextscanline(int x) // call before each new scanline: move on 
 	{ frame_pos_y+=2,video_pos_y+=2,video_target+=VIDEO_LENGTH_X*2-video_pos_x; video_target+=video_pos_x=x; session_signal|=session_signal_scanlines; }
 INLINE void video_endscanlines(void) // call after each drawn frame: end the current frame and clean up
 {
-	video_scanlinez=video_scanline; // technically this should go at the end...
 	// handle final scanline (100:0 neighbours, no next line after last!)
 	VIDEO_UNIT *vl=video_frame+VIDEO_OFFSET_X+(VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-2+(video_pos_y&1))*VIDEO_LENGTH_X+VIDEO_PIXELS_X;
 	video_callscanline(vl); video_callmicrowave(vl); // also used in video_drawscanline()
 }
-INLINE void video_newscanlines(int x,int y) // call before each new frame: reset `video_target`, `video_pos_x` and `video_pos_y`, and update `video_pos_z`
+INLINE void video_newscanlines(int x,int y) // call before each new frame: reset `video_target`, `video_pos_x` and `video_pos_y`
 {
 	if (!video_framecount) video_endscanlines(); // finish old frame if needed!
-	session_signal|=SESSION_SIGNAL_FRAME+session_signal_frames; // frame event!
+	++video_pos_z; session_signal|=SESSION_SIGNAL_FRAME+session_signal_frames; // frame event!
 	#ifdef MAUS_LIGHTGUNS
 	video_litegun=0; // the lightgun signal fades away between frames
 	#endif
-	if (video_interlaces&&(video_scanline&2)) ++y; // odd or even field according to the current scanline mode
-	++video_pos_z; video_target=video_frame+(video_pos_y=y)*VIDEO_LENGTH_X+(video_pos_x=x); // new coordinates
+	video_interlaced=(frame_scanline=video_scanline)==3; video_interlaces^=1;
+	if (video_scanline>=2) y+=video_interlaces; // odd or even field according to the current scanline mode
+	video_target=video_frame+(video_pos_y=y)*VIDEO_LENGTH_X+(video_pos_x=x); // new coordinates
 }
 
-INLINE void audio_playframe(void) // call between frames by the OS wrapper
+INLINE void audio_playframe(void) // filter the audio signal
 {
-	AUDIO_UNIT aa,*ao=audio_frame,i=AUDIO_LENGTH_Z;
+	AUDIO_UNIT *ao=audio_frame; int i=AUDIO_LENGTH_Z,aa;
 	switch (audio_filter)
 	{
 		#if AUDIO_CHANNELS > 1
-		static AUDIO_UNIT a0=AUDIO_ZERO,a1=AUDIO_ZERO; // independent channels
+		static int a0=AUDIO_ZERO,a1=AUDIO_ZERO; // independent channels
 		case 1: do
 				aa=*ao,*ao++=a0=( (a0<aa?1:0)+a0   +aa)>>1,
 				aa=*ao,*ao++=a1=( (a1<aa?1:0)+a1   +aa)>>1;
@@ -971,20 +980,82 @@ INLINE void audio_playframe(void) // call between frames by the OS wrapper
 	}
 }
 
-INLINE void session_update(void) // render video+audio thru OS and handle realtime logic (self-adjusting delays, automatic frameskip, etc.)
+INLINE int session_listen(void) // check the pending messages and update stuff accordingly until the user wants to quit (result is NONZERO)
 {
-	session_signal&=~SESSION_SIGNAL_FRAME; // new frame!
-	session_render();
-	audio_required=!audio_disabled||session_filmfile||session_wavefile; // ensures that audio is saved to WAV or XRF even on a machine without sound hardware
-	audio_target=audio_frame; audio_pos_z=0;
-	if (video_scanline==3)
-		video_interlaced|=1;
-	else
-		video_interlaced&=~1;
-	if (--video_framecount<0||video_framecount>video_framelimit+2)
-		video_framecount=video_framelimit; // catch both <0 and >N, but not automatic frameskip!
-	// simplify several frameskipping operations
-	frame_pos_y=video_framecount?video_pos_y+VIDEO_LENGTH_Y*2:video_pos_y;
+	static int s=-1; if (s!=session_signal) // catch DEBUG and PAUSE
+		s=session_signal,session_dirty=debug_dirty=1; // set or reset the "Debug" menu option, redraw debug panel
+	if (session_signal&(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE))
+	{
+		session_signal_frames&=~(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE);
+		session_signal_scanlines&=~(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE); // reset traps!
+		if (session_signal&SESSION_SIGNAL_DEBUG) if (debug_dirty)
+		{
+			session_please(),session_debug_show(),
+			session_drawme(),debug_dirty=0;
+		}
+		if (!session_paused) // set the caption just once
+		{
+			sprintf(session_tmpstr,"%s | %s | PAUSED",session_caption,session_info);
+			session_title(session_tmpstr);
+			session_please(),session_paused=1;
+		}
+		session_sleep();
+	}
+	if (session_queue()) return 1;
+	if (session_dirty) session_dirty=0,session_clean();
+	return 0;
+}
+
+INLINE void session_update(void) // render video+audio and handle self-adjusting realtime delays, automatic frameskip, etc.
+{
+	int i,j; static int performance_t=0,performance_f=0,performance_b=0; ++performance_f;
+	session_writewave(); session_writefilm(); // record wave+film frame
+	if (session_stick&&!session_key2joy) // do we need to check the joystick?
+	{
+		j=session_joy2k(); MEMZERO(joy_bit);
+		for (i=length(kbd_joy);i--;) if (j&(1<<i))
+			{ int k=kbd_joy[i]; joy_bit[k>>3]|=1<<(k&7); }
+	}
+	i=session_ticks(); { static BYTE q=0; if (!q) q=1,performance_t=i; } if ((j=i-performance_t)>=0) // update performance percentage?
+	{
+		sprintf(session_tmpstr,"%s | %s | %s %s %d:%d%%",session_caption,session_info,session_blitinfo(),session_version,
+			(performance_b*100+VIDEO_PLAYBACK/2)/VIDEO_PLAYBACK,(performance_f*100+VIDEO_PLAYBACK/2)/VIDEO_PLAYBACK);
+		performance_t+=session_clock; performance_f=performance_b=session_paused=0;
+		session_title(session_tmpstr);
+	}
+	if (video_required) // redraw window if it was already required!
+		if (!video_interlaces||!video_interlaced)
+			{ performance_b+=video_interlaced+1; session_drawme(); }
+	// now decide whether to do pauses and to require a new redraw
+	static BYTE r=0; if (!video_interlaces||frame_scanline<2)
+	{
+		if ((j=session_fast&&!session_filmfile?4:session_rhythm),!r||r>j) // 4 => 500% (0..3 = 100%..400%)
+			if (r=j,j=video_framelimit,!video_framecount||video_framecount>j+1) video_framecount=j;
+			else --video_framecount;
+		else --r;
+	}
+	if (session_wait|session_fast)
+	{
+		session_timer=i; // ensure that the next frame can be valid!
+		audio_mustsync(); if (audio_fastmute) audio_disabled|=+8;
+	}
+	else if (!r) // handle timers and do pauses
+	{
+		audio_disabled&=~8; audio_resyncme(); // recalc audio buffer, if required!
+		if (VIDEO_PLAYBACK==50) // always true on pure PAL systems
+			j=session_clock/50; // PAL never needs any adjusting (a frame always lasts exactly 20 ms)
+		else // (we avoid a warning here) always true on pure NTSC systems
+			{ static int jj=0; j=(jj+=session_clock)/VIDEO_PLAYBACK; jj%=VIDEO_PLAYBACK; } // 60 Hz: [16,17,17]
+		if ((i=(session_timer+=j)-i)>=0)
+			{ if (i=(i>j?j:i)*1000/session_clock) session_delay(i); } // avoid zero and overflows!
+		else if (i+j<0)
+			{ if (!session_filmfile) video_framecount=video_framelimit+1; } // skip one extra frame on timeout!
+	}
+	if (session_audio) session_playme(); // manage audio buffer
+	audio_required=!audio_disabled||session_filmfile||session_wavefile; // ensures that audio is saved to WAV or XRF even without sound hardware
+	frame_pos_y=video_pos_y; if (!(video_required=!video_framecount&&!r)) frame_pos_y+=VIDEO_LENGTH_Y*4; // simplify several frameskipping operations
+	audio_target=audio_frame,audio_pos_z=0; session_signal&=~SESSION_SIGNAL_FRAME; // new frame!
+	session_thanks();
 }
 
 // elementary ZIP archive support ----------------------------------- //
@@ -993,8 +1064,8 @@ INLINE void session_update(void) // render video+audio thru OS and handle realti
 // based on the RFC1951 standard and PUFF.C from the ZLIB project.
 
 BYTE *puff_data; int puff_size,puff_word,puff_bits; // stream cursor
-int puff_len_c[16+288],puff_off_c[16+32]; // length and offset Huffman tables
-char puff_cnt_c[288+32]; // bit counts: 0..287 length codes, 288..319 offset codes
+int puff_len_c[16+288],puff_off_c[16+32]; // Huffman tables: 16 bases + N values
+char puff_cnt_c[320]; // bit counts: 0..287 length codes + 288..319 offset codes
 
 const int puff_len_k[2][32]={ // length constants; 0, 30 and 31 are reserved
 	{ 0,3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258,0,0 },
@@ -1016,25 +1087,20 @@ void puff_default(void) // generate the default static Huffman bit counts
 int puff_recv(int n) // receive `n` bits from source; <0 ERROR, >=0 OUTPUT
 {
 	int w=puff_word; while (puff_bits<n) // we'll need `w` later
-	{
-		if (--puff_size<0) return -1; // source underrun!
-		w+=*puff_data++<<puff_bits,puff_bits+=8; // read byte from source
-	}
-	puff_word=w>>n; puff_bits-=n; return w&((1<<n)-1); // adjust target and flush bits
+		if (UNLIKELY(--puff_size<0)) return -1; // source underrun!
+		else w+=*puff_data++<<puff_bits,puff_bits+=8; // read byte from source
+	return puff_word=w>>n,puff_bits-=n,w&((1<<n)-1); // flush bits and return
 }
 int puff_decode(int *h) // receive code from Huffman source; <0 ERROR, >=0 OUTPUT
 {
-	int w=puff_word,b=puff_bits; // local copies are faster... are they?
-	for (int *s=h,l=1,i=0,base=0,code=0;;) // extract bits until they fit within an interval
+	for (int w=puff_word,b=puff_bits,l=1,i=0,base=0,code=0;;) // extract bits till they fit within an interval
 	{
-		while (b--)
-		{
-			int o=*++s; if (code+=w&1,w>>=1,code<base+o) // does the code fit the interval?
+		for (int o;b;--b) // Huffman bits are stored backwards: "w" right-shifts, "code" left-shifts
+			if (code+=w&1,w>>=1,code<base+(o=h[l])) // does the code fit the interval?
 				return puff_word=w,puff_bits=(puff_bits-l)&7,h[16+i+(code-base)]; // yes!
-			i+=o,base=(base+o)<<1,code<<=1,++l; // calculate next interval
-		}
-		if (!(b=16-l)||--puff_size<0) return -1; // too many bits! source underrun!
-		if (w=*puff_data++,b>8) b=8; // read byte from source and drop any bits left
+			else i+=o,base=(base+o)<<1,code<<=1,++l; // calculate next interval
+		if (UNLIKELY(!(b=16-l)||--puff_size<0)) return -1; // too many bits! source underrun!
+		if (w=*puff_data++,b>8) b=8; // read byte from source
 	}
 }
 int puff_tables(int *h,char *l,int n) // generate Huffman input tables from canonical length table; 0 OK, !0 ERROR
@@ -1042,10 +1108,10 @@ int puff_tables(int *h,char *l,int n) // generate Huffman input tables from cano
 	int o[16],i,a; for (i=0;i<16;++i) h[i]=0; // reset intervals
 	for (i=0;i<n;++i) ++h[l[i]]; // calculate intervals
 	if (h[0]==n) return 0; // empty table, nothing to do!
-	for (a=i=1;i<16;++i) if ((a=(a<<1)-h[i])<0) return a; // bad value!
+	for (a=i=1;i<16;++i) if (UNLIKELY((a=(a<<1)-h[i])<0)) return a; // bad value!
 	for (o[i=1]=0;i<15;++i) o[i+1]=o[i]+h[i]; // calculate base for each bit count
 	for (i=0;i<n;++i) if (l[i]) h[16+o[l[i]]++]=i; // assign values to all symbols
-	return a; // 0 if complete, >0 otherwise!
+	return a; // 0 if complete, >0 requires checking whether valh[0]+1==n, i.e. all lengths but one are zero
 }
 int puff_main(BYTE *t,int o,BYTE *s,int i) // inflate source `s[i]` into target `t[o]`; >=0 output length, <0 ERROR!
 {
@@ -1054,12 +1120,12 @@ int puff_main(BYTE *t,int o,BYTE *s,int i) // inflate source `s[i]` into target 
 	{
 		if (q=puff_recv(1),!(i=puff_recv(2))) // stored block?
 		{
-			if ((puff_size-=4)<0) return -1; // source underrun!
+			if (UNLIKELY((puff_size-=4)<0)) return -1; // source underrun!
 			i=*puff_data++,i+=*puff_data++<<8; j=*puff_data++,j+=*puff_data++<<8;
-			if (i+j!=0XFFFF||(puff_size-=i)<0||(o-=i)<0) return -1; // bad value! source underrun! target overflow!
+			if (UNLIKELY(i+j!=0XFFFF||(puff_size-=i)<0||(o-=i)<0)) return -1; // bad value! source underrun! target overflow!
 			// length zero is allowed: `...This completes the current deflate block and follows it with an empty stored block that is
 			// three bits plus filler bits to the next byte, followed by four bytes (00 00 ff ff)...` http://www.zlib.net/manual.html
-			memcpy(t,puff_data,i),puff_data+=i,t+=i,puff_word=puff_bits=0; // copy data, update pointers and drop any bits left
+			if (puff_word=puff_bits=0,i) memcpy(t,puff_data,i),puff_data+=i,t+=i; // drop any bits left, copy data and update cursors
 		}
 		else if (i>0&&i<3) // packed block?
 		{
@@ -1071,39 +1137,35 @@ int puff_main(BYTE *t,int o,BYTE *s,int i) // inflate source `s[i]` into target 
 			}
 			else // custom Huffman trees!
 			{
-				int len,off,a;
-				if ((len=puff_recv(5)+257)>286||(off=puff_recv(5)+1)>30||(j=puff_recv(4)+4)<4)
+				int len,off,a; if (UNLIKELY((len=puff_recv(5)+257)>286||(off=puff_recv(5)+1)>30||(j=puff_recv(4)+4)<4))
 					return -1; // bad match/range/huffman values!
 				for (a=0,i=0;i<j;) a|=puff_cnt_c[puff_cnt_k[i++]]=puff_recv(3); // read bit counts for the Huffman-encoded header
 				while (i<19) puff_cnt_c[puff_cnt_k[i++]]=0; // padding: clear the remainder of this header
-				if (a<0||puff_tables(puff_len_c,puff_cnt_c,19)) return -1; // bad values! invalid table!
+				if (UNLIKELY(a<0||puff_tables(puff_len_c,puff_cnt_c,19))) return -1; // bad values! invalid table!
 				for (len+=off,i=0;i<len;)
 					if ((a=puff_decode(puff_len_c))<16) // literal?
-						if (a<0) return a; else puff_cnt_c[i++]=a; // bad value!
+						if (UNLIKELY(a<0)) return -1; else puff_cnt_c[i++]=a; // bad value!
 					else
 					{
-						if (a<17) // copy last value 3..6 times?
-						{
-							if (i<1) return -1; // bad value!
-							j=puff_cnt_c[i-1],a=3+puff_recv(2);
-						}
-						else // store zero 3..10 or 11..138 times?
+						if (a<17) // 16: repeat the last value 3..6 times
+							if (UNLIKELY(!i)) return -1; else j=puff_cnt_c[i-1],a=3+puff_recv(2); // bad value!
+						else // 17 or 18: store zero 3..10 or 11..138 times
 							j=0,a=a==17?3+puff_recv(3):11+puff_recv(7);
-						if (puff_size<0||i+a>len) return -1; // source underrun! bad value!
+						if (UNLIKELY(puff_size<0||i+a>len)) return -1; // source underrun! bad value!
 						do puff_cnt_c[i++]=j; while (--a);
 					}
-				if ((len-=off,puff_tables(puff_len_c,puff_cnt_c,len)&&len-puff_len_c[0]!=1)|| // bad length table!
-					(puff_tables(puff_off_c,puff_cnt_c+len,off)&&off-puff_off_c[0]!=1)) return -1; // bad offset table!
+				if (UNLIKELY((len-=off,puff_tables(puff_len_c,puff_cnt_c,len)&&len-puff_len_c[0]!=1)|| // bad length table!
+					(puff_tables(puff_off_c,puff_cnt_c+len,off)&&off-puff_off_c[0]!=1))) return -1; // bad offset table!
 			}
-			for (;;) // beware: custom trees cannot generate lenght codes >=286 or offset codes >=30, but default trees can!
+			for (;;) // beware: custom trees cannot generate length codes >=286 or offset codes >=30, but default trees can!
 			{
 				if ((i=puff_decode(puff_len_c))<256) // literal?
-					if (i<0||--o<0) return -1; else *t++=i; // bad value! target overflow!
+					if (UNLIKELY(i<0||--o<0)) return -1; else *t++=i; // bad value! target overflow!
 				else if (i-=256) // length:offset pair?
 				{
-					if (i>=30||(o-=(i=puff_len_k[0][i]+puff_recv(puff_len_k[1][i])))<0|| // target overflow!
-						(j=puff_decode(puff_off_c))<0||j>=30|| // bad value!
-						(j=puff_off_k[0][j]+puff_recv(puff_off_k[1][j]))>t-u) return -1; // source underrun!
+					if (UNLIKELY(!(i=puff_len_k[0][i]+puff_recv(puff_len_k[1][i]))||(o-=i)<0|| // null! target overflow!
+						(j=puff_decode(puff_off_c))<0|| // bad value!
+						!(j=puff_off_k[0][j]+puff_recv(puff_off_k[1][j]))||j>t-u)) return -1; // null! source underrun!
 					s=t-j; do *t++=*s++; while (--i);
 				}
 				else break; // end of block!
@@ -1113,33 +1175,57 @@ int puff_main(BYTE *t,int o,BYTE *s,int i) // inflate source `s[i]` into target 
 	}
 	while (!q); return t-u; // OK, output length
 }
+
+#ifdef PNG_OUTPUT_MODE
+#define DEFLATE_RFC1950 // PNG files store ZLIB data!
+#endif
+
+#if (defined(INFLATE_RFC1950)||defined(DEFLATE_RFC1950))
+unsigned int adler32(unsigned int k,const BYTE *s,int i) // incremental compact Adler-32 checksum
+	{ int j=k&65535; k>>=16; while (i-->0) { if ((k+=(j+=*s++))>=65521) k%=65521,j%=65521; } return (k<<16)+j; }
+unsigned int puff_adler32(const BYTE *s,int i) { return adler32(1,s,i); } // default parameters for monolithic data
+#endif
 #ifdef INFLATE_RFC1950
 // RFC1950 standard data decoder
-DWORD puff_adler32(const BYTE *t,int o) // calculates Adler-32 checksum of a block `t` of size `o`
-	{ int j=1,k=0; while (o-->0) { if ((k+=(j+=*t++))>=65521) k%=65521,j%=65521; } return (k<<16)+j; }
 int puff_zlib(BYTE *t,int o,BYTE *s,int i) // decodes a RFC1950 standard ZLIB object; >=0 output length, <0 ERROR!
 {
-	if (!s||!t||i<6||o<0) return -1; // NULL or empty source or target!
-	if (s[0]!=120||s[1]&32||(s[0]*256+s[1])%31) return -1; // no ZLIB prefix!
-	return s+=2,i-=6,(o=puff_main(t,o,s,i))<0||puff_adler32(t,o)!=mgetmmmm(&s[i])?-1:o;
+	if (!t||!s||o<0||(i-=6)<2) return -1; // NULL or empty!
+	if (s[0]!=120||s[1]&32||(s[1]+30)%31) return -1; // no ZLIB prefix!
+	return (o=puff_main(t,o,s+=2,i))>=0&&puff_adler32(t,o)==mgetmmmm(puff_data)?puff_data+=4,o:-1; // OK! // ERROR!
+}
+#endif
+unsigned int ccitt32(unsigned int k,const BYTE *s,int i) // incremental compact CCITT CRC-32 algorithm by Karl Malbrain
+{
+	static const unsigned int z[16]={0,0X1DB71064,0X3B6E20C8,0X26D930AC,0X76DC4190,0X6B6B51F4,0X4DB26158,0X5005713C,
+		0XEDB88320,0XF00F9344,0XD6D6A3E8,0XCB61B38C,0X9B64C2B0,0X86D3D2D4,0XA00AE278,0XBDBDF21C}; // precalc'd!
+	{ while (i-->0) k^=*s++,k=(k>>4)^z[k&15],k=(k>>4)^z[k&15]; } return k; // walk bytes as pairs of nibbles
+}
+// notice that the CCITT CRC-16 method (f.e. Amstrad CPC tapes) would simply do `k=(k>>4)^((k&15)*4225)` on each nibble.
+unsigned int puff_ccitt32(const BYTE *s,int i) { return ccitt32(0XFFFFFFFF,s,i)^0XFFFFFFFF; } // default parameters
+#ifdef INFLATE_RFC1952
+// RFC1952 standard data decoder
+int puff_gzip(BYTE *t,int o,BYTE *s,int i) // decodes a RFC1952 standard GZIP object; >=0 output length, <0 ERROR!
+{
+	if (!t||!s||o<0||(i-=8)<12) return -1; // NULL or empty!
+	if (!equalsii(s,0X8B1F)||s[2]!=8) return -1; // unknown ID or CM!
+	int z=10; if (s[3]&4) z+=s[z+1]*256+s[z]+2; // FLG:FEXTRA
+	if (s[3]&8) while (z<i&&s[z++]) {} // FLG:FNAME
+	if (s[3]&16) while (z<i&&s[z++]) {} // FLG:FCOMMENT
+	if ((z+=s[3]&2)>=i||(o=puff_main(t,o,s+=z,i-=z))<0) return -1; // FLG:FHCRC // data error!
+	return mgetiiii(puff_data)==o&&mgetiiii(puff_data+4)==puff_ccitt32(t,o)?puff_data+=8,o:-1; // OK! // ISIZE or CRC32 error!
 }
 #endif
 
 // the DEFLATE method! ... or (once again) a quick-and-dirty implementation
 // based on the RFC1951 standard and reusing bits from INFLATE functions.
 
-#if defined(DEFLATE_RFC1950)&&!defined(DEFLATE_LEVEL)
-#define DEFLATE_LEVEL 6 // catch when ZLIB encoding is required but DEFLATE_LEVEL is missing!
+#if (defined(DEFLATE_RFC1950)||defined(DEFLATE_RFC1952))&&!defined(DEFLATE_LEVEL)
+#define DEFLATE_LEVEL 6 // catch when DEFLATE is required but DEFLATE_LEVEL is missing!
 #endif
 // = 0 never performs any compression at all
-// = 1 downgrades Lempel-Ziv into Run-Length
-// = 2..9 go from fast-n-weak to hard-n-slow
+// = 1..9 go from fast-n-weak to hard-n-slow
 
 #ifdef DEFLATE_LEVEL
-#if DEFLATE_LEVEL < 1
-#undef DEFLATE_NOSTORE // this tag is obviously incompatible with DEFLATE_LEVEL = 0
-#endif
-#ifndef DEFLATE_NOSTORE
 int huff_stored(BYTE *t,int o,BYTE *s,int i) // the storage part of DEFLATE; >=0 output length, <0 ERROR!
 {
 	BYTE *u=t; while (i>65535) // cuts source into 64K-1B non-final blocks
@@ -1150,7 +1236,6 @@ int huff_stored(BYTE *t,int o,BYTE *s,int i) // the storage part of DEFLATE; >=0
 	if ((o-=i+5)<0) return -1; // not enough room!
 	return *t++=1,*t++=i,*t++=i>>8,*t++=~i,*t++=~i>>8,memcpy(t,s,i),t-u+i; // final block!
 }
-#endif
 #if DEFLATE_LEVEL > 0 // if you must save DEFLATE data and perform compression on it!
 // Huffman-bitwise operations
 void huff_send(int n,int i) // sends the `n`-bit word `i` to target
@@ -1158,37 +1243,26 @@ void huff_send(int n,int i) // sends the `n`-bit word `i` to target
 	puff_word|=i<<puff_bits; puff_bits+=n; while (puff_bits>=8)
 		--puff_size,*puff_data++=puff_word,puff_word>>=8,puff_bits-=8;
 }
-void huff_encode(int *h,int i) { huff_send(h[i]&15,h[i]>>4); } // send value to Huffman target
+void huff_encode(int *h,int i) { i=h[i]; huff_send(i&255,i>>8); } // sends value to Huffman target
 void huff_append(const int h[2][32],int i,int z) { huff_send(h[1][i],z-h[0][i]); }
-#define huff_flush() huff_send(7,0) // flush the last bits in the bitstream!
+#define huff_flush() huff_send(7,0) // flushes the last bits in the bitstream!
 // notice that these function ignore target overflows; the caller must know that the pathological case (longest possible code) is 48 bits long
 void huff_tables(int *h,char *l,int n) // generates Huffman output table from canonical length table
 {
 	for (int j=1,k=0;j<16;++j,k<<=1) for (int i=0;i<n;++i)
 		if (l[i]==j) // do the bit counts match?
-			h[i]=((rbit16(k++)>>(16-j))<<4)+j; // store Huffman bits backwards
+			h[i]=((rbit16(k++)>>(16-j))<<8)+j; // store Huffman bits backwards
 }
-#if DEFLATE_LEVEL > 1
-#define DEFLATE_RANGE 32768 // we're better off sticking to 32K: DEFLATE_RETRY provides a better power/speed ratio
-//#define DEFLATE_RANGE (64<<DEFLATE_LEVEL) // this spans from 64<<2=256 to 64<<9=32768 but it's a generally bad idea
 #define DEFLATE_RETRY (1<<(DEFLATE_LEVEL*2-2)) // i.e. from 4 to 16K retries for LEVELS 2..8; LEVEL >= 9 means RETRY >= RANGE
+#ifndef DEFLATE_ALLOC
+#define DEFLATE_ALLOC 32768
 #endif
 int huff_static(BYTE *t,int o,BYTE *s,int i) // the static compression of DEFLATE; >=0 output length, <0 ERROR!
 {
 	puff_data=t,puff_size=o,puff_word=puff_bits=0; // beware, a bitstream isn't a bytestream!
-	#if DEFLATE_LEVEL > 1
-	#define HUFF_HASH_MAX 65536 // =256*256, 2-byte hash
-	#if SDL_BYTEORDER == SDL_BIG_ENDIAN // PPC, ARM...
-		#define HUFF_HASH(x) hh[(s[x]<<8)+s[x+1]] // big-endian hash function
-	#else // i86, x64... following Z80, MOS 6502, etc.
-		#define HUFF_HASH(x) hh[(s[x+1]<<8)+s[x]] // lil-endian hash function
-	#endif
-	int *hh=(int*)malloc(sizeof(int[HUFF_HASH_MAX+DEFLATE_RANGE])); if (!hh) return -1; // no memory!
-	int p=0,h=p; int *pp=hh+HUFF_HASH_MAX; // the table is too big to be local or static, but without it
-	for (int q=0;q<HUFF_HASH_MAX+DEFLATE_RANGE;++q) hh[q]=~DEFLATE_RANGE; // compression would be just too slow!
-	#else // run-length mode
-	int p=0; // ranges 1..4 = hash table is useless!
-	#endif
+	int *hh=(int*)session_h16lz; if (!hh) return -1; // no memory!
+	int p=0,h=p; int *pp=hh+H16MAX; // the table is too big to be local or static, but without it
+	for (int q=0;q<H16MAX+32768;++q) hh[q]=~32768; // compression would be just too slow!
 	// in static compression, default sizes are assumed, and no Huffman analysis is performed
 	huff_send(3,3); // tag the single block as final static ("3,5" would be final dynamic)
 	puff_default(); // default static Huffman tables
@@ -1197,55 +1271,32 @@ int huff_static(BYTE *t,int o,BYTE *s,int i) // the static compression of DEFLAT
 	while (p+3<=i) // the minimum match length is 3 bytes, a match can't begin any later!
 	{
 		if (6>puff_size) break; // target overflow!
-		#ifdef HUFF_HASH_MAX
-		while (h<p) pp[h%DEFLATE_RANGE]=HUFF_HASH(h),HUFF_HASH(h)=h,++h; // walk hash table
-		int len=0,off=p+258,x=p-DEFLATE_RANGE; if (off>i) off=i; const BYTE *y=s+off;
-		for (int q=HUFF_HASH(p),e=DEFLATE_RETRY;q>=x&&e;q=pp[q%DEFLATE_RANGE],(DEFLATE_RETRY<32768&&--e)) // search for matches
+		while (h<p) pp[h&32767]=hh[H16GET(s,h)],hh[H16GET(s,h)]=h,++h; // walk hash table
+		int len=0,off=p+258,x=p-32768; if (off>i) off=i; const BYTE *y=s+off;
+		for (int q=hh[H16GET(s,p)],e=DEFLATE_RETRY;q>=x&&e;q=pp[q&32767],(DEFLATE_RETRY<32768&&--e)) // search for matches
 		{
 			const BYTE *cmp1=s+q,*cmp2=s+p; if (cmp1[len]==cmp2[len]) // can this match be an improvement?
 				{ for (++cmp1,++cmp2;++cmp2<y&&*++cmp1==*cmp2;) {} int z=cmp2-s-p; if (len<z) if (len=z,off=p-q,cmp2>=y) break; }
 		}
 		if (len>=(off>32*64?4:3)) // was there a match? is it beneficial? (empirical 24*64<<<x<=32*64; one case favours 29, another 31, another one 32...)
-		#else // run-length!
-		int len=0,off=p+258,x; if (off>i) off=i; BYTE *y=s+off;
-		for (int q=0;q<4&&q<p;++q) // ranges 1..4 = four possible types of run-length encoding!
-		{
-			const BYTE *cmp1=s+p-q-1,*cmp2=s+p; while (*cmp1==*cmp2&&++cmp2<y) ++cmp1;
-			x=cmp2-s-p; if (len<x) if (len=x,off=q,cmp2==y) break;
-		}
-		if (len>=3) // was there a match at all?
-		#endif
 		{
 			p+=len; // greedy algorithm: grab the longest match and move on
 			if (len<11) x=len-2; else if (len>=258) x=29; else //for (x=log2u(len-3)*4;len<puff_len_k[0][x];--x) {}
 				x=log2u(len-3)*4-3,x+=(len-puff_len_k[0][x])>>puff_len_k[1][x];
 			huff_encode(puff_len_c, 256+x),huff_append(puff_len_k,x,len);
-			#ifdef HUFF_HASH_MAX
 			if (off<5) x=off-1; else //for (x=log2u(off-1)*2+1;off<puff_off_k[0][x];--x) {}
 				x=log2u(off-1)*2,x+=(off-puff_off_k[0][x])>>puff_off_k[1][x];
 			huff_encode(puff_off_c,     x),huff_append(puff_off_k,x,off);
-			#else // run-length!
-			huff_encode(puff_off_c,   off); // ranges 1..4 = huff_ocode[0..3] without suffix!
-			#endif
 		}
 		else
 			huff_encode(puff_len_c,s[p++]); // too short, store a literal
 	}
-	#if DEFLATE_LEVEL > 1
-	free(hh);
-	#undef HUFF_HASH_MAX
-	#undef HUFF_HASH
-	#endif
 	if ((i-p)*2+6>puff_size) return -1; // target overflow!
 	while (p<i) huff_encode(puff_len_c,s[p++]); // last bytes (if any) are always literals
 	huff_encode(puff_len_c,256); huff_flush(); return puff_data-t; // store end marker
 }
-#ifdef DEFLATE_NOSTORE
-#define huff_main huff_static // falling back is forbidden!
-#else
 int huff_main(BYTE *t,int o,BYTE *s,int i) // deflates source into target; >=0 output length, <0 ERROR!
 	{ int z=huff_static(t,o,s,i); return z<0?huff_stored(t,o,s,i):z; } // fall back to storage!
-#endif
 #else // if you must save DEFLATE data but don't want to perform any compression at all
 #define huff_main huff_stored
 #endif
@@ -1253,9 +1304,22 @@ int huff_main(BYTE *t,int o,BYTE *s,int i) // deflates source into target; >=0 o
 // RFC1950 standard data encoder
 int huff_zlib(BYTE *t,int o,BYTE *s,int i) // encodes a RFC1950 standard ZLIB object; >=0 output length, <0 ERROR!
 {
-	if (!t||!s||(o-=6)<=0||i<=0) return -1; // NULL or empty!
+	if (!t||!s||(o-=6)<=0||i<0) return -1; // NULL or empty!
 	*t++=120,*t++=218; // ZLIB prefix: compression type 8, default mode
-	return (o=huff_main(t,o,s,i))<0?-1:(mputmmmm(t+o,puff_adler32(s,i)),o+6);
+	return (o=huff_main(t,o,s,i))>=0?mputmmmm(t+o,puff_adler32(s,i)),o+6:-1; // OK! // ERROR!
+}
+#endif
+#ifdef DEFLATE_RFC1952
+// RFC1952 standard data encoder
+int huff_gzip(BYTE *t,int o,BYTE *s,int i) // encodes a RFC1952 standard GZIP object; >=0 output length, <0 ERROR!
+{
+	if (!t||!s||(o-=20)<0||i<0) return -1; // NULL or empty!
+	mputiiii(t,0X88B1F); // ID1(31)+ID2(139)+CM(8)+FLG(0)
+	memset(t+=4,0,6); // MTIME(0),XFL(0)+OS(0)
+	if ((o=huff_main(t+=6,o,s,i))<0) return -1; // ERROR!
+	mputiiii(t,puff_ccitt32(s,i)); // CRC32
+	mputiiii(t+=4,i); // ISIZE
+	return o+18; // OK
 }
 #endif
 #endif
@@ -1266,7 +1330,7 @@ int huff_zlib(BYTE *t,int o,BYTE *s,int i) // encodes a RFC1950 standard ZLIB ob
 
 BYTE *puff_src,*puff_tgt; int puff_srcl,puff_tgtl;
 FILE *puff_file=NULL;
-unsigned char puff_name[256],puff_type,puff_gzip;
+unsigned char puff_name[256],puff_type,puff_gz_q;
 unsigned int puff_skip,puff_next,puff_diff,puff_hash;//,puff_time
 void puff_close(void) // closes the current ZIP archive
 {
@@ -1292,10 +1356,10 @@ int puff_open(const char *s) // opens a new ZIP archive; 0 OK, !0 ERROR
 		char *t=strrchr(s,PATHCHAR); // build target name from source filename: skip the path,
 		strcpy(puff_name,t?t+1:s); // or copy the whole string if there's no path at all!
 		*strrchr(puff_name,'.')=0; // remove ".GZ" extension to get the real filename
-		return puff_next=puff_skip+(puff_type=8),puff_gzip=2,puff_diff=0;
+		return puff_next=puff_skip+(puff_type=8),puff_gz_q=2,puff_diff=0;
 	}
 	// find the central directory tree
-	fseek(puff_file,puff_gzip=0,SEEK_END);
+	fseek(puff_file,puff_gz_q=0,SEEK_END);
 	int l=ftell(puff_file),k=65536; if (k>l) k=l;
 	fseek(puff_file,l-k,SEEK_SET);
 	int i=fread1(session_scratch,k,puff_file)-22;
@@ -1315,10 +1379,10 @@ int puff_open(const char *s) // opens a new ZIP archive; 0 OK, !0 ERROR
 int puff_head(void) // reads a ZIP file header, if any; 0 OK, !0 ERROR
 {
 	if (!puff_file) return -1;
-	if (puff_gzip) return --puff_gzip!=1; // header is already pre-made; can be read once, but not twice
+	if (puff_gz_q) return --puff_gz_q!=1; // header is already pre-made; can be read once, but not twice
 	unsigned char h[46];
 	fseek(puff_file,puff_diff+puff_next,SEEK_SET);
-	if (fread(h,1,sizeof(h),puff_file)!=sizeof(h)||memcmp(h,"PK\001\002",4)||h[11]||!h[28]||h[29])//||(h[8]&8)
+	if (fread1(h,sizeof(h),puff_file)!=sizeof(h)||memcmp(h,"PK\001\002",4)||h[11]||!h[28]||h[29])//||(h[8]&8)
 		return puff_close(),1; // reject EOFs, unknown IDs, extended types and improperly sized filenames!
 	puff_type=h[10];
 	puff_srcl=mgetiiii(&h[20]);
@@ -1341,7 +1405,7 @@ int puff_body(int q) // loads (!0) or skips (0) a ZIP file body; 0 OK, !0 ERROR
 	{
 		if (puff_srcl<1||puff_tgtl<0)
 			return -1; // cannot get data from nothing! cannot write negative data!
-		if (puff_gzip)
+		if (puff_gz_q)
 			return fseek(puff_file,puff_diff+puff_skip,SEEK_SET),
 				puff_main(puff_tgt,puff_tgtl,puff_src,fread1(puff_src,puff_srcl,puff_file))!=puff_tgtl;
 		unsigned char h[30];
@@ -1357,14 +1421,6 @@ int puff_body(int q) // loads (!0) or skips (0) a ZIP file body; 0 OK, !0 ERROR
 		}
 	}
 	return q; // 0 skipped=OK, !0 unknown=ERROR
-}
-// compact CRC-32 algorithm by Karl Malbrain; the caller must manage the initial and final values, either 0 or 0XFFFFFFFF
-unsigned int puff_dohash(unsigned int k,const unsigned char *s,int l) // incremental function: run it on each data chunk
-{
-	static const unsigned int z[16]={0,0X1DB71064,0X3B6E20C8,0X26D930AC,0X76DC4190,0X6B6B51F4,0X4DB26158,0X5005713C,
-		0XEDB88320,0XF00F9344,0XD6D6A3E8,0XCB61B38C,0X9B64C2B0,0X86D3D2D4,0XA00AE278,0XBDBDF21C}; // precalc'd!
-	for (int i=0;i<l;++i) k^=s[i],k=(k>>4)^z[k&15],k=(k>>4)^z[k&15]; // walk bytes as pairs of nibbles
-	return k;
 }
 // ZIP-aware fopen()
 const char puff_pattern[]="*.gz;*.zip",PUFF_STR[]={PATHCHAR,PATHCHAR,PATHCHAR,0}; char puff_path[STRMAX]; // i.e. "TREE/PATH///ARCHIVE/FILE"
@@ -1401,7 +1457,7 @@ FILE *puff_fopen(char *s,const char *m) // mimics fopen(), so NULL on error, *FI
 				return puff_close(),NULL; // file failure!
 			puff_src=puff_tgt=NULL;
 			if (!(!puff_type||(puff_src=malloc(puff_srcl)))||!(puff_tgt=malloc(puff_tgtl))
-				||puff_body(1)||(puff_dohash(0XFFFFFFFF,puff_tgt,puff_tgtl)^puff_hash^0XFFFFFFFF))
+				||puff_body(1)||(puff_ccitt32(puff_tgt,puff_tgtl)^puff_hash))
 				fclose(puff_ffile),puff_ffile=NULL; // memory or data failure!
 			if (puff_ffile)
 				fwrite1(puff_tgt,puff_tgtl,puff_ffile),fseek(puff_ffile,0,SEEK_SET); // fopen() expects ftell()=0!
@@ -1483,10 +1539,16 @@ char *puff_session_newfile(char *x,char *y,char *z) // writing within ZIP archiv
 	return session_newfile(xx,y,z);
 }
 
+char *puff_makebasepath(char *s) // ZIP-aware extension of makebasepath(s)
+{
+	char *ss=strrstr(s,PUFF_STR); if (!ss) return makebasepath(s);
+	char rr[STRMAX]; strcpy(rr,s); rr[ss-s]=0;
+	char *tt=makebasepath(rr); return tt?strcat(tt,ss):NULL;
+}
+
 // on-screen symbols and messages ----------------------------------- //
 
-VIDEO_UNIT onscreen_ink0,onscreen_ink1; char onscreen_flag=1;
-#define onscreen_inks(q0,q1) (onscreen_ink0=q0,onscreen_ink1=q1)
+const VIDEO_UNIT onscreen_ink0=0xAA0000,onscreen_ink1=0x55FF55; char onscreen_flag=1;
 VIDEO_UNIT *onscreen_pxpy(int x,int y)
 {
 	if ((x*=8)<0) x+=VIDEO_OFFSET_X+VIDEO_PIXELS_X; else x+=VIDEO_OFFSET_X;
@@ -1532,6 +1594,42 @@ void onscreen_byte(int x,int y,int a,int q) // write two decimal digits
 	q=q?128+'0':'0';
 	onscreen_char(x,y,(a/10)+q); // beware, this will show 100 as ":0"
 	onscreen_char(x+1,y,(a%10)+q);
+}
+void session_status(void) // print common onscreen status elements
+{
+	#ifdef DEBUG
+	if (session_audio) // Win32 audio cycle / SDL2 audio queue
+		onscreen_hgauge(+1,-5,1<<(AUDIO_L2BUFFER-10),1,(audio_session/AUDIO_BYTESTEP)>>10);
+	#endif
+	if (!audio_disabled)
+	{
+		int d=AUDIO_PLAYBACK*AUDIO_CHANNELS<34000?1:3;// too narrow: AUDIO_PLAYBACK*AUDIO_CHANNELS<68000?3:5
+		int n=(AUDIO_PLAYBACK/VIDEO_PLAYBACK/d)&-8; // this ensures that the reference lines stay aligned!
+		VIDEO_UNIT *t=video_frame+(VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-64)*VIDEO_LENGTH_X+VIDEO_OFFSET_X+((VIDEO_PIXELS_X-n)>>1);
+		AUDIO_UNIT *s=audio_frame; if (frame_scanline<2)
+			for (;n;s+=d,++t,--n) // double-pixel audio scope
+			{
+				int i=15-(((*s-AUDIO_ZERO)>>(AUDIO_BITDEPTH-5))); if (n&6)
+				{
+					t[0]=t[VIDEO_LENGTH_X]=t[VIDEO_LENGTH_X*62]=t[VIDEO_LENGTH_X*63]=onscreen_ink0;
+					if (n&2) t[VIDEO_LENGTH_X*30]=t[VIDEO_LENGTH_X*31]=onscreen_ink0;
+				}
+				i*=VIDEO_LENGTH_X*2,t[i]=t[i+VIDEO_LENGTH_X]=onscreen_ink1;
+			}
+		else
+		{
+			if (frame_pos_y&1) t+=VIDEO_LENGTH_X; // the FRAME event already happened!
+			for (;n;s+=d,++t,--n) // single-pixel audio scope
+			{
+				int i=15-(((*s-AUDIO_ZERO)>>(AUDIO_BITDEPTH-5))); if (n&6)
+				{
+					t[0]=t[VIDEO_LENGTH_X*62]=onscreen_ink0;
+					if (n&2) t[VIDEO_LENGTH_X*30]=onscreen_ink0;
+				}
+				t[i*VIDEO_LENGTH_X*2]=onscreen_ink1;
+			}
+		}
+	}
 }
 
 // built-in general-purpose debugger -------------------------------- //
@@ -1627,9 +1725,10 @@ BYTE debug_buffer[DEBUG_LENGTH_X*DEBUG_LENGTH_Y+1];
 #define debug_posy() ((VIDEO_PIXELS_Y-DEBUG_LENGTH_Y*ONSCREEN_SIZE)/2)
 
 // these functions must be provided by the CPU code
-void debug_reset(void); // clean temporary breakpoints, do `debug_dirty=1` and update PC and SP coordinates
+void debug_reset(void); // clean temporary breakpoints and update PC and SP coordinates
 void debug_clean(void); // perform any cleanup or state change when the user requests to exit the debugger
 char *debug_list(void); // return a string of letters of registers that can be logged; first char must be SPACE!
+WORD debug_where(void); // returns the current PC of the CPU
 BYTE debug_peek(WORD); // receive a byte from reading address WORD
 BYTE debug_pook(int,WORD); // receive a byte from READING (!) or WRITING (0) address WORD
 void debug_poke(WORD,BYTE); // send the value BYTE to address WORD
@@ -1734,17 +1833,17 @@ void session_debug_print(char *t,int x,int y,int n) // print a line of `n` chara
 	}
 }
 
-void session_debug_show(int redo) // shows the current debugger
+void session_debug_show(void) // shows the current debugger
 {
-	static int videox,videoy,videoz; int i; BYTE b; char *t;
+	static int cpu_z,pos_x,pos_y,pos_z; int i; BYTE b; char *t; // pos_z is possibly overkill
 	memset(debug_buffer,0,sizeof(debug_buffer)); // clear buffer
-	if (redo||((videox^video_pos_x)|(videoy^video_pos_y)|(videoz^video_pos_z)))
+	if ((pos_x^video_pos_x)||(pos_y^video_pos_y)||(pos_z^video_pos_z)||(cpu_z^debug_where()))
 		debug_reset(); // reset debugger and background!
-	videoz=video_pos_z; session_backupvideo(debug_frame); // translucent debug text needs this :-/
-	if ((videoy=video_pos_y)>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-1)
+	cpu_z=debug_where(),pos_z=video_pos_z; session_backupvideo(debug_frame); // translucent debug text needs this :-/
+	if ((pos_y=video_pos_y)>=VIDEO_OFFSET_Y&&video_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-1)
 		for (int x=0,z=((video_pos_y&-2)-VIDEO_OFFSET_Y)*VIDEO_PIXELS_X;x<VIDEO_PIXELS_X;++x,++z)
 			debug_frame[z]=debug_frame[z+VIDEO_PIXELS_X]^=x&16?0XFF0000:0X00FFFF;
-	if ((videox=video_pos_x)>=VIDEO_OFFSET_X&&video_pos_x<VIDEO_OFFSET_X+VIDEO_PIXELS_X-1)
+	if ((pos_x=video_pos_x)>=VIDEO_OFFSET_X&&video_pos_x<VIDEO_OFFSET_X+VIDEO_PIXELS_X-1)
 		for (int y=0,z=(video_pos_x&-2)-VIDEO_OFFSET_X;y<VIDEO_PIXELS_Y;++y,z+=VIDEO_PIXELS_X)
 			debug_frame[z]=debug_frame[z+1]^=y&2?0XFF0000:0X00FFFF;
 	if (debug_grafx)
@@ -1940,7 +2039,7 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 		else if (k=='G') // GO TO..
 		{
 			sprintf(session_parmtr,(debug_grafx_m>0XFFFF)?"%05X":"%04X",debug_grafx_i&debug_grafx_m);
-			if (session_input("Go to")>0)
+			if (session_line("Go to")>0)
 				debug_grafx_i=session_debug_eval(session_parmtr)&debug_grafx_m;
 		}
 		else if (k=='I') // INPUT BYTES FROM FILE..
@@ -1959,7 +2058,7 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 		else if (k=='O') // OUTPUT BYTES INTO FILE..
 		{
 			char *s; FILE *f; int w=debug_grafx_i;
-			if (*session_parmtr=0,session_input("Output length")>=0)
+			if (*session_parmtr=0,session_line("Output length")>=0)
 				if ((i=session_debug_eval(session_parmtr))>0&&i<=(debug_grafx_m+1))
 					if (s=session_newfile(NULL,"*","Output file"))
 						if (f=fopen(s,"wb"))
@@ -2106,7 +2205,7 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 			if (debug_panel!=1)
 			{
 				sprintf(session_parmtr,"%04X",debug_panel>2?debug_panel3_w:debug_panel?debug_panel2_w:debug_panel0_w);
-				if (session_input("Go to")>0)
+				if (session_line("Go to")>0)
 					switch (i=session_debug_eval(session_parmtr),debug_panel)
 					{
 						case 0: debug_panel0_x=0; debug_panel0_w=(WORD)i; break;
@@ -2135,7 +2234,7 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 		case 'K': // CLOSE LOG
 			debug_close(); break;
 		case 'L': // LOG REGISTER.. (overwrites BREAKPOINT!)
-			if (*session_parmtr=0,sprintf(session_parmtr+1,"Log register%s",debug_list()),session_input(session_parmtr+1)==1)
+			if (*session_parmtr=0,sprintf(session_parmtr+1,"Log register%s",debug_list()),session_line(session_parmtr+1)==1)
 			{
 				char *t=strchr(debug_list(),ucase(session_parmtr[0])); if (t&&(i=t-debug_list()))
 					debug_point[debug_panel0_w]=(debug_point[debug_panel0_w]&~31)+i;
@@ -2147,7 +2246,7 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 			if (!(debug_panel&1))
 			{
 				char *s; FILE *f; WORD w=debug_panel?debug_panel2_w:debug_panel0_w;
-				if (*session_parmtr=0,session_input("Output length")>=0)
+				if (*session_parmtr=0,session_line("Output length")>=0)
 					if ((i=session_debug_eval(session_parmtr))>0&&i<=65536)
 						if (s=session_newfile(NULL,"*","Output file"))
 							if (f=fopen(s,"wb"))
@@ -2168,7 +2267,7 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 			break;
 		case 'P': // PRINT DISASSEMBLY/HEXDUMP INTO FILE..
 			if (!(debug_panel&1))
-				if (*session_parmtr=0,session_input(debug_panel?"Hexa dump length":"Disassembly length")>=0)
+				if (*session_parmtr=0,session_line(debug_panel?"Hexa dump length":"Disassembly length")>=0)
 				{
 					char *s,*t; FILE *f; WORD w=debug_panel?debug_panel2_w:debug_panel0_w,u;
 					if ((i=session_debug_eval(session_parmtr))>0&&i<=65536)
@@ -2206,7 +2305,7 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 			break;
 		case 'S': // SEARCH FOR STRING..
 			if (!(debug_panel&1))
-				if (strcpy(session_parmtr,debug_panel_string),session_input("Search string")>=0)
+				if (strcpy(session_parmtr,debug_panel_string),session_line("Search string")>=0)
 				{
 					strcpy(debug_panel_string,session_parmtr);
 					if (*debug_panel_string=='$') // HEXA STRING?
@@ -2224,9 +2323,9 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 			if (!(debug_panel&1))
 			{
 				WORD w=debug_panel?debug_panel2_w:debug_panel0_w; BYTE b;
-				if (*session_parmtr=0,session_input("Fill length")>=0)
+				if (*session_parmtr=0,session_line("Fill length")>=0)
 					if (i=(WORD)session_debug_eval(session_parmtr))
-						if (*session_parmtr=0,session_input("Filler byte")>=0)
+						if (*session_parmtr=0,session_line("Filler byte")>=0)
 						{
 							b=session_debug_eval(session_parmtr);
 							while (i--) debug_poke(w++,b);
@@ -2281,7 +2380,7 @@ int session_createwave(void) // create a wave file; 0 OK, !0 ERROR
 	mputiiii(&h[28],(AUDIO_PLAYBACK*AUDIO_BYTESTEP)>>session_wavedepth); // bytes per second
 	h[32]=AUDIO_BYTESTEP>>session_wavedepth; // bytes per sample
 	h[34]=AUDIO_BITDEPTH>>session_wavedepth;
-	fwrite(h,1,sizeof(h),session_wavefile);
+	fwrite1(h,sizeof(h),session_wavefile);
 	return session_wavesize=0;
 }
 void session_writewave(void)
@@ -2292,15 +2391,15 @@ void session_writewave(void)
 		{
 			#if SDL_BYTEORDER == SDL_BIG_ENDIAN && AUDIO_BITDEPTH > 8 // swap HI-LO bytes, WAVE files follow the LO-HI style
 			for (int i=0,j;i<AUDIO_LENGTH_Z*AUDIO_CHANNELS;++i) session_scratch[i*2]=j=audio_frame[i],session_scratch[i*2+1]=j>>8;
-			session_wavesize+=fwrite(session_scratch,1,(AUDIO_LENGTH_Z*AUDIO_BYTESTEP)>>session_wavedepth,session_wavefile);
+			session_wavesize+=fwrite1(session_scratch,(AUDIO_LENGTH_Z*AUDIO_BYTESTEP)>>session_wavedepth,session_wavefile);
 			#else
-			session_wavesize+=fwrite(audio_frame,1,(AUDIO_LENGTH_Z*AUDIO_BYTESTEP)>>session_wavedepth,session_wavefile);
+			session_wavesize+=fwrite1(audio_frame,(AUDIO_LENGTH_Z*AUDIO_BYTESTEP)>>session_wavedepth,session_wavefile);
 			#endif
 		}
 		else
 		{
 			for (int i=0;i<AUDIO_LENGTH_Z*AUDIO_CHANNELS;++i) session_scratch[i]=(audio_frame[i]>>8)+128;
-			session_wavesize+=fwrite(session_scratch,1,(AUDIO_LENGTH_Z*AUDIO_BYTESTEP)>>session_wavedepth,session_wavefile);
+			session_wavesize+=fwrite1(session_scratch,(AUDIO_LENGTH_Z*AUDIO_BYTESTEP)>>session_wavedepth,session_wavefile);
 		}
 	}
 }
@@ -2321,25 +2420,49 @@ int session_closewave(void) // close a wave file; 0 OK, !0 ERROR
 // warning: the following code assumes that VIDEO_UNIT is DWORD 0X00RRGGBB!
 
 unsigned int session_nextfilm=1,session_filmfreq,session_filmcount;
-BYTE session_filmflag,session_filmscale=1,session_filmtimer=1,session_filmalign; // format options
-#define SESSION_FILMVIDEO_LENGTH (VIDEO_PIXELS_X*VIDEO_PIXELS_Y) // copy of the previous video frame
-#define SESSION_FILMAUDIO_LENGTH (AUDIO_LENGTH_Z*AUDIO_CHANNELS*2) // copies of TWO audio frames
-VIDEO_UNIT *session_filmvideo=NULL; AUDIO_UNIT *session_filmaudio=NULL;
+BYTE session_filmscale=0,session_filmtimer=1,session_filmalign,session_filmhalf; // format options
+#define SESSION_FILMVIDEOS VIDEO_UNIT[VIDEO_PIXELS_X*VIDEO_PIXELS_Y] // copy of the previous video frame
+#define SESSION_FILMAUDIOS AUDIO_UNIT[AUDIO_LENGTH_Z*AUDIO_CHANNELS*2] // copies of TWO audio frames
+VIDEO_UNIT *session_filmvideo=NULL; // the screen size is constant, and it's too big for a static array anyway
+AUDIO_UNIT *session_filmaudio=NULL; // beware! AUDIO_LENGTH_Z is variable if the NTSC/PAL mode can change on runtime!
 BYTE *xrf_chunk=NULL; // this buffer contains one video frame and two audio frames AFTER encoding
-BYTE session_filmdirt; // used to detect skipped frames
+BYTE session_filmdirt,session_filmboth=0; // used to detect skipped frames and to downmix stereo to mono
 
-//#define xrf_encode1(n) (((a>>=1)||(*(b=t++)=0,a=128)),((n)&&(*b|=a,*t++=(n)&255))) // write "0" (zero) or "1nnnnnnnn" (nonzero)
-#define xrf_encode1(n) xrf_encode_n(&t,&a,&b,(n))
-void xrf_encode_n(BYTE **t,BYTE *a,BYTE **b,int n) // write "0" (zero) or "1nnnnnnnn" (nonzero)
+#if 1 // experimental support for additional encodings!!
+#define SESSION_FILMCHUNKS (sizeof(SESSION_FILMVIDEOS)+sizeof(SESSION_FILMAUDIOS)+8*8)
+void xrf_encodebool(BYTE **t,BYTE *a,BYTE **b,int n) // write "0" (zero) or "1" (nonzero)
+	{ { if (UNLIKELY(!(*a>>=1))) *(*b=(*t)++)=0,*a=128; } if (n) **b|=*a; }
+void xrf_encodegamma(BYTE **t,BYTE *a,BYTE **b,int n) // kind-of Elias Gamma code: [1a[1b[1c[..]]]]0 = 1[a[b[c[..]]]]
+	{ { for (int k=log2u(n);k;) --k,xrf_encodebool(t,a,b,1),xrf_encodebool(t,a,b,(n>>k)&1); } xrf_encodebool(t,a,b,0); }
+int xrf_encode(BYTE *t,BYTE *s,int l,int x) // the second terribly hacky encoder!
 {
-	if (!(*a>>=1)) *(*b=(*t)++)=0,*a=128;
-	if (n) **b|=*a,*(*t)++=n; // this will handle 256 as nonzero: 100000000
+	BYTE *u=t,a=0,*b,r=128,q=x<0?(x=-x,128):0; // x<0 = perform XOR 128 on bytes, used when turning 16s audio into 8u
+	int k=0; while (l)
+	{
+		int n=l; BYTE c=*s; do s+=x; while (--l&&c==*s);
+		if (c^=q,(n-=l)>1) // 00: fetch new byte; 01: reuse old byte; 10: new byte 0; 11: new byte 255
+		{
+			xrf_encodegamma(&t,&a,&b,k+1); for (BYTE *v=s-(k+n)*x;k;--k) *t++=*v^q,v+=x; // flush literals
+			int z=c>0&&c<255; xrf_encodebool(&t,&a,&b,!z); xrf_encodegamma(&t,&a,&b,n-1); // align both gammas: [1x..]0a[1y..]0b
+			if (!z) xrf_encodebool(&t,&a,&b,c); else if (r==c) xrf_encodebool(&t,&a,&b,1); else xrf_encodebool(&t,&a,&b,0),*t++=r=c;
+		}
+		else k+=n; // add the current run (in practice, always one byte) to the literals and keep going
+	}
+	xrf_encodegamma(&t,&a,&b,k+1); for (BYTE *v=s-k*x;k;--k) *t++=*v^q,v+=x; // flush final literals
+	{ for (k=3;k;--k) xrf_encodebool(&t,&a,&b,0); } return *t++=0,t-u; // end marker: long zero!
+}
+#else
+#define SESSION_FILMCHUNKS ((sizeof(SESSION_FILMVIDEOS)+sizeof(SESSION_FILMAUDIOS))*19/16+8*4)
+void xrf_encodebyte(BYTE **t,BYTE *a,BYTE **b,int n) // write "0" (zero) or "1nnnnnnnn" (nonzero)
+{
+	if (UNLIKELY(!(*a>>=1))) *(*b=(*t)++)=0,*a=128; // allocate new byte
+	if (n) **b|=*a,*(*t)++=n; // this will handle 256 as nonzero: 100000000 (long zero)
 }
 int xrf_encode(BYTE *t,BYTE *s,int l,int x) // terribly hacky encoder based on an 8-bit RLE and an interleaved pseudo Huffman filter!
 {
-	if (l<=0) return *t++=128,*t++=0,2; // quick END MARKER!
-	BYTE *u=t,a=0,*b,q=0; if (x<0) x=-x,q=128; // x<0 = perform XOR 128 on bytes, used when turning 16s audio into 8u
-	do
+	#define xrf_encode1(n) xrf_encodebyte(&t,&a,&b,(n)) // write "0" (zero) or "1nnnnnnnn" (nonzero)
+	BYTE *u=t,a=0,*b,q=x<0?x=-x,128:0; // x<0 = perform XOR 128 on bytes, used when turning 16s audio into 8u
+	while (l)
 	{
 		int n=l; BYTE c=*s; do s+=x; while (--l&&c==*s); n-=l; c^=q;
 		while (n>66047) // i.e. 512+65535; this happens when the screen is blank, or when nothing moves
@@ -2349,54 +2472,73 @@ int xrf_encode(BYTE *t,BYTE *s,int l,int x) // terribly hacky encoder based on a
 			xrf_encode1(c); if (n>=256)
 			{
 				if (n>=512)
-					xrf_encode1(255),n-=512,xrf_encode1(n>>8); // 512..66047 -> 0XFF 0X0000..0XFFFF (0..65535)
+					xrf_encode1(255),n-=512,xrf_encode1(n>>8); // 512..66047 -> $0FF,$0..$0FF,$0..$0FF
 				else
-					xrf_encode1(254); // 256..511 -> 0XFE 0X00..0XFF (0..255)
+					xrf_encode1(254); // 256..511 -> $0FE,$0..$0FF
 				n&=255;
 			}
-			else
-				n-=2; // 2..255 -> 0X00..0XFD
+			else n-=2; // 2..255 -> $0..$0FD; notice that none of the length fields uses $100 :-(
 			xrf_encode1(n);
 		}
 	}
-	while (l);
 	return xrf_encode1(256),t-u; // END MARKER is the special case "100000000"!
+	#undef xrf_encode1
 }
+#endif
 
 int session_createfilm(void) // start recording video and audio; 0 OK, !0 ERROR
 {
 	if (session_filmfile) return 1; // file already open!
-	if (!session_filmvideo&&!(session_filmvideo=malloc(sizeof(VIDEO_UNIT[SESSION_FILMVIDEO_LENGTH]))))
+	if (!session_filmvideo&&!(session_filmvideo=malloc(sizeof(SESSION_FILMVIDEOS))))
 		return 1; // cannot allocate buffer!
-	if (!session_filmaudio&&!(session_filmaudio=malloc(sizeof(AUDIO_UNIT[SESSION_FILMAUDIO_LENGTH]))))
+	if (!session_filmaudio&&!(session_filmaudio=malloc(sizeof(SESSION_FILMAUDIOS))))
 		return 1; // cannot allocate buffer!
-	if (!xrf_chunk&&!(xrf_chunk=malloc((sizeof(VIDEO_UNIT[SESSION_FILMVIDEO_LENGTH])+sizeof(AUDIO_UNIT[SESSION_FILMAUDIO_LENGTH]))*9/8+4*8))) // maximum pathological length!
+	if (!xrf_chunk&&!(xrf_chunk=malloc(SESSION_FILMCHUNKS))) // maximum pathological length!
 		return 1; // cannot allocate memory!
 	if (!(session_nextfilm=session_savenext("%s%08u.xrf",session_nextfilm))) // "Xor-Rle Film"
 		return 1; // too many files!
 	if (!(session_filmfile=fopen(session_parmtr,"wb")))
 		return 1; // cannot create file!
+	#if 1 // experimental support for additional encodings!!
+	fwrite1("XRF2!\015\012\032",8,session_filmfile);
+	#else
 	fwrite1("XRF1!\015\012\032",8,session_filmfile);
+	#endif
 	fputmm(VIDEO_PIXELS_X>>session_filmscale,session_filmfile);
 	fputmm(VIDEO_PIXELS_Y>>session_filmscale,session_filmfile);
 	fputmm(session_filmfreq=audio_disabled?0:AUDIO_LENGTH_Z<<session_filmtimer,session_filmfile);
 	fputc(VIDEO_PLAYBACK>>session_filmtimer,session_filmfile);
-	fputc(session_filmflag=((AUDIO_BITDEPTH>>session_wavedepth)>8?1:0)+(AUDIO_CHANNELS>1?2:0),session_filmfile); // +16BITS(1)+STEREO(2)
+	session_filmboth=(AUDIO_CHANNELS>1)&&audio_mixmode;
+	session_filmhalf=session_filmscale?0:video_scanline?0:1;
+	fputc(((AUDIO_BITDEPTH>>session_wavedepth)>8?1:0)+(session_filmboth?2:0)+(session_filmhalf?4:0),session_filmfile);
 	kputmmmm(0,session_filmfile); // frame count, will be filled later
 	session_filmalign=video_pos_y; // catch scanline mode, if any
-	return memset(session_filmvideo,0,sizeof(VIDEO_UNIT[SESSION_FILMVIDEO_LENGTH])),
-		memset(session_filmaudio,0,sizeof(AUDIO_UNIT[SESSION_FILMAUDIO_LENGTH])),
+	return memset(session_filmvideo,0,sizeof(SESSION_FILMVIDEOS)),
+		memset(session_filmaudio,0,sizeof(SESSION_FILMAUDIOS)),
 		session_filmdirt=session_filmcount=0;
 }
 void session_writefilm(void) // record one frame of video and audio
 {
 	if (!session_filmfile) return; // file not open!
 	// ignore first frame if the video is interleaved and we're on the wrong half frame
-	if (!session_filmcount&&video_interlaced&&!video_interlaces) return;
+	if (!session_filmcount&&video_interlaced&&video_interlaces) return;
 	BYTE *z=xrf_chunk; if (!video_framecount) session_filmdirt=1; // frameskipping?
 	if (!(++session_filmcount&session_filmtimer))
 	{
-		if (!session_filmdirt) // skipped frame?
+		VIDEO_UNIT *s,*t; // notice that this backup doesn't include secondary scanlines
+		int q=0,n=0; if (session_filmdirt) // not a skipped frame?
+		{
+			if (t=session_filmvideo,session_filmscale)
+				for (int i=VIDEO_OFFSET_Y+(session_filmalign&1);s=session_getscanline(i),i<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;i+=2)
+					for (int j=0;j<VIDEO_PIXELS_X/2;++j)
+						q|=*t++^=*s++,++s; // bitwise delta against last frame
+			else // no scaling, copy
+				for (int i=VIDEO_OFFSET_Y;s=session_getscanline(i),i<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;i+=session_filmhalf+1)
+					for (int j=0;j<VIDEO_PIXELS_X;++j)
+						q|=*t++^=*s++; // bitwise delta against last frame
+			n=t-session_filmvideo;
+		}
+		if (!q) // identical frame?
 		{
 			z+=xrf_encode(z,NULL,0,0); // B
 			z+=xrf_encode(z,NULL,0,0); // G
@@ -2405,85 +2547,91 @@ void session_writefilm(void) // record one frame of video and audio
 		}
 		else
 		{
-			session_filmdirt=0; // to avoid encoding multiple times a frameskipped image
-			VIDEO_UNIT *s,*t=session_filmvideo; // notice that this backup doesn't include secondary scanlines
-			if (session_filmscale)
-				for (int i=VIDEO_OFFSET_Y+(session_filmalign&1);s=session_getscanline(i),i<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;i+=2)
-					for (int j=0;j<VIDEO_PIXELS_X/2;++j)
-						*t++^=*s++,++s; // bitwise delta against last frame
-			else
-				for (int i=VIDEO_OFFSET_Y;s=session_getscanline(i),i<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;++i)
-					for (int j=0;j<VIDEO_PIXELS_X;++j)
-						*t++^=*s++; // bitwise delta against last frame
 			// the compression relies on perfectly standard arrays, i.e. the stride of an array of DWORDs is always 4 bytes wide;
 			// are there any exotic platforms where the byte length of WORD/Uint16 and DWORD/Uint32 isn't strictly enforced?
 			#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-			z+=xrf_encode(z,&((BYTE*)session_filmvideo)[3],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // B
-			z+=xrf_encode(z,&((BYTE*)session_filmvideo)[2],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // G
-			z+=xrf_encode(z,&((BYTE*)session_filmvideo)[1],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // R
-			//z+=xrf_encode(z,&((BYTE*)session_filmvideo)[0],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // A!
+			z+=xrf_encode(z,&((BYTE*)session_filmvideo)[3],n,4); // B
+			z+=xrf_encode(z,&((BYTE*)session_filmvideo)[2],n,4); // G
+			z+=xrf_encode(z,&((BYTE*)session_filmvideo)[1],n,4); // R
+			//z+=xrf_encode(z,&((BYTE*)session_filmvideo)[0],n,4); // A!
 			#else
-			z+=xrf_encode(z,&((BYTE*)session_filmvideo)[0],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // B
-			z+=xrf_encode(z,&((BYTE*)session_filmvideo)[1],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // G
-			z+=xrf_encode(z,&((BYTE*)session_filmvideo)[2],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // R
-			//z+=xrf_encode(z,&((BYTE*)session_filmvideo)[3],(VIDEO_PIXELS_X*VIDEO_PIXELS_Y)>>(2*session_filmscale),4); // A!
+			z+=xrf_encode(z,&((BYTE*)session_filmvideo)[0],n,4); // B
+			z+=xrf_encode(z,&((BYTE*)session_filmvideo)[1],n,4); // G
+			z+=xrf_encode(z,&((BYTE*)session_filmvideo)[2],n,4); // R
+			//z+=xrf_encode(z,&((BYTE*)session_filmvideo)[3],n,4); // A!
 			#endif
-			t=session_filmvideo;
-			if (session_filmscale)
+		}
+		if (session_filmdirt) // remember to reverse the bitmaps!
+		{
+			session_filmdirt=0; // to avoid encoding multiple times a frameskipped image
+			if (t=session_filmvideo,session_filmscale)
 				for (int i=VIDEO_OFFSET_Y+(session_filmalign&1);s=session_getscanline(i),i<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;i+=2)
 					for (int j=0;j<VIDEO_PIXELS_X/2;++j)
 						*t++=*s++,++s; // keep this frame for later
 			else // no scaling, copy
-				for (int i=VIDEO_OFFSET_Y;i<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;++i)
+				for (int i=VIDEO_OFFSET_Y;i<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;i+=session_filmhalf+1)
 					MEMNCPY(t,session_getscanline(i),VIDEO_PIXELS_X),t+=VIDEO_PIXELS_X;
 		}
 		if (session_filmfreq) // audio?
 		{
-			BYTE *s=(BYTE*)audio_frame; int l=AUDIO_LENGTH_Z;
+			BYTE *u=(BYTE*)audio_frame; int l=AUDIO_LENGTH_Z;
 			if (session_filmtimer)
-				s=(BYTE*)session_filmaudio,l*=2,memcpy(&session_filmaudio[AUDIO_LENGTH_Z*AUDIO_CHANNELS],audio_frame,AUDIO_LENGTH_Z*AUDIO_BYTESTEP); // glue both blocks!
+				u=(BYTE*)session_filmaudio,l*=2,memcpy(&session_filmaudio[AUDIO_LENGTH_Z*AUDIO_CHANNELS],audio_frame,AUDIO_LENGTH_Z*AUDIO_BYTESTEP); // glue both blocks!
 			#if AUDIO_CHANNELS > 1
 			#if AUDIO_BITDEPTH > 8
 				#if SDL_BYTEORDER == SDL_BIG_ENDIAN
 				if (session_wavedepth)
-					z+=xrf_encode(z,&s[0],l,-4), // L
-					z+=xrf_encode(z,&s[2],l,-4); // R
+				{
+					z+=xrf_encode(z,&u[0],l,-4); // L
+					if (session_filmboth)
+						z+=xrf_encode(z,&u[2],l,-4); // R
+				}
 				else
-					z+=xrf_encode(z,&s[1],l,4), // l
-					z+=xrf_encode(z,&s[0],l,4), // L
-					z+=xrf_encode(z,&s[3],l,4), // r
-					z+=xrf_encode(z,&s[2],l,4); // R
+				{
+					z+=xrf_encode(z,&u[1],l,4), // l
+					z+=xrf_encode(z,&u[0],l,4); // L
+					if (session_filmboth)
+						z+=xrf_encode(z,&u[3],l,4), // r
+						z+=xrf_encode(z,&u[2],l,4); // R
+				}
 				#else
 				if (session_wavedepth)
-					z+=xrf_encode(z,&s[1],l,-4), // L
-					z+=xrf_encode(z,&s[3],l,-4); // R
+				{
+					z+=xrf_encode(z,&u[1],l,-4); // L
+					if (session_filmboth)
+						z+=xrf_encode(z,&u[3],l,-4); // R
+				}
 				else
-					z+=xrf_encode(z,&s[0],l,4), // l
-					z+=xrf_encode(z,&s[1],l,4), // L
-					z+=xrf_encode(z,&s[2],l,4), // r
-					z+=xrf_encode(z,&s[3],l,4); // R
+				{
+					z+=xrf_encode(z,&u[0],l,4), // l
+					z+=xrf_encode(z,&u[1],l,4); // L
+					if (session_filmboth)
+						z+=xrf_encode(z,&u[2],l,4), // r
+						z+=xrf_encode(z,&u[3],l,4); // R
+				}
 				#endif
 			#else
-			z+=xrf_encode(z,&s[0],l,2), // L
-			z+=xrf_encode(z,&s[1],l,2); // R
+			z+=xrf_encode(z,&u[0],l,2); // L
+			if (session_filmboth)
+				z+=xrf_encode(z,&u[1],l,2); // R
 			#endif
 			#else
 			#if AUDIO_BITDEPTH > 8
 				#if SDL_BYTEORDER == SDL_BIG_ENDIAN
 				if (session_wavedepth)
-					z+=xrf_encode(z,&s[0],l,-2); // M
+					z+=xrf_encode(z,&u[0],l,-2); // M
 				else
-					z+=xrf_encode(z,&s[1],l,2), // m
-					z+=xrf_encode(z,&s[0],l,2); // M
+					z+=xrf_encode(z,&u[1],l,2), // m
+					z+=xrf_encode(z,&u[0],l,2); // M
 				#else
 				if (session_wavedepth)
-					z+=xrf_encode(z,&s[1],l,-2); // M
+					z+=xrf_encode(z,&u[1],l,-2); // M
 				else
-					z+=xrf_encode(z,&s[0],l,2), // m
-					z+=xrf_encode(z,&s[1],l,2); // M
+					z+=xrf_encode(z,&u[0],l,2), // m
+					z+=xrf_encode(z,&u[1],l,2); // M
 				#endif
 			#else
-			z+=xrf_encode(z,&s[0],l,1); // M
+			z+=xrf_encode(z,&u[0],l,1); // M
 			#endif
 			#endif
 		}
@@ -2496,9 +2644,9 @@ void session_writefilm(void) // record one frame of video and audio
 }
 int session_closefilm(void) // stop recording video and audio; 0 OK, !0 ERROR
 {
-	if (xrf_chunk) free(xrf_chunk),xrf_chunk=NULL;
 	if (session_filmvideo) free(session_filmvideo),session_filmvideo=NULL;
 	if (session_filmaudio) free(session_filmaudio),session_filmaudio=NULL;
+	if (xrf_chunk) free(xrf_chunk),xrf_chunk=NULL;
 	if (!session_filmfile) return 1; // file not open!
 	fseek(session_filmfile,16,SEEK_SET);
 	fputmmmm(session_filmcount>>session_filmtimer,session_filmfile); // number of frames
@@ -2510,24 +2658,146 @@ int session_closefilm(void) // stop recording video and audio; 0 OK, !0 ERROR
 
 unsigned int session_nextbitmap=1;
 
-// Optional QOI 24-bit output, based on three operations that return the amount of bytes they stored in session_qoi3_temp[]
-// 1.- session_qoi3_init(x,y) prepares the encoding procedure and generates the appropriate QOI file header;
-// 2.- session_qoi3_main(s,l,d) encodes `l` pixels in steps of `d` from VIDEO_UNIT* `s` into QOI data;
-// 3.- session_qoi3_exit() flushes any pending data and generates the footer of the QOI file.
+#ifdef PNG_OUTPUT_MODE // where its value is 0..4 (filter: none, left, up, both, paeth) or >4 (adaptive)
+
+// Optional PNG 24-bit output, once again based on three steps: init, main and exit
+// However, because DEFLATE must see the whole data at once, we have to do things differently
+
+#if PNG_OUTPUT_MODE > 1
+#define session_png3_prev session_scratch // more than enough to keep a whole scanline in RGB
+#endif
+BYTE *session_png3_mini=NULL,*session_scrn_temp=NULL; int session_png3_hash,session_png3_size;
+int session_scrn_init(int x,int y) // returns -1 on error, 0 on OK (we only save anything at the end of the operation)
+{
+	if (session_png3_mini) free(session_png3_mini),session_png3_mini=NULL;
+	if (session_scrn_temp) free(session_scrn_temp);
+	int i=(x*3+1)*y; // IDAT = one byte for each line
+	if (!(session_scrn_temp=malloc((session_png3_size=i+(i>>11))+64))) return -1;
+	memcpy(session_scrn_temp,"\211PNG\015\012\032\012\000\000\000\015IHDR\000\000\000\000\000\000\000\000\010\002\000\000\000\000\000\000\000\000\000\000\000IDAT",41);
+	mputmmmm(session_scrn_temp+16,x);
+	mputmmmm(session_scrn_temp+20,y);
+	session_png3_hash=0;
+	#if PNG_OUTPUT_MODE > 1
+	#if PNG_OUTPUT_MODE > 4
+	cprintf("PNG:");
+	#endif
+	memset(session_png3_prev,0,x*3+1);
+	#endif
+	return !(session_png3_mini=malloc(i))?free(session_scrn_temp),session_png3_mini=NULL,-1:0;
+}
+int session_scrn_line(VIDEO_UNIT *s,int l,int d) // where `d` is 1 to encode all pixels, 2 to encode one half
+{
+	if (!session_png3_mini) return -1;
+	BYTE *t=session_png3_mini+session_png3_hash; *t++=PNG_OUTPUT_MODE>0&&PNG_OUTPUT_MODE<5?PNG_OUTPUT_MODE:0; // scanline type
+	#if PNG_OUTPUT_MODE > 0
+	BYTE *u=t; // we need this later if we're filtering the image
+	#endif
+	while (l>0) { VIDEO_UNIT p=*s; s+=d,l-=d,*t++=p>>16,*t++=p>>8,*t++=p; } // remember, VIDEO_UNIT is 0X00RRGGBB
+	session_png3_hash=t-session_png3_mini;
+	#if PNG_OUTPUT_MODE > 0
+	#if PNG_OUTPUT_MODE > 4 // the adaptive mode performs mock filters of every type, then chooses the one producing the most zeros and near-zeros
+	int m=0,g=0; l=t-u;
+	do g+=abs((signed char)u[--l]); while (l);
+	d=0,l=t-u; // case 1: LEFT
+	do --l,d+=abs((signed char)(u[l]-u[l-3])); while (l>3);
+	do --l,d+=abs((signed char)u[l]); while (l);
+	if (g>d) g=d,m=1;
+	d=0,l=t-u; // case 2: UP
+	do --l,d+=abs((signed char)(u[l]-session_png3_prev[l])); while (l);
+	if (g>d) g=d,m=2;
+	d=0,l=t-u; // case 3: BOTH
+	do --l,d+=abs((signed char)(u[l]-(u[l-3]+session_png3_prev[l])>>1)); while (l>3);
+	do --l,d+=abs((signed char)(u[l]-(session_png3_prev[l]>>1))); while (l);
+	if (g>d) g=d,m=3;
+	d=0,l=t-u; // case 4: PAETH
+	do
+	{
+		--l; BYTE a=u[l-3],b=session_png3_prev[l],c=session_png3_prev[l-3];
+		int p0=a+b-c,pa=abs(p0-a),pb=abs(p0-b),pc=abs(p0-c);
+		if (pa<=pb&&pa<=pc) p0=a; else if (pb<=pc) p0=b; else p0=c;
+		d+=abs((signed char)(u[l]-p0));
+	}
+	while (l>3);
+	do --l,d+=abs((signed char)(u[l]-session_png3_prev[l])); while (l); // PAETH ends like UP!
+	if (g>d) g=d,m=4;
+	u[-1]=m; cprintf("%c",48+m); // store the chosen mode; that being said, these emulators often do their best job with case 0, NONE :-/
+	#else
+	const int m=PNG_OUTPUT_MODE;
+	#endif
+	l=t-u; switch (m)
+	{
+		#if PNG_OUTPUT_MODE > 1
+		case 0: // NONE
+			memcpy(session_png3_prev,u,l);
+			break;
+		case 1: // LEFT
+			do d=u[--l],u[l]=d-u[l-3],session_png3_prev[l]=d; while (l>3);
+			do d=u[--l],session_png3_prev[l]=d; while (l); // keep the prev. bytes!
+			break;
+		case 4: // PAETH
+			do
+			{
+				d=u[--l]; BYTE a=u[l-3],b=session_png3_prev[l],c=session_png3_prev[l-3];
+				int p0=a+b-c,pa=abs(p0-a),pb=abs(p0-b),pc=abs(p0-c);
+				if (pa<=pb&&pa<=pc) p0=a; else if (pb<=pc) p0=b; else p0=c;
+				u[l]=d-p0,session_png3_prev[l]=d;
+			}
+			while (l>3);
+			// no `break`! PAETH ends like UP!
+		case 2: // UP
+			do d=u[--l],u[l]=d-session_png3_prev[l],session_png3_prev[l]=d; while (l);
+			break;
+		case 3: // BOTH
+			do d=u[--l],u[l]=d-((u[l-3]+session_png3_prev[l])>>1),session_png3_prev[l]=d; while (l>3);
+			do d=u[--l],u[l]=d-(session_png3_prev[l]>>1),session_png3_prev[l]=d; while (l);
+			break;
+		#else
+		case 1: // LEFT
+			do --l,u[l]-=u[l-3]; while (l>3); // no need to keep the prev. bytes
+			break;
+		#endif
+	}
+	#endif
+	return 0; // ditto!
+}
+int session_scrn_exit(void)
+{
+	if (!session_scrn_temp||!session_png3_mini) return -1;
+	#if PNG_OUTPUT_MODE > 4
+	cprintf(".\n");
+	#endif
+	int i=huff_zlib(session_scrn_temp+41,session_png3_size,session_png3_mini,session_png3_hash); if (i<0) return -1; // error!
+	mputmmmm(session_scrn_temp+29,puff_ccitt32(session_scrn_temp+12,17));
+	mputmmmm(session_scrn_temp+33,i);
+	mputmmmm(session_scrn_temp+41+i,puff_ccitt32(session_scrn_temp+37,i+4));
+	mputmmmm(session_scrn_temp+41+i+4,0);
+	mputmmmm(session_scrn_temp+41+i+8,0X49454E44); // "IEND"
+	mputmmmm(session_scrn_temp+41+i+12,0XAE426082); // crc32 of IEND
+	return 41+i+16;
+}
+#define SESSION_SCRN_EXT "PNG"
+#define session_scrn_ext "png"
+
+#else
+
+// Optional QOI 24-bit output, based on three operations that return the amount of bytes they stored in session_scrn_temp[]
+// 1.- session_scrn_init(x,y) prepares the encoding procedure and generates the appropriate QOI file header;
+// 2.- session_scrn_line(s,l,d) encodes `l` pixels in steps of `d` from VIDEO_UNIT* `s` into QOI data;
+// 3.- session_scrn_exit() flushes any pending data and generates the footer of the QOI file.
 // For the interested, https://qoiformat.org/ (format specification) + https://github.com/phoboslab/qoi (reference codec)
-#define session_qoi3_temp (session_scratch+VIDEO_LENGTH_X*sizeof(VIDEO_UNIT)) // this should never overflow :-X
+#define session_scrn_temp session_scratch // more than enough for a worst-case scanline in RGB
 #define session_qoi3_calc(x) ((((x)>>16)*3+((x)>>8)*5+(x)*7+53)&63) // Alpha is always 255, so (255*11)&63= 53
 VIDEO_UNIT session_qoi3_hash[64],session_qoi3_prev; char session_qoi3_size;
-int session_qoi3_init(int x,int y)
+int session_scrn_init(int x,int y)
 {
-	BYTE *t=session_qoi3_temp;
+	BYTE *t=session_scrn_temp;
 	memset(session_qoi3_hash,-1,sizeof(session_qoi3_hash)),session_qoi3_prev=session_qoi3_size=0; // session_qoi3_hash[] must be invalid!
 	mputmmmm(t,0X716F6966),mputmmmm((t+4),x),mputmmmm((t+8),y),mputmm((t+12),0X0300),t+=14; // header: "qoif", width, height, RGB minus A
-	return t-session_qoi3_temp;
+	return t-session_scrn_temp;
 }
-int session_qoi3_main(VIDEO_UNIT *s,int l,int d) // where `d` is 1 to encode all pixels, 2 to encode one half
+int session_scrn_line(VIDEO_UNIT *s,int l,int d) // where `d` is 1 to encode all pixels, 2 to encode one half
 {
-	BYTE *t=session_qoi3_temp;
+	BYTE *t=session_scrn_temp;
 	VIDEO_UNIT p; while (l>0)
 	{
 		p=*s; s+=d,l-=d; // remember, VIDEO_UNIT is 0X00RRGGBB
@@ -2539,28 +2809,33 @@ int session_qoi3_main(VIDEO_UNIT *s,int l,int d) // where `d` is 1 to encode all
 		else if ((g+=32-2)<64&&(r+=8-2+32-g)<16&&(b+=8-2+32-g)<16) { *t++=128+g,*t++=(r<<4)+b; } // two bytes: QOI_OP_LUMA
 		else { *t++=254,*t++=p>>16,*t++=p>>8,*t++=p; } // three bytes: QOI_OP_RGB; we don't store Alpha, so no QOI_OP_RGBA
 	}
-	return t-session_qoi3_temp;
+	return t-session_scrn_temp;
 }
-int session_qoi3_exit(void)
+int session_scrn_exit(void)
 {
-	BYTE *t=session_qoi3_temp;
+	BYTE *t=session_scrn_temp;
 	{ if (session_qoi3_size) *t++=191+session_qoi3_size; } mputmmmm(t,0),mputmmmm(t+4,1),t+=8; // flush QOI_OP_RUN, put footer
-	return t-session_qoi3_temp;
+	return t-session_scrn_temp;
 }
+#define SESSION_SCRN_EXT "QOI"
+#define session_scrn_ext "qoi"
 
-char session_qoi3_flag=0;
-INLINE int session_savebitmap(void) // save a RGB888 BMP/QOI file; 0 OK, !0 ERROR
+#endif
+
+char session_scrn_flag=0;
+INLINE int session_savebitmap(void) // save a RGB888 BMP/QOI/PNG file; 0 OK, !0 ERROR
 {
-	if (!(session_nextbitmap=session_savenext(session_qoi3_flag?"%s%08u.qoi":"%s%08u.bmp",session_nextbitmap)))
+	if (!(session_nextbitmap=session_savenext(session_scrn_flag?"%s%08u." session_scrn_ext:"%s%08u.bmp",session_nextbitmap)))
 		return 1; // too many files!
 	FILE *f; if (!(f=fopen(session_parmtr,"wb")))
 		return 1; // cannot create file!
-	int i; if (session_qoi3_flag)
+	int i; if (session_scrn_flag)
 	{
-		fwrite(session_qoi3_temp,1,session_qoi3_init(VIDEO_PIXELS_X>>session_filmscale,VIDEO_PIXELS_Y>>session_filmscale),f);
+		if ((i=session_scrn_init(VIDEO_PIXELS_X>>session_filmscale,VIDEO_PIXELS_Y>>session_filmscale))>=0)
+		fwrite1(session_scrn_temp,i,f);
 		for (i=VIDEO_OFFSET_Y;i<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y;i+=session_filmscale+1)
-			fwrite(session_qoi3_temp,1,session_qoi3_main(session_getscanline(i),VIDEO_PIXELS_X,session_filmscale+1),f);
-		fwrite(session_qoi3_temp,1,session_qoi3_exit(),f);
+			fwrite1(session_scrn_temp,session_scrn_line(session_getscanline(i),VIDEO_PIXELS_X,session_filmscale+1),f);
+		fwrite1(session_scrn_temp,session_scrn_exit(),f);
 	}
 	else
 	{
@@ -2569,7 +2844,7 @@ INLINE int session_savebitmap(void) // save a RGB888 BMP/QOI file; 0 OK, !0 ERRO
 		mputiiii(&h[2],sizeof(h)+i); mputiiii(&h[34],i);
 		mputii(&h[18],VIDEO_PIXELS_X>>session_filmscale);
 		mputii(&h[22],VIDEO_PIXELS_Y>>session_filmscale);
-		fwrite(h,1,sizeof(h),f);
+		fwrite1(h,sizeof(h),f);
 		for (i=VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-session_filmscale-1;i>=VIDEO_OFFSET_Y;i-=session_filmscale+1)
 		{
 			VIDEO_UNIT *s=session_getscanline(i),v;
@@ -2582,58 +2857,11 @@ INLINE int session_savebitmap(void) // save a RGB888 BMP/QOI file; 0 OK, !0 ERRO
 			else
 				for (int j=0;j<VIDEO_PIXELS_X;++j) // turn each ARGB into one RGB
 					*t++=v=*s++,*t++=v>>8,*t++=v>>16; // B, G, R
-			fwrite(session_scratch,1,t-session_scratch,f);
+			fwrite1(session_scratch,t-session_scratch,f);
 		}
 	}
 	return fclose(f),0;
 }
-
-#if 0 // right now we don't need a QOI reader :-/
-// This QOI 24-bit decoder is straightforward: each operation receives a source `s` of `i` bytes;
-// each succesful operation returns the amount of processed bytes N so the caller can do s+=N,i-=N.
-int session_qoi3_head(int *w,int *h,BYTE *s,int i) // process the header: NEGATIVE if bad, header size if OK
-{
-	if (i<14+8||!equalsmmmm(s,0X716F6966)) return -1;
-	memset(session_qoi3_hash,-1,sizeof(session_qoi3_hash)),session_qoi3_prev=0;
-	session_qoi3_size=(*w=mgetmmmm(s+4))*(*h=mgetmmmm(s+8));
-	return *w>0&&*h>0?14:-1;
-}
-int session_qoi3_body(VIDEO_UNIT *t,BYTE *s,int i) // process the body: NEGATIVE if bad, body size if OK
-{
-	BYTE *u=s,r,g,b; DWORD p; int o=session_qoi3_size;
-	while (i>8&&o>0)
-	{
-		--i,b=*s++; if (b<128)
-			if (b<64) // QOI_OP_INDEX?
-				{ --o,*t++=session_qoi3_prev=session_qoi3_hash[b]; continue; }
-			else // QOI_OP_DIFF
-			{
-				r=(b>>4)-4,g=(b>>2)&3,b&=3;
-				r+=(session_qoi3_prev>>16)-2,g+=(session_qoi3_prev>>8)-2,b+=session_qoi3_prev-2;
-				p=(r<<16)+(g<<8)+b;
-			}
-		else if (b<254)
-			if (b<192) // QOI_OP_LUMA?
-			{
-				--i,g=b-128-32,r=(b=*s++)>>4,b&=15; r+=g-8,b+=g-8;
-				r+=session_qoi3_prev>>16,g+=session_qoi3_prev>>8,b+=session_qoi3_prev;
-				p=(r<<16)+(g<<8)+b;
-			}
-			else // QOI_OP_RUN?
-			{
-				if ((o-=b-=191)<0) break;
-				p=session_qoi3_prev; do *t++=p; while (--b);
-				session_qoi3_hash[session_qoi3_calc(p)]=p; continue;
-			}
-		else // QOI_OP_RGB/QOI_OP_RGBA
-			{ i-=3,p=*s++<<16,p+=*s++<<8,p+=*s++; if (b&1) --i,++s; } // skip A
-		--o,*t++=session_qoi3_hash[session_qoi3_calc(p)]=session_qoi3_prev=p;
-	}
-	return o?-1:s-u;
-}
-int session_qoi3_foot(BYTE *s,int i) // process the footer: NEGATIVE if bad, footer size if OK
-	{ return i>7&&equalsmmmm(s+0,0)&&equalsmmmm(s+4,1)?8:-1; }
-#endif
 
 // configuration functions ------------------------------------------ //
 
@@ -2662,10 +2890,10 @@ char *session_configread(void) // reads configuration file; session_parmtr holds
 		if (!strcasecmp(t,"hardvideo")) return video_scanline=(*s>>1)&3,video_pageblend=*s&1,NULL;
 		if (!strcasecmp(t,"softvideo")) return video_filter=*s&7,NULL;
 		if (!strcasecmp(t,"zoomvideo")) return session_zoomblit=(*s>>1)&7,session_zoomblit=session_zoomblit>4?4:session_zoomblit,video_lineblend=*s&1,NULL;
-		if (!strcasecmp(t,"safevideo")) return session_softblit=*s&1,video_gammaflag=!(*s&2),video_microwave=(*s>>2)&1,NULL;
+		if (!strcasecmp(t,"safevideo")) return session_softblit=*s&1/*,video_gammaflag=!(*s&2)*/,video_microwave=(*s>>2)&1,NULL;
 		if (!strcasecmp(t,"safeaudio")) return session_softplay=(~*s)&3,NULL; // stay compatible with old configs (ZERO was accelerated, NONZERO wasn't)
 		if (!strcasecmp(t,"film")) return session_filmscale=*s&1,session_filmtimer=(*s>>1)&1,session_wavedepth=(*s>>2)&1,NULL;
-		if (!strcasecmp(t,"info")) return onscreen_flag=*s&1,session_qoi3_flag=(*s>>1)&1,video_fineblend=(*s>>2)&1,NULL;
+		if (!strcasecmp(t,"info")) return onscreen_flag=*s&1,session_scrn_flag=(*s>>1)&1,video_fineblend=(*s>>2)&1,NULL;
 	}
 	return s;
 }
@@ -2674,14 +2902,23 @@ void session_configwrite(FILE *f) // save common parameters
 	fprintf(f,"film %d\ninfo %d\n"
 		"hardaudio %d\nsoftaudio %d\nhardvideo %d\nsoftvideo %X\n"
 		"zoomvideo %d\nsafevideo %d\nsafeaudio %d\n"
-		,session_filmscale+session_filmtimer*2+session_wavedepth*4,onscreen_flag+session_qoi3_flag*2+video_fineblend*4
+		,session_filmscale+session_filmtimer*2+session_wavedepth*4,onscreen_flag+session_scrn_flag*2+video_fineblend*4
 		,audio_mixmode,audio_filter,video_scanline*2+video_pageblend,video_filter,
-		video_lineblend+session_zoomblit*2,session_softblit+(video_gammaflag?0:2)+video_microwave*4,session_softplay^3);
+		video_lineblend+session_zoomblit*2,session_softblit/*+(video_gammaflag?0:2)*/+video_microwave*4,session_softplay^3);
 }
 
 void session_configreadmore(char*); // must be defined by the emulator!
 int session_prae(char *s) // load configuration and set stuff up; `s` is argv[0]
 {
+	#ifndef DEFLATE_ALLOC
+	#define DEFLATE_ALLOC 0
+	#endif
+	#ifndef LEMPELZIV_ALLOC
+	#define LEMPELZIV_ALLOC 0
+	#endif
+	#if (DEFLATE_ALLOC|LEMPELZIV_ALLOC)
+	session_h16lz=malloc(sizeof(int[(DEFLATE_ALLOC>LEMPELZIV_ALLOC?DEFLATE_ALLOC:LEMPELZIV_ALLOC)+H16MAX]));
+	#endif
 	if (s=strrchr(strcpy(session_path,s),PATHCHAR)) // detect session path using argv[0] as reference
 		s[1]=0; // keep separator
 	else
@@ -2691,14 +2928,15 @@ int session_prae(char *s) // load configuration and set stuff up; `s` is argv[0]
 		while (fgets(session_parmtr,STRMAX-1,f)) session_configreadmore(session_configread());
 		fclose(f);
 	}
-	#ifndef RGB2LINEAR
 	video_recalc();
-	#endif
 	return debug_setup(),0; // set debugger up as soon as possible
 }
 void session_configwritemore(FILE*); // ditto!
 int session_post(void) // save configuration and shut stuff down; always 0 OK
 {
+	#if (DEFLATE_ALLOC|LEMPELZIV_ALLOC)
+	if (session_h16lz) free(session_h16lz);
+	#endif
 	puff_byebye();
 	session_closefilm();
 	session_closewave();

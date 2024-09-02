@@ -1,5 +1,5 @@
  //  ####    ####   ######  ######   ####  ------------------------- //
-//  ##  ##  ##  ##  ##      ##      ##  ##  CSFEC, small Commodore 64 //
+//  ##  ##  ##  ##  ##      ##      ##  ##  CSFEC, stock Commodore 64 //
 //  ##      ##      ##      ##      ##      (SixtyFour) emulator made //
 //  ##       ####   ####    ####    ##      on top of CPCEC's modules //
 //  ##          ##  ##      ##      ##      by Cesar Nicolas-Gonzalez //
@@ -44,14 +44,17 @@ Contact information: <mailto:cngsoft@gmail.com> */
 #define VIDEO_PLAYBACK 50
 #define VIDEO_LENGTH_X (63<<4)
 #define VIDEO_LENGTH_Y (39<<4)
+#ifndef VIDEO_BORDERLESS
 #define VIDEO_OFFSET_X (13<<4)
 #define VIDEO_OFFSET_Y (11<<2) // the best balance for "Delta" (score panel on top) and "Megaphoenix" (on bottom)
 #define VIDEO_PIXELS_X (48<<4)
 #define VIDEO_PIXELS_Y (67<<3)
-//#define VIDEO_OFFSET_X (17<<4) // show the default 640x400 screen without the border
-//#define VIDEO_OFFSET_Y (25<<2)
-//#define VIDEO_PIXELS_X (40<<4)
-//#define VIDEO_PIXELS_Y (25<<4)
+#else
+#define VIDEO_OFFSET_X (17<<4) // show the default 640x400 screen without the border
+#define VIDEO_OFFSET_Y (25<<2)
+#define VIDEO_PIXELS_X (40<<4)
+#define VIDEO_PIXELS_Y (25<<4)
+#endif
 #define VIDEO_RGB2Y(r,g,b) ((r)*3+(g)*6+(b)) // generic RGB-to-Y expression
 
 #if defined(SDL2)||!defined(_WIN32)
@@ -67,35 +70,36 @@ unsigned short session_icon32xx16[32*32] = {
 // | 71 | 70 | 73 | 10 | 13 | 20 | 23 | 30 | 33 | 40 | 43 | 50 | 53 | 60 | 63 | 00 | | 04 |
 // +-------------------------------------------------------------------------------+ +----+
 // | CTRL | Q  | W  | E  | R  | T  | Y  | U  | I  | O  | P  | @  | *  | ^  |RESTORE| | F3 |
-// | 72   | 76 | 11 | 16 | 21 | 26 | 31 | 36 | 41 | 46 | 51 | 56 | 61 | 66 |RESTORE| | 05 |
+// |  72  | 76 | 11 | 16 | 21 | 26 | 31 | 36 | 41 | 46 | 51 | 56 | 61 | 66 |RESTORE| | 05 |
 // +-------------------------------------------------------------------------------+ +----+
 // |R/S |CAPS| A  | S  | D  | F  | G  | H  | J  | K  | L  | :  | ;  | =  | RETURN  | | F5 |
 // | 77 |LOCK| 12 | 15 | 22 | 25 | 32 | 35 | 42 | 45 | 52 | 55 | 62 | 65 |   01    | | 06 |
-// +----+----------------------------------------------------------------+---------+ +----+
+// +-------------------------------------------------------------------------------+ +----+
 // | C= |LSHIFT| Z  | X  | C  | V  | B  | N  | M  | ,  | .  | /  |RSHIFT |C.DN|C.RT| | F7 |
-// | 75 | 17   | 14 | 27 | 24 | 37 | 34 | 47 | 44 | 57 | 54 | 67 | 64    | 07 | 02 | | 03 |
-// +--------------------------------------------------------+----------------------+ +----+
-// SHIFT+HOME=CLR |                  SPACE                  | SHIFT+C.DN=C.UP  "CAPS LOCK":
-// SHIFT+DEL=INST |                   74                    | SHIFT+C.RT=C.LT    SHIFT+C=
+// | 75 |  17  | 14 | 27 | 24 | 37 | 34 | 47 | 44 | 57 | 54 | 67 |  64   | 07 | 02 | | 03 |
+// +-------------------------------------------------------------------------------+ +----+
+// CLR:SHIFT+HOME |                  SPACE                  | C.UP:SHIFT+C.DN   CAPS LOCK:
+// INST:SHIFT+DEL |                   74                    | C.LT:SHIFT+C.RT    SHIFT+C=
 //                +-----------------------------------------+
 
 #define KBD_JOY_UNIQUE 5 // four sides + one fire
 unsigned char kbd_joy[]= // ATARI norm: up, down, left, right, fire1-fire4
 	{ 0110,0111,0112,0113,0114,0114,0114,0114 }; // always constant, all joystick bits are hard-wired
+#define DEBUG_LONGEST 3 // MOS 65XX opcodes can be up to 3 bytes long
 //#define MAUS_EMULATION // ignore!
 //#define MAUS_LIGHTGUNS // ignore!
 #define VIDEO_LO_X_RES // no "half" (hi-res) pixels are ever drawn
 #define RUNLENGTH_OBSOLETE // snap_load/snap_save (oldest!!)
 #define RUNLENGTH_ENCODING // snap_load/snap_save (old!)
 #define LEMPELZIV_ENCODING // snap_load/snap_save
+#define PNG_OUTPUT_MODE 0 // PNG_OUTPUT_MODE implies DEFLATE_RFC1950 and forbids QOI
 #define POWER_BOOST1 7 // power_boost default value (enabled)
 #define POWER_BOOST0 8
-#define DEBUG_LONGEST 3 // MOS 65XX opcodes can be up to 3 bytes long
 #include "cpcec-rt.h" // emulation framework!
 
 const unsigned char kbd_map_xlt[]=
 {
-	// control keys
+	// control keys (range 0X81..0XBF)
 	KBCODE_F1	,0x81,	KBCODE_F2	,0x82,	KBCODE_F3	,0x83,	KBCODE_F4	,0x84,
 	KBCODE_F5	,0x85,	KBCODE_F6	,0x86,	KBCODE_F7	,0x87,	KBCODE_F8	,0x88,
 	KBCODE_F9	,0x89,	KBCODE_HOLD	,0x8F,	KBCODE_F11	,0x8B,	KBCODE_F12	,0x8C,
@@ -137,7 +141,7 @@ const unsigned char kbd_map_xlt[]=
 	KBCODE_X_8	,0103, // F7 + LSHIFT = F8
 	KBCODE_END	,0X90, // RESTORE (the NMI button, not a real key!)
 	// key mirrors
-	KBCODE_CHR4_4	,0071, // "<" = ARROW LEFT; KBCODE_CHR4_4 105-K!
+	KBCODE_CHR4_4	,0071, // this key is missing in 104-key layouts!
 };
 
 VIDEO_UNIT video_table[16]; // colour table, 0xRRGGBB style: the 16 original colours
@@ -155,7 +159,7 @@ int video_table_load(char *s) // based on VICE's palette files (either RR GG BB 
 }
 void video_table_reset(void)
 {
-	VIDEO_UNIT const p[]={
+	VIDEO_UNIT const p[]={ // different gamma and saturation levels
 		// Community-Colors v1.2a -- p1x3l.net
 		0X000000,0XFFFFFF,0XAF2A2A,0X62D8CC,0XB03FB6,0X4AC64A,0X3739C4,0XE4ED4E,
 		0XB6591C,0X683808,0XEA746C,0X4D4D4D,0X848484,0XA6FA9E,0X707CE6,0XB6B6B6,
@@ -177,7 +181,8 @@ int multi_t=0,multi_u=0; // overclocking shift+bitmask
 
 // HARDWARE DEFINITIONS ============================================= //
 
-BYTE mem_ram[9<<16],mem_rom[5<<12],mem_i_o[1<<12]; // RAM (64K C64 + 512K REU/GEORAM), ROM (8K KERNAL, 8K BASIC, 4K CHARGEN) and I/O (1K VIC-II, 1K SID, 1K VRAM, 1K CIA+EXTRAS)
+#define ram_maxcfg 6 // 0 = 64K, 1 = 128K, 2 = 192K, 3 = 320K, 4 = 576K, 5 = 1088K, 6 = 2112K
+BYTE mem_ram[33<<16],mem_rom[5<<12],mem_i_o[1<<12]; // RAM (64K C64 + 2048K REU/GEORAM), ROM (8K KERNAL, 8K BASIC, 4K CHARGEN) and I/O (1K VIC-II, 1K SID, 1K VRAM, 1K CIA+EXTRAS)
 #define ext_ram (&mem_ram[1<<16]) // RAM beyond the base 64K, see below
 BYTE *mmu_rom[256],*mmu_ram[256]; // pointers to all the 256-byte pages
 BYTE mmu_bit[256]; // flags of all the 256-byte pages: +1 PEEK, +2 POKE, +4 DUMBPEEK, +8 DUMBPOKE
@@ -215,17 +220,20 @@ void mmu_setup(void)
 
 // the REU and GeoRAM memory extensions are handled through the MMU, so their logic goes here
 
-BYTE ram_depth=0; // REU memory extension
-int ram_kbyte[]={0,64,128,256,512}; // REU/GEORAM size in kb
+BYTE ram_depth=0; // extended RAM configuration
+int ram_kbytes(int x) { return (32<<x)&-64; } // REU/GEORAM size in kb
+void ram_setcfg(int x) { ram_depth=x; }
+#define ram_getcfg() (ram_depth)
+
 int ram_cap=0,ram_dirty=0; // up to ((8<<16)-1); see `ext_ram`
 HLII reu_word; int reu_addr,reu_size=0; // REU C64-extra offsets+length
 BYTE reu_table[32]; // REU config.registers
-BYTE georam_yes=0,georam_block=0,georam_page=0; // GEORAM configuration
+BYTE georam_yes=0,georam_block,georam_page; // GEORAM configuration
 #define reu_ram ext_ram
 #define reu_cap ram_cap
 #define reu_dirty ram_dirty
 #define reu_empty 0XFF // the REU can request bytes from empty space
-#define reu_max 0XFFFFF // i.e. (16<<16)-1, 512k RAM + 512k empty space!
+#define reu_max 0X3FFFFF // i.e. (18<<16)-1, 2048k RAM + 2048k empty space!
 #define reu_inc_65xx (!(reu_table[10]&128))
 #define reu_inc_addr (!(reu_table[10]& 64))
 #define reu_fail() (reu_table[0]|=32)
@@ -236,7 +244,7 @@ void reu_kick(void) // start a REU operation according to the current registers
 	if (reu_table[1]&128)
 	{
 		reu_word.b.l=reu_table[2],reu_word.b.h=reu_table[3];
-		reu_addr=(reu_table[4]+(reu_table[5]<<8)+((reu_table[6]&15)<<16)); // slight mod to catch >512K invasions
+		reu_addr=(reu_table[4]+(reu_table[5]<<8)+((reu_table[6]&63)<<16)); // slight mod to catch >2048K invasions
 		if (!(reu_size=reu_table[7]+(reu_table[8]<<8))) reu_size=1<<16;
 		//char t[4][5]={"SAVE","LOAD","SWAP","TEST"};
 		//cprintf("REU-%c:%s-%04X ",ram_depth+'0',t[reu_mode],reu_size-1);
@@ -262,9 +270,7 @@ BYTE cart_easy[256]; // Easyflash RAM page: avoid weird accidents by keeping it 
 char cart_path[STRMAX]="";
 
 void cart_remove(void) // remove a cartridge; resetting the system must be done by the caller
-{
-	cart_boot=0; /*cart_reset();*/ cart_type=-1; if (cart) { free(cart),cart=NULL; }
-}
+	{ cart_boot=0; /*cart_reset();*/ cart_type=-1; if (cart) free(cart),cart=NULL; }
 int cart_insert(char *s) // insert a cartridge or "inject" a program file thru a subset of the autorun handling
 {
 	FILE *f=puff_fopen(s,"rb"); if (!f) return 1;
@@ -553,10 +559,11 @@ void tape_putc(int i) // sends one byte to the tape buffer
 
 // tape_skipload disables realtime, raises frameskip, etc. during tape operation; tape_fastload hijacks tape loaders
 char tape_thru_cia=0,tape_rewind=0,tape_skipload=1,tape_fastload=0; int tape_skipping=0; // tape options and status
-char tape_signal,tape_status=0,tape_output,tape_type=0; // tape status
+INT8 tape_signal,tape_type=0; char tape_status=0,tape_output; // tape status
 int tape_wave,tape_waverate,tape_waveskip,tape_wavesign; // WAVE status
 int tape_t; // duration of the current tape signal in microseconds
 BYTE m6510_t64ok=8; // T64-specific variable: MMU configuration trap (7 enabled, 8 disabled)
+#define tape_physical() (m6510_t64ok!=7)
 BYTE tape_polarity=0; // signal polarity, only relevant in WAVE files
 #define FASTTAPE_STABLE // overkill!
 
@@ -690,34 +697,34 @@ void tape_eofmet(void) // the tape is over, shall we close or rewind?
 	if (tape_signal||(tape_signal=-1,!tape_rewind)) tape_close();
 	else tape_seek(tape_filebase); // rewind to beginning of tape
 }
-int tape_main(int i) // simulate tape activity for `t` ticks; returns nonzero if a new signal was detected
+int tape_main(int t) // simulate tape activity for `t` ticks; returns nonzero if a new signal was detected
 {
 	char q=0; switch (tape_type)
 	{
 		case +0: // WAV
-			tape_wave-=tape_waverate*i; while (tape_wave<=0)
+			tape_wave-=tape_waverate*t; while (tape_wave<=0)
 			{
-				tape_wave+=1000000;
-				tape_skip(tape_waveskip); if ((i=tape_getc())<0) { tape_eofmet(); return 1; }
-				if ((i=(i>128)?1:0)!=tape_status) if ((tape_status=i)^tape_wavesign==tape_polarity) q=1;
+				tape_wave+=98E4; // 980 KHz regardless of PAL or NTSC
+				tape_skip(tape_waveskip); if ((t=tape_getc())<0) { tape_eofmet(); return 1; }
+				if ((t=(t>128)?1:0)!=tape_status) if ((tape_status=t)^tape_wavesign==tape_polarity) q=1;
 			}
 			return q;
 		case +1: // CSW
-			tape_wave-=tape_waverate*i; while (tape_wave<=0)
-				if (tape_wave+=1000000,--tape_t<=0)
+			tape_wave-=tape_waverate*t; while (tape_wave<=0)
+				if (tape_wave+=98E4,--tape_t<=0) // 980 KHz, likewise
 				{
-					if ((i=tape_getc())>0||(i=tape_getcccc())>0) tape_t+=i;
+					if ((t=tape_getc())>0||(t=tape_getcccc())>0) tape_t+=t;
 					else { tape_eofmet(); return 1; } // EOF or ZERO!
 					if ((tape_status^=1)^tape_wavesign==tape_polarity) q=1;
 				}
 			return q;
 		case +2: // TAP
-			tape_t-=i; while (tape_t<=0)
+			tape_t-=t; while (tape_t<=0)
 			{
-				q=1; if ((i=tape_getc())<0) { tape_eofmet(); return 1; }
-				else if (i>0) tape_t+=i<<3; // nonzero = normal
+				q=1; if ((t=tape_getc())<0) { tape_eofmet(); return 1; }
+				else if (t>0) tape_t+=t<<3; // nonzero = normal
 				else if (!tape_old_type) tape_t+=tape_getccc();
-				else { do tape_t+=256<<3; while (!(i=tape_getc())); tape_t+=i<<3; }
+				else { do tape_t+=256<<3; while (!(t=tape_getc())); tape_t+=t<<3; }
 			}
 			return q;
 	}
@@ -728,7 +735,7 @@ int tape_main(int i) // simulate tape activity for `t` ticks; returns nonzero if
 
 int tape_t64load(char *s) // loads a file from a T64 archive into the emulated C64; `s` is the filename, NULL if none
 {
-	if (s&&strcmp("*",s)) // a filename instead of NULL or a wildcard? search!
+	if (s&&*s!='*') // a filename instead of NULL or a wildcard? search!
 	{
 		int i; for (i=0;i<tape_filesize;++i)
 			if (tape_buffer[64+i*32]==1&&tape_buffer[65+i*32]&&!memcmp(&tape_buffer[80+i*32],s,16))
@@ -739,10 +746,9 @@ int tape_t64load(char *s) // loads a file from a T64 archive into the emulated C
 	WORD l=mgetii(&tape_buffer[66+tape_filetell*32]),h=mgetii(&tape_buffer[68+tape_filetell*32]);
 	if (l<2||h<2||h<=l) return 1; // wrong init+exit values!!
 	fseek(tape,mgetiiii(&tape_buffer[72+tape_filetell*32]),SEEK_SET);
-	//if (!mem_ram[0XB9]) h=h-l+0X0801,l=0X0801; // adjust init+exit values? INTENSIT.T64 is at odds with https://www.c64-wiki.com/wiki/LOAD
 	//mputii(&mem_ram[0X002D],h); mputii(&mem_ram[0X002F],h); mputii(&mem_ram[0X0031],h);
 	mputii(&mem_ram[0X00AC],h); mputii(&mem_ram[0X00AE],h); // end-of-file KERNAL pokes
-	fread1(&mem_ram[l],(WORD)(h-l),tape); // load the file data into RAM!
+	fread1(&mem_ram[l],h-l,tape); // load the file data into RAM!
 	if (++tape_filetell>=tape_filesize) tape_filetell=0; // wrap back!
 	return mem_ram[0X90]=0X00; // OK!
 }
@@ -1179,7 +1185,8 @@ void m6502_send(WORD w,BYTE b) // send the byte `b` to the C1541 address `w`
 // the delays between instruction steps are always 1 T
 #define M65XX_XEE (0XEE)
 #define M65XX_XEF (0XEF)
-#define M65XX_XVS 0 // the C1541 drive will actually toggle the OVERFLOW pin... when I get to write it in :-(
+#define M65XX_TRAP_0X50 // BVC $RR: the C1541 drive will actually toggle the OVERFLOW pin... when I get to write it in :-(
+#define M65XX_TRAP_0X70 // BVS $RR: likewise!, although the original C1541 ROM didn't loop this operation for active waits
 #define M65XX_WAIT (++m65xx_t)
 #define M65XX_WHAT (++m65xx_t)
 #define M65XX_TICK (++m65xx_t)
@@ -1215,11 +1222,8 @@ void c1541_reset(void)
 
 #define SID_TICK_STEP 16
 #define SID_MAIN_EXTRABITS 0
-#define SID_MAX_VOICE 10922 // 11585 // 13376 // the filter can be noisy with 16383 =32767 /2 channels
+#define SID_MAX_VOICE 10922 // 16-bit sample style, where 10922= 32768/3 channels
 #define SID_MUTE_TIME main_t
-#ifdef DEBUG
-BYTE sid_quiet[3]={0,0,0}; // optional muting of channels
-#endif
 int sid_extras=0; // no extra chips by default
 #include "cpcec-m8.h"
 
@@ -1248,6 +1252,7 @@ void ym3_write(void)
 	//psg_hard_log=0xFF; // 0xFF means the hard envelope doesn't change
 }
 
+#define dac_frame() sid_frame() // dac_busy, dac_voice, etc. are handled by the SID
 int /*tape_loud=1,*/tape_song=0;
 //void audio_main(int t) { sid_main(t/*,((tape_status^tape_output)&tape_loud)<<12*/); }
 #define audio_main sid_main // (the SID chips are the only audio generators on the C64)
@@ -1906,13 +1911,8 @@ void vicii_draw_border(void) // render a single line of the border, again relyin
 // notice that nonzero "tape_thru_cia" and "tape_type<0" imply a valid tape
 #define M6510_62500HZ_H do{ if (!tape_disabled) { if (LIKELY(tape_thru_cia)) m6510_62500hz_playtape(); else if (tape_type<0) m6510_62500hz_savetape(); } \
 	else if (!disc_disabled) m6510_62500hz_disc(); }while(0) // in theory the disc should coexist with the tape, i.e. no "else"; in practice, however...
-#if 0 // update twice / every 8 T
-#define M6510_62500HZ_T 8
-#define M6510_62500HZ_L M6510_62500HZ_H
-#else // update once / every 16 T
-#define M6510_62500HZ_T 16
-#define M6510_62500HZ_L ((void)0)
-#endif
+#define M6510_62500HZ_T 16 // 8 //
+#define M6510_62500HZ_L ((void)0) // M6510_62500HZ_H //
 void m6510_62500hz_playtape(void) // update TAPE-to-CIA logic
 {
 	if (tape_main(M6510_62500HZ_T))
@@ -2026,11 +2026,18 @@ int m6510_tick(int q) // handles the essential events that happen on each tick, 
 			case +2:
 				if (vicii_frame) // frame flyback?
 				{
-					//if (video_pos_y>=VIDEO_LENGTH_Y)
-					//{
-						#define VICII_POS_Y_ADD (-1) // the physical VSYNC when this line ends, hence this value
-						video_newscanlines(video_pos_x,VICII_POS_Y_ADD*2); // end of frame!
-					//}
+					#define VICII_POS_Y_ADD (-1) // the physical VSYNC when this line ends, hence this value
+					video_newscanlines(video_pos_x,VICII_POS_Y_ADD*2); // end of frame!
+					{
+						static int reuz=-1; if (reuz!=ram_dirty) reuz=ram_dirty,session_dirty=1;
+					}
+					// handle signal loss in the 6510 I/O
+					{
+						static BYTE mmuz=0,mmut=0;
+						if (~mmuz&mmu_out&(128+64+8)) mmut=9; // CPUPORT complains below 9
+						if (!--mmut) mmu_out&=~(128+64+8); // undefined signal loss
+						mmuz=mmu_out;
+					}
 					// handle decimals, seconds, minutes, hours and alarm in a single block;
 					// bit 30 keeps the clock from updating (f.e. while setting the time)
 					if (--vicii_n_cia<=0)
@@ -2317,8 +2324,7 @@ BYTE m6510_recv(WORD w) // receive a byte from the I/O address `w`
 						w=cia_port_13[0]; cia_port_13[0]=0;
 						// this satisfies "BOX CHECK TEST" but there are more differences (PC64 CIA IRQ test)
 						if (!cia_nouveau&&cia_state_a[0]==0+0+2+0&&CIA_TABLE_0[5]*256+CIA_TABLE_0[4]==cia_count_a[0]+1) ++cia_count_a[0];
-						#if 0 //#ifndef FASTTAPE_STABLE // limited in scope (for example Mastertronic tapes) and very unreliable :-/
-						// tape analysis?
+						#if 0 //#ifndef FASTTAPE_STABLE // tape analysis? limited in scope (f.e. Mastertronic tapes) and very unreliable :-/
 						if (!(CIA_TABLE_0[13]&16)&&tape_fastload&&!tape_disabled&&tape&&!(w&m6510_a)) // can A be anything but $10 here?
 						{
 							WORD www=m6510_pc.w-3; BYTE *zzz=&PEEK(www);
@@ -2721,20 +2727,20 @@ void all_reset(void); // a JAM in the 6510 can reset the C64!
 #define M65XX_S m6510_s
 
 #define M65XX_XEE (0XEE)
-#define M65XX_XEF ((tape&&m6510_t64ok!=7)?0XEF:0XEE) // catch special case: the Mastertronic tape loader :-/
-#define M65XX_XVS 0 // the OVERFLOW pin doesn't exist on the MOS 6510, unlike the C1541's MOS 6502
+#define M65XX_XEF ((tape&&tape_physical())?0XEF:0XEE) // catch special case: the Mastertronic tape loader :-/
 #define M65XX_HLT (vicii_takeover) // this is how the VIC-II can override the MOS 6510
 #define M65XX_SHW (m6510_what==1) // "FELLAS-EXT" checks this to detect when READY turns true!
 int m6510_what; // it doesn't need to stick, but putting this in M65XX_LOCAL hurts the performance :-(
 //#define M65XX_TRAP_0X20 if (UNLIKELY(M65XX_PC.w==0XF53A&&mmu_mcr==m6510_t64ok)) { t64_loadfile(); M65XX_X=mem_ram[0X00AC],M65XX_Y=mem_ram[0X00AD],M65XX_PC.w=0XF8D1; } // load T64 file
 #define M65XX_REU
 
-#define bios_magick() (debug_point[0XF539]=debug_point[0XFD6E]=DEBUG_MAGICK)
+#define bios_magick() (debug_point[0XF539]=debug_point[0XFD6E]=debug_point[0XE4E4]=DEBUG_MAGICK)
 void m6510_magick(void) // virtual magick!
 {
 	//cprintf("MAGICK:%08X ",m6510_pc.w);
 	/**/ if (m6510_pc.w==0XF539) { if (mmu_mcr==m6510_t64ok&&mem_rom[0X1539]==0X20) { t64_loadfile(); M65XX_X=mem_ram[0X00AC],M65XX_Y=mem_ram[0X00AD],M65XX_PC.w=0XF8D0; } } // load T64 file
 	else if (m6510_pc.w==0XFD6E) { if (mem_ram[0XC2]==0X04&&mmu_mcr==power_boost&&mem_rom[0X1D6E]==0XB1) mem_ram[0XC2]=0X9F; } // power-up boost (memory test)
+	else if (m6510_pc.w==0XE4E4) { if (mmu_mcr==7&&(tape_skipload|tape_fastload)&&mem_rom[0X04E4]==0XC8&&M65XX_Y==255) M65XX_Y=239; } // tape "FOUND FILENAME" boost: press SPACE!
 }
 #define M65XX_MAGICK() m6510_magick()
 
@@ -2902,7 +2908,7 @@ INLINE void autorun_next(void) // handle AUTORUN
 			autorun_mode=9;
 			break;
 		case 3: // TYPE "LOAD", PRESS RETURN...
-			if (!autorun_type("\014\017\001\004",4)) session_dirty|=(tape_enabled=m6510_t64ok!=7),autorun_mode=4; // `tape_enabled` is reset by all_reset(), so we must set it here
+			if (!autorun_type("\014\017\001\004",4)) session_dirty|=(tape_enabled=tape_physical()),autorun_mode=4; // `tape_enabled` is reset by all_reset(), so we must set it here
 			break;
 		case 4: // RELEASE RETURN...
 			autorun_kbd_res(0001);
@@ -3025,7 +3031,7 @@ int snap_save(char *s) // saves snapshot file `s`; 0 OK, !0 ERROR
 	#ifdef LEMPELZIV_ENCODING
 	if (snap_extended) header[14]='2';
 	#endif
-	int i,j,k; for (i=0;i<512;++i) session_scratch[i]=(VICII_COLOR[i*2]<<4)+(VICII_COLOR[1+i*2]&15);
+	int i,j,k; nibble2byte(session_scratch,VICII_COLOR,512);
 	if ((j=snap_extended?snap_bin2x(&session_scratch[512],512,session_scratch,512):0)>0) mputii(&header[0x10],j); else j=0;
 	if ((k=snap_extended?snap_bin2x(&session_scratch[512*2],1<<16,mem_ram,1<<16):0)>0) mputii(&header[0x12],k); else k=0;
 	// CPU #1
@@ -3084,9 +3090,9 @@ int snap_save(char *s) // saves snapshot file `s`; 0 OK, !0 ERROR
 		for (i=1;i<(ram_dirty>>16)+2;++i)
 		{
 			if (georam_yes)
-				fputmmmm(0X47454F30+i,f); // "GEO1".."GEO8", GeoRAM 64K page
+				fputmmmm((i>9?0X47454F37:0X47454F30)+i,f); // "GEO1".."GEO9", "GEOA..GEOZ", GeoRAM 64K page
 			else
-				fputmmmm(0X52455530+i,f); // "REU1".."REU8", REU 64K page
+				fputmmmm((i>9?0X52455537:0X52455530)+i,f); // "REU1".."REU0", "REUA..REUZ",  REU 64K page
 			snap_savechunk(&mem_ram[i<<16],1<<16,f);
 		}
 	}
@@ -3101,14 +3107,14 @@ int snap_save(char *s) // saves snapshot file `s`; 0 OK, !0 ERROR
 int snap_load(char *s) // loads snapshot file `s`; 0 OK, !0 ERROR
 {
 	FILE *f=puff_fopen(s,"rb"); if (!f) return 1;
-	BYTE header[256]; int i,q;
-	#ifdef LEMPELZIV_ENCODING
-	if ((fread1(header,256,f)!=256)||((q=memcmp(header,snap_obsolete,16))&&(memcmp(header,snap_magic16,14)||(header[14]-='1')>1))) return puff_fclose(f),1;
-	q=q?header[14]:-1; // i.e. -1 = obsolete, 0 = run-length, +1 = lempel-ziv
-	#else
-	if ((fread1(header,256,f)!=256)||((q=memcmp(header,snap_obsolete,16))&&memcmp(header,snap_magic16,16))) return puff_fclose(f),1;
-	q=q?0:-1; // -1 = obsolete, 0 = run-length
-	#endif
+	BYTE header[256]; int i,q; // where q is -1 = obsolete, 0 = run-length, +1 = lempel-ziv
+	if (fread1(header,256,f)!=256||((q=-1,memcmp(header,snap_obsolete,16))&&(
+		#ifdef LEMPELZIV_ENCODING
+		(q=(header[14]-'1')&255)>1||(header[14]='1',memcmp(header,snap_magic16,16))
+		#else
+		q=0,memcmp(header,snap_magic16,16)
+		#endif
+		))) return puff_fclose(f),1;
 	// CPU #1
 	m6510_pc.w=mgetii(&header[0x20]);
 	m6510_p=header[0x22];
@@ -3118,7 +3124,7 @@ int snap_load(char *s) // loads snapshot file `s`; 0 OK, !0 ERROR
 	m6510_s=header[0x26];
 	m6510_int=header[0x27]&(128+2+1); // avoid accidents; see `m6510_irq` below!
 	mmu_cfg[0]=header[0x30];
-	mmu_cfg[1]=header[0x31];
+	mmu_cfg[1]=header[0x31]; tape_enabled=!(mmu_cfg[1]&32)&&tape&&tape_physical(); // shall we play the tape?
 	//if (!(mmu_out=header[0x32])) mmu_out=0XFF; // *!* temporary bugfix
 	// CIA #1
 	memcpy(CIA_TABLE_0,&header[0x40],0X10);
@@ -3154,9 +3160,8 @@ int snap_load(char *s) // loads snapshot file `s`; 0 OK, !0 ERROR
 	// VIC-II
 	memcpy(VICII_TABLE,&header[0xB0],0X30);
 	if ((vicii_pos_x=(header[0xE0]<<multi_t))>=vicii_irq_x) vicii_pos_x-=vicii_len_x;
-	frame_pos_y-=video_pos_y,video_target-=video_pos_y*VIDEO_LENGTH_X; // adjust (1/2)
-	video_pos_y=(video_pos_y&1)+((vicii_pos_y=mgetii(&header[0xE2]))+VICII_POS_Y_ADD)*2;
-	frame_pos_y+=video_pos_y,video_target+=video_pos_y*VIDEO_LENGTH_X; // adjust (2/2)
+	i=mgetii(&header[0xE2])-vicii_pos_y; vicii_pos_y+=i; i+=VICII_POS_Y_ADD; // adjust (1/2)
+	i<<=1,frame_pos_y+=i,video_pos_y+=i,video_target+=i*VIDEO_LENGTH_X; // adjust (2/2)
 	vicii_n_cia=(6-header[0xE1])&7; vicii_irq_y=(VICII_TABLE[17]&128)*2+VICII_TABLE[18];
 	vicii_badline=vicii_pos_y>=48&&vicii_pos_y<248&&!((VICII_TABLE[17]-vicii_pos_y)&7);
 	vicii_setmaps(),vicii_setmode();
@@ -3168,7 +3173,7 @@ int snap_load(char *s) // loads snapshot file `s`; 0 OK, !0 ERROR
 	int j=mgetii(&header[0x10]),k=mgetii(&header[0x12]); // `j` and `k` are zero when the blocks aren't compressed
 	if (q<0) k=j,j=0; // snap_obsolete stored the RAM0 flag where the VRAM flag is now 'cause it didn't pack the VRAM
 	(j>0&&j<512)?snap_x2bin(mem_ram,512,session_scratch,fread1(session_scratch,j,f),q):fread1(mem_ram,512,f);
-	for (i=0;i<512;++i) VICII_COLOR[i*2]=mem_ram[i]>>4,VICII_COLOR[1+i*2]=mem_ram[i]&15;
+	byte2nibble(VICII_COLOR,mem_ram,512);
 	k?snap_x2bin(mem_ram,1<<16,session_scratch,fread1(session_scratch,k,f),q):fread1(mem_ram,1<<16,f);
 	// C1541, REU and other extras
 	ram_dirty=0; while ((k=fgetmmmm(f),i=fgetiiii(f))>=0)
@@ -3205,10 +3210,12 @@ int snap_load(char *s) // loads snapshot file `s`; 0 OK, !0 ERROR
 			georam_page=fgetc(f)&63;
 			i-=2; // keep leftovers
 		}
-		else if (georam_yes>=2&&i<=65536&&((k>=0X52455531&&k<=0X52455538)||(k>=0X47454F31&&k<=0X47454F38))) // "REU1".."REU8", REU 64K pages + "GEO1".."GEO8", GeoRAM 64K pages
+		else if (georam_yes>=2&&i<=65536&&((k>=0X52455531&&k<=0X5245555A)||(k>=0X47454F31&&k<=0X47454F5A))) // "REU1".."REU9", "REUA".."REUZ", REU 64K pages + "GEO1".."GEO9", "GEOA".."GEOZ", GeoRAM 64K pages
 		{
-			i=snap_loadchunk(&mem_ram[(k&=15)<<16],65536,f,i,q);
-			if (ram_dirty<(k<<=16)) ram_dirty=k; // remember highest page
+			if ((k=(k-'0')&255)>9) k-=7; // "A" = 10, etc.
+			if ((k<<=16)<sizeof(mem_ram)) // failure should cancel the snapshot!
+				i=snap_loadchunk(&mem_ram[k],65536,f,i,q);
+			if (ram_dirty<k) ram_dirty=k; // remember highest page; we "abuse" that the extended memory starts at offset 64K
 		}
 		else if (k==0X45415359&&i<=256) // "EASY", EasyFlash RAM page
 		{
@@ -3222,9 +3229,9 @@ int snap_load(char *s) // loads snapshot file `s`; 0 OK, !0 ERROR
 	if (georam_yes>=2) // adjust variables after loading REU data
 	{
 		georam_yes&=1; ram_cap=1<<(ram_depth+15);
-		while (ram_cap<ram_dirty) ram_cap<<=1,++ram_depth;
+		while (ram_cap<ram_dirty&&ram_depth<ram_maxcfg) ram_cap<<=1,++ram_depth;
 		--ram_cap; // binary mask, so it's all 1s
-		if (ram_dirty>ram_cap) ram_dirty=ram_cap; else if (ram_dirty) --ram_dirty;
+		if (ram_dirty>ram_cap) ram_dirty=ram_cap; else if (ram_dirty) --ram_dirty; // sanitize ram_dirty to either 0 or a valid bitmask
 	}
 	PSID_STOP;
 	if (!cart&&cart_mode) // insert last known cartridge file if active
@@ -3322,33 +3329,25 @@ int psid_load(char *s) // load a PSID file and build a minimal framework around 
 
 int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` autorun; 0 OK, !0 ERROR
 {
-	autorun_mode=0; // cancel any autoloading yet
-	if (!video_table_load(s)) video_main_xlat(),video_xlat_clut(); else
+	autorun_mode=0; if (!s||!*s) return -1; // cancel any autoloading yet; reject invalid paths
 	#ifdef DEBUG
 	if (!psid_load(s)) disc_disabled|=2; else // SID files ALWAYS take over: disable drive!
 	#endif
+	if (!video_table_load(s)) video_main_xlat(),video_xlat_clut(); else // colour palette!
 	if (snap_load(s))
-	{
 		if (tape_open(s))
-		{
-			if (disc_open(s,0,0))
-			{
+			if (disc_open(s,0,!(disc_filemode&1))) // use same setting as DEFAULT READ-ONLY
 				if (cart_insert(s))
-				{
 					if (bios_load(s))
 						return bios_reload(),1; // everything failed!
 					else
 						all_reset(); // cleanup!
-				}
 				else
 					{ all_reset(); if (!cart) disc_disabled|=2,autorun_t=9,autorun_mode=q?1:2; } // disable disc drive, PRG files are standalone
-			}
 			else
 				{ if (q) cart_remove(),all_reset(),disc_disabled=0,autorun_t=9,autorun_mode=8; } // enable disc drive
-		}
 		else
 			{ if (q) cart_remove(),all_reset(),disc_disabled|=2,autorun_t=9,autorun_mode=3; } // disable disc drive
-	}
 	if (q) STRCOPY(autorun_path,s);
 	return 0;
 }
@@ -3360,7 +3359,7 @@ char file_pattern[]="*.csw;*.d64;*.crt;*.prg;*.rom;*.s64;"
 #ifdef DEBUG
 	"*.sid;"
 #endif
-	";*.t64;*.tap;*.vpl;*.wav"; // from A to Z!
+	"*.t64;*.tap;*.vpl;*.wav"; // from A to Z!
 
 char session_menudata[]=
 	"File\n"
@@ -3403,12 +3402,16 @@ char session_menudata[]=
 	"0x8513 192K RAM\n"
 	"0x8514 320K RAM\n"
 	"0x8515 576K RAM\n"
-	"0x8517 GeoRAM mode\n"
+	"0x8516 1088K RAM\n"
+	"0x8517 2112K RAM\n"
+	"0x8518 GeoRAM mode\n"
+	"0x8519 Get high RAM..\n"
+	"0x851A Put high RAM..\n"
 	//"=\n"
 	"0x8502 Early glue logic\n"
 	"0x8501 Early CIA 6526\n"
 	"0x8503 Early SID 6581\n"
-	"0x8504 Play SID samples\n"
+	"0x8504 Play SID 4th voice\n"
 	"0x8505 Disable SID filters\n"
 	"0x8508 SID " I18N_MULTIPLY "1\n"
 	"0x8509 SID " I18N_MULTIPLY "2 #:$D420\n"
@@ -3496,12 +3499,9 @@ char session_menudata[]=
 	"0x0B02 Average scanlines\n"
 	"0x8904 X-blending\n"
 	"0x8905 Y-blending\n"
-	"0x8906 Frame blending\n"
+	"0x8906 Gigascreen\n"
 	#ifdef VIDEO_FILTER_BLUR0
-	"0x8909 Narrow X-blending\n"
-	#endif
-	#ifndef RGB2LINEAR
-	"0x8908 Gamma correction\n"
+	"0x8909 Fine Giga/X-blend\n"
 	#endif
 	"=\n"
 	"0x9100 Raise frameskip\tNum.+\n"
@@ -3510,7 +3510,7 @@ char session_menudata[]=
 	"0x9400 No frameskip\tNum./\n"
 	"=\n"
 	"0x8C00 Save screenshot\tF12\n"
-	"0x8C04 Output QOI format\n"
+	"0x8C04 Output " SESSION_SCRN_EXT " format\n"
 	"0xCC00 Record film\tShift-F12\n"
 	"0x8C02 High framerate\n"
 	"0x8C01 High resolution\n"
@@ -3539,7 +3539,7 @@ void session_clean(void) // refresh options
 	#if AUDIO_BITDEPTH > 8
 	session_menucheck(0x8C03,!session_wavedepth);
 	#endif
-	session_menucheck(0x8C04,session_qoi3_flag);
+	session_menucheck(0x8C04,session_scrn_flag);
 	session_menucheck(0xCC00,!!session_filmfile);
 	session_menucheck(0x0C00,!!session_wavefile);
 	session_menucheck(0x4C00,!!ym3_file);
@@ -3573,8 +3573,8 @@ void session_clean(void) // refresh options
 	session_menucheck(0x8590,!(disc_filemode&2));
 	session_menucheck(0x8591,disc_filemode&1);
 	session_menucheck(0x8510,!(disc_disabled&1));
-	session_menuradio(0x8511+ram_depth,0x8511,0x8515);
-	session_menucheck(0x8517,georam_yes);
+	session_menuradio(0x8511+ram_depth,0x8511,0x8517);
+	session_menucheck(0x8518,georam_yes);
 	session_menucheck(0x851F,!(snap_extended));
 	//session_menucheck(0x852F,!!printer); // *!* TODO
 	session_menucheck(0x8901,onscreen_flag);
@@ -3584,9 +3584,6 @@ void session_clean(void) // refresh options
 	session_menucheck(0x8905,video_lineblend);
 	session_menucheck(0x8906,video_pageblend);
 	session_menucheck(0x8907,video_microwave);
-	#ifndef RGB2LINEAR
-	session_menucheck(0x8908,video_gammaflag);
-	#endif
 	#ifdef VIDEO_FILTER_BLUR0
 	session_menucheck(0x8909,video_fineblend);
 	#endif
@@ -3596,7 +3593,7 @@ void session_clean(void) // refresh options
 	session_menuradio(0x8B01+video_type,0x8B01,0x8B05);
 	session_menuradio(0x0B01+video_scanline,0x0B01,0x0B04);
 	reu_table[0]&=64+32; // +128 INTERRUPT PENDING (unused), +64 END OF BLOCK, +32 FAULT
-	ram_cap=ram_depth?(ram_kbyte[ram_depth]<<10)-1:0; // nonzero depth enables REU
+	ram_cap=ram_depth?(ram_kbytes(ram_depth)<<10)-1:0; // nonzero depth enables extended RAM
 	if (ram_dirty>ram_cap) ram_dirty=ram_cap; // avoid hot-switch accidents!
 	//if (ram_depth>2) reu_table[0]+=16; // +256K REU mode, but only on old models!
 	vicii_len_y=312; // PAL/NTSC vertical configuration
@@ -3610,28 +3607,22 @@ void session_clean(void) // refresh options
 	session_menuradio(0xC401+audio_mixmode,0xC401,0xC404);
 	switch (sid_extras)
 	{
-		case 1: case 2:
-			for (int i=0;i<3;++i)
-				sid_stereo[0][i][0]=(256+audio_stereos[audio_mixmode][0])/2,sid_stereo[0][i][1]=(256-audio_stereos[audio_mixmode][0])/2, // 1st chip is LEFT
-				sid_stereo[1][i][0]=(256+audio_stereos[audio_mixmode][2])/2,sid_stereo[1][i][1]=(256-audio_stereos[audio_mixmode][2])/2; // 2nd chip is RIGHT
-			break;
 		case 3: case 4:
-			for (int i=0;i<3;++i)
-				sid_stereo[0][i][0]=(256+audio_stereos[audio_mixmode][1]+1)/3,sid_stereo[0][i][1]=(256-audio_stereos[audio_mixmode][1]+1)/3, // 1st chip is M
-				sid_stereo[1][i][0]=(256+audio_stereos[audio_mixmode][0]+1)/3,sid_stereo[1][i][1]=(256-audio_stereos[audio_mixmode][0]+1)/3, // 2nd chip is L
-				sid_stereo[2][i][0]=(256+audio_stereos[audio_mixmode][2]+1)/3,sid_stereo[2][i][1]=(256-audio_stereos[audio_mixmode][2]+1)/3; // 3rd chip is R
+			sid_stereo[0][0]=(256+audio_stereos[audio_mixmode][1]+1)/3,sid_stereo[0][1]=(256-audio_stereos[audio_mixmode][1]+1)/3, // 1st chip is M
+			sid_stereo[1][0]=(256+audio_stereos[audio_mixmode][0]+1)/3,sid_stereo[1][1]=(256-audio_stereos[audio_mixmode][0]+1)/3, // 2nd chip is L
+			sid_stereo[2][0]=(256+audio_stereos[audio_mixmode][2]+1)/3,sid_stereo[2][1]=(256-audio_stereos[audio_mixmode][2]+1)/3; // 3rd chip is R
 			break;
-		default: // some songs (f.e. "CATWALK") could overflow with stereo separation at 100%; it shows that the SID is mono because it has one filter, not two :-/
-			sid_stereo[0][0][0]=256+audio_stereos[audio_mixmode][0],sid_stereo[0][0][1]=256-audio_stereos[audio_mixmode][0]; // A:B:C order is LEFT:RIGHT:MIDDLE
-			sid_stereo[0][1][0]=256+audio_stereos[audio_mixmode][2],sid_stereo[0][1][1]=256-audio_stereos[audio_mixmode][2]; // why? because C can be sampled:
-			sid_stereo[0][2][0]=256+audio_stereos[audio_mixmode][1],sid_stereo[0][2][1]=256-audio_stereos[audio_mixmode][1]; // samples will always be MIDDLE!
-			#ifdef DEBUG
-			for (int i=0;i<3;++i) if (sid_quiet[i]) sid_stereo[0][i][0]=sid_stereo[0][i][1]=0;
-			#endif
+		case 1: case 2:
+			sid_stereo[0][0]=(256+audio_stereos[audio_mixmode][0])>>1,sid_stereo[0][1]=(256-audio_stereos[audio_mixmode][0])>>1, // 1st chip is LEFT
+			sid_stereo[1][0]=(256+audio_stereos[audio_mixmode][2])>>1,sid_stereo[1][1]=(256-audio_stereos[audio_mixmode][2])>>1; // 2nd chip is RIGHT
+			break;
+		default: // the "ideal" stereo SID A:B:C:4TH order is LEFT:RIGHT:MIDDLE:MIDDLE because C can be sampled ("ECHOFIED") and thus 4TH must be MIDDLE;
+			// however, some songs (f.e. "CATWALK") could overflow with stereo separation at 100%: after all, the SID has one filter, not two :-/
+			sid_stereo[0][0]=sid_stereo[0][1]=256;
 	}
 	#endif
 	video_resetscanline(),debug_dirty=1; sprintf(session_info,"%d:%dK %s %sx%c %d.0MHz"//" | disc %s | tape %s | %s"
-		,ram_dirty?65+(ram_dirty>>10):64,64+ram_kbyte[ram_depth],georam_yes?"GEO":"REU"
+		,ram_dirty?65+(ram_dirty>>10):64,64+ram_kbytes(ram_depth),georam_yes?"GEO":"REU"
 		,sid_nouveau?"8580":"6581",'0'+sid_chips,1<<multi_t);
 }
 void session_user(int k) // handle the user's commands
@@ -3708,10 +3699,13 @@ void session_user(int k) // handle the user's commands
 				"Num./\tNo frameskip"
 				"\n"
 				"Pause\tPause/continue" MESSAGEBOX_WIDETAB
-				"*Return\tMaximize/restore" "\t"
+				"*Return\tMaximize/restore" "\t" // this `t` sets the window width
 				"\n"
 				"*Up\tIncrease zoom" MESSAGEBOX_WIDETAB
-				"*Down\tDecrease zoom" "\t"
+				"*Down\tDecrease zoom"
+				"\n"
+				"*Right\tSpeed action up" MESSAGEBOX_WIDETAB
+				"*Left\tSlow action down"
 				// "\n" "^Key =\tControl+Key" MESSAGEBOX_WIDETAB "*Key =\tAlt+Key\n"
 			,"Help");
 			break;
@@ -3756,7 +3750,7 @@ void session_user(int k) // handle the user's commands
 		case 0x8400: // F4: TOGGLE SOUND
 			#if AUDIO_CHANNELS > 1
 			if (session_shift) // next stereo mode
-				{ if (++audio_mixmode>=length(audio_stereos)) audio_mixmode=0; }
+				{ if (!session_filmfile) { if (++audio_mixmode>=length(audio_stereos)) audio_mixmode=0; } }
 			else
 			#endif
 			if (session_audio)
@@ -3768,7 +3762,7 @@ void session_user(int k) // handle the user's commands
 		case 0x8404:
 			#if AUDIO_CHANNELS > 1
 			if (session_shift) // SET STEREO MODE
-				audio_mixmode=k-0x8401;
+				{ if (!session_filmfile) audio_mixmode=k-0x8401; }
 			else
 			#endif
 			audio_filter=k-0x8401;
@@ -3799,7 +3793,7 @@ void session_user(int k) // handle the user's commands
 		case 0x8503: // SID 8580/6581 SWITCH
 			sid_nouveau=!sid_nouveau; sid_shape_setup(); //sid_all_update();
 			break;
-		case 0x8504: // DISABLE SID SAMPLES
+		case 0x8504: // DISABLE SID SAMPLES ("4TH VOICE")
 			sid_samples=!sid_samples; sid_all_update();
 			break;
 		case 0x8505: // DISABLE SID FILTERS
@@ -3822,7 +3816,7 @@ void session_user(int k) // handle the user's commands
 		case 0x850D: // SID VOICE A OFF
 		case 0x850E: // SID VOICE B OFF
 		case 0x850F: // SID VOICE C OFF
-			sid_quiet[k-0x850D]=!sid_quiet[k-0x850D];
+			sid_quiet[k-0x850D]=!sid_quiet[k-0x850D]; sid_all_update();
 			break;
 		#endif
 		case 0x8590: // STRICT DISC WRITES
@@ -3836,10 +3830,26 @@ void session_user(int k) // handle the user's commands
 		case 0x8513: // 192K
 		case 0x8514: // 320K
 		case 0x8515: // 576K
-			ram_depth=k-0x8511; mmu_recalc();
+		case 0x8516: // 1088K
+		case 0x8517: // 2112K
+			ram_setcfg(k-0x8511); mmu_recalc();
 			break;
-		case 0x8517: // GEORAM/REU
+		case 0x8518: // GEORAM/REU
 			georam_yes=!georam_yes;
+			break;
+		case 0x8519: // GET HIGH RAM...
+			if (ram_depth&&(s=puff_session_getfile(cart_path,"*.bin;*.reu","Load high RAM")))
+			{
+				FILE *f=puff_fopen(s,"rb"); if (k=0,f) k=fread1(mem_ram+65536,32768<<ram_depth,f),fclose(f);
+				if (k<1) session_message("Cannot load high RAM!",txt_error); else ram_dirty=k-1;
+			}
+			break;
+		case 0x851A: // PUT HIGH RAM...
+			if (ram_depth&&(s=puff_session_newfile(cart_path,"*.bin;*.reu","Save high RAM")))
+			{
+				FILE *f=puff_fopen(s,"wb"); if (k=0,f) k=fwrite1(mem_ram+65536,32768<<ram_depth,f),fclose(f);
+				if (k<1) session_message("Cannot save high RAM!",txt_error);
+			}
 			break;
 		case 0x851F: // STRICT SNA DATA
 			snap_extended=!snap_extended;
@@ -3957,7 +3967,7 @@ void session_user(int k) // handle the user's commands
 			break;
 		case 0x0800: // ^F8: REMOVE TAPE, PLAY TAPE
 			if (session_shift)
-				tape_enabled=!tape_enabled&&tape&&m6510_t64ok!=7;
+				tape_enabled=!tape_enabled&&tape&&tape_physical();
 			else
 				tape_enabled=0,tape_close();
 			break;
@@ -3973,10 +3983,10 @@ void session_user(int k) // handle the user's commands
 			onscreen_flag^=1;
 			break;
 		case 0x8902: // Y-MASKING
-			video_filter^=VIDEO_FILTER_MASK_Y;
+			if (!session_filmfile) video_filter^=VIDEO_FILTER_MASK_Y;
 			break;
 		case 0x8903: // X-MASKING
-			video_filter^=VIDEO_FILTER_MASK_X;
+			if (!session_filmfile) video_filter^=VIDEO_FILTER_MASK_X;
 			break;
 		case 0x8904: // X-BLENDING
 			video_filter^=VIDEO_FILTER_MASK_Z;
@@ -3984,20 +3994,16 @@ void session_user(int k) // handle the user's commands
 		case 0x8905: // Y-BLENDING
 			video_lineblend^=1;
 			break;
-		case 0x8906: // FRAME BLENDING
+		case 0x8906: // FRAME BLENDING (GIGASCREEN)
 			video_pageblend^=1;
 			break;
 		case 0x8907: // MICROWAVES
 			video_microwave^=1;
 			break;
-		#ifndef RGB2LINEAR
-		case 0x8908: // GAMMA BLENDING/CORRECTION
-			video_gammaflag^=1; video_recalc();
-			break;
-		#endif
 		#ifdef VIDEO_FILTER_BLUR0
 		case 0x8909: // FINE/COARSE X-BLENDING
-			video_fineblend^=1; break;
+			video_fineblend^=1;
+			break;
 		#endif
 		case 0x9000: // NMI (RESTORE key)
 			m6510_irq|=+128;
@@ -4042,10 +4048,10 @@ void session_user(int k) // handle the user's commands
 		case 0x0B03: // SIMPLE INTERLACE
 		case 0x0B04: // DOUBLE INTERLACE
 		case 0x0B02: // AVG. SCANLINES
-			video_scanline=k-0x0B01;
+			if (!session_filmfile) video_scanline=k-0x0B01;
 			break;
 		case 0x0B00: // ^F11: SCANLINES
-			if (session_shift)
+			if (session_filmfile) {} else if (session_shift)
 				{ if (!(video_filter=(video_filter+1)&7)) video_lineblend^=1; }
 			else if ((video_scanline=video_scanline+1)>3)
 				{ if (video_scanline=0,video_pageblend^=1) video_microwave^=1; }
@@ -4064,8 +4070,8 @@ void session_user(int k) // handle the user's commands
 				session_wavedepth^=1;
 			break;
 		#endif
-		case 0X8C04: // OUTPUT AS QOI
-			session_qoi3_flag^=1;
+		case 0X8C04: // OUTPUT AS BMP
+			session_scrn_flag^=1;
 			break;
 		case 0x8C00: // F12: SAVE SCREENSHOT OR RECORD FILM
 			if (!session_shift)
@@ -4118,12 +4124,12 @@ void session_user(int k) // handle the user's commands
 void session_configreadmore(char *s) // parse a pre-processed configuration line: `session_parmtr` keeps the value name, `s` points to its value
 {
 	int i; char *t=UTF8_BOM(session_parmtr); if (!s||!*s||!*t) {} // ignore if empty or internal!
-	else if (!strcasecmp(t,"type")) cia_nouveau=*s&1,vic_nouveau=(*s>>1)&1;
-	else if (!strcasecmp(t,"sid1")) sid_filters=~*s&1,sid_samples=(~*s>>1)&1;
-	else if (!strcasecmp(t,"bank")) georam_yes=*s&1,ram_depth=(*s>>1)&7,ram_depth=ram_depth>length(ram_kbyte)?0:ram_depth;
-	else if (!strcasecmp(t,"unit")) disc_filemode=*s&3,disc_disabled=(*s>>2)&1;
-	else if (!strcasecmp(t,"misc")) snap_extended=*s&1,key2joy_flag=(*s>>1)&1;
-	else if (!strcasecmp(t,"sids")) sid_nouveau=*s&1,sid_extras=(*s>>1)&7,sid_extras=sid_extras>4?0:sid_extras;
+	else if (i=eval_hex(*s)&31,!strcasecmp(t,"type")) cia_nouveau=i&1,vic_nouveau=(i>>1)&1;
+	else if (!strcasecmp(t,"sid1")) sid_filters=~i&1,sid_samples=(~i>>1)&1;
+	else if (!strcasecmp(t,"bank")) { if (i<=ram_maxcfg*2+1) ram_setcfg(i>>1),georam_yes=i&1; }
+	else if (!strcasecmp(t,"unit")) disc_filemode=i&3,disc_disabled=(i>>2)&1;
+	else if (!strcasecmp(t,"misc")) snap_extended=i&1,key2joy_flag=(i>>1)&1;
+	else if (!strcasecmp(t,"sids")) sid_nouveau=i&1,sid_extras=(i>>1)&7,sid_extras=sid_extras>4?0:sid_extras;
 	else if (!strcasecmp(t,"file")) strcpy(autorun_path,s);
 	else if (!strcasecmp(t,"snap")) strcpy(snap_path,s);
 	else if (!strcasecmp(t,"tape")) strcpy(tape_path,s);
@@ -4132,26 +4138,25 @@ void session_configreadmore(char *s) // parse a pre-processed configuration line
 	else if (!strcasecmp(t,"cart")) strcpy(cart_path,s);
 	else if (!strcasecmp(t,"rgbs")) strcpy(palette_path,s);
 	else if (!strcasecmp(t,"vjoy")) { if (!hexa2byte(session_parmtr,s,KBD_JOY_UNIQUE)) usbkey2native(kbd_k2j,session_parmtr,KBD_JOY_UNIQUE); }
-	else if (!strcasecmp(t,"palette")) { if ((i=*s&7)<5) video_type=i; }
-	else if (!strcasecmp(t,"casette")) tape_rewind=*s&1,tape_skipload=(*s>>1)&1,tape_fastload=(*s>>2)&1;
+	else if (!strcasecmp(t,"palette")) { if (i<5) video_type=i; }
+	else if (!strcasecmp(t,"casette")) tape_rewind=i&1,tape_skipload=(i>>1)&1,tape_fastload=(i>>2)&1;
 	else if (!strcasecmp(t,"debug")) debug_configread(strtol(s,NULL,10));
 }
 void session_configwritemore(FILE *f) // update the configuration file `f` with emulator-specific names and values
 {
-	native2usbkey(kbd_k2j,kbd_k2j,KBD_JOY_UNIQUE); byte2hexa0(session_parmtr,kbd_k2j,KBD_JOY_UNIQUE);
-	fprintf(f,"type %d\nsid1 %d\nbank %d\nunit %d\nmisc %d\nsids %d\n"
+	native2usbkey(kbd_k2j,KBD_JOY_UNIQUE); fprintf(f,"type %d\nsid1 %d\nbank %X\nunit %d\nmisc %d\nsids %d\n"
 		"file %s\nsnap %s\ntape %s\ndisc %s\nbios %s\ncart %s\nrgbs %s\n"
 		"vjoy %s\npalette %d\ncasette %d\ndebug %d\n",
-		cia_nouveau+vic_nouveau*2,(sid_filters?0:1)+(sid_samples?0:2),(ram_depth<<1)+(georam_yes&1),(disc_disabled&1)*4+disc_filemode,(key2joy_flag&1)*2+snap_extended,sid_extras*2+sid_nouveau,
+		cia_nouveau+vic_nouveau*2,(sid_filters?0:1)+(sid_samples?0:2),ram_getcfg()*2+(georam_yes?1:0),(disc_disabled&1)*4+disc_filemode,(key2joy_flag&1)*2+snap_extended,sid_extras*2+sid_nouveau,
 		autorun_path,snap_path,tape_path,disc_path,bios_path,cart_path,palette_path,
-		session_parmtr,video_type,tape_rewind+tape_skipload*2+tape_fastload*4,debug_configwrite());
+		byte2hexa0(session_parmtr,kbd_k2j,KBD_JOY_UNIQUE),video_type,tape_rewind+tape_skipload*2+tape_fastload*4,debug_configwrite());
 }
 
 // START OF USER INTERFACE ========================================== //
 
 int main(int argc,char *argv[])
 {
-	session_prae(argv[0]); all_setup(); all_reset();
+	session_prae(ARGVZERO); all_setup(); all_reset();
 	int i=0,j,k=m6510_pc.w=0; while (++i<argc) // see later about m6510_pc
 		if (argv[i][0]=='-')
 		{
@@ -4188,12 +4193,14 @@ int main(int argc,char *argv[])
 						session_stick=0;
 						break;
 					case 'k':
-						ram_depth=(BYTE)(argv[i][j++]-'0');
-						if (ram_depth<0||ram_depth>=length(ram_kbyte))
+						ram_depth=eval_hex(argv[i][j++]);
+						if (ram_depth<0||ram_depth>ram_maxcfg)
 							i=argc; // help!
+						else
+							ram_setcfg(ram_depth);
 						break;
 					case 'K':
-						ram_depth=0;
+						ram_setcfg(0);
 						break;
 					/*
 					case 'm':
@@ -4272,7 +4279,7 @@ int main(int argc,char *argv[])
 				}
 			while ((i<argc)&&(argv[i][j]));
 		}
-		else if (any_load(argv[i],1))
+		else if (any_load(puff_makebasepath(argv[i]),1))
 			i=argc; // help!
 	if (i>argc)
 		return
@@ -4283,11 +4290,13 @@ int main(int argc,char *argv[])
 			"  -g/G\tenable/disable GeoRAM mode\n"
 			"  -j\tenable joystick keys\n"
 			"  -J\tdisable joystick\n"
-			"  -k0\t64K RAM\n"
+			"  -k0\t64K RAM\n"//"-K"
 			"  -k1\t128K RAM\n"
 			"  -k2\t192K RAM\n"
 			"  -k3\t320K RAM\n"
 			"  -k4\t576K RAM\n"
+			"  -k5\t1088K RAM\n"
+			"  -k6\t2112K RAM\n"
 			//"  -m0\t-\n"
 			//"  -m1\t-\n"
 			//"  -m2\t-\n"
@@ -4315,20 +4324,33 @@ int main(int argc,char *argv[])
 	session_kbdreset();
 	session_kbdsetup(kbd_map_xlt,length(kbd_map_xlt)/2);
 	video_target=&video_frame[video_pos_y*VIDEO_LENGTH_X+video_pos_x]; audio_target=audio_frame;
-	video_main_xlat(),video_xlat_clut(); onscreen_inks(0xAA0000,0x55FF55); session_resize();
-	audio_disabled=!session_audio;
+	video_main_xlat(),video_xlat_clut(); session_resize();
 	// it begins, "alea jacta est!"
-	while (!session_listen())
+	for (audio_disabled=!session_audio;!session_listen();)
 	{
 		while (!session_signal)
-		{
 			m6510_main( // clump MOS 6510 instructions together to gain speed...
-			((VIDEO_LENGTH_X+15-video_pos_x)>>4)
-			<<multi_t); // ...without missing any deadlines!
-		}
+				((VIDEO_LENGTH_X+15-video_pos_x)<<multi_t)>>4); // ...without missing any deadlines!
 		if (session_signal&SESSION_SIGNAL_FRAME) // end of frame?
 		{
-			if (!video_framecount&&onscreen_flag)
+			if (audio_required)
+			{
+				if (audio_pos_z<AUDIO_LENGTH_Z) audio_main(TICKS_PER_FRAME); // fill sound buffer to the brim!
+				#if AUDIO_CHANNELS > 1
+				if (sid_chips==1&&audio_mixmode) // a single chip is mono, but we can add pseudo-stereo surround
+				{
+					#define AUDIO_SURROUND 0 // 0..N; the higher this value, the more nuanced the delay
+					static AUDIO_UNIT zz[(AUDIO_PLAYBACK/50)>>AUDIO_SURROUND]; // backups of past samples
+					int zi=0,zo=(AUDIO_PLAYBACK/50)>>(AUDIO_SURROUND+1); if (video_pos_z&1) i=zi,zi=zo,zo=i;
+					int zn=AUDIO_LENGTH_Z>>(AUDIO_SURROUND+4-audio_mixmode),zm=AUDIO_LENGTH_Z-zn;
+					for (i=zn;--i>=0;) zz[zo+i]=audio_frame[(zm+i)*AUDIO_CHANNELS];
+					for (i=zm;--i>=0;) audio_frame[(zn+i)*AUDIO_CHANNELS]=audio_frame[i*AUDIO_CHANNELS];
+					for (i=zn;--i>=0;) audio_frame[i*AUDIO_CHANNELS]=zz[zi+i];
+				}
+				#endif
+				audio_playframe();
+			}
+			if (video_required&&onscreen_flag)
 			{
 				if (disc_disabled)
 					onscreen_text(+1,-3,"--\t--",0);
@@ -4350,49 +4372,25 @@ int main(int argc,char *argv[])
 				}
 				if (session_stick|session_key2joy)
 				{
-					if (autorun_mode)
-					{
-						onscreen_bool(-5,-7,3,1,autorun_t>0),
-						onscreen_bool(-5,-4,3,1,autorun_t>0),
-						onscreen_bool(-6,-6,1,5,autorun_t>0),
-						onscreen_bool(-2,-6,1,5,autorun_t>0);
-					}
+					if (autorun_mode) // big letter "A"
+						onscreen_bool(-7,-7,3,1,autorun_t>0),
+						onscreen_bool(-7,-4,3,1,autorun_t>0),
+						onscreen_bool(-8,-6,1,5,autorun_t>0),
+						onscreen_bool(-4,-6,1,5,autorun_t>0);
 					else
 					{
-						onscreen_bool(-5,-6,3,1,kbd_bit_tst(kbd_joy[0])),
-						onscreen_bool(-5,-2,3,1,kbd_bit_tst(kbd_joy[1])),
-						onscreen_bool(-6,-5,1,3,kbd_bit_tst(kbd_joy[2])),
-						onscreen_bool(-2,-5,1,3,kbd_bit_tst(kbd_joy[3])),
-						onscreen_bool(-4,-4,1,1,kbd_bit_tst(kbd_joy[4]));
+						onscreen_bool(-7,-6,3,1,kbd_bit_tst(kbd_joy[0])),
+						onscreen_bool(-7,-2,3,1,kbd_bit_tst(kbd_joy[1])),
+						onscreen_bool(-8,-5,1,3,kbd_bit_tst(kbd_joy[2])),
+						onscreen_bool(-4,-5,1,3,kbd_bit_tst(kbd_joy[3])),
+						onscreen_bool(-6,-4,1,1,kbd_bit_tst(kbd_joy[4]));
 					}
 				}
 				#ifdef DEBUG
-				if (session_audio) // Win32 audio cycle / SDL2 audio queue
-				{
-					//onscreen_byte(+11,-3,(audio_session/10000)%100,1);
-					//onscreen_byte(+13,-3,(audio_session/  100)%100,1);
-					//onscreen_byte(+15,-3, audio_session       %100,1);
-					onscreen_hgauge(+11,-2,1<<(AUDIO_L2BUFFER-10),1,(audio_session/AUDIO_BYTESTEP)>>10);
-				}
+				//onscreen_byte(+1,+1,(video_pos_y>>1)&127,0);
 				#endif
+				session_status();
 			}
-			// update session and continue
-			if (!--autorun_t) autorun_next();
-			if (audio_required)
-			{
-				if (audio_pos_z<AUDIO_LENGTH_Z) audio_main(TICKS_PER_FRAME); // fill sound buffer to the brim!
-			}
-			if (ym3_file) ym3_write(),ym3_flush();
-			sid_frame(); //sid_mute_dumb18(0),sid_mute_dumb18(1),sid_mute_dumb18(2); // force updates!
-			//video_clut[31]=video_clut[video_pos_z&7]; // DEBUG COLOUR!
-			//if (...) // do this always!
-			{
-				static BYTE mmu_old=0,mmu_fly=0;
-				if (~mmu_old&mmu_out&(128+64+8)) mmu_fly=9; //else if (~mmu_out&mmu_old&(128+64+8)) mmu_fly=0; // CPUPORT complains below 9
-				if (!--mmu_fly) mmu_out&=~(128+64+8); // undefined signal loss
-				mmu_old=mmu_out; // remember for later
-			}
-			if (m6510_pc.w>=0XE4E2&&m6510_pc.w<0XE4EB&&mmu_mcr==7&&(tape_skipload|tape_fastload|autorun_mode)) m6510_pc.w=0XE4EB; // tape "FOUND FILENAME" boost
 			#ifdef DEBUG
 			if (PSID_TRUE) // SID playback mode?
 			{
@@ -4426,29 +4424,8 @@ int main(int argc,char *argv[])
 				else psid_keyz=0;
 			}
 			#endif
-			static int reu_dirtz=-1; if (reu_dirtz!=ram_dirty)
-				reu_dirtz=ram_dirty,session_dirty=1;
-			if (!tape_fastload) tape_song=0/*,tape_loud=1*/;
-			else if (tape_song) /*tape_loud=0,*/--tape_song;
-			//else tape_loud=1; // expect song to play for several frames
-			if (tape_signal)
-			{
-				if (tape_signal<2) tape_enabled=0; // stop tape if required
-				//tape_output=tape_type<0&&(...); // keep it consistent
-				tape_signal=0,session_dirty=1; // update config
-			}
-			if (tape&&tape_enabled) // tape PLAY bit
-				mmu_inp&=~16; // "KNUCKLE BUSTER.TAP" expects something more sophisticated, it hangs if this happens too soon :-/
-			else
-				mmu_inp|=+16;
-			if (tape_browsing) mmu_inp^=--tape_browsing&16; // introduce irregularities in the signal!
-			tape_skipping=audio_queue=0; // reset tape and audio flags
-			if (tape&&tape_filetell<tape_filesize&&tape_skipload&&!session_filmfile&&!tape_disabled&&!tape_song) // no `tape_loud` but `!tape_song`
-				video_framelimit|=(MAIN_FRAMESKIP_MASK+1),session_fast|=2,video_interlaced|=2/*,audio_disabled|=2*/; // abuse binary logic to reduce activity
-			else
-				video_framelimit&=~(MAIN_FRAMESKIP_MASK+1),session_fast&=~2,video_interlaced&=~2/*,audio_disabled&=~2*/; // ditto, to restore normal activity
-			session_update();
-			//if (!audio_disabled) audio_main(1+(video_pos_x>>4)); // preload audio buffer
+			// update session and continue
+			if (!--autorun_t) autorun_next();
 			if (autorun_mode)
 				MEMLOAD(kbd_bits,autorun_kbd); // the active keys are fully virtual
 			else
@@ -4456,9 +4433,30 @@ int main(int argc,char *argv[])
 				for (i=0;i<length(kbd_bits);++i) kbd_bits[i]=kbd_bit[i]|joy_bit[i]; // mix keyboard + joystick bits
 				if (kbd_bit[ 8]) kbd_bits[0]|=kbd_bit[ 8],kbd_bits[1]|=128; // LEFT SHIFT + right side KEY combos (1/2)
 				if (kbd_bit[15]) kbd_bits[7]|=kbd_bit[15],kbd_bits[1]|=128; // LEFT SHIFT + left  side KEY combos (2/2)
-				if (!(~kbd_bits[9]&3)) kbd_bits[9]-=3; // catch illegal UP+DOWN...
-				if (!(~kbd_bits[9]&12)) kbd_bits[9]-=12; // and LEFT+RIGHT joystick bits
+				if (!(~kbd_bits[9]& 3)) kbd_bits[9]-= 3; // catch illegal UP+DOWN...
+				if (!(~kbd_bits[9]&12)) kbd_bits[9]-=12; // ...and LEFT+RIGHT in joystick
 			}
+			dac_frame(); if (ym3_file) ym3_write(),ym3_flush();
+			tape_skipping=audio_queue=0; // reset tape and audio flags
+			if (!tape_fastload) tape_song=0/*,tape_loud=1*/; else if (tape_song) /*tape_loud=0,*/--tape_song;
+			//else tape_loud=1; // expect song to play for several frames
+			tape_output=tape_type<0&&(mmu_cfg[1]&8); // keep tape output consistent
+			if (tape_signal)
+			{
+				if (tape_signal<2) tape_enabled=0; // stop tape if required
+				tape_signal=0,session_dirty=1; // update config
+			}
+			if (tape&&tape_enabled) // tape PLAY bit
+				mmu_inp&=~16; // "KNUCKLE BUSTER.TAP" expects something more sophisticated, it hangs if this happens too soon :-/
+			else
+				mmu_inp|=+16;
+			if (tape_browsing) mmu_inp^=--tape_browsing&16; // introduce irregularities in the signal! (f.e. detect the REWIND button)
+			if (tape&&tape_filetell<tape_filesize&&tape_skipload&&!session_filmfile&&!tape_disabled&&!tape_song) // no `tape_loud` but `!tape_song`
+				session_fast|=+2,audio_disabled|=+2,video_framelimit|=MAIN_FRAMESKIP_MASK+1; // abuse binary logic to reduce activity
+			else
+				session_fast&=~2,audio_disabled&=~2,video_framelimit&=MAIN_FRAMESKIP_MASK  ; // ditto, to restore normal activity
+			session_update();
+			//if (!audio_disabled) audio_main(1+(video_pos_x>>4)); // preload audio buffer
 		}
 	}
 	// it's over, "acta est fabula"

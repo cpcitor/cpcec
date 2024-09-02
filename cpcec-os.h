@@ -21,14 +21,15 @@
 #include <mmsystem.h> // WINMM.DLL: waveOutWrite()...
 #include <shellapi.h> // SHELL32.DLL: DragQueryFile()...
 
-#define STRMAX 288 // widespread in Windows
+#define STRMAX 640 // 288 // widespread in Windows
 #define PATHCHAR '\\' // unlike '/' (POSIX)
 #define strcasecmp _stricmp // from MSVCRT!
 #define fsetsize(f,l) _chsize(_fileno(f),(l))
 #include <io.h> // _chsize(),_fileno()...
 // WIN32 is never UTF-8; it's either ANSI (...A) or UNICODE (...W)
-#define I18N_MULTIPLY "\327"
-#define I18N_DIVISION "\367"
+#define ARGVZERO (GetModuleFileName(NULL,session_substr,sizeof(session_substr))?session_substr:argv[0])
+#define I18N_MULTIPLY "x" //"\327"
+//#define I18N_DIVISION "\367"
 
 #define MESSAGEBOX_WIDETAB "\t" // expect proportional font
 #define GPL_3_LF " " // Windows provides its own line feeds
@@ -60,7 +61,7 @@ BYTE session_hidemenu=0; // normal or pop-up menu
 HDC session_dc1=NULL,session_dc2=NULL; HGDIOBJ session_dib=NULL; // video structs
 HWAVEOUT session_wo; WAVEHDR session_wh; MMTIME session_mmtime; // audio structs
 
-VIDEO_UNIT *debug_frame; BYTE debug_dirty; // !0 (new redraw required) or 0 (redraw not required)
+VIDEO_UNIT *debug_frame;
 HGDIOBJ session_dbg=NULL; // the debug screen's own bitmap
 
 #ifdef DDRAW
@@ -70,6 +71,8 @@ HGDIOBJ session_dbg=NULL; // the debug screen's own bitmap
 	LPDIRECTDRAWSURFACE lpddfore=NULL,lpddback=NULL;
 	DDSURFACEDESC ddsd;
 	LPDIRECTDRAWSURFACE lpdd_dbg=NULL;
+#else
+	#define lpddback NULL
 #endif
 
 // A modern keyboard as seen by Windows through WM_KEYDOWN and WK_KEYUP; extended keys are shown here with bit 7 on.
@@ -229,25 +232,24 @@ BYTE native_usbkey[]={ // WIN32-USB keyboard translation table; CONTROL, SHIFT, 
 	KBCODE_X_4,	KBCODE_X_5,	KBCODE_X_6,	KBCODE_X_7,
 	KBCODE_X_8,	KBCODE_X_9,	KBCODE_X_0,	KBCODE_X_DOT,
 	KBCODE_CHR4_5,	KBCODE_APPS};//=101
-void usbkey2native(BYTE *t,const BYTE *s,int n) { while (n) { int k=*s++; *t++=k<sizeof(native_usbkey)?native_usbkey[k]:0; --n; } }
-void native2usbkey(BYTE *t,const BYTE *s,int n) { while (n) { int k=0; while (k<sizeof(native_usbkey)&&*s!=native_usbkey[k]) ++k; *t++=k<sizeof(native_usbkey)?k:0; s++; --n; } }
+void usbkey2native(BYTE *t,const BYTE *s,int n) { while (n--) { int k=*s++; *t++=k<sizeof(native_usbkey)?native_usbkey[k]:0; } }
+void native2usbkey(BYTE *t,int n) { while (n--) { int k=0; { while (k<sizeof(native_usbkey)&&*t!=native_usbkey[k]) ++k; } *t++=k<sizeof(native_usbkey)?k:0; } }
 BYTE kbd_k2j[]= // these keys can simulate a 4-button joystick
 	{ KBCODE_UP, KBCODE_DOWN, KBCODE_LEFT, KBCODE_RIGHT, KBCODE_Z, KBCODE_X, KBCODE_C, KBCODE_V };
-
 unsigned char kbd_map[256]; // key-to-key translation map
 
 // general engine functions and procedures -------------------------- //
 
-void session_please(void) // stop activity for a short while
-{
-	if (!session_wait) //video_framecount=1;
-		if (session_wait=1,session_audio) waveOutPause(session_wo);
-}
+char basepath[STRMAX]; // is this long enough for the GetFullPathName() target buffer?
+char *makebasepath(const char *s) // fetch the absolute path of a relative path; returns NULL on error
+	{ char *m; return GetFullPathName(s,sizeof(basepath),basepath,&m)?basepath:NULL; }
 
-void session_kbdclear(void)
-{
-	MEMZERO(kbd_bit); MEMZERO(joy_bit);
-}
+void session_please(void) // stop activity for a short while
+	{ if (!session_wait) if (session_wait=1,session_audio) waveOutPause(session_wo); }
+void session_thanks(void) // resume activity after a "please"
+	{ if (session_wait) if (session_wait=0,session_audio) waveOutRestart(session_wo); }
+void session_kbdclear(void) // wipe keyboard and joystick bits, for example on focus loss
+	{ MEMZERO(kbd_bit); MEMZERO(joy_bit); }
 #define session_kbdreset() MEMBYTE(kbd_map,~~~0) // init and clean key map up
 void session_kbdsetup(const unsigned char *s,int l) // maps a series of virtual keys to the real ones
 {
@@ -268,6 +270,7 @@ int session_key_n_joy(int k) // handle some keys as joystick motions
 }
 
 #define session_clrscr() InvalidateRect(session_hwnd,NULL,1)
+int session_clock=1000; // by default the unit is the millisecond from the internal tick count
 int session_r_x,session_r_y,session_r_w,session_r_h; // actual location and size of the bitmap
 void session_desktop(RECT *r) { SystemParametersInfo(SPI_GETWORKAREA,0,r,0); r->right-=r->left,r->bottom-=r->top; } // i.e. width and height
 int session_resize(void) // dunno why, but one 100% render must happen before the resizing; performance falls otherwise :-/
@@ -369,11 +372,28 @@ void session_redraw(HWND hwnd,HDC h) // redraw the window contents
 		}
 	}
 }
+#define session_drawme() session_redraw(session_hwnd,session_dc1) // shortcut!
+void session_playme(void) // audio shortcut!
+{
+	static BYTE s=1; if (s!=!!audio_disabled) if (s=!s) MEMBYTE(audio_memory,AUDIO_ZERO); // mute mode cleanup!
+	audio_session=(audio_session+AUDIO_LENGTH_Z*AUDIO_BYTESTEP)&((AUDIO_BYTESTEP<<AUDIO_L2BUFFER)-AUDIO_BYTESTEP);
+	if (!audio_disabled) // add block size and wrap around buffer
+	{
+		int t=AUDIO_LENGTH_Z*AUDIO_BYTESTEP,u;
+		if ((u=(AUDIO_BYTESTEP<<AUDIO_L2BUFFER)-audio_session)<t) // wrap around?
+			memcpy(&audio_memory[audio_session],audio_frame,u),
+			memcpy( audio_memory,&((BYTE*)audio_frame)[u],t-u);
+		else
+			memcpy(&audio_memory[audio_session],audio_frame,t);
+	}
+}
+char *session_blitinfo(void)  { return lpddback?"DDRAW":session_hardblit?"GDI":"gdi"; }
+
 int session_contextmenu(void) // used only when the normal menu is disabled
 {
 	POINT p; return (session_hidemenu&&session_menu)?GetCursorPos(&p),TrackPopupMenu(session_menu,0,p.x,p.y,0,session_hwnd,NULL):0;
 }
-LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // window callback function
+LRESULT CALLBACK msg_main(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // window callback function
 {
 	int k; switch (msg)
 	{
@@ -492,6 +512,12 @@ LRESULT CALLBACK mainproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 					case VK_DOWN: //case VK_SUBTRACT: case 0XBD: // ALT+DOWN lowers it
 						if (!session_fullblit&&session_zoomblit>0) --session_zoomblit,session_resize();
 						return 0;
+					case VK_LEFT: // ALT+LEFT slows the emulation down
+						if (session_rhythm>0) session_wait=session_dirty=1,--session_rhythm; // shall we do session_fast&=~1 too?
+						return 0;
+					case VK_RIGHT: // ALT+RIGHT speeds it up (fast-forward)
+						if (session_rhythm<3) session_wait=session_dirty=1,++session_rhythm; // ditto?
+						return 0;
 				}
 			else if (msg==WM_KILLFOCUS)
 				session_focused=0;
@@ -542,7 +568,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	if (session_menu&&session_submenu)
 		AppendMenu(session_menu,MF_POPUP,(UINT_PTR)session_submenu,session_parmtr);
 	WNDCLASS wc; memset(&wc,0,sizeof(wc));
-	wc.lpfnWndProc=mainproc;
+	wc.lpfnWndProc=msg_main;
 	wc.hInstance=GetModuleHandle(0);
 	wc.hIcon=LoadIcon(wc.hInstance,MAKEINTRESOURCE(34002)); // value from RC file
 	wc.hCursor=LoadCursor(NULL,IDC_ARROW); // cannot be zero!!
@@ -654,151 +680,13 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 			session_wh.dwLoops=-1; // loop forever!
 			waveOutPrepareHeader(session_wo,&session_wh,sizeof(session_wh));
 			waveOutWrite(session_wo,&session_wh,sizeof(session_wh)); // should be zero!
+			session_clock=AUDIO_PLAYBACK;
 		}
 	}
 	session_clean(); session_please();
 	session_redraw(session_hwnd,session_dc1); // dummy first redraw, session_resize() hinges on it
 	timeBeginPeriod(8); // WIN10 sets this value too high by default; 8 is recommended in multiple sources
 	return NULL;
-}
-INLINE int session_listen(void) // handle all pending messages; 0 OK, !0 EXIT
-{
-	static int s=-1; if (s!=session_signal) // catch DEBUG and PAUSE
-		s=session_signal,session_dirty=debug_dirty=2;
-	if (session_signal&(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE))
-	{
-		session_signal_frames&=~(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE);
-		session_signal_scanlines&=~(SESSION_SIGNAL_DEBUG|SESSION_SIGNAL_PAUSE); // reset traps!
-		if (session_signal&SESSION_SIGNAL_DEBUG)
-			if (debug_dirty)
-			{
-				session_please(),session_debug_show(debug_dirty!=1),
-				session_redraw(session_hwnd,session_dc1),debug_dirty=0;
-			}
-		if (!session_paused) // set the caption just once
-		{
-			sprintf(session_tmpstr,"%s | %s | PAUSED",session_caption,session_info);
-			SetWindowText(session_hwnd,session_tmpstr);
-			session_please(),session_paused=1;
-		}
-		WaitMessage();
-	}
-	for (MSG msg;PeekMessage(&msg,NULL,0,0,PM_REMOVE);) //if (!session_hdlg||!IsDialogMessage(session_hdlg,&msg))
-	{
-		TranslateMessage(&msg);
-		if (msg.message==WM_QUIT)
-			return 1;
-		DispatchMessage(&msg);
-		if (session_event)
-		{
-			if (!((session_signal&SESSION_SIGNAL_DEBUG)&&session_debug_user(session_event)))
-				session_dirty=1,session_user(session_event);
-			session_event=0; //if (session_paused) ...?
-		}
-	}
-	if (session_dirty) session_dirty=0,session_clean();
-	return 0;
-}
-
-INLINE void session_render(void) // update video, audio and timers
-{
-	int i,j; static int performance_t=0,performance_f=0,performance_b=0; ++performance_f;
-	static BYTE r=0,q=0; if (++r>session_rhythm||session_wait) r=0; // force update after wait
-	if (!video_framecount) // do we need to hurry up?
-	{
-		if (++performance_b,((video_interlaces^=1)||!video_interlaced))
-			if (q) session_redraw(session_hwnd,session_dc1),q=0; // redraw once between two pauses
-		if (session_stick&&!session_key2joy) // do we need to check the joystick?
-		{
-			session_joy.dwSize=sizeof(session_joy);
-			session_joy.dwFlags=JOY_RETURNBUTTONS|JOY_RETURNPOVCTS|JOY_RETURNX|JOY_RETURNY|JOY_RETURNZ|JOY_RETURNR|JOY_RETURNCENTERED;
-			if (session_focused&&!joyGetPosEx(session_stick-1,&session_joy)) // without focus, ignore the joystick
-			{
-				j=((/*session_joy.dwPOV<0||*/session_joy.dwPOV>=36000)?(session_joy.dwYpos<0X4000?1:0)+(session_joy.dwYpos>=0XC000?2:0)+(session_joy.dwXpos<0X4000?4:0)+(session_joy.dwXpos>=0XC000?8:0) // axial
-				:(session_joy.dwPOV< 2250?1:session_joy.dwPOV< 6750?9:session_joy.dwPOV<11250?8:session_joy.dwPOV<15750?10: // angular: U (0), U-R (4500), R (9000), R-D (13500)
-				session_joy.dwPOV<20250?2:session_joy.dwPOV<24750?6:session_joy.dwPOV<29250?4:session_joy.dwPOV<33750?5:1)) // D (18000), D-L (22500), L (27000), L-U (31500)
-				+((session_joy.dwButtons&(JOY_BUTTON1/*|JOY_BUTTON5*/))?16:0)+((session_joy.dwButtons&(JOY_BUTTON2/*|JOY_BUTTON6*/))?32:0) // FIRE1, FIRE2 ...
-				+((session_joy.dwButtons&(JOY_BUTTON3/*|JOY_BUTTON7*/))?64:0)+((session_joy.dwButtons&(JOY_BUTTON4/*|JOY_BUTTON8*/))?128:0) // FIRE3, FIRE4 ...
-				/*+((session_joy.dwZpos<0X4000?4:0)+(session_joy.dwZpos>0XC000?8:0))
-				+((session_joy.dwRpos<0X4000?1:0)+(session_joy.dwRpos>0XC000?2:0))*/ // this is safe on my controller (Axis Z + Rotation Z) but perhaps not on other controllers
-				;
-			}
-			else
-				j=0; // joystick failure, release its keys
-			MEMZERO(joy_bit); /*if (j)*/ for (i=0;i<length(kbd_joy);++i)
-				if (j&(1<<i)) // joystick bit is set?
-					{ int k=kbd_joy[i]; joy_bit[k>>3]|=1<<(k&7); }
-		}
-	}
-	if (audio_required&&audio_filter) audio_playframe(); // audio filter: sample averaging
-	session_writewave(); session_writefilm(); // record wave+film frame
-
-	if (!r) // check timers and pauses
-	{
-		if (session_audio) // rely on audio clock; unlike SDL2, the Win32 audio clock is reliable :-)
-		{
-			static BYTE t=1; if (t!=(session_fast|audio_disabled)) // sound needs higher priority, but only on realtime
-			{
-				//BELOW_NORMAL_PRIORITY_CLASS was overkill and caused trouble on busy systems :-(
-				SetPriorityClass(GetCurrentProcess(),(t=session_fast|audio_disabled)?NORMAL_PRIORITY_CLASS:ABOVE_NORMAL_PRIORITY_CLASS);
-				//SetThreadPriority(GetCurrentThread(),(t=session_fast|audio_disabled)?THREAD_PRIORITY_NORMAL:THREAD_PRIORITY_ABOVE_NORMAL);
-			}
-			waveOutGetPosition(session_wo,&session_mmtime,sizeof(session_mmtime));
-			//if (!=MMSYSERR_NOERROR) session_audio=0,audio_disabled=-1; // audio device is lost! // can this really happen!?
-			i=session_mmtime.u.sample,j=AUDIO_PLAYBACK; // questionable -- this will break the timing every 13 hours of emulation at 44100 Hz :-(
-		}
-		else // use internal tick count as clock
-			i=GetTickCount(),j=1000; // questionable for similar reasons, albeit every 23 days :-(
-		if (i-performance_t>=0) // update performance percentage?
-		{
-			sprintf(session_tmpstr,"%s | %s | %s %s %d:%d%%",
-				session_caption,session_info,
-			#ifdef DDRAW
-				lpddback?"DDRAW":
-			#endif
-				session_hardblit?"GDI":"gdi",session_version,
-				(performance_b*100+VIDEO_PLAYBACK/2)/VIDEO_PLAYBACK,(performance_f*100+VIDEO_PLAYBACK/2)/VIDEO_PLAYBACK);
-			SetWindowText(session_hwnd,session_tmpstr);
-			performance_t=i+j,performance_f=performance_b=session_paused=0;
-		}
-		q=1; static BYTE p=0; if (session_wait|session_fast)
-		{
-			if (audio_fastmute) audio_disabled|=+8;
-			p=1,session_timer=i; // ensure that the next frame can be valid!
-		}
-		else
-		{
-			audio_disabled&=~8;
-			if (p) // recalc audio buffer?
-				p=0,audio_session=(((4-session_softplay)<<(AUDIO_L2BUFFER-(2)-1))+session_timer)*AUDIO_BYTESTEP;
-			int s; if (VIDEO_PLAYBACK==50) // always true on pure PAL systems
-				s=j/50; // PAL never needs any adjusting (`j` is 1000, 22050, 24000, 44100 or 48000)
-			else // (we avoid a warning here) always true on pure NTSC systems
-				{ static int s0=0; s=(s0+=j)/VIDEO_PLAYBACK; s0%=VIDEO_PLAYBACK; } // 60 Hz: [16,17,17]
-			if ((i=(session_timer+=s)-i)>=0)
-				{ if (i=(i>s?s:i)*1000/j) Sleep(i); } // avoid zero and overflows!
-			else if (i<-s&&!session_filmfile)//&&!video_framecount) // *!* threshold?
-				video_framecount=video_framelimit+2; // skip frame on timeout!
-		}
-	}
-	audio_session=(audio_session+AUDIO_LENGTH_Z*AUDIO_BYTESTEP)&((AUDIO_BYTESTEP<<AUDIO_L2BUFFER)-AUDIO_BYTESTEP); // add block size and wrap around buffer
-	if (session_audio) // manage audio buffer
-	{
-		static BYTE s=1; if (s!=audio_disabled)
-			if (s=audio_disabled) // silent mode needs cleanup
-				MEMBYTE(audio_memory,AUDIO_ZERO);
-		if (!audio_disabled)
-		{
-			int t=AUDIO_LENGTH_Z*AUDIO_BYTESTEP,u;
-			if ((u=(AUDIO_BYTESTEP<<AUDIO_L2BUFFER)-audio_session)<t) // wrap around?
-				memcpy(&audio_memory[audio_session],audio_frame,u),
-				memcpy( audio_memory,&((BYTE*)audio_frame)[u],t-u);
-			else
-				memcpy(&audio_memory[audio_session],audio_frame,t);
-		}
-	}
-	if (session_wait) // resume activity after a pause
-		if (session_wait=0,session_audio) waveOutRestart(session_wo);
 }
 
 INLINE void session_byebye(void) // delete video+audio devices
@@ -822,6 +710,68 @@ INLINE void session_byebye(void) // delete video+audio devices
 	ReleaseDC(session_hwnd,session_dc1);
 	free(video_blend);
 	timeEndPeriod(8); // possibly unnecessary even on WIN10, as the programme is ending
+}
+
+// operations summonned by session_listen() and session_update()
+
+#define session_title(s) SetWindowText(session_hwnd,(s)) // set the window caption
+#define session_sleep() WaitMessage() // sleep till a system event happens
+#define session_delay(i) Sleep(i) // wait for approx `i` milliseconds
+char audio_needsync=0;
+#define audio_mustsync() (audio_needsync=1)
+void audio_resyncme(void)
+{
+	if (audio_needsync)
+		audio_needsync=0,audio_session=(((4-session_softplay)<<(AUDIO_L2BUFFER-1-2))+session_timer)*AUDIO_BYTESTEP;
+}
+
+int session_queue(void) // walk message queue: NONZERO = QUIT
+{
+	for (MSG msg;PeekMessage(&msg,NULL,0,0,PM_REMOVE);)
+	{
+		TranslateMessage(&msg);
+		if (msg.message==WM_QUIT)
+			return 1;
+		DispatchMessage(&msg);
+		if (session_event)
+		{
+			if (!((session_signal&SESSION_SIGNAL_DEBUG)&&session_debug_user(session_event)))
+				session_dirty=1,session_user(session_event);
+			session_event=0; //if (session_paused) ...?
+		}
+	}
+	return 0; // OK
+}
+int session_joy2k(void) // turn the joystick status into bits
+{
+	session_joy.dwSize=sizeof(session_joy);
+	session_joy.dwFlags=JOY_RETURNBUTTONS|JOY_RETURNPOVCTS|JOY_RETURNX|JOY_RETURNY|JOY_RETURNZ|JOY_RETURNR|JOY_RETURNCENTERED;
+	if (session_focused&&!joyGetPosEx(session_stick-1,&session_joy)) // without focus, ignore the joystick
+		return ((/*session_joy.dwPOV<0||*/session_joy.dwPOV>=36000)?(session_joy.dwYpos<0X4000?1:0)+(session_joy.dwYpos>=0XC000?2:0)+(session_joy.dwXpos<0X4000?4:0)+(session_joy.dwXpos>=0XC000?8:0) // axial
+		:(session_joy.dwPOV< 2250?1:session_joy.dwPOV< 6750?9:session_joy.dwPOV<11250?8:session_joy.dwPOV<15750?10: // angular: U (0), U-R (4500), R (9000), R-D (13500)
+		session_joy.dwPOV<20250?2:session_joy.dwPOV<24750?6:session_joy.dwPOV<29250?4:session_joy.dwPOV<33750?5:1)) // D (18000), D-L (22500), L (27000), L-U (31500)
+		+((session_joy.dwButtons&(JOY_BUTTON1/*|JOY_BUTTON5*/))?16:0)+((session_joy.dwButtons&(JOY_BUTTON2/*|JOY_BUTTON6*/))?32:0) // FIRE1, FIRE2 ...
+		+((session_joy.dwButtons&(JOY_BUTTON3/*|JOY_BUTTON7*/))?64:0)+((session_joy.dwButtons&(JOY_BUTTON4/*|JOY_BUTTON8*/))?128:0) // FIRE3, FIRE4 ...
+		/*+((session_joy.dwZpos<0X4000?4:0)+(session_joy.dwZpos>0XC000?8:0))
+		+((session_joy.dwRpos<0X4000?1:0)+(session_joy.dwRpos>0XC000?2:0))*/ // this is safe on my controller (Axis Z + Rotation Z) but perhaps not on other controllers
+		;
+	return 0; // joystick failure, release its bits
+}
+int session_ticks(void) // get the current system time; see also "session_clock"
+{
+	if (session_audio) // prefer audio clock to internal tick count; unlike SDL2, the Win32 audio clock is reliable :-)
+	{
+		static BYTE t=1; if (t!=(session_fast|audio_disabled)) // sound needs higher priority, but only on realtime
+		{
+			//BELOW_NORMAL_PRIORITY_CLASS was overkill and caused trouble on busy systems :-(
+			SetPriorityClass(GetCurrentProcess(),(t=session_fast|audio_disabled)?NORMAL_PRIORITY_CLASS:ABOVE_NORMAL_PRIORITY_CLASS);
+			//SetThreadPriority(GetCurrentThread(),(t=session_fast|audio_disabled)?THREAD_PRIORITY_NORMAL:THREAD_PRIORITY_ABOVE_NORMAL);
+		}
+		waveOutGetPosition(session_wo,&session_mmtime,sizeof(session_mmtime));
+		//if (!=MMSYSERR_NOERROR) session_audio=0,audio_disabled=-1; // audio device is lost! // can this really happen!?
+		return session_mmtime.u.sample; // questionable -- this will break the timing every 13 hours of emulation at 44100 Hz :-(
+	}
+	else return GetTickCount(); // questionable for similar reasons, albeit every 23 days :-(
 }
 
 // menu item functions ---------------------------------------------- //
@@ -853,19 +803,18 @@ void session_aboutme(const char *s,const char *t) // special case: "About.."
 
 // shared dialog data ----------------------------------------------- //
 
-int session_dialog_return; // dialog outcome: integer
-char *session_dialog_text; // dialog outcome: string
+char *session_dialog_text; char *session_dialog_list; // dialog strings
 
 // input dialog ----------------------------------------------------- //
 
-LRESULT CALLBACK inputproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // dialog callback function
+LRESULT CALLBACK msg_line(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // dialog callback function
 {
 	switch (msg)
 	{
 		case WM_INITDIALOG:
 			SetWindowText(hwnd,session_dialog_text);
 			SendDlgItemMessage(hwnd,12345,EM_SETLIMITTEXT,STRMAX-1,0);
-			return SendDlgItemMessage(hwnd,12345,WM_SETTEXT,0,(LPARAM)session_parmtr),session_dialog_return=-1;
+			return SendDlgItemMessage(hwnd,12345,WM_SETTEXT,0,(LPARAM)session_parmtr),1;
 		/*case WM_SIZE:
 			RECT r; GetClientRect(hwnd,&r);
 			SetWindowPos(session_dialog_item,NULL,0,0,r.right,r.bottom*1/2,SWP_NOZORDER);
@@ -873,38 +822,35 @@ LRESULT CALLBACK inputproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // di
 			return SetWindowPos(GetDlgItem(hwnd,IDCANCEL),NULL,r.right/2,r.bottom*1/2,r.right/2,r.bottom/2,SWP_NOZORDER),1;*/
 		case WM_COMMAND:
 			if (LOWORD(wparam)==IDCANCEL)
-				EndDialog(hwnd,0);
-			else if (/*!HIWORD(wparam)&&*/LOWORD(wparam)==IDOK)
-			{
-				session_dialog_return=SendDlgItemMessage(hwnd,12345,WM_GETTEXT,STRMAX,(LPARAM)session_parmtr);
-				EndDialog(hwnd,0);
-			}
+				EndDialog(hwnd,-1);
+			else if (LOWORD(wparam)==IDOK)
+				EndDialog(hwnd,SendDlgItemMessage(hwnd,12345,WM_GETTEXT,STRMAX,(LPARAM)session_parmtr));
 			return 1;
 	}
 	return 0; // ignore other messages
 }
-int session_input(char *t) // `t` is the caption; returns <0 on error or LENGTH on success
+int session_line(char *t) // `t` is the caption; returns <0 on error or LENGTH on success
 {
 	session_please();
 	session_dialog_text=t;
-	DialogBoxParam(GetModuleHandle(0),(LPCSTR)34004,session_hwnd,(DLGPROC)inputproc,0);
-	return session_dialog_return; // both the source and target strings are in `session_parmtr`
+	// DialogBoxParam returns ZERO if session_hwnd is INVALID, but it cannot be the case here!
+	return DialogBoxParam(GetModuleHandle(0),(LPCSTR)34004,session_hwnd,(DLGPROC)msg_line,0); // the actual string is in `session_parmtr`
 }
 
 // list dialog ------------------------------------------------------ //
 
-LRESULT CALLBACK listproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // dialog callback function
+LRESULT CALLBACK msg_list(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // dialog callback function
 {
 	switch (msg)
 	{
 		case WM_INITDIALOG:
 			SetWindowText(hwnd,session_dialog_text);
-			char *l=(char*)lparam; while (*l)
+			char *l=session_dialog_list; while (*l)
 			{
 				SendDlgItemMessage(hwnd,12345,LB_ADDSTRING,0,(LPARAM)l);
 				while (*l++) {}
 			}
-			return SendDlgItemMessage(hwnd,12345,LB_SETCURSEL,session_dialog_return,0),session_dialog_return=-1; // select item
+			return SendDlgItemMessage(hwnd,12345,LB_SETCURSEL,lparam,0),1; // select item
 		/*case WM_SIZE:
 			RECT r; GetClientRect(hwnd,&r);
 			SetWindowPos(session_dialog_item,NULL,0,0,r.right,r.bottom*15/16,SWP_NOZORDER);
@@ -912,13 +858,15 @@ LRESULT CALLBACK listproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // dia
 			return SetWindowPos(GetDlgItem(hwnd,IDCANCEL),NULL,r.right/2,r.bottom*15/16,r.right/2,r.bottom/16,SWP_NOZORDER),1;*/
 		case WM_COMMAND:
 			if (LOWORD(wparam)==IDCANCEL)
-				EndDialog(hwnd,0);
-			else if ((HIWORD(wparam)==LBN_DBLCLK)||(/*!HIWORD(wparam)&&*/LOWORD(wparam)==IDOK))
-				if ((session_dialog_return=SendDlgItemMessage(hwnd,12345,LB_GETCURSEL,0,0))>=0) // ignore OK if no item is selected
+				EndDialog(hwnd,-1);
+			else if (LOWORD(wparam)==IDOK||wparam==(LBN_DBLCLK<<16)+12345)
+			{
+				int i=SendDlgItemMessage(hwnd,12345,LB_GETCURSEL,0,0); if (i>=0) // ignore OK if no item is selected
 				{
-					SendDlgItemMessage(hwnd,12345,LB_GETTEXT,session_dialog_return,(LPARAM)session_parmtr);
-					EndDialog(hwnd,0);
+					SendDlgItemMessage(hwnd,12345,LB_GETTEXT,i,(LPARAM)session_parmtr);
+					EndDialog(hwnd,i); // where `i` is 0..N-1, i.e. the selected item's index
 				}
+			}
 			return 1;
 	}
 	return 0; // ignore other messages
@@ -927,22 +875,20 @@ int session_list(int i,const char *s,char *t) // `s` is a list of ASCIZ entries,
 {
 	if (!*s) return -1; // empty!
 	session_please();
-	session_dialog_text=t;
-	session_dialog_return=i;
-	DialogBoxParam(GetModuleHandle(0),(LPCSTR)34003,session_hwnd,(DLGPROC)listproc,(LPARAM)s);
-	return session_dialog_return; // the string is in `session_parmtr`
+	session_dialog_text=t,session_dialog_list=(char*)s; // avoid a warning... we won't modify the contents of the list either way!
+	return DialogBoxParam(GetModuleHandle(0),(LPCSTR)34003,session_hwnd,(DLGPROC)msg_list,i); // the chosen string is in `session_parmtr`
 }
 
 // scan dialog ------------------------------------------------------ //
 
-LRESULT CALLBACK scanproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // dialog callback function
+LRESULT CALLBACK msg_scan(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // dialog callback function
 {
 	switch (msg)
 	{
 		case WM_INITDIALOG:
 			EnableWindow(session_hwnd,0);
 			SetWindowText(hwnd,session_dialog_text);
-			return SendDlgItemMessage(hwnd,12345,WM_SETTEXT,0,lparam),session_dialog_return=-1;
+			return SendDlgItemMessage(hwnd,12345,WM_SETTEXT,0,lparam),1;
 		/*case WM_SIZE:
 			RECT r; GetClientRect(hwnd,&r);
 			return SetWindowPos(session_dialog_item,NULL,0,0,r.right,r.bottom,SWP_NOZORDER),1;*/
@@ -954,21 +900,21 @@ LRESULT CALLBACK scanproc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // dia
 	}
 	return 0; // ignore other messages
 }
-int session_scan(const char *s) // `s` is the name of the event; returns <0 on error or >=0 (keyboard code) on success
+int session_scan(const char *s) // `s` is the name of the event; returns <0 on error or >0 (keyboard code; can it be zero!?) on success
 {
 	session_please();
 	session_dialog_text=txt_session_scan;
-	session_hdlg=CreateDialogParam(GetModuleHandle(0),(LPCSTR)34005,session_hwnd,(DLGPROC)scanproc,(LPARAM)s);
+	session_hdlg=CreateDialogParam(GetModuleHandle(0),(LPCSTR)34005,session_hwnd,(DLGPROC)msg_scan,(LPARAM)s);
 	ShowWindow(session_hdlg,SW_SHOWDEFAULT); //UpdateWindow(session_hdlg);
-	for (MSG msg;session_hdlg&&GetMessage(&msg,NULL,0,0)>0;TranslateMessage(&msg),DispatchMessage(&msg))
+	int o=-1; for (MSG msg;session_hdlg&&GetMessage(&msg,NULL,0,0)>0;TranslateMessage(&msg),DispatchMessage(&msg))
 		if (msg.message==WM_KEYDOWN) // dialogs hide WM_KEYDOWN events, so we must track them here
 		{
-			int i=((HIWORD(msg.lParam))&127)+(((HIWORD(msg.lParam))>>1)&128);
+			int i=((HIWORD(msg.lParam))&127)+(((HIWORD(msg.lParam))>>1)&128); // we ignore reserved keys
 			if (i!=KBCODE_L_SHIFT&&i!=KBCODE_R_SHIFT&&i!=KBCODE_L_CTRL&&i!=KBCODE_R_CTRL
 				&&!((i>=KBCODE_F1&&i<=KBCODE_F10)||(i>=KBCODE_F11&&i<=KBCODE_F12)))
-				PostMessage(session_hdlg,WM_CLOSE,0,0),session_dialog_return=i==KBCODE_ESCAPE?-1:i;
+				PostMessage(session_hdlg,WM_CLOSE,0,0),o=i==KBCODE_ESCAPE?-1:i;
 		}
-	return session_dialog_return; // the string is in `session_parmtr`
+	return o;
 }
 
 // file dialog ------------------------------------------------------ //
@@ -976,8 +922,7 @@ int session_scan(const char *s) // `s` is the name of the event; returns <0 on e
 OPENFILENAME session_ofn;
 int getftype(const char *s) // <0 = invalid path / nothing, 0 = file, >0 = directory
 {
-	if (!s||!*s) return -1; // invalid path
-	int i=GetFileAttributes(s); return i>0?i&FILE_ATTRIBUTE_DIRECTORY:i;
+	int i; return (!s||!*s)?-1:(i=GetFileAttributes(s))>0?i&FILE_ATTRIBUTE_DIRECTORY:i;
 }
 int session_filedialog(char *r,const char *s,const char *t,int q,int f) // auxiliar function, see below
 {
