@@ -213,23 +213,16 @@ void session_please(void) // stop activity for a short while
 void session_thanks(void) // resume activity after a "please"
 	{ if (session_wait) if (session_wait=0,session_audio) SDL_PauseAudioDevice(session_audio,0); }
 void session_kbdclear(void) // wipe keyboard and joystick bits, for example on focus loss
-	{ MEMZERO(kbd_bit); MEMZERO(joy_bit); session_joybits=0; }
+	{ joy_kbd=joy_bit=session_joybits=0; MEMZERO(kbd_bit); }
 #define session_kbdreset() MEMBYTE(kbd_map,~~~0) // init and clean key map up
 void session_kbdsetup(const unsigned char *s,int l) // maps a series of virtual keys to the real ones
 {
 	session_kbdclear();
-	while (l--)
-	{
-		int k=*s++;
-		kbd_map[k]=*s++;
-	}
+	while (l--) { int k=*s++; kbd_map[k]=*s++; }
 }
-int session_key_n_joy(int k) // handle some keys as joystick motions
+int session_k2joy(int k) // translate key code; -8..-1 = joystick bit 0..7, 0..127 = normal key, 128..255 = function key
 {
-	if (session_key2joy)
-		for (int i=0;i<KBD_JOY_UNIQUE;++i)
-			if (kbd_k2j[i]==k)
-				return kbd_joy[i];
+	if (session_key2joy) for (int i=0;i<KBD_JOY_UNIQUE;++i) if (kbd_k2j[i]==k) return i-8;
 	return kbd_map[k];
 }
 
@@ -1515,13 +1508,12 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	session_ui_makechrs();
 	if (session_hidemenu) // user interface style
 	{
-		i=SESSION_UI_000; SESSION_UI_000=SESSION_UI_100; SESSION_UI_100=i;
-		i=SESSION_UI_033; SESSION_UI_033=SESSION_UI_067; SESSION_UI_067=i;
+		i=SESSION_UI_000; SESSION_UI_000=SESSION_UI_100; SESSION_UI_100=i; // inverse palette
+		i=SESSION_UI_033; SESSION_UI_033=SESSION_UI_067; SESSION_UI_067=i; // blacks / whites
 	}
 	if (session_stick)
 	{
-		i=SDL_NumJoysticks();
-		cprintf("Detected %d joystick[s]: ",i); // unlike Win32, SDL2 lists the joysticks from last to first
+		i=SDL_NumJoysticks(); cprintf("Detected %d joystick[s]: ",i); // unlike Win32, SDL2 lists the joysticks from last to first
 		while (--i>=0&&!((session_pad=SDL_IsGameController(i)),(cprintf("%s #%d '%s' ",
 			session_pad?"Controller":"Joystick",i,session_pad?SDL_GameControllerNameForIndex(i):SDL_JoystickNameForIndex(i))),
 			session_joy=(session_pad?(void*)SDL_GameControllerOpen(i):(void*)SDL_JoystickOpen(i))))
@@ -1638,7 +1630,7 @@ int session_queue(void) // walk message queue: NONZERO = QUIT
 				}
 			#ifdef MAUS_EMULATION
 			case SDL_MOUSEBUTTONDOWN: // no `break`!
-				session_maus_z=event.type==SDL_MOUSEBUTTONDOWN&&event.button.button==SDL_BUTTON_LEFT;
+				if (event.button.button==SDL_BUTTON_LEFT) session_maus_z=event.type==SDL_MOUSEBUTTONDOWN;
 				break;
 			case SDL_MOUSEMOTION:
 				session_maus_x=session_r_w>0?((event.motion.x-session_r_x)*VIDEO_PIXELS_X+session_r_w/2)/session_r_w:-1;
@@ -1676,10 +1668,10 @@ int session_queue(void) // walk message queue: NONZERO = QUIT
 				}
 				if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant inside debugger, see below
 					session_event=debug_xlat(event.key.keysym.scancode);
-				if ((k=session_key_n_joy(event.key.keysym.scancode))<128) // normal key
+				if ((k=session_k2joy(event.key.keysym.scancode))<128) // normal key
 				{
 					if (!(session_signal&SESSION_SIGNAL_DEBUG)) // only relevant outside debugger
-						kbd_bit_set(k);
+						{ if (k<0) joy_kbd|=+1<<(k+8); else kbd_bit_set(k); }
 				}
 				else if (!session_event) // special key, but only if not already set by debugger
 					session_event=(k-((event.key.keysym.mod&KMOD_CTRL)?128:0))<<8;
@@ -1694,8 +1686,9 @@ int session_queue(void) // walk message queue: NONZERO = QUIT
 				break;
 			case SDL_KEYUP:
 				session_shift=!!(event.key.keysym.mod&KMOD_SHIFT);
-				if ((k=session_key_n_joy(event.key.keysym.scancode))<128)
-					kbd_bit_res(k);
+				if ((k=session_k2joy(event.key.keysym.scancode))<128)
+					//if (!(session_signal&SESSION_SIGNAL_DEBUG)) // redundant, unlike in SDL_KEYDOWN
+						{ if (k<0) joy_kbd&=~(1<<(k+8)); else kbd_bit_res(k); }
 				break;
 			case SDL_JOYAXISMOTION:
 				//if (!session_pad) // redundant

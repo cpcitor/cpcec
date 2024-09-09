@@ -380,7 +380,7 @@ INLINE void crtc_table_send(BYTE i)
 				crtc_invis_update(); // mix visibility of R6 and R8 together
 				break;
 			case 4:
-				//printf("%02X%c%02X ",crtc_count_r4,(crtc_status&CRTC_STATUS_R9_OK)?'+':'-',i);
+				//cprintf("%02X%c%02X ",crtc_count_r4,(crtc_status&CRTC_STATUS_R9_OK)?'+':'-',i);
 				if (crtc_type&5) // CRTC1, CRTC3 and CRTC4 are straightforward (but see below "THE LIVING DAYLIGHTS" for a chance of overflow on CRTC 1)
 				{
 					if (crtc_type!=3/*&&!(crtc_status&CRTC_STATUS_R9_OK)*/?crtc_count_r4==i:crtc_count_r4>=i) // the "BG Games" logo of "PINBALL DREAMS" expects ">=" in CRTC3!
@@ -1196,17 +1196,17 @@ void audio_main(int t) // render audio output for `t` clock ticks; t is always n
 // autorun runtime logic -------------------------------------------- //
 
 BYTE snap_done; // avoid accidents with ^F2, see all_reset()
-char autorun_path[STRMAX]="",autorun_line[STRMAX]; int autorun_mode=0,autorun_t=0;
-BYTE autorun_kbd[16]; // automatic keypresses
+char autorun_path[STRMAX]="",autorun_s[STRMAX]; BYTE autorun_m=0; int autorun_t=0;
+BYTE autorun_kbd[16],kbd_bits[16]; // automatic keypresses
 #define autorun_kbd_set(k) (autorun_kbd[k>>3]|=1<<(k&7))
 #define autorun_kbd_res(k) (autorun_kbd[k>>3]&=~(1<<(k&7)))
 int autorun_kbd_bit(int k) // combined autorun+keyboard+joystick bits
 {
-	if (autorun_mode)
+	if (autorun_m)
 		return autorun_kbd[k];
 	if (k==9&&litegun) // catch special case: lightgun models
 	{
-		k=kbd_bit[9]&128; switch (litegun) // all lightguns do nothing if the trigger is up
+		k=kbd_bits[9]&128; switch (litegun) // all lightguns do nothing if the trigger is up
 		{
 			case 1: // TROJAN LIGHT PHASER updates the CRTC light pen registers when FIRE is down
 				if (session_maus_z)
@@ -1232,43 +1232,43 @@ int autorun_kbd_bit(int k) // combined autorun+keyboard+joystick bits
 		}
 		return k;
 	}
-	return kbd_bit[k]|joy_bit[k];
+	return kbd_bits[k];
 }
 INLINE void autorun_next(void) // handle AUTORUN
 {
-	switch (autorun_mode)
+	switch (autorun_m)
 	{
 		case 1: // tape (1/2)
 			autorun_kbd_set(0x17); // PRESS CONTROL
 			autorun_kbd_set(0x06); // PRESS ENTER
-			++autorun_mode; autorun_t=4;
+			++autorun_m; autorun_t=4;
 			break;
 		case 2: // tape (2/2)
 			autorun_kbd_res(0x17); // RELEASE CONTROL
 			autorun_kbd_res(0x06); // RELEASE ENTER
-			autorun_mode=8; autorun_t=4;
+			autorun_m=8; autorun_t=4;
 			break;
 		case 3: // disc: type 'RUN"filename"' or '|CPM'
-			strcpy(&POKE(type_id?0xAC8A:0xACA4),autorun_line); // type hidden line
-			autorun_mode=8; autorun_t=4;
+			strcpy(&POKE(type_id?0xAC8A:0xACA4),autorun_s); // type hidden line
+			autorun_m=8; autorun_t=4;
 			break;
 		case 4: // PLUS menu (1/2)
 			autorun_kbd_set(0x0D); // PRESS F1
-			++autorun_mode; autorun_t=4;
+			++autorun_m; autorun_t=4;
 			break;
 		case 5: // PLUS menu (2/2)
 			autorun_kbd_res(0x0D); // RELEASE F1
-			autorun_mode=disc_disabled?1:3; autorun_t=40; // now load the tape or disc proper
+			autorun_m=disc_disabled?1:3; autorun_t=40; // now load the tape or disc proper
 			break;
 		case 8: // shared (1/2)
 			autorun_kbd_set(0x12); // PRESS RETURN
-			++autorun_mode; autorun_t=4;
+			++autorun_m; autorun_t=4;
 			break;
 		case 9: // shared (2/2)
 			autorun_kbd_res(0x12); // RELEASE RETURN
 			if (plus_enabled&&disc_disabled) // Gremlin games ("Basil the Great Mouse Detective", "Gauntlet", "Skate Crazy"...)
 				POKE(0XC2D4)=0XC0; // need this to load on Plus; POKE(0XC374)=0 is redundant, because it's already zero.
-			disc_disabled&=1,autorun_mode=0; // end of AUTORUN
+			disc_disabled&=1,autorun_m=0; // end of AUTORUN
 			break;
 	}
 }
@@ -2504,7 +2504,7 @@ void all_reset(void) // reset everything!
 	z80_sp.w=0xC000; // implicit in "No Exit" PLUS!
 	z80_imd=1; // implicit in "Pro Tennis Tour" PLUS!
 	debug_reset();
-	disc_disabled&=1,z80_irq=snap_done=autorun_mode=autorun_t=0; // avoid accidents!
+	disc_disabled&=1,z80_irq=snap_done=autorun_m=autorun_t=0; // avoid accidents!
 	MEMBYTE(z80_tape_index,-1); // TAPE_FASTLOAD, avoid false positives!
 }
 
@@ -2642,8 +2642,10 @@ int bios_load(char *s) // load a cartridge file or a firmware ROM file. 0 OK, !0
 			cprintf("PLUS cartridge %dK.\n",i>>10);
 		}
 	}
+	#if 0 // not a good idea... autorun handles this case either way
 	if (!memcmp(&mem_rom[0xCE07],"\x1B\xBB\x30\xF0\xFE\x81\x28\x0C\xEE\x82",10))
 		mem_rom[0xCE07]=0x09,mem_rom[0xCE0C]=0x31,mem_rom[0xCE10]=0x32; // PLUS HACK: boot menu accepts '1' and '2'!
+	#endif
 	if (session_substr!=s) STRCOPY(bios_path,s);
 	return old_type_id=type_id,mmu_update(),0;
 }
@@ -3083,7 +3085,7 @@ int any_load_catalog(int t,int r) // load track `t` and sectors from `r` to `r+3
 
 int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` autorun; 0 OK, !0 ERROR
 {
-	autorun_mode=0; if (!s||!*s) return -1; // cancel any autoloading yet; reject invalid paths
+	autorun_m=0; if (!s||!*s) return -1; // cancel any autoloading yet; reject invalid paths
 	if (snap_load(s))
 	{
 		#ifdef Z80_DANDANATOR
@@ -3138,10 +3140,10 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 									}
 								}
 						if (bestscore) // load and run a file
-							sprintf(autorun_line,"RUN\"%s",bestfile);
+							sprintf(autorun_s,"RUN\"%s",bestfile);
 						else // no known files, run boot sector
-							strcpy(autorun_line,"|CPM");
-						cprintf("%s\n",autorun_line);
+							strcpy(autorun_s,"|CPM");
+						cprintf("%s\n",autorun_s);
 						disc_disabled=0,tape_close(); // open disc? enable disc, close tapes!
 					}
 				}
@@ -3151,7 +3153,7 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 				{
 					dandanator_remove(),old_type_id=old_type_id>2?-1:old_type_id,all_reset(),bios_reload(); // force firmware reload if required
 					if (tape) disc_disabled|=2; // disable disc to avoid accidents
-					autorun_mode=type_id<3?disc_disabled?1:3:4; autorun_t=55; // the PLUS menu must be handled separately
+					autorun_m=type_id<3?disc_disabled?1:3:4; autorun_t=55; // the PLUS menu must be handled separately
 				}
 			}
 			else dandanator_remove(),all_reset(); // load bios? reset!
@@ -3166,6 +3168,14 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 // auxiliary user interface operations ------------------------------ //
 
 BYTE key2joy_flag=0; // alternate joystick buttons
+
+int session_kbjoy(void) // update keys+joystick
+{
+	MEMLOAD(kbd_bits,kbd_bit);
+	for (int i=0;i<8;++i) if (joy_bit&(1<<i)) { int j=kbd_joy[i]; kbd_bits[j>>3]|=+1<<(j&7); }
+	return 0; // should never fail!
+}
+
 char txt_error_snap_save[]="Cannot save snapshot!";
 char file_pattern[]="*.cdp;*.cdt;*.cpr;*.crt;*.csw;*.dsk;*.ini;*.des;*.rom;*.sna;*.wav"; // from A to Z
 
@@ -4169,21 +4179,20 @@ int main(int argc,char *argv[])
 				}
 				if (session_stick|session_key2joy)
 				{
-					if (autorun_mode) // big letter "A"
-						onscreen_bool(-7,-7,3,1,autorun_t>0),
-						onscreen_bool(-7,-4,3,1,autorun_t>0),
-						onscreen_bool(-8,-6,1,5,autorun_t>0),
-						onscreen_bool(-4,-6,1,5,autorun_t>0);
+					if (autorun_m) // big letter "A"
+						onscreen_bool(-7,-7,3,1,1),
+						onscreen_bool(-7,-4,3,1,1),
+						onscreen_bool(-8,-6,1,5,1),
+						onscreen_bool(-4,-6,1,5,1);
 					else
 					{
-						onscreen_bool(-6,-8,1,2,kbd_bit_tst(kbd_joy[0])),
-						onscreen_bool(-6,-5,1,2,kbd_bit_tst(kbd_joy[1])),
-						onscreen_bool(-8,-6,2,1,kbd_bit_tst(kbd_joy[2])),
-						onscreen_bool(-5,-6,2,1,kbd_bit_tst(kbd_joy[3])),
-						onscreen_bool(-8,-2,2,1,kbd_bit_tst(kbd_joy[4])),
-						onscreen_bool(-5,-2,2,1,kbd_bit_tst(kbd_joy[5]));
-						if (video_threshold>VIDEO_LENGTH_X/4)
-							onscreen_bool(-6,-6,1,1,0);
+						onscreen_bool(-6,-8,1,2,joy_bit&(1<<0)),
+						onscreen_bool(-6,-5,1,2,joy_bit&(1<<1)),
+						onscreen_bool(-8,-6,2,1,joy_bit&(1<<2)),
+						onscreen_bool(-5,-6,2,1,joy_bit&(1<<3)),
+						onscreen_bool(-8,-2,2,1,joy_bit&(5<<4)),
+						onscreen_bool(-5,-2,2,1,joy_bit&(5<<5));
+						if (video_threshold>VIDEO_LENGTH_X/4) onscreen_bool(-6,-6,1,1,0); // DEBUG!
 					}
 				}
 				#ifdef DEBUG
