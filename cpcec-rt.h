@@ -11,7 +11,7 @@
 // interface of variables and procedures that don't require particular
 // knowledge of the emulation's intrinsic properties.
 
-#define MY_VERSION "20240830" // all emulators share the same release date
+#define MY_VERSION "20240909" // all emulators share the same release date
 
 #define INLINE // 'inline' is useless in TCC and GCC4, and harmful in GCC5!
 #define UNUSED // '__attribute__((unused))' may be missing outside GCC
@@ -87,7 +87,7 @@ char session_fast=0,session_rhythm=0,session_wait=0,session_softblit=1,session_h
 char session_audio=1,session_stick=1,session_shift=0,session_key2joy=0; // keyboard and joystick
 int session_maus_x=0,session_maus_y=0; // mouse coordinates (debugger + SDL2 UI + optional emulation)
 #ifdef MAUS_EMULATION
-int session_maus_z=0; // optional mouse and lightgun
+unsigned char session_maus_z=0; // optional mouse and lightgun
 #endif
 char video_filter=0,audio_filter=0,video_fineblend=0; // filter flags
 char session_fullblit=0,session_zoomblit=0,session_version[16]; // OS label, [8] was too short
@@ -114,12 +114,12 @@ int session_ntsc(int q) // sets NTSC (60 Hz) mode if `q` is nonzero, sets PAL (5
 #define session_ntsc(q) (q)
 #endif
 
-#define kbd_bit_set(k) (kbd_bit[(k)>>3]|=1<<((k)&7))
+#define kbd_bit_set(k) (kbd_bit[(k)>>3]|= (1<<((k)&7)))
 #define kbd_bit_res(k) (kbd_bit[(k)>>3]&=~(1<<((k)&7)))
-#define kbd_bit_tst(k) ((kbd_bit[(k)>>3]|joy_bit[(k)>>3])&(1<<((k)&7)))
-unsigned char kbd_bit[16],joy_bit[16]; // up to 128 keys in 16 rows of 8 bits
+unsigned char kbd_bit[16],joy_kbd,joy_bit; // up to 128 keys in 16 rows of 8 bits + real/virtual joystick bits
 unsigned char txt_session_scan[]="Press a key or ESCAPE"; // cfr. redefine virtual joystick
 
+int session_kbjoy(void); // update keys+joystick; will be defined later on!
 void session_clean(void); // "clean" dirty settings; will be defined later on!
 void session_user(int); // handle the user's commands; will be defined later on, too!
 void session_debug_show(void); // redraw the debugger text, reloading it if required
@@ -1003,19 +1003,20 @@ INLINE int session_listen(void) // check the pending messages and update stuff a
 	}
 	if (session_queue()) return 1;
 	if (session_dirty) session_dirty=0,session_clean();
-	return 0;
+	return session_kbjoy(); // sync the keyboard and joystick
 }
 
 INLINE void session_update(void) // render video+audio and handle self-adjusting realtime delays, automatic frameskip, etc.
 {
 	int i,j; static int performance_t=0,performance_f=0,performance_b=0; ++performance_f;
 	session_writewave(); session_writefilm(); // record wave+film frame
-	if (session_stick&&!session_key2joy) // do we need to check the joystick?
+	if (session_key2joy) // virtual joystick?
 	{
-		j=session_joy2k(); MEMZERO(joy_bit);
-		for (i=length(kbd_joy);i--;) if (j&(1<<i))
-			{ int k=kbd_joy[i]; joy_bit[k>>3]|=1<<(k&7); }
+		joy_bit=joy_kbd;
+		if (!(~joy_bit& 3)) joy_bit-= 3; // catch illegal UP+DOWN...
+		if (!(~joy_bit&12)) joy_bit-=12; // ...and LEFT+RIGHT in joystick
 	}
+	else joy_bit=session_stick?session_joy2k():0; // real joystick or nothing
 	i=session_ticks(); { static BYTE q=0; if (!q) q=1,performance_t=i; } if ((j=i-performance_t)>=0) // update performance percentage?
 	{
 		sprintf(session_tmpstr,"%s | %s | %s %s %d:%d%%",session_caption,session_info,session_blitinfo(),session_version,

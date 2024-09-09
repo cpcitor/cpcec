@@ -249,23 +249,16 @@ void session_please(void) // stop activity for a short while
 void session_thanks(void) // resume activity after a "please"
 	{ if (session_wait) if (session_wait=0,session_audio) waveOutRestart(session_wo); }
 void session_kbdclear(void) // wipe keyboard and joystick bits, for example on focus loss
-	{ MEMZERO(kbd_bit); MEMZERO(joy_bit); }
+	{ joy_kbd=joy_bit=0; MEMZERO(kbd_bit); }
 #define session_kbdreset() MEMBYTE(kbd_map,~~~0) // init and clean key map up
 void session_kbdsetup(const unsigned char *s,int l) // maps a series of virtual keys to the real ones
 {
 	session_kbdclear();
-	while (l--)
-	{
-		int k=*s++;
-		kbd_map[k]=*s++;
-	}
+	while (l--) { int k=*s++; kbd_map[k]=*s++; }
 }
-int session_key_n_joy(int k) // handle some keys as joystick motions
+int session_k2joy(int k) // translate key code; -8..-1 = joystick bit 0..7, 0..127 = normal key, 128..255 = function key
 {
-	if (session_key2joy)
-		for (int i=0;i<KBD_JOY_UNIQUE;++i)
-			if (kbd_k2j[i]==k)
-				return kbd_joy[i];
+	if (session_key2joy) for (int i=0;i<KBD_JOY_UNIQUE;++i) if (kbd_k2j[i]==k) return i-8;
 	return kbd_map[k];
 }
 
@@ -457,7 +450,7 @@ LRESULT CALLBACK msg_main(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 		case WM_LBUTTONDOWN:
 		case WM_MOUSEMOVE: // no `break`!
 			#ifdef MAUS_EMULATION
-			session_maus_z=wparam&MK_LBUTTON;
+			session_maus_z=wparam&MK_LBUTTON; // MK_LBUTTON is 1, so this is identical to !!(expr)
 			#endif
 			session_maus_y=session_r_h>0?((HIWORD(lparam)-session_r_y)*VIDEO_PIXELS_Y+session_r_h/2)/session_r_h:-1;
 			session_maus_x=session_r_w>0?((LOWORD(lparam)-session_r_x)*VIDEO_PIXELS_X+session_r_w/2)/session_r_w:-1;
@@ -469,10 +462,10 @@ LRESULT CALLBACK msg_main(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 			session_shift=GetKeyState(VK_SHIFT)<0;
 			if (session_signal&SESSION_SIGNAL_DEBUG) // only relevant inside debugger, see below
 				session_event=debug_xlat(((HIWORD(lparam))&127)+(((HIWORD(lparam))>>1)&128));
-			if ((k=session_key_n_joy(((HIWORD(lparam))&127)+(((HIWORD(lparam))>>1)&128)))<128) // normal key
+			if ((k=session_k2joy(((HIWORD(lparam))&127)+(((HIWORD(lparam))>>1)&128)))<128) // normal key
 			{
 				if (!(session_signal&SESSION_SIGNAL_DEBUG)) // only relevant outside debugger
-					kbd_bit_set(k);
+					{ if (k<0) joy_kbd|=+1<<(k+8); else kbd_bit_set(k); }
 			}
 			else if (!session_event) // special key, but only if not already set by debugger
 				session_event=(k-(GetKeyState(VK_CONTROL)<0?128:0))<<8;
@@ -483,8 +476,9 @@ LRESULT CALLBACK msg_main(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam) // win
 			break;
 		case WM_KEYUP:
 			session_shift=GetKeyState(VK_SHIFT)<0;
-			if ((k=session_key_n_joy(((HIWORD(lparam))&127)+(((HIWORD(lparam))>>1)&128)))<128) // normal key
-				kbd_bit_res(k);
+			if ((k=session_k2joy(((HIWORD(lparam))&127)+(((HIWORD(lparam))>>1)&128)))<128) // normal key
+				//if (!(session_signal&SESSION_SIGNAL_DEBUG)) // redundant, unlike in WM_KEYDOWN
+					{ if (k<0) joy_kbd&=~(1<<(k+8)); else kbd_bit_res(k); }
 			break;
 		case WM_DROPFILES:
 			session_shift=GetKeyState(VK_SHIFT)<0,session_event=0X8000;
@@ -654,8 +648,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	session_joy.dwFlags=JOY_RETURNALL;
 	if (session_stick)
 	{
-		JOYCAPS jc; i=joyGetNumDevs(),j=0;
-		cprintf("Detected %d joystick[s]: ",i);
+		JOYCAPS jc; i=joyGetNumDevs(),j=0; cprintf("Detected %d joystick[s]: ",i);
 		while (j<i&&(joyGetDevCaps(j,&jc,sizeof(jc))||(cprintf("Joystick/controller #%d '%s' ",j,jc.szPname),joyGetPosEx(j,&session_joy))))
 			++j; // scan joysticks until we run out or one is OK
 		session_stick=(j<i)?j+1:0; cprintf(session_stick?"Joystick enabled!\n":"No joystick!\n"); // ID+1 if available, 0 if missing

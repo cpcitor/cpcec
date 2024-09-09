@@ -27,10 +27,6 @@ int opll_wave[14]; // cycle within the sample
 #define OPLL_SINE_BITS 10
 int opll_sine[4][1<<OPLL_SINE_BITS]; //
 
-#if AUDIO_CHANNELS > 1
-int opll_stereo[14][2]; // the channels' LEFT and RIGHT weights
-#endif
-
 const BYTE opll_const[19*8]= // OPLL preset insts (0-15) and drums (16-18): FMSX, BlueMSX and OpenMSX agree on their values
 { // each line follows the same rules from OPL regs. 0-7
 	0,0,0,0,0,0,0,0, //  0: original, user-defined
@@ -127,11 +123,7 @@ void opll_main(AUDIO_UNIT *t,int l) // "piggyback" the audio output for nonzero 
 		((opll_table[32+8]&1)*256+opll_table[16+8])<<((opll_table[32+8]&14)>>1)};
 	do
 	{
-		#if AUDIO_CHANNELS > 1
-		int o0=0,o1=0;
-		#else
-		int o=0;
-		#endif
+		static int o=0;
 		#if OPLL_MAIN_EXTRABITS
 		for (char n=0;n<(1<<OPLL_MAIN_EXTRABITS);++n)
 		#endif
@@ -143,21 +135,14 @@ void opll_main(AUDIO_UNIT *t,int l) // "piggyback" the audio output for nonzero 
 				if (opll_loud[c])
 				{
 					opll_wave[c]+=s[c]*m;
-					int p=/*opll_ampl[c]**/opll_smpl[c][(opll_wave[c]>>(19-OPLL_SINE_BITS))&((1<<OPLL_SINE_BITS)-1)];
-					#if AUDIO_CHANNELS > 1
-						o0+=opll_stereo[c][0]*p,
-						o1+=opll_stereo[c][1]*p;
-					#else
-						o+=p;
-					#endif
+					o+=/*opll_ampl[c]**/opll_smpl[c][(opll_wave[c]>>(19-OPLL_SINE_BITS))&((1<<OPLL_SINE_BITS)-1)];
 				}
 		}
+		*t=((o >>(OPLL_MAIN_EXTRABITS))+*t)>>1; ++t;
 		#if AUDIO_CHANNELS > 1
-		o0=(o0>>(OPLL_MAIN_EXTRABITS+9))+*t; *t++=o0>>1;
-		o1=(o1>>(OPLL_MAIN_EXTRABITS+9))+*t; *t++=o1>>1;
-		#else
-		o=(o>>OPLL_MAIN_EXTRABITS)+*t; *t++=o>>1; // assuming 50% OPLL, 50% AY
+		*t=((o >>(OPLL_MAIN_EXTRABITS))+*t)>>1; ++t;
 		#endif
+		o &=(1<<OPLL_MAIN_EXTRABITS)-1;
 	}
 	while (--l>0);
 }

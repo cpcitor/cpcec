@@ -213,7 +213,7 @@ void sid_setup(void)
 	sid_shape_setup();
 }
 
-char sid_filters=1,sid_samples=1,sid_delay[3]; INT8 sid_filter_raw[3][3],sid_filter_flt[3][3]; // filter states, mixing bitmasks and output values
+BYTE sid_filters=1,sid_samples=1,sid_delay[3]; INT8 sid_filter_raw[3][3],sid_filter_flt[3][3]; // filter states, mixing bitmasks and output values
 int sid_voice[3],sid_mixer[3],sid_filtered[3]; // sampled speech and digidrums
 double sid_filter_hw[3],sid_filter_bw[3],sid_filter_lw[3]; // I hate mixing [long] ints and [double] floats...
 double sid_filter_qu[3],sid_filter_fu[3]; // Chamberlin filter parameters; they're always above 0.0 and below 2.0 but they need precision
@@ -262,13 +262,13 @@ void sid_reg_update(int x,int i)
 			break;
 		case 24: // filter mode/volume control
 			i=SID_TABLE[x][24]; sid_filter_hw[x]=(i>>6)&1,sid_filter_bw[x]=(i>>5)&1,sid_filter_lw[x]=(i>4)&1;
-			if (sid_samples)
+			if (sid_samples) if (sid_delay[x]!=(i&=15))
 			{
+				sid_delay[x]=16; // out of range!
 				// a linear table makes "STORMLORD" (range 5-12) and "TURBO OUT RUN" MENU (range 4-11) sound softer than expected.
 				// (question: why does "TURBO OUT RUN" TITLE use the full range 0-15!?)
 				const INT8 k[16]={ -126,-122,-116,-108,-96,-80,-56,-24,+24,+56,+80,+96,+108,+116,+122,+126 };
-				i=k[i&15]*(SID_MAX_VOICE*2); // empirical multiplier, mostly comparing "STORMLORD" and "ECHOFIED"
-				if (sid_voice[x]!=i) sid_voice[x]=i,sid_delay[x]=0;
+				sid_voice[x]=k[i]*(SID_MAX_VOICE*2); // empirical multiplier, mostly comparing "STORMLORD" and "ECHOFIED"
 			}
 			// no `break`!
 		case 23: // filter resonance control
@@ -505,7 +505,7 @@ void sid_frame(void) // the equivalent of dac_frame() in other machines
 		int z=(SID_TABLE[x][24]&15)*17; if (sid_mixer[x]<z) ++sid_mixer[x]; // the mixer takes a while to catch up
 		sid_mixer[x]=(sid_mixer[x]*3+z)>>2; // f.e. the intro of "Stormlord" plays samples ($35..$3C) but the menu just clobbers the mixer ($3F)
 		z=SID_TABLE[x][24]&15; // clobbering the mixer must keep the "dac_voice", f.e. noise in "International Karate 1/2/Plus" ($04 in IK, $14 in IK+)
-		if (sid_delay[x]) sid_voice[x]=sid_voice[x]*63/64; else ++sid_delay[x];
+		if (sid_delay[x]<16) sid_voice[x]=sid_voice[x]*63/64; else sid_delay[x]=SID_TABLE[x][24]&15;
 	}
 	sid_mute(); // update mute timers
 }

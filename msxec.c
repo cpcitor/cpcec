@@ -257,6 +257,7 @@ void ym3_write(void) { ym3_write_ay(psg_table,&psg_hard_log,PSG_KHZ_CLOCK); }
 int dac_extra=0,dac_delay=0,dac_voice=0; // tape_loud=1,tape_song=0: do any MSX titles play music while loading from tape!?
 #define dac_frame() ((dac_extra>>=1)?0:dac_delay>0?dac_voice=dac_voice*63/64:++dac_delay) // soften signal as time passes
 
+BYTE joy_bits; // the actual joystick bits
 BYTE joystick_bit=0; // alternate joystick ports; they use registers 14 and 15 of the PSG
 BYTE key2joy_flag=0; // alternate joystick buttons
 
@@ -278,9 +279,6 @@ BYTE sccplus_ready=0,sccplus_debug=0,sccplus_ram[1<<16]; // the two-in-one 64K b
 // C0-DF: test ?	// E0-FF: unused ?
 BYTE sccplus_playing; // zero on reset, one when a channel is first enabled
 int sccplus_tone[5],sccplus_ampl[5]; // these values are too big for 8 bits
-#if AUDIO_CHANNELS > 1
-int sccplus_stereo[5][2]; // the five channels' LEFT and RIGHT weights
-#endif
 
 void sccplus_reset(void)
 {
@@ -354,11 +352,7 @@ void sccplus_main(AUDIO_UNIT *t,int l) // "piggyback" the audio output for nonze
 		(sccplus_table[161+8]&15)*256+sccplus_table[160+8]};
 	do
 	{
-		#if AUDIO_CHANNELS > 1
-		static int o0=0,o1=0;
-		#else
 		static int o=0;
-		#endif
 		#if SCCPLUS_MAIN_EXTRABITS
 		for (char n=0;n<(1<<SCCPLUS_MAIN_EXTRABITS);++n) // remember, the old SCC- is a subset of the SCC+
 		#endif
@@ -372,20 +366,14 @@ void sccplus_main(AUDIO_UNIT *t,int l) // "piggyback" the audio output for nonze
 						int k=(sccplus_tone[c]+=m)/j; sccplus_wave[c]+=k,sccplus_tone[c]%=j;
 						j=sccplus_wave[c]; //if (!sccplus_table[192]) j^=sccplus_wave[c]>>5;
 						int p=sccplus_ampl[c]*(INT8)sccplus_table[c*32+(j&31)];
-						#if AUDIO_CHANNELS > 1
-							o0+=sccplus_stereo[c][0]*p,
-							o1+=sccplus_stereo[c][1]*p;
-						#else
-							o+=p;
-						#endif
+						o+=p;
 					}
 		}
+		*t=((o >>(SCCPLUS_MAIN_EXTRABITS))+*t)>>1; ++t;
 		#if AUDIO_CHANNELS > 1
-		*t=((o0>>(SCCPLUS_MAIN_EXTRABITS+8))+*t)>>1; ++t; o0&=(1<<SCCPLUS_MAIN_EXTRABITS+8)-1;
-		*t=((o1>>(SCCPLUS_MAIN_EXTRABITS+8))+*t)>>1; ++t; o1&=(1<<SCCPLUS_MAIN_EXTRABITS+8)-1;
-		#else
-		*t=((o >> SCCPLUS_MAIN_EXTRABITS   )+*t)>>1; ++t; o &=(1<<SCCPLUS_MAIN_EXTRABITS  )-1;
+		*t=((o >>(SCCPLUS_MAIN_EXTRABITS))+*t)>>1; ++t;
 		#endif
+		o &=(1<<SCCPLUS_MAIN_EXTRABITS)-1;
 	}
 	while (--l>0);
 }
@@ -2135,7 +2123,7 @@ void audio_main(int t) // render audio output for `t` clock ticks; t is always n
 // autorun runtime logic -------------------------------------------- //
 
 BYTE snap_done; // avoid accidents with ^F2, see all_reset()
-char autorun_path[STRMAX]="",*autorun_s=NULL,autorun_t=0;
+char autorun_path[STRMAX]="",*autorun_s=NULL;//,autorun_m=0;
 //BYTE autorun_kbd[16]; // automatic keypresses
 #define autorun_next() ((void)0) // handle AUTORUN
 
@@ -2505,7 +2493,7 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 		case 0XA2: // PSG PORT #2
 			if (psg_index==14)
 			{
-				BYTE b=(psg_table[15]>>6)^~joystick_bit; if (b&=1) b=kbd_bit[14];
+				BYTE b=(psg_table[15]>>6)^~joystick_bit; if (b&=1) b=autorun_s?0:joy_bits;
 				#if 1 // TAPE_FASTLOAD
 				if (tape_fastload&&tape/*_loud*/) z80_tape_trap(); // handle tape analysis upon status
 				#endif
@@ -2519,7 +2507,7 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 		case 0XAD: // PIO PORT B (MSX-SYSTEM MIRROR)
 			if (!(type_id|ram_map)) return 255;
 		case 0XA9: // PIO PORT B
-			return ~kbd_bit[pio_port_c&15];
+			return autorun_s?255:~kbd_bit[pio_port_c&15];
 		case 0XAE: // PIO PORT C (MSX-SYSTEM MIRROR)
 			if (!(type_id|ram_map)) return 255;
 		case 0XAA: // PIO PORT C
@@ -2740,9 +2728,10 @@ BYTE z80_xcf=0; // the XCF quirk flag
 void z80_magick(void) // virtual magick!
 {
 	//cprintf("MAGICK:%08X ",z80_pc.w);
-	/**/ if (pio_port_a& 15) { if (z80_pc.w==0X2C76&&ram_bit+1==z80_hl.w&&mmu_rom[2]==&mem_rom[0X10000-0X0000]&&equalsmm(&mem_rom[0X12C76],0XE53E)) ram_dirty=3; } // MSX2P: clean extended RAM "dirty" status after internal test
+	/**/ if (pio_port_a&15) // MSX2P: clean RAM "dirty" flag
+		{ if ((pio_port_a&15)==3&&z80_pc.w==0X2C76&&z80_hl.w==ram_bit+1&&mmu_rom[2]==&mem_rom[0X10000-0X0000]&&equalsmm(&mem_rom[0X12C76],0XE53E)) ram_dirty=3; }
 	// all the other traps are BIOS & BASIC only!
-	else if (z80_pc.w==0X10CB) { if (autorun_t>0) { { if (mem_rom[0X10CB]==0XE5) z80_af.b.h=*autorun_s++,z80_pc.w=0XFD9F; } if (!--autorun_t) disc_disabled&=1; } } // AUTORUN + end of AUTORUN
+	else if (z80_pc.w==0X10CB) { if (autorun_s&&mem_rom[0X10CB]==0XE5) if (z80_af.b.h=*autorun_s++,z80_pc.w=0XFD9F,!*autorun_s) autorun_s=NULL,disc_disabled&=1; } // AUTORUN + end of AUTORUN
 	else if (!power_boosted) ; // power-up boost only!
 	else if (z80_pc.w==0X030D||z80_pc.w==0X0370) // MSX1: power-up boost (hardware test)
 		{ if (!type_id&&mem_rom[z80_pc.w]==0X2C) z80_hl.b.l=255; }
@@ -2764,7 +2753,7 @@ void debug_info(int q)
 	else
 		sprintf(DEBUG_INFOZ( 0),"MAP:   - --:--:--:--");
 	sprintf(DEBUG_INFOZ( 1)+4,"PIO%c %02X:%02X:%02X:%02X",cart?'*':'-',pio_port_a,pio_port_b,pio_port_c,pio_control);
-	sprintf(DEBUG_INFOZ( 2)+5,"RAM %02X:%02X:%02X:%02X",ram_cfg[0],ram_cfg[1],ram_cfg[2],ram_cfg[3]);
+	sprintf(DEBUG_INFOZ( 2)+4,"RAM%c %02X:%02X:%02X:%02X",ram_map?'+':'-',ram_cfg[0],ram_cfg[1],ram_cfg[2],ram_cfg[3]);
 	sprintf(DEBUG_INFOZ( 3)+6,"PS %02X:%02X:%02X:%02X",ps_slot[0],ps_slot[1],ps_slot[2],ps_slot[3]);
 	if (!(q&1)) // 1/2
 	{
@@ -2921,7 +2910,7 @@ void all_reset(void) // reset everything!
 	debug_reset();
 	sccplus_reset();
 	//MEMBYTE(mem_ram,-1); // clean memory AND remove "AB" boot traps (not MEMZERO?)
-	disc_disabled&=1,z80_irq=snap_done=/*autorun_mode=*/autorun_t=0; // avoid accidents!
+	disc_disabled&=1,z80_irq=snap_done=/*autorun_m=*/0,autorun_s=NULL; // avoid accidents!
 	MEMBYTE(z80_tape_index,-1); // TAPE_FASTLOAD, avoid false positives!
 }
 
@@ -3231,9 +3220,16 @@ int snap_load(char *s) // load a snapshot `s`; zero OK, nonzero error!
 
 // "autorun" file and logic operations ------------------------------ //
 
+int session_kbjoy(void) // update keys+joystick
+{
+	joy_bits=0; if (!autorun_s) // (!autorun_m)
+		for (int i=0;i<8;++i) if (joy_bit&(1<<i)) joy_bits|=1<<(kbd_joy[i]-0160);
+	return 0; // should never fail!
+}
+
 int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` autorun; 0 OK, !0 ERROR
 {
-	autorun_t=0; if (!s||!*s) return -1; // cancel any autoloading yet; reject invalid paths
+	autorun_s=NULL; if (!s||!*s) return -1; // cancel any autoloading yet; reject invalid paths
 	if (!video_table_load(s)) video_main_xlat(),video_xlat_clut(); else if (!cart_hotfix(s)) {} else // colour palette, cartridge patch!
 	if (snap_load(s))
 		if (disc_open(s,0,!(disc_filemode&1))) // use same setting as DEFAULT READ-ONLY
@@ -3255,11 +3251,11 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 				{
 					cart_remove(),all_reset(),disc_disabled|=2;
 					if (globbing("*cload*",s,1)) // least likely (<10%)
-						autorun_t=10,autorun_s="cload\015run\015";
+						autorun_s="cload\015run\015";
 					else if (globbing("*bload*",s,1)) // halfway (>30%)
-						autorun_t=14,autorun_s="bload\042cas:\042,r\015";
+						autorun_s="bload\042cas:\042,r\015";
 					else // most likely (>50%!)
-						autorun_t=10,autorun_s="run\042cas:\042\015";
+						autorun_s="run\042cas:\042\015";
 				}
 			}
 		else
@@ -3498,24 +3494,16 @@ void session_clean(void) // refresh options
 	kbd_joy[5]=kbd_joy[7]=0165-key2joy_flag;
 	#if AUDIO_CHANNELS > 1
 	session_menuradio(0xC401+audio_mixmode,0xC401,0xC404);
-	// according to https://www.msx.org/wiki/Category:PSG most brands doing stereo chose MIDDLE:LEFT:RIGHT
-	psg_stereo[0][0]=256+audio_stereos[audio_mixmode][1],psg_stereo[0][1]=256-audio_stereos[audio_mixmode][1];
-	psg_stereo[1][0]=256+audio_stereos[audio_mixmode][0],psg_stereo[1][1]=256-audio_stereos[audio_mixmode][0];
-	psg_stereo[2][0]=256+audio_stereos[audio_mixmode][2],psg_stereo[2][1]=256-audio_stereos[audio_mixmode][2];
+	// according to https://www.msx.org/wiki/Category:PSG some brands had stereo BAC or BCA, but most had mono,
+	// and both the Konami SCC and the OPLL chips are effectively mono to begin with :-(
 	#ifdef PSG_PLAYCITY
-	for (int i=0;i<3;++i)
-		playcity_stereo[0][i][0]=psg_stereo[i][0],playcity_stereo[0][i][1]=psg_stereo[i][1]; // TURBO SOUND chip shares stereo with the PSG
+	playcity_stereo[0][0][0]=playcity_stereo[0][0][1]=
+	playcity_stereo[0][1][0]=playcity_stereo[0][1][1]=
+	playcity_stereo[0][2][0]=playcity_stereo[0][2][1]=256;
 	#endif
-	// is the Konami SCC stereo? let's assume it's M:L:R:LM:MR -- voices 4 and 5 must be in opposite sides, and "F1 SPIRIT" uses voice 1 as the engine
-	sccplus_stereo[0][0]=psg_stereo[0][0];
-	sccplus_stereo[0][1]=psg_stereo[0][1];
-	sccplus_stereo[3][0]=((sccplus_stereo[1][0]=psg_stereo[1][0])+psg_stereo[0][0])>>1;
-	sccplus_stereo[3][1]=((sccplus_stereo[1][1]=psg_stereo[1][1])+psg_stereo[0][1])>>1;
-	sccplus_stereo[4][0]=((sccplus_stereo[2][0]=psg_stereo[2][0])+psg_stereo[0][0])>>1;
-	sccplus_stereo[4][1]=((sccplus_stereo[2][1]=psg_stereo[2][1])+psg_stereo[0][1])>>1;
-	// OPLL was either fully mono or assigned one side to instruments and the other side to drums :-/
-	for (int c=0;c<length(opll_stereo);++c)
-		opll_stereo[c][0]=psg_stereo[0][0],opll_stereo[c][1]=psg_stereo[0][1];
+	psg_stereo[0][0]=psg_stereo[0][1]=
+	psg_stereo[1][0]=psg_stereo[1][1]=
+	psg_stereo[2][0]=psg_stereo[2][1]=256;
 	#endif
 	video_resetscanline(),debug_dirty=1; sprintf(session_info,"%d:%dK %s %s %0.1fMHz"
 		,16*(ram_dirty+1),16*(ram_bit+1)
@@ -4204,6 +4192,18 @@ int main(int argc,char *argv[])
 			if (audio_required)
 			{
 				if (audio_pos_z<AUDIO_LENGTH_Z) audio_main(TICKS_PER_FRAME); // fill sound buffer to the brim!
+				#if AUDIO_CHANNELS > 1
+				if (audio_mixmode) // the MSX chip audio chips are mono, but we can add pseudo-stereo surround
+				{
+					#define AUDIO_SURROUND 0 // 0..N; the higher this value, the more nuanced the delay
+					static AUDIO_UNIT zz[(AUDIO_PLAYBACK/50)>>AUDIO_SURROUND]; // backups of past samples
+					int zi=0,zo=(AUDIO_PLAYBACK/50)>>(AUDIO_SURROUND+1); if (video_pos_z&1) i=zi,zi=zo,zo=i;
+					int zn=AUDIO_LENGTH_Z>>(AUDIO_SURROUND+4-audio_mixmode),zm=AUDIO_LENGTH_Z-zn;
+					for (i=zn;--i>=0;) zz[zo+i]=audio_frame[(zm+i)*AUDIO_CHANNELS];
+					for (i=zm;--i>=0;) audio_frame[(zn+i)*AUDIO_CHANNELS]=audio_frame[i*AUDIO_CHANNELS];
+					for (i=zn;--i>=0;) audio_frame[i*AUDIO_CHANNELS]=zz[zi+i];
+				}
+				#endif
 				audio_playframe();
 			}
 			if (video_required&&onscreen_flag)
@@ -4228,19 +4228,19 @@ int main(int argc,char *argv[])
 				}
 				if (session_stick|session_key2joy)
 				{
-					if (autorun_t) // big letter "A"
-						onscreen_bool(-7,-7,3,1,autorun_t>0),
-						onscreen_bool(-7,-4,3,1,autorun_t>0),
-						onscreen_bool(-8,-6,1,5,autorun_t>0),
-						onscreen_bool(-4,-6,1,5,autorun_t>0);
+					if (autorun_s) // big letter "A"
+						onscreen_bool(-7,-7,3,1,1),
+						onscreen_bool(-7,-4,3,1,1),
+						onscreen_bool(-8,-6,1,5,1),
+						onscreen_bool(-4,-6,1,5,1);
 					else
 					{
-						onscreen_bool(-6,-8,1,2,kbd_bit_tst(kbd_joy[0])),
-						onscreen_bool(-6,-5,1,2,kbd_bit_tst(kbd_joy[1])),
-						onscreen_bool(-8,-6,2,1,kbd_bit_tst(kbd_joy[2])),
-						onscreen_bool(-5,-6,2,1,kbd_bit_tst(kbd_joy[3])),
-						onscreen_bool(-8,-2,2,1,kbd_bit_tst(kbd_joy[4])),
-						onscreen_bool(-5,-2,2,1,kbd_bit_tst(kbd_joy[5]));
+						onscreen_bool(-6,-8,1,2,joy_bit&(1<<0)),
+						onscreen_bool(-6,-5,1,2,joy_bit&(1<<1)),
+						onscreen_bool(-8,-6,2,1,joy_bit&(1<<2)),
+						onscreen_bool(-5,-6,2,1,joy_bit&(1<<3)),
+						onscreen_bool(-8,-2,2,1,joy_bit&(5<<4)),
+						onscreen_bool(-5,-2,2,1,joy_bit&(5<<5));
 					}
 				}
 				#ifdef DEBUG

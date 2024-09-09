@@ -749,7 +749,7 @@ int ula_bus,ula_bus3; // floating bus: -1 if we're beyond the bitmap, latest ATT
 int ula_count_x=0,ula_count_y=0; // horizontal+vertical sync counters
 int ula_shown_x,ula_shown_y=192; // horizontal+vertical bitmap/attrib counters
 int ula_count_z=0; // current T within a character (0..3)
-int chromatrons=0X00FFFF^1; // it must normally match colour 13 (bright cyan)
+BYTE chromatrons=0,chromatronz=0; // 0 when disabled, otherwise flips between %01010101 and %10101010
 #define ULA_GET_T() (((ula_count_y-ula_start_y)*ula_limit_x+ula_count_x)*4+ula_count_z) // current T within a frame, f.e. 0..69887 in a Spectrum 48K
 void ULA_SET_T(int x) // sets the internal ULA clock: `x` is a value between 0 and 69887 (48K), 70907 (128K) or whatever the current machine is using
 {
@@ -768,7 +768,7 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 		{
 			if (frame_pos_y>=VIDEO_OFFSET_Y&&frame_pos_y<VIDEO_OFFSET_Y+VIDEO_PIXELS_Y&&frame_pos_y==video_pos_y)
 			{
-				if (ula_shown_y>=0&&ula_shown_y<192) if (chromatrons==video_xlat[13])
+				if (ula_shown_y>=0&&ula_shown_y<192) if (chromatronz)
 				{
 					VIDEO_UNIT *tt=video_target-video_pos_x+(VIDEO_OFFSET_X+VIDEO_PIXELS_X/2)-256;
 					char qq=((video_pos_y)^(video_interlaces<<1))&2;
@@ -814,6 +814,11 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 				}
 				else if (ula_shown_x&1) // BITMAP, 2nd character
 				{
+					if (chromatronz) // this is where "NOP.szx" and "BrightMiner.z80" get their hybrid brightness from
+					{
+						if (b0==0XAA) if ((a0&100)==32) a0+=64;
+						if (b ==0XAA) if ((a &100)==32) a +=64;
+					}
 					VIDEO_UNIT p,v1=ula_clut[1][a0],v0=ula_clut[0][a0];
 					VIDEO_NEXT=p=b0&128?v1:v0; VIDEO_NEXT=p;
 					VIDEO_NEXT=p=b0& 64?v1:v0; VIDEO_NEXT=p;
@@ -851,6 +856,7 @@ INLINE void video_main(int t) // render video output for `t` clock ticks; t is a
 		}
 		if (UNLIKELY(++ula_count_x>=ula_limit_x)) // end of scanline?
 		{
+			chromatronz=chromatrons&&(video_type>0&&video_type<4);
 			ula_count_x=0;
 			// for lack of a more precise timer, the scanline is used to refresh the ULA's unstable input bit 6:
 			// - Issue-2 systems (the first batch of 48K) make the bit depend on ULA output bits 3 and 4.
@@ -883,34 +889,24 @@ void audio_main(int t) // render audio output for `t` clock ticks; t is always n
 // autorun runtime logic -------------------------------------------- //
 
 BYTE snap_done; // avoid accidents with ^F2, see all_reset()
-char autorun_path[STRMAX]="",autorun_line[STRMAX]; int autorun_mode=0,autorun_t=0;
-BYTE autorun_kbd[16]; // automatic keypresses
-#define autorun_kbd_set(k) (autorun_kbd[k>>3]|=1<<(k&7))
-#define autorun_kbd_res(k) (autorun_kbd[k>>3]&=~(1<<(k&7)))
+char autorun_path[STRMAX]="",autorun_s[STRMAX]; BYTE autorun_m=0; int autorun_t=0;
+BYTE autorun_k,kbd_bits[9]; // automatic keypresses
 int autorun_kbd_bit(int k) // combined autorun+keyboard+joystick bits
 {
-	if (autorun_mode)
-		return autorun_kbd[k];
-	#define kbd_bit_gunstick(button,sensor) (session_maus_z?button+((video_litegun&0x00C000)?sensor:0):0) // GUNSTICK detects bright pixels
-	if (k==8&&litegun) return kbd_bit_gunstick(16,4); // GUNSTICK on KEMPSTON
-	if (k==4&&litegun) return kbd_bit_gunstick(1,4); // GUNSTICK on SINCLAIR 1 ("SOLO")
-	//if (k==3&&litegun) return kbd_bit_gunstick(16,4); // GUNSTICK on SINCLAIR 2
-	switch (k) // handle composite keys
+	if (autorun_m) return k==6?autorun_k:0; // RETURN is the only key that matters
+	if (litegun)
 	{
-		case 0: // CAPS SHIFT is [0]&1
-			return ((kbd_bit[9]|kbd_bit[10]|kbd_bit[11])?1:0)|kbd_bit[12]|kbd_bit[0]|joy_bit[0];
-		case 3:
-			return kbd_bit[ 9]|kbd_bit[13]|kbd_bit[3]|joy_bit[3];
-		case 4:
-			return kbd_bit[10]|kbd_bit[14]|kbd_bit[4]|joy_bit[4];
-		case 7: // SYMBOL SHIFT is [7]&2
-			return ((kbd_bit[12]|kbd_bit[13]|kbd_bit[14]|kbd_bit[15])?2:0)|kbd_bit[11]|kbd_bit[15]|kbd_bit[7]|joy_bit[7];
+		#define kbd_bit_gunstick(button,sensor) (session_maus_z?button+((video_litegun&0x00C000)?sensor:0):0) // GUNSTICK detects bright pixels
+		if (k==8) return kbd_bit_gunstick(16,4); // GUNSTICK on KEMPSTON
+		if (k==4) return kbd_bit_gunstick(1,4); // GUNSTICK on SINCLAIR 1 ("SOLO")
+		//if (k==3) return kbd_bit_gunstick(16,4); // GUNSTICK on SINCLAIR 2
+		#undef kbd_bit_gunstick
 	}
-	return kbd_bit[k]|joy_bit[k];
+	return kbd_bits[k];
 }
 INLINE void autorun_next(void) // handle AUTORUN
 {
-	switch (autorun_mode)
+	switch (autorun_m)
 	{
 		case 1: // 48K and menu-less 128K: type 'LOAD ""' and press RETURN
 		case 2: // BETA128: type 'RANDOMIZE USR 15619: REM: RUN"filename"' and press RETURN
@@ -935,12 +931,12 @@ INLINE void autorun_next(void) // handle AUTORUN
 			}
 			// no `break`!
 		case 3: // menu-ready 128K: hit RETURN
-			autorun_kbd_set(0x30); // PRESS RETURN
-			autorun_mode=4; autorun_t=3;
+			autorun_k=1; // PRESS RETURN
+			autorun_m=4; autorun_t=3;
 			break;
 		case 4: // release RETURN
-			autorun_kbd_res(0x30); // RELEASE RETURN
-			disc_disabled&=1,autorun_mode=0; // end of AUTORUN
+			autorun_k=0; // RELEASE RETURN
+			disc_disabled&=1,autorun_m=0; // end of AUTORUN
 			break;
 	}
 }
@@ -1676,7 +1672,7 @@ void all_reset(void) // reset everything!
 	const int k=4; // the extended ZX RAM reveals a pattern that isn't erased by the firmware
 	for (int i=0;i<sizeof(mem_ram);i+=k) memset(&mem_ram[i],0,k),i+=k,memset(&mem_ram[i],-1,k);
 	//MEMZERO(mem_ram);
-	MEMZERO(autorun_kbd);
+	autorun_k=0;
 	trdos_reset(); trdos_mapped=0;
 	ula_reset();
 	if (type_id<3)
@@ -1690,7 +1686,7 @@ void all_reset(void) // reset everything!
 	dac_voice=0;
 	z80_reset();
 	debug_reset();
-	disc_disabled&=1,z80_irq=snap_done=autorun_mode=autorun_t=0; // avoid accidents!
+	disc_disabled&=1,z80_irq=snap_done=autorun_m=autorun_t=0; // avoid accidents!
 	MEMBYTE(z80_tape_index,-1); // TAPE_FASTLOAD, avoid false positives!
 }
 
@@ -2372,7 +2368,7 @@ int snap_load(char *s) // load a snapshot. `s` path, NULL to reload; 0 OK, !0 ER
 
 int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` autorun; 0 OK, !0 ERROR
 {
-	autorun_mode=0; if (!s||!*s) return -1; // cancel any autoloading yet; reject invalid paths
+	autorun_m=0; if (!s||!*s) return -1; // cancel any autoloading yet; reject invalid paths
 	if (snap_load(s))
 	{
 		#ifdef Z80_DANDANATOR
@@ -2404,14 +2400,14 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 					{
 						z80_pc.w=0; // skip 128K power-up boost, it's incompatible with USR0
 						ula_v2_send(0X10); // force USR0 mode
-						autorun_mode=2; autorun_t=96; // USR0 always needs typing; OPENSE boots more slowly than the source BIOS
+						autorun_m=2; autorun_t=96; // USR0 always needs typing; OPENSE boots more slowly than the source BIOS
 					}
 					else
 					{
 						if (type_id&&mem_rom[0X8020]==0XEF) // detect machines without a main menu
-							autorun_mode=3,autorun_t=(type_id==3?150:75); // menu-based 128K machines; PLUS3 is very slow
+							autorun_m=3,autorun_t=(type_id==3?150:75); // menu-based 128K machines; PLUS3 is very slow
 						else
-							autorun_mode=1,autorun_t=99; // 48K and menu-less 128K machines, f.e. OPENSE with 128K stub
+							autorun_m=1,autorun_t=99; // 48K and menu-less 128K machines, f.e. OPENSE with 128K stub
 					}
 				}
 			}
@@ -2425,6 +2421,18 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 }
 
 // auxiliary user interface operations ------------------------------ //
+
+int session_kbjoy(void) // update keys+joystick
+{
+	MEMLOAD(kbd_bits,kbd_bit);
+	for (int i=0;i<8;++i) if (joy_bit&(1<<i)) { int j=kbd_joy[i]; kbd_bits[j>>3]|=+1<<(j&7); }
+	// handle composite keys
+	kbd_bits[0]|=((kbd_bit[ 9]|kbd_bit[10]|kbd_bit[11])?1:0)|kbd_bit[12]; // CAPS SHIFT is [0]&1
+	kbd_bits[3]|=  kbd_bit[ 9]|kbd_bit[13]; // SINCLAIR 2
+	kbd_bits[4]|=  kbd_bit[10]|kbd_bit[14]; // SINCLAIR 1
+	kbd_bits[7]|=((kbd_bit[12]|kbd_bit[13]|kbd_bit[14]|kbd_bit[15])?2:0)|kbd_bit[11]|kbd_bit[15]; // SYMBOL SHIFT is [7]&2
+	return 0; // should never fail!
+}
 
 char txt_error_snap_save[]="Cannot save snapshot!";
 char file_pattern[]="*.csw;*.dsk;*.mld;*.pzx;*.rom;*.scl;*.sna;*.sit;*.sp;*.szx;*.tap;*.trd;*.tzx;*.wav;*.z80"; // from A to Z
@@ -2635,7 +2643,7 @@ void session_clean(void) // refresh options
 	session_menucheck(0x8518,!playcity_disabled);
 	session_menucheck(0x8519,!dac_disabled);
 	#endif
-	session_menucheck(0x851A,chromatrons==video_xlat[13]);
+	session_menucheck(0x851A,chromatrons&1);
 	session_menucheck(0x851F,!(snap_extended));
 	session_menucheck(0x852F,!!printer);
 	session_menucheck(0x8901,onscreen_flag);
@@ -3423,18 +3431,18 @@ int main(int argc,char *argv[])
 				}
 				if (session_stick|session_key2joy)
 				{
-					if (autorun_mode) // big letter "A"
-						onscreen_bool(-7,-7,3,1,autorun_t>0),
-						onscreen_bool(-7,-4,3,1,autorun_t>0),
-						onscreen_bool(-8,-6,1,5,autorun_t>0),
-						onscreen_bool(-4,-6,1,5,autorun_t>0);
+					if (autorun_m) // big letter "A"
+						onscreen_bool(-7,-7,3,1,1),
+						onscreen_bool(-7,-4,3,1,1),
+						onscreen_bool(-8,-6,1,5,1),
+						onscreen_bool(-4,-6,1,5,1);
 					else
 					{
-						onscreen_bool(-7,-6,3,1,kbd_bit_tst(kbd_joy[0])),
-						onscreen_bool(-7,-2,3,1,kbd_bit_tst(kbd_joy[1])),
-						onscreen_bool(-8,-5,1,3,kbd_bit_tst(kbd_joy[2])),
-						onscreen_bool(-4,-5,1,3,kbd_bit_tst(kbd_joy[3])),
-						onscreen_bool(-6,-4,1,1,kbd_bit_tst(kbd_joy[4]));
+						onscreen_bool(-7,-6,3,1,joy_bit&(1<<0)),
+						onscreen_bool(-7,-2,3,1,joy_bit&(1<<1)),
+						onscreen_bool(-8,-5,1,3,joy_bit&(1<<2)),
+						onscreen_bool(-4,-5,1,3,joy_bit&(1<<3)),
+						onscreen_bool(-6,-4,1,1,joy_bit&(15<<4));
 					}
 				}
 				#ifdef DEBUG

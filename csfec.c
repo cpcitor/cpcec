@@ -1898,6 +1898,12 @@ void vicii_draw_border(void) // render a single line of the border, again relyin
 
 //void video_main(int t) // the VIC-II updates the video on its own!
 
+// autorun runtime logic -------------------------------------------- //
+
+BYTE snap_done; // avoid accidents with ^F2, see all_reset()
+char autorun_path[STRMAX]=""; BYTE *autorun_s=NULL,autorun_m=0;
+#define autorun_next() ((void)0) // handle AUTORUN timer
+
 // CPU: MOS 6510 MICROPROCESSOR ===================================== //
 
 // interrupt queue operations; notice that the 6510 checks m6510_int first and m6510_irq later
@@ -2734,13 +2740,38 @@ int m6510_what; // it doesn't need to stick, but putting this in M65XX_LOCAL hur
 //#define M65XX_TRAP_0X20 if (UNLIKELY(M65XX_PC.w==0XF53A&&mmu_mcr==m6510_t64ok)) { t64_loadfile(); M65XX_X=mem_ram[0X00AC],M65XX_Y=mem_ram[0X00AD],M65XX_PC.w=0XF8D1; } // load T64 file
 #define M65XX_REU
 
-#define bios_magick() (debug_point[0XF539]=debug_point[0XFD6E]=debug_point[0XE4E4]=DEBUG_MAGICK)
+#define bios_magick() (debug_point[0XFFCF]=debug_point[0XF539]=debug_point[0XFD6E]=debug_point[0XE4E4]=DEBUG_MAGICK)
 void m6510_magick(void) // virtual magick!
 {
 	//cprintf("MAGICK:%08X ",m6510_pc.w);
-	/**/ if (m6510_pc.w==0XF539) { if (mmu_mcr==m6510_t64ok&&mem_rom[0X1539]==0X20) { t64_loadfile(); M65XX_X=mem_ram[0X00AC],M65XX_Y=mem_ram[0X00AD],M65XX_PC.w=0XF8D0; } } // load T64 file
-	else if (m6510_pc.w==0XFD6E) { if (mem_ram[0XC2]==0X04&&mmu_mcr==power_boost&&mem_rom[0X1D6E]==0XB1) mem_ram[0XC2]=0X9F; } // power-up boost (memory test)
-	else if (m6510_pc.w==0XE4E4) { if (mmu_mcr==7&&(tape_skipload|tape_fastload)&&mem_rom[0X04E4]==0XC8&&M65XX_Y==255) M65XX_Y=239; } // tape "FOUND FILENAME" boost: press SPACE!
+	/**/ if (m6510_pc.w==0XFFCF) // autorun: type string!
+		{ if (autorun_m) { if (mmu_mcr==7&&mem_rom[0XFFCF-0XE000]==0X6C&&mem_rom[0XE194-0XE000]==0X60)
+		{
+			if (autorun_m&1) // PRG+RUN and CASETTE use the keyboard buffer
+				memcpy(mem_ram+0X277,autorun_s,mem_ram[0XC6]=strlen(autorun_s));
+			switch (autorun_m)
+			{
+				case 3: // CASETTE
+					disc_disabled&=1,session_dirty|=(tape_enabled=tape_physical()); // play tape!
+					autorun_m=0; break;
+				case 1: // PRG+RUN
+				case 2: // PRG
+					mem_ram[0X0801]=mem_ram[0X0802]=0; // must go before "int i"!
+					int i=2; FILE *f=puff_fopen(cart_path,"rb"); if (f) { fgetii(f),i=fread1(&mem_ram[0X0801],0XFFFA-0X0801,f); puff_fclose(f); }
+					i+=0X0801; // end of prog, rather than prog size
+					mputii(&mem_ram[0X00AC],i); mputii(&mem_ram[0X00AE],i); mputii(&mem_ram[0X002D],i); mputii(&mem_ram[0X002F],i);
+					mputii(&mem_ram[0X0031],i); // end-of-file BASIC pokes
+					autorun_m=0; break;
+				case 4: // DISC // too long to fit in the keyboard input buffer :-(
+					M65XX_A=*autorun_s++,M65XX_P&=~1,M65XX_PC.w=0XE194; if (!*autorun_s) autorun_m=0; // stop only after typing RUN
+			}
+		} else autorun_m=0; } } // just in case someone uses a non-100% compatible BIOS!
+	else if (m6510_pc.w==0XF539) // load T64 file
+		{ if (mmu_mcr==m6510_t64ok&&mem_rom[0X1539]==0X20) { t64_loadfile(); M65XX_X=mem_ram[0X00AC],M65XX_Y=mem_ram[0X00AD],M65XX_PC.w=0XF8D0; } }
+	else if (m6510_pc.w==0XFD6E) // power-up boost (memory test)
+		{ if (mem_ram[0XC2]==0X04&&mmu_mcr==power_boost&&mem_rom[0X1D6E]==0XB1) mem_ram[0XC2]=0X9F; }
+	else if (m6510_pc.w==0XE4E4) // tape "FOUND FILENAME" boost: press SPACE!
+		{ if (mmu_mcr==7&&(tape_skipload|tape_fastload)&&mem_rom[0X04E4]==0XC8&&M65XX_Y==255) M65XX_Y=239; }
 }
 #define M65XX_MAGICK() m6510_magick()
 
@@ -2872,60 +2903,7 @@ void grafx_info(VIDEO_UNIT *t,int g,int o) // draw the palette and the sprites
 #include "cpcec-m6.h"
 #undef DEBUG_HERE
 
-// autorun runtime logic -------------------------------------------- //
-
-BYTE snap_done; // avoid accidents with ^F2, see all_reset()
-char autorun_path[STRMAX]=""; int autorun_mode=0,autorun_t=0;
-BYTE autorun_kbd[16]; // automatic keypresses
-#define autorun_kbd_set(k) (autorun_kbd[k>>3]|=1<<(k&7))
-#define autorun_kbd_res(k) (autorun_kbd[k>>3]&=~(1<<(k&7)))
-
-int autorun_type(char *s,int n)
-{
-	autorun_t=9; if (!(m6510_pc.w>=0XE5CD&&m6510_pc.w<0XE5D6)) return -1; // try again later!
-	if (n)
-	{
-		memcpy(&mem_ram[mem_ram[0XD1]+mem_ram[0XD2]*256+mem_ram[0XD3]],s,n); // copy string
-		mem_ram[0XD3]+=n; autorun_kbd_set(0001); // move the cursor forward and press RETURN
-	}
-	return 0;
-}
-
-INLINE void autorun_next(void) // handle AUTORUN
-{
-	switch (autorun_mode)
-	{
-		case 1: // TYPE "RUN", PRESS RETURN...
-			if (autorun_type("\022\025\016",3)) break; // retry!
-			// no `break`!
-		case 2: // INJECT FILE...
-			if (autorun_type(NULL,0)) break; // retry!
-			int i=2; mem_ram[0X0801]=mem_ram[0X0802]=0;
-			FILE *f=puff_fopen(cart_path,"rb"); if (f) { fgetii(f),i=fread1(&mem_ram[0X0801],0XFFFA-0X0801,f); puff_fclose(f); }
-			i+=0X0801; // end of prog, rather than prog size
-			mputii(&mem_ram[0X00AC],i); mputii(&mem_ram[0X00AE],i); // poke end-of-file KERNAL pokes
-			mputii(&mem_ram[0X002D],i); mputii(&mem_ram[0X002F],i); mputii(&mem_ram[0X0031],i); // end-of-file BASIC pokes
-			autorun_mode=9;
-			break;
-		case 3: // TYPE "LOAD", PRESS RETURN...
-			if (!autorun_type("\014\017\001\004",4)) session_dirty|=(tape_enabled=tape_physical()),autorun_mode=4; // `tape_enabled` is reset by all_reset(), so we must set it here
-			break;
-		case 4: // RELEASE RETURN...
-			autorun_kbd_res(0001);
-			autorun_t=3; autorun_mode=5;
-			break;
-		case 5: // TYPE "RUN", PRESS RETURN...
-			if (!(m6510_pc.w>=0XE000&&autorun_type("\022\025\016",3))) autorun_t=autorun_mode=9; // we must NOT retry if we're already running code!!
-			break;
-		case 8: // TYPE "LOAD"*",8,1", PRESS RETURN...
-			if (!autorun_type("\014\017\001\004\042\052\042" ",8,1",11)) autorun_mode=9; // ditto!
-			break;
-		case 9: // ...RELEASE RETURN!
-			autorun_kbd_res(0001);
-			disc_disabled&=1,autorun_mode=0; // end of AUTORUN
-			break;
-	}
-}
+// optional: SID support -------------------------------------------- //
 
 #ifdef DEBUG
 char psid_rsid,psid_info[6]; WORD psid_play,psid_last,psid_song,psid_boot,psid_poke; int psid_bits; // PSID playback is a special case of autorun
@@ -2958,12 +2936,11 @@ void all_reset(void) // reset everything!
 	for (int i=0;i<0X10000;i+=k) memset(&mem_ram[i],0,k),i+=k,memset(&mem_ram[i],-1,k);
 	memset(&mem_ram[0X10000],0,sizeof(mem_ram)-0X10000); // extra memory is filled with $00 AFAIK
 	//MEMZERO(mem_ram);
-	MEMZERO(autorun_kbd); MEMZERO(kbd_bits);
 	mmu_reset(),m6510_reset(),cia_reset();
 	vicii_reset(),sid_all_reset();
 	m6510_int=m6510_irq=0; debug_reset();
 	c1541_reset(); PSID_STOP;
-	disc_disabled&=1,tape_enabled=snap_done=autorun_mode=autorun_t=0; //MEMBYTE(m6510_tape_index,-1); // avoid accidents!
+	disc_disabled&=1,tape_enabled=snap_done=autorun_m=0,autorun_s=NULL; //MEMBYTE(m6510_tape_index,-1); // avoid accidents!
 	//if (!memcmp(&mem_ram[0X8004],"\303\302\31580",5)) mem_ram[0X8004]=0330; // disable "CBM80" trap! // we already wiped the RAM above
 }
 
@@ -3329,7 +3306,7 @@ int psid_load(char *s) // load a PSID file and build a minimal framework around 
 
 int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` autorun; 0 OK, !0 ERROR
 {
-	autorun_mode=0; if (!s||!*s) return -1; // cancel any autoloading yet; reject invalid paths
+	autorun_m=0; if (!s||!*s) return -1; // cancel any autoloading yet; reject invalid paths
 	#ifdef DEBUG
 	if (!psid_load(s)) disc_disabled|=2; else // SID files ALWAYS take over: disable drive!
 	#endif
@@ -3343,16 +3320,30 @@ int any_load(char *s,int q) // load a file regardless of format. `s` path, `q` a
 					else
 						all_reset(); // cleanup!
 				else
-					{ all_reset(); if (!cart) disc_disabled|=2,autorun_t=9,autorun_mode=q?1:2; } // disable disc drive, PRG files are standalone
+					{ all_reset(); if (!cart) disc_disabled|=2,autorun_s="RUN\015",autorun_m=q?1:2; } // disable disc drive, PRG files are standalone
 			else
-				{ if (q) cart_remove(),all_reset(),disc_disabled=0,autorun_t=9,autorun_mode=8; } // enable disc drive
+				{ if (q) cart_remove(),all_reset(),disc_disabled=0,autorun_s="LOAD\042*\042,8,1\015RUN\015",autorun_m=4; } // enable disc drive
 		else
-			{ if (q) cart_remove(),all_reset(),disc_disabled|=2,autorun_t=9,autorun_mode=3; } // disable disc drive
+			{ if (q) cart_remove(),all_reset(),disc_disabled|=2,autorun_s="LOAD\015RUN\015",autorun_m=3; } // disable disc drive
 	if (q) STRCOPY(autorun_path,s);
 	return 0;
 }
 
 // auxiliary user interface operations ------------------------------ //
+
+int session_kbjoy(void) // update keys+joystick
+{
+	if (autorun_m)
+		MEMZERO(kbd_bits);
+	else
+	{
+		MEMLOAD(kbd_bits,kbd_bit); // mix keyboard + joystick bits
+		for (int i=0;i<8;++i) if (joy_bit&(1<<i)) { int j=kbd_joy[i]; kbd_bits[j>>3]|=+1<<(j&7); }
+		if (kbd_bit[ 8]) kbd_bits[0]|=kbd_bit[ 8],kbd_bits[1]|=128; // LEFT SHIFT + right side KEY combos (1/2)
+		if (kbd_bit[15]) kbd_bits[7]|=kbd_bit[15],kbd_bits[1]|=128; // LEFT SHIFT + left  side KEY combos (2/2)
+	}
+	return 0; // should never fail!
+}
 
 char txt_error_snap_save[]="Cannot save snapshot!";
 char file_pattern[]="*.csw;*.d64;*.crt;*.prg;*.rom;*.s64;"
@@ -3861,7 +3852,7 @@ void session_user(int k) // handle the user's commands
 					if (cart_insert(s)) // error? warn and undo!
 						session_message("Cannot insert cartridge!",txt_error);
 					else
-						all_reset(),autorun_mode=cart?0:(autorun_t=9,2); // reset machine!
+						all_reset(),autorun_m=cart?0:2; // reset machine!
 			}
 			else if (s=puff_session_getfile(bios_path,"*.rom","Load firmware"))
 			{
@@ -4372,18 +4363,18 @@ int main(int argc,char *argv[])
 				}
 				if (session_stick|session_key2joy)
 				{
-					if (autorun_mode) // big letter "A"
-						onscreen_bool(-7,-7,3,1,autorun_t>0),
-						onscreen_bool(-7,-4,3,1,autorun_t>0),
-						onscreen_bool(-8,-6,1,5,autorun_t>0),
-						onscreen_bool(-4,-6,1,5,autorun_t>0);
+					if (autorun_m) // big letter "A"
+						onscreen_bool(-7,-7,3,1,1),
+						onscreen_bool(-7,-4,3,1,1),
+						onscreen_bool(-8,-6,1,5,1),
+						onscreen_bool(-4,-6,1,5,1);
 					else
 					{
-						onscreen_bool(-7,-6,3,1,kbd_bit_tst(kbd_joy[0])),
-						onscreen_bool(-7,-2,3,1,kbd_bit_tst(kbd_joy[1])),
-						onscreen_bool(-8,-5,1,3,kbd_bit_tst(kbd_joy[2])),
-						onscreen_bool(-4,-5,1,3,kbd_bit_tst(kbd_joy[3])),
-						onscreen_bool(-6,-4,1,1,kbd_bit_tst(kbd_joy[4]));
+						onscreen_bool(-7,-6,3,1,joy_bit&(1<<0)),
+						onscreen_bool(-7,-2,3,1,joy_bit&(1<<1)),
+						onscreen_bool(-8,-5,1,3,joy_bit&(1<<2)),
+						onscreen_bool(-4,-5,1,3,joy_bit&(1<<3)),
+						onscreen_bool(-6,-4,1,1,joy_bit&(15<<4));
 					}
 				}
 				#ifdef DEBUG
@@ -4425,17 +4416,7 @@ int main(int argc,char *argv[])
 			}
 			#endif
 			// update session and continue
-			if (!--autorun_t) autorun_next();
-			if (autorun_mode)
-				MEMLOAD(kbd_bits,autorun_kbd); // the active keys are fully virtual
-			else
-			{
-				for (i=0;i<length(kbd_bits);++i) kbd_bits[i]=kbd_bit[i]|joy_bit[i]; // mix keyboard + joystick bits
-				if (kbd_bit[ 8]) kbd_bits[0]|=kbd_bit[ 8],kbd_bits[1]|=128; // LEFT SHIFT + right side KEY combos (1/2)
-				if (kbd_bit[15]) kbd_bits[7]|=kbd_bit[15],kbd_bits[1]|=128; // LEFT SHIFT + left  side KEY combos (2/2)
-				if (!(~kbd_bits[9]& 3)) kbd_bits[9]-= 3; // catch illegal UP+DOWN...
-				if (!(~kbd_bits[9]&12)) kbd_bits[9]-=12; // ...and LEFT+RIGHT in joystick
-			}
+			//if (!--autorun_t) autorun_next();
 			dac_frame(); if (ym3_file) ym3_write(),ym3_flush();
 			tape_skipping=audio_queue=0; // reset tape and audio flags
 			if (!tape_fastload) tape_song=0/*,tape_loud=1*/; else if (tape_song) /*tape_loud=0,*/--tape_song;
