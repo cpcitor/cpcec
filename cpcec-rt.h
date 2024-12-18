@@ -11,7 +11,8 @@
 // interface of variables and procedures that don't require particular
 // knowledge of the emulation's intrinsic properties.
 
-#define MY_VERSION "20240909" // all emulators share the same release date
+#define MY_LICENSE "Copyright (C) 2019-2024 Cesar Nicolas-Gonzalez"
+#define MY_VERSION "20241216" // all emulators share the same release date
 
 #define INLINE // 'inline' is useless in TCC and GCC4, and harmful in GCC5!
 #define UNUSED // '__attribute__((unused))' may be missing outside GCC
@@ -61,7 +62,9 @@ INLINE int ucase(int i) { return i>='a'&&i<='z'?i-32:i; }
 #define AUDIO_PLAYBACK 44100 // 22050, 24000, 44100, 48000
 //#define AUDIO_L2BUFFER 15 // =32K samples (667..750 ms)
 #define AUDIO_L2BUFFER 14 // =16K samples (333..375 ms)
+#ifndef AUDIO_CHANNELS
 #define AUDIO_CHANNELS 2 // 1 for mono, 2 for stereo
+#endif
 
 char session_caption[]=MY_CAPTION " " MY_VERSION;
 unsigned char session_scratch[1<<18]; // at least 256k
@@ -112,6 +115,9 @@ int session_ntsc(int q) // sets NTSC (60 Hz) mode if `q` is nonzero, sets PAL (5
 #else // fixed mode, either PAL or NTSC!
 #define AUDIO_LENGTH_Z (AUDIO_PLAYBACK/VIDEO_PLAYBACK)
 #define session_ntsc(q) (q)
+#endif
+#ifndef VIDEO_HALFBLEND
+#define VIDEO_HALFBLEND 1 // '0' new style, '1' old style
 #endif
 
 #define kbd_bit_set(k) (kbd_bit[(k)>>3]|= (1<<((k)&7)))
@@ -563,8 +569,11 @@ void sha1_exit(const BYTE *s,int n)
 #define VIDEO_FILTER_MASK_Z 4
 #if AUDIO_CHANNELS > 1
 const int audio_stereos[][3]={{0,0,0},{+64,0,-64},{+128,0,-128},{+256,0,-256}}; // left, middle and right relative to 100% = 256
+BYTE audio_mixmode=length(audio_stereos)-1; // 0 = pure mono... n-1 = pure stereo
+#else
+BYTE audio_mixmode=0; // useless in single-channel mode, but it must stick
 #endif
-BYTE video_lineblend=0,video_pageblend=0,video_microwave=0,audio_mixmode=length(audio_stereos)-1; // 0 = pure mono... n-1 = pure stereo
+BYTE video_lineblend=0,video_pageblend=0,video_microwave=0;
 BYTE video_scanline=0,frame_scanline=8; // 0 = all scanlines, 1 = avg. scanlines, 2 = full interlace, 3 = half interlace
 int video_microwavez=1; // the microwave noise
 #ifdef MAUS_LIGHTGUNS
@@ -597,28 +606,22 @@ VIDEO_UNIT *video_xlat_all(VIDEO_UNIT *t,VIDEO_UNIT const *s,int n) // turn pale
 #define VIDEO_FILTER_7525(x,y) (((((x&0XFF00FF)*3+(y&0XFF00FF)+0X30003)&0X3FC03FC)+(((x&0XFF00)*3+(y&0XFF00)+0X300)&0X3FC00))>>2) // 75% 1st + 25% 2nd; always raw RGB!
 
 //#define RAWWW // couples of X and Y instead of (X+Y)/2
-#define VIDEO_FILTER_DOT1(x) ((crt1[(x)>>16]<<16)|(crt1[((x)>>8)&255]<<8)|crt1[(x)&255]) // south-west pixel
-#define VIDEO_FILTER_DOT2(x) ((crt2[(x)>>16]<<16)|(crt2[((x)>>8)&255]<<8)|crt2[(x)&255]) // north-east pixel
-#define VIDEO_FILTER_DOT3 // south-east pixel
-//#define VIDEO_FILTER_DOT4(x) ((x)-(((x)>>1)&0X7F7F7F)+0X202020)
-#define VIDEO_FILTER_DOT4(x) ((x)-(((x)>>2)&0X3F3F3F)) // even +0X101010 is too bright :-/
-#define VIDEO_FILTER_DOT5(x) ((crt5[(x)>>16]<<16)|(crt5[((x)>>8)&255]<<8)|crt5[(x)&255]) // south-west pixel
-#define VIDEO_FILTER_DOT6 VIDEO_FILTER_DOT2 // north-east pixel
-#define VIDEO_FILTER_DOT7 VIDEO_FILTER_DOT4 // south-east pixel
-BYTE srgb[1<<16],crt1[256],crt2[256],crt5[256]; // the sRGB-to-linear-and-back operations need precalculated tables, they're too expensive otherwise :-(
-void video_recalc(void) // redo the video filter tables
+#define VIDEO_FILTER_DOT0(x) ((x)-(((x)>>2)&0X3F3F3F)) // 0..255 => 0..192, a bit too bright
+//#define VIDEO_FILTER_DOT0(x) ((x)-(((x)>>3)&0X1F1F1F)*3) // 0..255 => 0..162, way too dark
+#define VIDEO_FILTER_DOT1(x) (video_dot1[(x)>>16]<<16|video_dot1[255&((x)>>8)]<<8|video_dot1[255&(x)])
+#define VIDEO_FILTER_DOT2(x) (video_dot2[(x)>>16]<<16|video_dot2[255&((x)>>8)]<<8|video_dot2[255&(x)])
+BYTE video_srgb[1<<16],video_dot1[256],video_dot2[256]; // the sRGB-to-linear-and-back operations need precalc'd tables, they're too expensive :-(
+void video_praecalc(void) // build the precalc'd video filter tables
 {
 	for (int h=0;h<256;++h)
 	{
-		int z=h*h*2;
-		crt1[h]=z<255*255?0:sqrtu(z-255*255);
-		crt2[h]=z<255*255?sqrtu(  z):   255 ;
-		crt5[h]=VIDEO_FILTER_DOT4(crt1[h]);
-		for (int l=0;l<256;++l)
-			srgb[h*256+l]=sqrtu((h*h+l*l+h+l)>>1);
+		int z=(h*h)*2+h; // between h*h*2 and (h*h+h)*2
+		video_dot1[h]=((z<255*255?  sqrtu(z  ): 255 )+h+1)>>1;//h<191?(h*4+1)/3:255;//=h<128?  h*2:255;//
+		video_dot2[h]=((z<255*255?0:sqrtu(z-255*255))+h+1)>>1;//h> 64?(h*4-255)/3:0;//=h<128?0:h*2-255;//
+		for (int l=0;l<256;++l) video_srgb[h*256+l]=sqrtu((h*h+l*l+h+l)>>1);//=(h+l+1)>>1;
 	}
 }
-#define VIDEO_FILTER_SRGB(x,y) (srgb[((x>>8)&0XFF00)+(y>>16)]<<16)|(srgb[(x&0XFF00)+((y>>8)&255)]<<8)|srgb[((x&255)<<8)+(y&255)] // old-new avg.
+#define VIDEO_FILTER_SRGB(x,y) (video_srgb[((x>>8)&0XFF00)|(y>>16)]<<16)|(video_srgb[(x&0XFF00)|((y>>8)&255)]<<8)|video_srgb[((x&255)<<8)|(y&255)] // old-new avg.
 #define VIDEO_FILTER_HALF(x,y) (x==y?x:VIDEO_FILTER_SRGB(x,y))
 
 #ifdef VIDEO_LO_X_RES
@@ -638,16 +641,16 @@ void video_recalc(void) // redo the video filter tables
 #define MAIN_FRAMESKIP_MASK ((1<<MAIN_FRAMESKIP_BITS)-1)
 void video_resetscanline(void) // reset configuration values on new video options
 {
-	static char b=0; if (b!=video_pageblend) // do we need to reset the blending buffer?
-		if (b=video_pageblend)
-			for (int y=0;y<VIDEO_PIXELS_Y/2;++y)
-				MEMNCPY(&video_blend[y*VIDEO_PIXELS_X],&video_frame[(VIDEO_OFFSET_Y+y*2)*VIDEO_LENGTH_X+VIDEO_OFFSET_X],VIDEO_PIXELS_X);
+	static char a=0,b=0; if (a!=video_scanline||b!=video_pageblend) // do we need to reset the blending buffer?
+		if (a=video_scanline,b=video_pageblend) // does the new mode require the buffer?
+			for (int y=0;y<(VIDEO_PIXELS_Y>>!!VIDEO_HALFBLEND);++y)
+				MEMNCPY(&video_blend[y*VIDEO_PIXELS_X],&video_frame[(VIDEO_OFFSET_Y+(y<<!!VIDEO_HALFBLEND))*VIDEO_LENGTH_X+VIDEO_OFFSET_X],VIDEO_PIXELS_X);
 }
 #define VIDEO_NEXT *video_target++ // "VIDEO_NEXT = VIDEO_NEXT = ..." generates invalid code on VS13 and slower code on TCC!
 // do not manually unroll the following operations, GCC is smart enough to do a better job on its own!
 void video_callscanline(VIDEO_UNIT *vl)
 {
-	VIDEO_UNIT *vi=vl-VIDEO_PIXELS_X; if (frame_scanline<2) // all scanlines + avg. scanlines in final line
+	VIDEO_UNIT *vi=vl-VIDEO_PIXELS_X,vt; if (frame_scanline<2) // all scanlines + avg. scanlines in final line
 	{
 		VIDEO_UNIT *vo=vi+VIDEO_LENGTH_X;
 		switch (video_filter&(VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y))
@@ -657,19 +660,19 @@ void video_callscanline(VIDEO_UNIT *vl)
 				break;
 			case VIDEO_FILTER_MASK_Y:
 				do
-					*vo=VIDEO_FILTER_DOT4(*vi);
+					*vo=VIDEO_FILTER_DOT0(*vi);
 				while (++vo,++vi<vl);
 				break;
 			case VIDEO_FILTER_MASK_X:
 				do
-					*vo=VIDEO_FILTER_DOT1(*vi),++vi,++vo,
-					*vo=VIDEO_FILTER_DOT3(*vi),*vi=VIDEO_FILTER_DOT2(*vi);
+					*vo=*vi=VIDEO_FILTER_DOT1(*vi),++vo,++vi,
+					*vo=*vi=VIDEO_FILTER_DOT2(*vi);
 				while (++vo,++vi<vl);
 				break;
 			case VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y:
 				do
-					*vo=VIDEO_FILTER_DOT5(*vi),++vi,++vo,
-					*vo=VIDEO_FILTER_DOT7(*vi),*vi=VIDEO_FILTER_DOT6(*vi);
+					*vi=vt=VIDEO_FILTER_DOT1(*vi),*vo=VIDEO_FILTER_DOT0(vt),++vo,++vi,
+					*vi=vt=VIDEO_FILTER_DOT2(*vi),*vo=VIDEO_FILTER_DOT0(vt);
 				while (++vo,++vi<vl);
 				break;
 		}
@@ -679,31 +682,21 @@ void video_callscanline(VIDEO_UNIT *vl)
 		// half/single/double scanlines: bottom lines add VIDEO_FILTER_MASK_Z
 		case VIDEO_FILTER_MASK_Y+VIDEO_FILTER_MASK_Z:
 			do
-				*vi=VIDEO_FILTER_DOT4(*vi);
+				*vi=VIDEO_FILTER_DOT0(*vi);
 			while (++vi<vl);
 			break;
 		case VIDEO_FILTER_MASK_X:
-			do
-				++vi,
-				*vi=VIDEO_FILTER_DOT2(*vi);
-			while (++vi<vl);
-			break;
 		case VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Z:
-			do
-				*vi=VIDEO_FILTER_DOT1(*vi),++vi,
-				*vi=VIDEO_FILTER_DOT3(*vi);
-			while (++vi<vl);
-			break;
 		case VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y:
 			do
-				++vi,
-				*vi=VIDEO_FILTER_DOT6(*vi);
+				*vi=VIDEO_FILTER_DOT1(*vi),++vi,
+				*vi=VIDEO_FILTER_DOT2(*vi);
 			while (++vi<vl);
 			break;
 		case VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y+VIDEO_FILTER_MASK_Z:
 			do
-				*vi=VIDEO_FILTER_DOT5(*vi),++vi,
-				*vi=VIDEO_FILTER_DOT7(*vi);
+				vt=VIDEO_FILTER_DOT1(*vi),*vi=VIDEO_FILTER_DOT0(vt),++vi,
+				vt=VIDEO_FILTER_DOT2(*vi),*vi=VIDEO_FILTER_DOT0(vt);
 			while (++vi<vl);
 			break;
 	}
@@ -779,32 +772,53 @@ INLINE void video_drawscanline(void) // call after each drawn scanline; memory c
 	#endif
 	if (video_lineblend) // blend current and previous scanline together!
 	{
+		#ifndef VIDEO_LO_X_RES
+		static BYTE vj=0; // avoid "sticky" pixels when the modes change!
+		#endif
 		static VIDEO_UNIT vz[VIDEO_PIXELS_X]; // vertical blur
 		if (UNLIKELY(video_pos_y<VIDEO_OFFSET_Y+2))
 			MEMLOAD(vz,vi); // 1st line, backup only
 		else
 		{
-			vo=vz; do
+			vo=vz;
 			#ifdef RAWWW // quick'n'dirty
+			do
 				*vo=*vi,++vo,++vi,vs=*vo,*vo=*vi,*vi=vs;
 			while (++vo,++vi<vl);
 			#else // standard half'n'half
-			if ((vt=*vo)!=(vs=*vi))
-			#ifdef VIDEO_LO_X_RES // will cause data loss in hi-res!
-				*vo=vs,vi[1]=*vi=VIDEO_FILTER_SRGB(vs,vt);
-			while (vo+=2,(vi+=2)<vl);
+			#ifndef VIDEO_LO_X_RES
+			if ((vj|video_hi_x_res)&2)
+				do
+					if ((vt=*vo)!=(vs=*vi)) *vo=vs,*vi=VIDEO_FILTER_SRGB(vs,vt);
+				while (++vo,++vi<vl); // read hi-res pixels
+			else
+			{
+				if (video_hi_x_res&1) // 1st pixel?
+				{
+					if ((vt=*vo)!=(vs=*vi)) *vo=vs,*vi=VIDEO_FILTER_SRGB(vs,vt);
+					++vo,++vi; // 1st pixel
+				}
 			#else
-				*vo=vs,*vi=VIDEO_FILTER_SRGB(vs,vt);
-			while (++vo,++vi<vl);
+			{
 			#endif
+				do
+					if ((vt=*vo)!=(vs=*vi)) *vo=vs,vi[1]=*vi=VIDEO_FILTER_SRGB(vs,vt);
+				while (vo+=2,(vi+=2)<vl); // skip lo-res pixels
+			}
 			#endif
-			vi=vl-VIDEO_PIXELS_X; // go back
 		}
+		#ifndef VIDEO_LO_X_RES
+		vj=video_hi_x_res;
+		#endif
+		vi=vl-VIDEO_PIXELS_X; // rewind
 	}
 	// the order is important: doing PAGEBLEND before LINEBLEND is slow :-(
 	if (video_pageblend) // gigascreen: blend scanlines from previous and current frame!
 	{
-		vo=&video_blend[((video_pos_y-VIDEO_OFFSET_Y)>>1)*VIDEO_PIXELS_X]; // gigascreen
+		#ifndef VIDEO_LO_X_RES
+		static BYTE j[VIDEO_PIXELS_Y/2]={0}; BYTE *vj=&j[(video_pos_y-VIDEO_OFFSET_Y)>>1]; // avoid "sticky" pixels when the modes change!
+		#endif
+		vo=&video_blend[((video_pos_y-VIDEO_OFFSET_Y)>>!!VIDEO_HALFBLEND)*VIDEO_PIXELS_X]; // gigascreen
 		#ifdef RAWWW // quick'n'dirty
 		if (video_pos_z&1) // give each gigascreen side its own half
 			do *vo=*vi,++vo,++vi,vs=*vo,*vo=*vi,*vi=vs; while (++vo,++vi<vl);
@@ -812,63 +826,95 @@ INLINE void video_drawscanline(void) // call after each drawn scanline; memory c
 			do vs=*vo,*vo=*vi,*vi=vs,++vo,++vi,*vo=*vi; while (++vo,++vi<vl);
 		#else // standard half'n'half
 		if (!video_fineblend)
-			do if ((vt=*vo)!=(vs=*vi))
-			#ifdef VIDEO_LO_X_RES // will cause data loss in hi-res!
-				*vo=vi[1]=*vi=VIDEO_FILTER_SRGB(vs,vt); // accumulative
-			while (vo+=2,(vi+=2)<vl);
+			#ifndef VIDEO_LO_X_RES
+			if ((*vj|video_hi_x_res)&2)
+				do
+					if ((vt=*vo)!=(vs=*vi)) *vo=*vi=VIDEO_FILTER_SRGB(vs,vt); // accumulative
+				while (++vo,++vi<vl); // read hi-res pixels
+			else
+			{
+				if (video_hi_x_res&1) // 1st pixel?
+				{
+					if ((vt=*vo)!=(vs=*vi)) *vo=*vi=VIDEO_FILTER_SRGB(vs,vt); // accumulative
+					++vo,++vi; // 1st pixel
+				}
 			#else
-				*vo=*vi=VIDEO_FILTER_SRGB(vs,vt); // accumulative
-			while (++vo,++vi<vl);
+			{
 			#endif
+				do
+					if ((vt=*vo)!=(vs=*vi)) *vo=vi[1]=*vi=VIDEO_FILTER_SRGB(vs,vt); // accumulative
+				while (vo+=2,(vi+=2)<vl); // skip lo-res pixels
+			}
 		else
-			do if ((vt=*vo)!=(vs=*vi))
-			#ifdef VIDEO_LO_X_RES // will cause data loss in hi-res!
-				*vo=vs,vi[1]=*vi=VIDEO_FILTER_SRGB(vs,vt); // simple
-			while (vo+=2,(vi+=2)<vl);
+			#ifndef VIDEO_LO_X_RES // do all pixels in hi-res!
+			if ((*vj|video_hi_x_res)&2)
+				do
+					if ((vt=*vo)!=(vs=*vi)) *vo=vs,*vi=VIDEO_FILTER_SRGB(vs,vt); // simple
+				while (++vo,++vi<vl); // read hi-res pixels
+			else
+			{
+				if (video_hi_x_res&1) // 1st pixel?
+				{
+					if ((vt=*vo)!=(vs=*vi)) *vo=vs,*vi=VIDEO_FILTER_SRGB(vs,vt); // simple
+					++vo,++vi; // 1st pixel
+				}
 			#else
-				*vo=vs,*vi=VIDEO_FILTER_SRGB(vs,vt); // simple
-			while (++vo,++vi<vl);
+			{
 			#endif
+				do
+					if ((vt=*vo)!=(vs=*vi)) *vo=vs,vi[1]=*vi=VIDEO_FILTER_SRGB(vs,vt); // simple
+				while (vo+=2,(vi+=2)<vl); // skip lo-res pixels
+			}
 		#endif
-		vi=vl-VIDEO_PIXELS_X; // go back
+		#ifndef VIDEO_LO_X_RES
+		*vj=video_hi_x_res;
+		#endif
+		vi=vl-VIDEO_PIXELS_X; // rewind
 	}
 	// last but not least, let's blur pixels together
 	if (video_filter&VIDEO_FILTER_MASK_Z)
 	{
+		vi+=video_hi_x_res&1; // 1st pixel
 		#ifdef VIDEO_FILTER_BLUR0
 		if (!video_fineblend)
 		{
 			VIDEO_FILTER_BLURDATA;
 			vt=*vi,VIDEO_FILTER_BLUR0(vt);
-			do {
-				#ifdef VIDEO_FILTER_BLUR2
-				vs=*vi,
-				VIDEO_FILTER_BLUR1(vt,vs),*vi++=vt,
-				#ifdef VIDEO_LO_X_RES
-				#else
-				vs=*vi,
-				#endif
-				VIDEO_FILTER_BLUR2(vt,vs),*vi++=vt;
-				#else
-				vs=*vi,
-				VIDEO_FILTER_BLUR(vt,vs),*vi++=vt;
-				#endif
-			} while (vi<vl);
+			#ifndef VIDEO_LO_X_RES // do all pixels in hi-res!
+			if (video_hi_x_res&2)
+				do {
+					vs=*vi,
+					VIDEO_FILTER_BLUR1(vt,vs),*vi=vt,
+					vs=*++vi, // read hi-res pixel
+					VIDEO_FILTER_BLUR2(vt,vs),*vi=vt;
+				} while (++vi<vl);
+			else
+			#endif
+				do {
+					vs=*vi,
+					VIDEO_FILTER_BLUR1(vt,vs),*vi=vt,
+					++vi; // skip lo-res pixel
+					VIDEO_FILTER_BLUR2(vt,vs),*vi=vt;
+				} while (++vi<vl);
 		}
 		else
 		#endif
 		{
-			vt=vs=*vi; do {
-				if ((vs=*vi)!=vt) *vi=VIDEO_FILTER_SRGB(vs,vt);
-				#ifdef VIDEO_LO_X_RES
-				++vi;
-				#endif
-				++vi;
-				if ((vt=*vi)!=vs) *vi=VIDEO_FILTER_SRGB(vt,vs);
-				#ifdef VIDEO_LO_X_RES
-				++vi;
-				#endif
-			} while (++vi<vl);
+			vt=vs=*vi;
+			#ifndef VIDEO_LO_X_RES // do all pixels in hi-res!
+			if (video_hi_x_res&2)
+				do {
+					if ((vs=*vi)!=vt) *vi=VIDEO_FILTER_SRGB(vs,vt);
+					++vi; // read hi-res pixel
+					if ((vt=*vi)!=vs) *vi=VIDEO_FILTER_SRGB(vt,vs);
+				} while (++vi<vl);
+			else
+			#endif
+				do {
+					if ((vs=*vi)!=vt) *vi=VIDEO_FILTER_SRGB(vs,vt);
+					vi+=2; // skip lo-res pixel
+					if ((vt=*vi)!=vs) *vi=VIDEO_FILTER_SRGB(vt,vs);
+				} while ((vi+=2)<vl);
 		}
 	}
 	// now we can handle the actual masks and scanlines
@@ -892,31 +938,31 @@ INLINE void video_drawscanline(void) // call after each drawn scanline; memory c
 				case VIDEO_FILTER_MASK_Y:
 					do
 						#ifdef RAWWW // quick'n'dirty
-						*vo=VIDEO_FILTER_DOT4(*vi),++vj,++vo,++vi,*vo=VIDEO_FILTER_DOT4(*vj);
+						*vo=VIDEO_FILTER_DOT0(*vi),++vj,++vo,++vi,*vo=VIDEO_FILTER_DOT0(*vj);
 						#else // standard half'n'half
-						vt=VIDEO_FILTER_HALF(*vi,*vj),*vo=VIDEO_FILTER_DOT4(vt);
+						vt=VIDEO_FILTER_HALF(*vi,*vj),*vo=VIDEO_FILTER_DOT0(vt);
 						#endif
 					while (++vj,++vo,++vi<vl);
 					break;
 				case VIDEO_FILTER_MASK_X:
 					do
 						#ifdef RAWWW // quick'n'dirty
-						*vo=VIDEO_FILTER_DOT1(*vi),++vj,++vo,++vi,
-						*vo=VIDEO_FILTER_DOT3(*vj),*vi=VIDEO_FILTER_DOT2(*vi);
+						*vj=VIDEO_FILTER_DOT1(*vj),*vo=*vi,++vj,++vo,++vi,
+						*vj=VIDEO_FILTER_DOT2(*vj),*vo=*vj;
 						#else // standard half'n'half
-						vt=VIDEO_FILTER_HALF(*vi,*vj),*vo=VIDEO_FILTER_DOT1(vt),++vj,++vo,++vi,
-						vt=VIDEO_FILTER_HALF(*vi,*vj),*vo=VIDEO_FILTER_DOT3(vt),*vi=VIDEO_FILTER_DOT2(*vi);
+						*vj=VIDEO_FILTER_DOT1(*vj),*vo=VIDEO_FILTER_HALF(*vi,*vj),++vj,++vo,++vi,
+						*vj=VIDEO_FILTER_DOT2(*vj),*vo=VIDEO_FILTER_HALF(*vi,*vj);
 						#endif
 					while (++vj,++vo,++vi<vl);
 					break;
 				case VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y:
 					do
 						#ifdef RAWWW // quick'n'dirty
-						*vo=VIDEO_FILTER_DOT5(*vi),++vj,++vo,++vi,
-						*vo=VIDEO_FILTER_DOT7(*vj),*vi=VIDEO_FILTER_DOT6(*vi);
+						*vi=vt=VIDEO_FILTER_DOT1(*vi),*vo=VIDEO_FILTER_DOT0(vt),++vj,++vo,++vi,
+						*vi=VIDEO_FILTER_DOT2(*vi),*vo=VIDEO_FILTER_DOT0(*vj);
 						#else // standard half'n'half
-						vt=VIDEO_FILTER_HALF(*vi,*vj),*vo=VIDEO_FILTER_DOT5(vt),++vj,++vo,++vi,
-						vt=VIDEO_FILTER_HALF(*vi,*vj),*vo=VIDEO_FILTER_DOT7(vt),*vi=VIDEO_FILTER_DOT6(*vi);
+						*vj=VIDEO_FILTER_DOT1(*vj),vt=VIDEO_FILTER_HALF(*vi,*vj),*vo=VIDEO_FILTER_DOT0(vt),++vj,++vo,++vi,
+						*vj=VIDEO_FILTER_DOT2(*vj),vt=VIDEO_FILTER_HALF(*vi,*vj),*vo=VIDEO_FILTER_DOT0(vt);
 						#endif
 					while (++vj,++vo,++vi<vl);
 					break;
@@ -954,8 +1000,8 @@ INLINE void audio_playframe(void) // filter the audio signal
 		#if AUDIO_CHANNELS > 1
 		static int a0=AUDIO_ZERO,a1=AUDIO_ZERO; // independent channels
 		case 1: do
-				aa=*ao,*ao++=a0=( (a0<aa?1:0)+a0   +aa)>>1,
-				aa=*ao,*ao++=a1=( (a1<aa?1:0)+a1   +aa)>>1;
+				aa=*ao,*ao++=a0=(((a0<aa?1:0)+a0)  +aa)>>1,
+				aa=*ao,*ao++=a1=(((a1<aa?1:0)+a1)  +aa)>>1;
 			while (--i); break;
 		case 2: do
 				aa=*ao,*ao++=a0=(((a0<aa?1:0)+a0)*3+aa)>>2,
@@ -968,7 +1014,7 @@ INLINE void audio_playframe(void) // filter the audio signal
 		#else
 		static AUDIO_UNIT a0=AUDIO_ZERO; // single channel
 		case 1: do
-				aa=*ao,*ao++=a0=( (a0<aa?1:0)+a0   +aa)>>1;
+				aa=*ao,*ao++=a0=(((a0<aa?1:0)+a0)  +aa)>>1;
 			while (--i); break;
 		case 2: do
 				aa=*ao,*ao++=a0=(((a0<aa?1:0)+a0)*3+aa)>>2;
@@ -979,6 +1025,16 @@ INLINE void audio_playframe(void) // filter the audio signal
 		#endif
 	}
 }
+#if AUDIO_CHANNELS > 1
+INLINE void session_surround(int c) // c = 0 (hardest).. N (weakest)
+{
+	static AUDIO_UNIT z[AUDIO_PLAYBACK/50]; // previous samples; we assume PAL is the slowest framerate
+	int n=AUDIO_LENGTH_Z>>(c+1),m=AUDIO_LENGTH_Z-n,p=0,q=AUDIO_PLAYBACK/(50<<1); if (video_pos_z&1) p=q,q=0;
+	for (c=n;c--;) z[q+c]=audio_frame[(m+c)*AUDIO_CHANNELS];
+	for (;m--;) audio_frame[(n+m)*AUDIO_CHANNELS]=audio_frame[m*AUDIO_CHANNELS];
+	for (;n--;) audio_frame[n*AUDIO_CHANNELS]=z[p+n];
+}
+#endif
 
 INLINE int session_listen(void) // check the pending messages and update stuff accordingly until the user wants to quit (result is NONZERO)
 {
@@ -1027,11 +1083,11 @@ INLINE void session_update(void) // render video+audio and handle self-adjusting
 	if (video_required) // redraw window if it was already required!
 		if (!video_interlaces||!video_interlaced)
 			{ performance_b+=video_interlaced+1; session_drawme(); }
-	// now decide whether to do pauses and to require a new redraw
-	static BYTE r=0; if (!video_interlaces||frame_scanline<2)
+	static BYTE r=0; if (!video_interlaces||frame_scanline<2) // update the two frame counters: Nx100% speed and frameskip
 	{
-		if ((j=session_fast&&!session_filmfile?4:session_rhythm),!r||r>j) // 4 => 500% (0..3 = 100%..400%)
-			if (r=j,j=video_framelimit,!video_framecount||video_framecount>j+1) video_framecount=j;
+		if ((j=session_fast&&!session_filmfile?4:session_rhythm),!r||r>j) // 0..3 = 100%..400%; 4=500% > 1<<2=400%
+			if (r=j,j=(session_fast&2)?(MAIN_FRAMESKIP_MASK+1)>>2:video_framelimit,!video_framecount||video_framecount>j+1)
+				video_framecount=j; // bit 1 of session_fast = emulator is temporarily requesting full throttle
 			else --video_framecount;
 		else --r;
 	}
@@ -1272,12 +1328,12 @@ int huff_static(BYTE *t,int o,BYTE *s,int i) // the static compression of DEFLAT
 	while (p+3<=i) // the minimum match length is 3 bytes, a match can't begin any later!
 	{
 		if (6>puff_size) break; // target overflow!
-		while (h<p) pp[h&32767]=hh[H16GET(s,h)],hh[H16GET(s,h)]=h,++h; // walk hash table
+		while (h<p) { int x=s[h]+s[h+1]*17+s[h+2]*239; pp[h&32767]=hh[x],hh[x]=h,++h; } // walk hash table
 		int len=0,off=p+258,x=p-32768; if (off>i) off=i; const BYTE *y=s+off;
-		for (int q=hh[H16GET(s,p)],e=DEFLATE_RETRY;q>=x&&e;q=pp[q&32767],(DEFLATE_RETRY<32768&&--e)) // search for matches
+		for (int q=hh[s[p]+s[p+1]*17+s[p+2]*239],e=DEFLATE_RETRY;q>=x&&e;q=pp[q&32767],(DEFLATE_RETRY<32768&&--e)) // search for matches
 		{
 			const BYTE *cmp1=s+q,*cmp2=s+p; if (cmp1[len]==cmp2[len]) // can this match be an improvement?
-				{ for (++cmp1,++cmp2;++cmp2<y&&*++cmp1==*cmp2;) {} int z=cmp2-s-p; if (len<z) if (len=z,off=p-q,cmp2>=y) break; }
+				{ { while (*cmp1==*cmp2&&++cmp2<y) ++cmp1; } int z=cmp2-s-p; if (len<z) if (len=z,off=p-q,cmp2>=y) break; }
 		}
 		if (len>=(off>32*64?4:3)) // was there a match? is it beneficial? (empirical 24*64<<<x<=32*64; one case favours 29, another 31, another one 32...)
 		{
@@ -2887,7 +2943,11 @@ char *session_configread(void) // reads configuration file; session_parmtr holds
 	if (*s) // handle common parameters, unless empty
 	{
 		if (!strcasecmp(t,"hardaudio")) return audio_mixmode=*s&3,NULL;
-		if (!strcasecmp(t,"softaudio")) return audio_filter=*s&3,NULL;
+		if (!strcasecmp(t,"softaudio")) return audio_filter=*s&3,
+			#if !AUDIO_ALWAYS_MONO
+				audio_surround=(*s>>2)&1,
+			#endif
+			NULL;
 		if (!strcasecmp(t,"hardvideo")) return video_scanline=(*s>>1)&3,video_pageblend=*s&1,NULL;
 		if (!strcasecmp(t,"softvideo")) return video_filter=*s&7,NULL;
 		if (!strcasecmp(t,"zoomvideo")) return session_zoomblit=(*s>>1)&7,session_zoomblit=session_zoomblit>4?4:session_zoomblit,video_lineblend=*s&1,NULL;
@@ -2904,7 +2964,11 @@ void session_configwrite(FILE *f) // save common parameters
 		"hardaudio %d\nsoftaudio %d\nhardvideo %d\nsoftvideo %X\n"
 		"zoomvideo %d\nsafevideo %d\nsafeaudio %d\n"
 		,session_filmscale+session_filmtimer*2+session_wavedepth*4,onscreen_flag+session_scrn_flag*2+video_fineblend*4
-		,audio_mixmode,audio_filter,video_scanline*2+video_pageblend,video_filter,
+		,audio_mixmode,audio_filter
+			#if !AUDIO_ALWAYS_MONO
+				+audio_surround*4
+			#endif
+		,video_scanline*2+video_pageblend,video_filter,
 		video_lineblend+session_zoomblit*2,session_softblit/*+(video_gammaflag?0:2)*/+video_microwave*4,session_softplay^3);
 }
 
@@ -2929,7 +2993,7 @@ int session_prae(char *s) // load configuration and set stuff up; `s` is argv[0]
 		while (fgets(session_parmtr,STRMAX-1,f)) session_configreadmore(session_configread());
 		fclose(f);
 	}
-	video_recalc();
+	video_praecalc();
 	return debug_setup(),0; // set debugger up as soon as possible
 }
 void session_configwritemore(FILE*); // ditto!

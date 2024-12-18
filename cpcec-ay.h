@@ -18,7 +18,13 @@
 int psg_outputs[17]={0,(PSG_MAX_VOICE*65536)>>23,(PSG_MAX_VOICE*46341)>>22,(PSG_MAX_VOICE*65536)>>22, // 16 static levels...
 	(PSG_MAX_VOICE*46341)>>21,(PSG_MAX_VOICE*65536)>>21,(PSG_MAX_VOICE*46341)>>20,(PSG_MAX_VOICE*65536)>>20,
 	(PSG_MAX_VOICE*46341)>>19,(PSG_MAX_VOICE*65536)>>19,(PSG_MAX_VOICE*46341)>>18,(PSG_MAX_VOICE*65536)>>18,
-	(PSG_MAX_VOICE*46341)>>17,(PSG_MAX_VOICE*65536)>>17,(PSG_MAX_VOICE*46341)>>16,(PSG_MAX_VOICE*65536)>>16,0}; // + dynamic level
+	(PSG_MAX_VOICE*46341)>>17,(PSG_MAX_VOICE*65536)>>17,(PSG_MAX_VOICE*46341)>>16,PSG_MAX_VOICE,0}; // + dynamic level
+
+void psg_weight(int v) // for systems where extra devices may tone the PSG down
+{
+	psg_outputs[16]=(psg_outputs[16]*v+(psg_outputs[15]>>1))/psg_outputs[15],psg_outputs[15]=v;
+	for (int i=0;i<7;++i) psg_outputs[i*2+1]=(v*65536)>>(23-i),psg_outputs[i*2+2]=(v*46341)>>(22-i);
+}
 
 const BYTE psg_valid[16]={ 255,15,255,15,255,15,31,255,31,31,31,255,255,15,255,255 }; // bit masks
 BYTE psg_index,psg_table[16]; // index and table
@@ -44,7 +50,7 @@ int psg_tone_count[3]={0,0,0},psg_tone_state[3]={0,0,0};
 int psg_tone_limit[3],psg_tone_power[3],psg_tone_mixer[3];
 int psg_noise_limit,psg_noise_count=0;
 int psg_hard_limit,psg_hard_count; char psg_hard_style,psg_hard_level;
-#if AUDIO_CHANNELS > 1
+#if !AUDIO_ALWAYS_MONO
 int psg_stereo[3][2]; // the three channels' LEFT and RIGHT weights
 #endif
 void psg_reg_update(int c)
@@ -117,7 +123,7 @@ INLINE void psg_table_sendto(BYTE x,BYTE i)
 #ifdef PSG_PLAYCITY
 BYTE playcity_table[PSG_PLAYCITY][16],playcity_index[PSG_PLAYCITY],playcity_hard_new[PSG_PLAYCITY];
 int playcity_hard_style[PSG_PLAYCITY],playcity_hard_count[PSG_PLAYCITY],playcity_hard_level[PSG_PLAYCITY];
-#if AUDIO_CHANNELS > 1
+#if !AUDIO_ALWAYS_MONO
 int playcity_stereo[PSG_PLAYCITY][3][2];
 #endif
 void playcity_select(BYTE x,BYTE b)
@@ -186,7 +192,7 @@ void psg_main(int t,int d) // render audio output for `t` clock ticks, with `d` 
 {
 	static int r=0; // audio clock is slower, so remainder is kept here
 	if (audio_pos_z>=AUDIO_LENGTH_Z||(r+=t<<PSG_MAIN_EXTRABITS)<0) return; // nothing to do!
-	#if AUDIO_CHANNELS > 1
+	#if !AUDIO_ALWAYS_MONO
 	d=-d<<8; // flip DAC sign!
 	#else
 	d=-d; // flip DAC sign!
@@ -194,7 +200,7 @@ void psg_main(int t,int d) // render audio output for `t` clock ticks, with `d` 
 	do
 	{
 		static unsigned int smash=0,crash=1;
-		#if AUDIO_CHANNELS > 1
+		#if !AUDIO_ALWAYS_MONO
 		static int n=0,o0=0,o1=0; // output averages
 		#else
 		static int n=0,o=0; // output average
@@ -231,7 +237,7 @@ void psg_main(int t,int d) // render audio output for `t` clock ticks, with `d` 
 		for (int c=0;c<3;++c)
 			if ((psg_tone_mixer[c]&1)|psg_tone_state[c]) // is the channel active?
 				if ((psg_tone_mixer[c]&8)|smash) // is the channel noisy?
-		#if AUDIO_CHANNELS > 1
+		#if !AUDIO_ALWAYS_MONO
 				{
 					int o=psg_outputs[psg_tone_power[c]];
 					o0+=o*psg_stereo[c][0],
@@ -248,9 +254,15 @@ void psg_main(int t,int d) // render audio output for `t` clock ticks, with `d` 
 		{
 			b+=TICKS_PER_SECOND;
 			#if AUDIO_CHANNELS > 1
+			#if !AUDIO_ALWAYS_MONO
 			int dd=n<<(24-AUDIO_BITDEPTH),qq;
 			*audio_target++=(qq=o0/dd)+AUDIO_ZERO,o0-=qq*dd, // rounded average (left)
 			*audio_target++=(qq=o1/dd)+AUDIO_ZERO,o1-=qq*dd; // rounded average (right)
+			#else
+			int dd=n<<(16-AUDIO_BITDEPTH),qq;
+			*audio_target++=(qq=o/dd)+AUDIO_ZERO, // rounded average (left)
+			*audio_target++=qq+AUDIO_ZERO,o-=qq*dd; // rounded average (right)
+			#endif
 			#else
 			int dd=n<<(16-AUDIO_BITDEPTH),qq;
 			*audio_target++=(qq=o /dd)+AUDIO_ZERO,o -=qq*dd; // rounded average
@@ -292,7 +304,7 @@ void playcity_main(AUDIO_UNIT *t,int l)
 		if (!(playcity_hard_limit[x]=playcity_table[x][11]+playcity_table[x][12]*256)) // hard envelope limits
 			playcity_hard_limit[x]=1;
 	}
-	#if AUDIO_CHANNELS > 1
+	#if !AUDIO_ALWAYS_MONO
 	static int n=0,o0=0,o1=0; // output averages
 	#else
 	static int n=0,o=0; // output average
@@ -342,7 +354,7 @@ void playcity_main(AUDIO_UNIT *t,int l)
 							int z=playcity_tone_power[x][c];
 							if (z&16)
 								z=playcity_hard_power[x];
-							#if AUDIO_CHANNELS > 1
+							#if !AUDIO_ALWAYS_MONO
 							int o=PSG_PLAYCITY_XLAT(z);
 							o0+=o*playcity_stereo[x][c][0],
 							o1+=o*playcity_stereo[x][c][1];
@@ -358,9 +370,15 @@ void playcity_main(AUDIO_UNIT *t,int l)
 		if (n) // enough data to write a sample? unlike the basic PSG, `n` is >1 at 44100 Hz (5 or 6)
 		{
 			#if AUDIO_CHANNELS > 1
+			#if !AUDIO_ALWAYS_MONO
 			int dd=n<<(24-AUDIO_BITDEPTH),qq;
 			*t++-=qq=o0/dd,o0-=qq*dd, // rounded average (left)
 			*t++-=qq=o1/dd,o1-=qq*dd; // rounded average (right)
+			#else
+			int dd=n<<(16-AUDIO_BITDEPTH),qq;
+			*t++-=qq=o/dd, // rounded average (left)
+			*t++-=qq,o-=qq*dd; // rounded average (right)
+			#endif
 			#else
 			int dd=n<<(16-AUDIO_BITDEPTH),qq;
 			*t++-=qq=o /dd,o -=qq*dd; // rounded average

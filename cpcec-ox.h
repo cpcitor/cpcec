@@ -1396,11 +1396,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	if (SDL_Init(SDL_INIT_EVENTS|SDL_INIT_VIDEO|SDL_INIT_AUDIO|SDL_INIT_TIMER|SDL_INIT_JOYSTICK|SDL_INIT_GAMECONTROLLER)<0)
 		return (char*)SDL_GetError();
 	if (!(session_hwnd=SDL_CreateWindow(NULL,SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,0))|| // SDL_WINDOWPOS_CENTERED is wonderful :-)
-		#ifdef VIDEO_HI_Y_RES
-		!(video_blend=malloc(sizeof(VIDEO_UNIT[VIDEO_PIXELS_Y*VIDEO_PIXELS_X])))
-		#else
-		!(video_blend=malloc(sizeof(VIDEO_UNIT[VIDEO_PIXELS_Y/2*VIDEO_PIXELS_X])))
-		#endif
+		!(video_blend=malloc(sizeof(VIDEO_UNIT[(VIDEO_PIXELS_Y>>!!VIDEO_HALFBLEND)*VIDEO_PIXELS_X])))
 		) return SDL_Quit(),(char*)SDL_GetError();
 
 	if (!session_softblit&&(session_blitter=SDL_CreateRenderer(session_hwnd,-1,0))) // ...SDL_CreateRenderer(session_hwnd,-1,SDL_RENDERER_SOFTWARE)
@@ -1597,8 +1593,8 @@ INLINE void session_byebye(void) // delete video+audio devices
 #define session_title(s) SDL_SetWindowTitle(session_hwnd,(s)) // set the window caption
 #define session_sleep() SDL_WaitEvent(NULL) // sleep till a system event happens
 #define session_delay(i) SDL_Delay(i) // wait for approx `i` milliseconds
-#define audio_mustsync() // nothing to do here;
-#define audio_resyncme() // SDL2 handles the sync!
+#define audio_mustsync() ((void)0) // nothing to do here;
+#define audio_resyncme() // SDL2 handles the sync for us!
 int session_queue(void) // walk message queue: NONZERO = QUIT
 {
 	int k; for (SDL_Event event;SDL_PollEvent(&event);)
