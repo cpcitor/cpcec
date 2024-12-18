@@ -582,11 +582,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	RECT r; session_desktop(&r); // unlike SDL2, we lack a true CW_CENTERED option and we must calculate everything :-(
 	if (!(session_hwnd=CreateWindow(wc.lpszClassName,NULL,i,(r.right-session_ideal.right)>>1,(r.bottom-session_ideal.bottom)>>1,
 		session_ideal.right,session_ideal.bottom,NULL,session_hidemenu?NULL:session_menu,wc.hInstance,NULL))||
-		#ifdef VIDEO_HI_Y_RES
-		!(video_blend=malloc(sizeof(VIDEO_UNIT[VIDEO_PIXELS_Y*VIDEO_PIXELS_X])))
-		#else
-		!(video_blend=malloc(sizeof(VIDEO_UNIT[VIDEO_PIXELS_Y/2*VIDEO_PIXELS_X])))
-		#endif
+		!(video_blend=malloc(sizeof(VIDEO_UNIT[(VIDEO_PIXELS_Y>>!!VIDEO_HALFBLEND)*VIDEO_PIXELS_X])))
 		) return "cannot create window"; // the OS will do DestroyWindow(session_hwnd) ...will it? :-/
 	DragAcceptFiles(session_hwnd,1);
 
@@ -711,12 +707,9 @@ INLINE void session_byebye(void) // delete video+audio devices
 #define session_sleep() WaitMessage() // sleep till a system event happens
 #define session_delay(i) Sleep(i) // wait for approx `i` milliseconds
 char audio_needsync=0;
-#define audio_mustsync() (audio_needsync=1)
-void audio_resyncme(void)
-{
-	if (audio_needsync)
-		audio_needsync=0,audio_session=(((4-session_softplay)<<(AUDIO_L2BUFFER-1-2))+session_timer)*AUDIO_BYTESTEP;
-}
+#define audio_mustsync() (audio_needsync=1) // we must handle the sync
+void audio_resyncme(void) // because WinMM won't do it on its own <:-(
+	{ if (audio_needsync) audio_needsync=0,audio_session=(((4-session_softplay)<<(AUDIO_L2BUFFER-1-2))+session_timer)*AUDIO_BYTESTEP; }
 
 int session_queue(void) // walk message queue: NONZERO = QUIT
 {
@@ -754,6 +747,7 @@ int session_ticks(void) // get the current system time; see also "session_clock"
 {
 	if (session_audio) // prefer audio clock to internal tick count; unlike SDL2, the Win32 audio clock is reliable :-)
 	{
+		static int r=0; if (++r>444) { r=0; audio_mustsync(); } // can be done on demand, but also nudged regularly
 		static BYTE t=1; if (t!=(session_fast|audio_disabled)) // sound needs higher priority, but only on realtime
 		{
 			//BELOW_NORMAL_PRIORITY_CLASS was overkill and caused trouble on busy systems :-(

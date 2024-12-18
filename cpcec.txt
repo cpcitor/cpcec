@@ -399,10 +399,9 @@ recordings like these.
 In other systems XRFEC cannot directly use any codec, so the output is an AVI
 file without any compression (image is RGB 24 bpp, sound is stereo PCM);
 fortunately, it can generate it through the console by specifying "-" instead of
-"target.avi" and feed this way a video encoding tool, for example FFMPEG: the
-command line "xrfec source.xrf - | ffmpeg -i - target.avi" will delegate on
-FFMPEG the task of encoding the AVI file. Read the documentation of FFMPEG on
-this matter.
+"target.avi" and feed a video encoding tool, for example FFMPEG: the command
+line "xrfec source.xrf - | ffmpeg -i - target.avi" will delegate on FFMPEG the
+task of encoding the AVI file. Read the documentation of FFMPEG on this matter.
 
 ## ZXSEC ##
 
@@ -1329,3 +1328,12 @@ patch) to support the slightly different brightness of some attributes (f.e.
 falling to zero when sound played without changing the mixer) and turning the
 artificially stereo chips from MSXEC (PSG, Konami SCC and Yamaha OPLL) into
 their real mono selves: stereo in MSXEC is now surround-like as in CSFEC.
+- 20241216 -- minor patch fixing a bug in command-line parameters combined with
+autorun files: the former could override the later even when the files came last
+(reported by Cpcitor). Further tweaks in the sound logic and sources to enable
+compiling the emulators with mono sound, and to improve the audio synchro.
+Optional surround stereo is available in CPCEC, CSFEC (when there's more than
+one SID chip) and ZXSEC. X-masking and Y-masking changed again, trying to grow
+closer to light-and-dark pixel analog screen patterns. X-blending adjusts itself
+to the machine's video mode, f.e. it will perform simpler pixel blur
+calculations in CPCEC when MODE 2 isn't selected.

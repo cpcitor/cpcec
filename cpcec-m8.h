@@ -19,8 +19,10 @@ char sid_tone_shape[3][3],sid_tone_noisy[3][3],sid_tone_stage[3][3]; // oscillat
 int sid_tone_count[3][4],sid_tone_limit[3][3],sid_tone_pulse[3][3],sid_tone_value[3][3],sid_tone_power[3][3]; // oscillator long values
 int sid_tone_cycle[3][3],sid_tone_adsr[3][4][3],*sid_tone_syncc[3][3],*sid_tone_ringg[3][3]; // ADSR long values, counters and pointers
 const int sid_adsr_table[16]={ 1,4,8,12,19,28,34,40,50,125,250,400,500,1500,2500,4000 }; // official milliseconds >>1
-#if AUDIO_CHANNELS > 1
+#if !AUDIO_ALWAYS_MONO
 int sid_stereo[3][2]; // the three chips' LEFT and RIGHT weights
+#else
+int sid_weight; // the SID chips' weights, always equally distributed in single, double or triple modes.
 #endif
 char sid_chips=1; // emulate just the first chip by default; up to three chips are supported
 char sid_nouveau=1; // MOS 8580 (new) and 6581 (old) have slighly different wave shape tables and filters
@@ -310,15 +312,11 @@ void sid_main(int t/*,int d*/)
 {
 	static int r=0; // audio clock is slower, so remainder is kept here
 	if (audio_pos_z>=AUDIO_LENGTH_Z||(r+=t<<SID_MAIN_EXTRABITS)<0) return; // nothing to do!
-	#if AUDIO_CHANNELS > 1
 	/*d=-d<<8;*/
-	#else
-	/*d=-d;*/
-	#endif
 	do
 	{
 		static unsigned int crash[3]={1,1,1};
-		#if AUDIO_CHANNELS > 1
+		#if !AUDIO_ALWAYS_MONO
 		static int n=0,o0=0,o1=0; // output averages
 		#else
 		static int n=0,o=0; // output average
@@ -395,15 +393,15 @@ void sid_main(int t/*,int d*/)
 		for (int x=sid_chips;x--;)
 		{
 			int m=((SID_MIX_CHANNEL(x,0)+SID_MIX_CHANNEL(x,1)+SID_MIX_CHANNEL(x,2)+sid_filtered[x])*sid_mixer[x])>>8; // reduce signal loss, split >>16 into two >>8
-			#if AUDIO_CHANNELS > 1
+			#if !AUDIO_ALWAYS_MONO
 			o0+=(m*sid_stereo[x][0])>>8;
 			o1+=(m*sid_stereo[x][1])>>8;
 			#else
-			o+=m>>8;
+			o+=(m*sid_weight)>>8;
 			#endif
 		}
 		/*
-		#if AUDIO_CHANNELS > 1
+		#if !AUDIO_ALWAYS_MONO
 		o0+=d,
 		o1+=d;
 		#else
@@ -415,12 +413,18 @@ void sid_main(int t/*,int d*/)
 		{
 			b+=TICKS_PER_SECOND;
 			#if AUDIO_CHANNELS > 1
+			#if !AUDIO_ALWAYS_MONO
 			int dd=n<<(24-AUDIO_BITDEPTH),qq;
 			*audio_target++=(qq=o0/dd)+AUDIO_ZERO,o0-=qq*dd, // rounded average (left)
 			*audio_target++=(qq=o1/dd)+AUDIO_ZERO,o1-=qq*dd; // rounded average (right)
 			#else
-			int dd=n<<(16-AUDIO_BITDEPTH),qq;
-			*audio_target++=(qq=o /dd)+AUDIO_ZERO,o -=qq*dd; // rounded average
+			int dd=n<<(24-AUDIO_BITDEPTH),qq;
+			*audio_target++=(qq=o/dd)+AUDIO_ZERO; // rounded average
+			*audio_target++=qq+AUDIO_ZERO,o-=qq*dd; // rounded average
+			#endif
+			#else
+			int dd=n<<(24-AUDIO_BITDEPTH),qq;
+			*audio_target++=(qq=o/dd)+AUDIO_ZERO,o-=qq*dd; // rounded average
 			#endif
 			if (n=0,++audio_pos_z>=AUDIO_LENGTH_Z) r%=SID_TICK_STEP; // end of buffer!
 		}

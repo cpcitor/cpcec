@@ -8,7 +8,6 @@
 
 #define MY_CAPTION "CPCEC"
 #define my_caption "cpcec"
-#define MY_LICENSE "Copyright (C) 2019-2024 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
 
@@ -92,12 +91,15 @@ unsigned char kbd_joy[]= // ATARI norm: up, down, left, right, fire1-fire4
 #define MAUS_EMULATION // emulation can examine the mouse
 #define MAUS_LIGHTGUNS // lightguns are emulated with the mouse
 //#define VIDEO_LO_X_RES // the normal MODE 2 is monochrome, but the PLUS ASIC can scroll in MODE 2 steps :-(
+unsigned char video_hi_x_res=0; // variable: +1 PLUS ASIC odd x-scroll, +2 hi-res (PLUS ASIC sprites, MODE 2)
 //#define INFLATE_RFC1950 // no file needs inflating RFC1950 data
 //#define DEFLATE_RFC1950 // no file needs deflating RFC1950 data
 //#define SHA1_CALCULATOR // unused
 #define PNG_OUTPUT_MODE 0 // PNG_OUTPUT_MODE implies DEFLATE_RFC1950 and forbids QOI
 #define POWER_BOOST1 1 // power_boost default value (enabled)
 #define POWER_BOOST0 0
+#define AUDIO_ALWAYS_MONO (AUDIO_CHANNELS==1) // false, the PSG is stereo (ABC by default on the CPC)
+unsigned char audio_surround=0; // ditto
 #include "cpcec-rt.h" // emulation framework!
 
 int litegun=0; // 0 = standard joystick, 1 = Trojan Light Phaser, 2 = Gunstick (MHT), 3 = Westphaser (Loriciel)
@@ -641,7 +643,6 @@ void playcity_setcfg(BYTE b) { if (b<16) playcity_clock=b,playcity_hiclock=(b?b*
 int playcity_disabled=0,playcity_dirty,playcity_ctc_state[4]={0,0,0,0},playcity_ctc_flags[4]={0,0,0,0},playcity_ctc_count[4]={0,0,0,0},playcity_ctc_limit[4]={0,0,0,0};
 int dac_disabled=1; // Digiblaster DAC, disabled by default to avoid trouble with the printer
 int playcity_outputs[16]; // to be filled following psg_outputs[]
-
 #include "cpcec-ay.h"
 
 #include "cpcec-ym.h"
@@ -656,7 +657,7 @@ int dac_delay=0,dac_voice=0,tape_loud=1,tape_song=0; // DAC and tape levels and 
 #define tape_disabled tape_delay // the machine can disable the tape even when we enable it
 //#define TAPE_TAP_FORMAT // useless outside Spectrum
 //#define TAPE_CAS_FORMAT // useless outside MSX
-//#define TAPE_TZX_KANSAS // useless outside MSX AFAIK, are there any non-MSX protections using this method?
+#define TAPE_TZX_KANSAS // useless outside MSX, are there any non-MSX tapes (besides our own!) using this method?
 //#define FASTTAPE_DUMPER // overkill!
 #include "cpcec-k7.h"
 
@@ -698,7 +699,7 @@ int plus_dma_delay1=8,plus_dma_delay0=8; // DMA contention thresholds
 
 void video_main_sprites(void)
 {
-	int delta=plus_sprite_latest-plus_sprite_offset;
+	int delta=plus_sprite_latest-plus_sprite_offset,j=0; // `j` tracks hi-res sprites, see below
 	VIDEO_UNIT plus_backup_pixels[3]; // screen buffer; avoids dirt on the left edge of the screen
 	MEMLOAD(plus_backup_pixels,&plus_sprite_target[delta-3]);
 	for (int i=15*8;i>=0;i-=8) // render sprites
@@ -709,9 +710,9 @@ void video_main_sprites(void)
 		int spritey=(crtc_line-(plus_sprite_xyz[i+2]+256*plus_sprite_xyz[i+3]))&511; // 9-bit wrap!
 		if ((spritey>>=--zoomy)>=16) continue;
 		int spritex=(plus_sprite_xyz[i+0]+256*(INT8)plus_sprite_xyz[i+1])+plus_sprite_offset;
+		if (spritex&1) j=2; // misaligned = hi-res!
 		if (plus_sprite_latest>=spritex+(16<<--zoomx)||spritex>=video_pos_x) continue;
-		int x=0,xx=16;
-		if ((spritex-=plus_sprite_latest)<0)
+		int x=0,xx=16; if ((spritex-=plus_sprite_latest)<0)
 			x=(0-spritex)>>zoomx,xx-=x,spritex+=x<<zoomx; // clip left edge
 		BYTE *s=&plus_sprite_bmp[i*32+spritey*16+x];
 		VIDEO_UNIT *t=&plus_sprite_target[spritex+delta];
@@ -720,7 +721,7 @@ void video_main_sprites(void)
 		switch (zoomx) // `xx` will never be zero!
 		{
 			case 0:
-				do
+				j=2; do
 					if (x=*s++)
 						*t=video_clut[16+x];
 				while (++t,--xx);
@@ -740,6 +741,7 @@ void video_main_sprites(void)
 		}
 	}
 	MEMSAVE(&plus_sprite_target[delta-3],plus_backup_pixels); // hide sprite edges :-(
+	video_hi_x_res|=j; // catch hi-res sprites!
 	plus_sprite_latest=video_pos_x; //plus_dirtysprite=-1;
 }
 void video_main_borders(void)
@@ -876,11 +878,13 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 						video_target[-4]= video_target[-3]= video_target[-2]= video_target[-1]= video_clut[16]; // actually the border
 				}
 				else if (crtc_count_r0==crtc_table[1]) // end of bitmap -- CRTC_STATUS_H_OFF_SET will do
+				{
 					if (plus_sprite_target)
 					{
 						if (video_pos_x>plus_sprite_latest) video_main_sprites(); // last sprites
 						video_main_borders(); // border cleanup
 					}
+				}
 			}
 		}
 		else // not drawing at all!!
@@ -917,6 +921,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 			}
 			gate_status=(gate_status&(3+CRTC_STATUS_HSYNC+CRTC_STATUS_VSYNC))+
 				((crtc_before=crtc_status)&(CRTC_STATUS_H_OFF+CRTC_STATUS_V_OFF+CRTC_STATUS_INVIS));
+			if (gate_status<4) video_hi_x_res|=(gate_status==2?2:0)+(plus_sprite_adjust&1); // detect hi-res and odd x-scroll
 		}
 
 		// ASIC hardware sprites and DMA
@@ -1164,7 +1169,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 				vsync_match=0; if (!(video_pos_z&255)&&crtc_type==1) crtc_syncs_update(); // "PHEELONE" watchdog
 				// all calculations are ready: feed everything to the video engine!
 				video_newscanlines(video_pos_x,(((VIDEO_LENGTH_Y-vsync_limit)/2)&-2)+((crtc_status&CRTC_STATUS_REG_8)?2:0)); // end of frame!
-				video_threshold=VIDEO_LENGTH_X/4; // soft horizontal threshold
+				video_hi_x_res=0; video_threshold=VIDEO_LENGTH_X/4; // soft horizontal threshold
 			}
 			vsync_count+=2; vsync_match+=2;
 			// "PREHISTORIK 2", "EDGE GRINDER" and the like perform smooth horizontal scrolling with the low nibble of REG3.
@@ -3278,6 +3283,7 @@ char session_menudata[]=
 	"0xC402 25% stereo\n"
 	"0xC403 50% stereo\n"
 	"0xC404 100% stereo\n"
+	"0xC408 Surround mode\n"
 	#endif
 	"=\n"
 	"0x8401 No filtering\n"
@@ -3300,7 +3306,7 @@ char session_menudata[]=
 	//"0x8B00 Next palette\tF11\n"
 	//"0xCB00 Prev. palette\tShift-F11\n"
 	"=\n"
-	"0x8907 Microwave static\n"
+	"0x8907 Microwaves\n"
 	"0x8903 X-masking\n"
 	"0x8902 Y-masking\n"
 	//"0x0B00 Next scanline\tCtrl-F11\n"
@@ -3386,6 +3392,8 @@ void session_clean(void) // refresh options
 	session_menuradio(0x8511+ram_depth,0x8511,0x8517);
 	session_menucheck(0x851F,!snap_extended);
 	session_menucheck(0x852F,!!printer);
+	session_menucheck(0x9300,video_framelimit==MAIN_FRAMESKIP_MASK);
+	session_menucheck(0x9400,!video_framelimit);
 	session_menucheck(0x8901,onscreen_flag);
 	session_menucheck(0x8902,video_filter&VIDEO_FILTER_MASK_Y);
 	session_menucheck(0x8903,video_filter&VIDEO_FILTER_MASK_X);
@@ -3405,30 +3413,35 @@ void session_clean(void) // refresh options
 	video_vsync_max=crtc_hold?VIDEO_VSYNC_HI*2-VIDEO_LENGTH_Y:VIDEO_VSYNC_HI;
 	kbd_joy[4]=kbd_joy[6]=0x4C+key2joy_flag;
 	kbd_joy[5]=kbd_joy[7]=0x4D-key2joy_flag;
-	#if AUDIO_CHANNELS > 1
+	#if !AUDIO_ALWAYS_MONO
+	session_menucheck(0xC408,audio_surround);
 	session_menuradio(0xC401+audio_mixmode,0xC401,0xC404);
-	for (int i=0;i<3;++i)
-		psg_stereo[i][0]=256+audio_stereos[audio_mixmode][i],psg_stereo[i][1]=256-audio_stereos[audio_mixmode][i]; // built-in stereo is L:M:R
+	for (int i=0,x=audio_surround?0:audio_mixmode;i<3;++i)
+		psg_stereo[i][0]=256+audio_stereos[x][i],psg_stereo[i][1]=256-audio_stereos[x][i]; // built-in stereo is L:M:R
+	#endif
 	#ifdef PSG_PLAYCITY
 	if (!playcity_disabled&&playcity_dirty)
 	{
 		if (playcity_dirty<3) // "ALCON 2020: SLAP FIGHT" uses just one Playcity chip, as stereo as the PSG!
 		{
 			for (int i=0;i<16;++i) playcity_outputs[i]=psg_outputs[i]; // 100% single chip
+			#if !AUDIO_ALWAYS_MONO
 			for (int i=0;i<3;++i)
 				playcity_stereo[0][i][0]=playcity_stereo[1][i][0]=psg_stereo[i][0], // as long as just one chip (whichever) is on,
 				playcity_stereo[0][i][1]=playcity_stereo[1][i][1]=psg_stereo[i][1]; // it doesn't matter how the other is config'd
+			#endif
 		}
 		else
 		{
 			for (int i=0;i<16;++i) playcity_outputs[i]=psg_outputs[i]>>1; // 50% double chip
+			#if !AUDIO_ALWAYS_MONO
 			for (int i=0;i<3;++i)
 				playcity_stereo[0][i][0]=psg_stereo[2][0],playcity_stereo[0][i][1]=psg_stereo[2][1], // PlayCity chip 0 is RIGHT
 				playcity_stereo[1][i][0]=psg_stereo[0][0],playcity_stereo[1][i][1]=psg_stereo[0][1]; // PlayCity chip 1 is LEFT
 			psg_stereo[0][0]=psg_stereo[2][0]=psg_stereo[1][0]; psg_stereo[0][1]=psg_stereo[2][1]=psg_stereo[1][1]; // AY chip is MIDDLE
+			#endif
 		}
 	}
-	#endif
 	#endif
 	video_resetscanline(),debug_dirty=1; sprintf(session_info,"%d:%dK %s%c %d.0MHz"//" | disc %s | tape %s | %s"
 		,ram_dirty,ram_kbytes(ram_depth),plus_enabled?"ASIC":"CRTC",'0'+crtc_type,4<<multi_t);
@@ -3575,6 +3588,7 @@ void session_user(int k) // handle the user's commands
 			#endif
 			audio_filter=k-0x8401;
 			break;
+		case 0x8408: { if (session_shift) audio_surround^=1; } break;
 		case 0x0400: // ^F4: TOGGLE JOYSTICK
 			if (session_shift)
 				key2joy_flag=!key2joy_flag; // FLIP JOYSTICK BUTTONS
@@ -3890,12 +3904,12 @@ void session_user(int k) // handle the user's commands
 			break;
 		case 0x9100: // ^NUM.+
 		case 0x1100: // NUM.+: INCREASE FRAMESKIP
-			if ((video_framelimit&MAIN_FRAMESKIP_MASK)<MAIN_FRAMESKIP_MASK)
+			if (video_framelimit<MAIN_FRAMESKIP_MASK)
 				++video_framelimit;
 			break;
 		case 0x9200: // ^NUM.-
 		case 0x1200: // NUM.-: DECREASE FRAMESKIP
-			if ((video_framelimit&MAIN_FRAMESKIP_MASK)>0)
+			if (video_framelimit>0)
 				--video_framelimit;
 			break;
 		case 0x9300: // ^NUM.*
@@ -4050,7 +4064,9 @@ int main(int argc,char *argv[])
 						session_audio=0;
 						break;
 					case 't':
+						#if AUDIO_CHANNELS > 1
 						audio_mixmode=length(audio_stereos)-1;
+						#endif
 						break;
 					case 'T':
 						audio_mixmode=0;
@@ -4093,7 +4109,7 @@ int main(int argc,char *argv[])
 				}
 			while ((i<argc)&&(argv[i][j]));
 		}
-		else if (any_load(puff_makebasepath(argv[i]),1))
+		else if (k=0,any_load(puff_makebasepath(argv[i]),1)) // a succesful any_load() would be destroyed by a "k=1"!
 			i=argc; // help!
 	if (i>argc)
 		return
@@ -4154,6 +4170,9 @@ int main(int argc,char *argv[])
 				#ifdef PSG_PLAYCITY
 				if (!playcity_disabled)
 					playcity_main(audio_frame,AUDIO_LENGTH_Z);
+				#endif
+				#if AUDIO_CHANNELS > 1
+				if (audio_surround) if (audio_mixmode) session_surround(length(audio_stereos)-1-audio_mixmode);
 				#endif
 				audio_playframe();
 			}
@@ -4218,9 +4237,9 @@ int main(int argc,char *argv[])
 				tape_signal=0,session_dirty=1; // update config
 			}
 			if (tape&&tape_filetell<tape_filesize&&tape_skipload&&!session_filmfile&&!tape_disabled&&tape_loud) // `tape_loud` implies `!tape_song`
-				session_fast|=+2,audio_disabled|=+2,video_framelimit|=MAIN_FRAMESKIP_MASK+1; // abuse binary logic to reduce activity
+				session_fast|=+2,audio_disabled|=+2; // abuse binary logic to reduce activity
 			else
-				session_fast&=~2,audio_disabled&=~2,video_framelimit&=MAIN_FRAMESKIP_MASK  ; // ditto, to restore normal activity
+				session_fast&=~2,audio_disabled&=~2; // ditto, to restore normal activity
 			session_update();
 			//if (!audio_disabled) audio_main(1+(video_pos_x>>4)); // preload audio buffer
 		}

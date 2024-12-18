@@ -8,7 +8,6 @@
 
 #define MY_CAPTION "CSFEC"
 #define my_caption "csfec"
-#define MY_LICENSE "Copyright (C) 2019-2024 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
 
@@ -89,12 +88,15 @@ unsigned char kbd_joy[]= // ATARI norm: up, down, left, right, fire1-fire4
 //#define MAUS_EMULATION // ignore!
 //#define MAUS_LIGHTGUNS // ignore!
 #define VIDEO_LO_X_RES // no "half" (hi-res) pixels are ever drawn
+#define video_hi_x_res 0 // constant, see above
 #define RUNLENGTH_OBSOLETE // snap_load/snap_save (oldest!!)
 #define RUNLENGTH_ENCODING // snap_load/snap_save (old!)
 #define LEMPELZIV_ENCODING // snap_load/snap_save
 #define PNG_OUTPUT_MODE 0 // PNG_OUTPUT_MODE implies DEFLATE_RFC1950 and forbids QOI
 #define POWER_BOOST1 7 // power_boost default value (enabled)
 #define POWER_BOOST0 8
+#define AUDIO_ALWAYS_MONO (AUDIO_CHANNELS==1) // false, a multi-SID setup is stereo
+unsigned char audio_surround=0; // a single-SID setup is mono
 #include "cpcec-rt.h" // emulation framework!
 
 const unsigned char kbd_map_xlt[]=
@@ -1224,7 +1226,7 @@ void c1541_reset(void)
 #define SID_MAIN_EXTRABITS 0
 #define SID_MAX_VOICE 10922 // 16-bit sample style, where 10922= 32768/3 channels
 #define SID_MUTE_TIME main_t
-int sid_extras=0; // no extra chips by default
+int sid_extras=0; // no extra chips by default; the single default chip is mono
 #include "cpcec-m8.h"
 
 #include "cpcec-ym.h"
@@ -3457,6 +3459,7 @@ char session_menudata[]=
 	"0xC402 25% stereo\n"
 	"0xC403 50% stereo\n"
 	"0xC404 100% stereo\n"
+	"0xC408 Surround mode\n"
 	#endif
 	"=\n"
 	"0x8401 No filtering\n"
@@ -3479,7 +3482,7 @@ char session_menudata[]=
 	//"0x8B00 Next palette\tF11\n"
 	//"0xCB00 Prev. palette\tShift-F11\n"
 	"=\n"
-	"0x8907 Microwave static\n"
+	"0x8907 Microwaves\n"
 	"0x8903 X-masking\n"
 	"0x8902 Y-masking\n"
 	//"0x0B00 Next scanline\tCtrl-F11\n"
@@ -3568,6 +3571,8 @@ void session_clean(void) // refresh options
 	session_menucheck(0x8518,georam_yes);
 	session_menucheck(0x851F,!(snap_extended));
 	//session_menucheck(0x852F,!!printer); // *!* TODO
+	session_menucheck(0x9300,video_framelimit==MAIN_FRAMESKIP_MASK);
+	session_menucheck(0x9400,!video_framelimit);
 	session_menucheck(0x8901,onscreen_flag);
 	session_menucheck(0x8902,video_filter&VIDEO_FILTER_MASK_Y);
 	session_menucheck(0x8903,video_filter&VIDEO_FILTER_MASK_X);
@@ -3595,21 +3600,29 @@ void session_clean(void) // refresh options
 		SID_TABLE[1]=&mem_i_o[0XE00],SID_TABLE[2]=&mem_i_o[0XF00];
 	sid_chips=sid_extras<1?1:sid_extras<3?2:3;
 	#if AUDIO_CHANNELS > 1
+	session_menucheck(0xC408,audio_surround);
 	session_menuradio(0xC401+audio_mixmode,0xC401,0xC404);
-	switch (sid_extras)
+	int x=audio_surround?0:audio_mixmode; switch (sid_extras)
 	{
 		case 3: case 4:
-			sid_stereo[0][0]=(256+audio_stereos[audio_mixmode][1]+1)/3,sid_stereo[0][1]=(256-audio_stereos[audio_mixmode][1]+1)/3, // 1st chip is M
-			sid_stereo[1][0]=(256+audio_stereos[audio_mixmode][0]+1)/3,sid_stereo[1][1]=(256-audio_stereos[audio_mixmode][0]+1)/3, // 2nd chip is L
-			sid_stereo[2][0]=(256+audio_stereos[audio_mixmode][2]+1)/3,sid_stereo[2][1]=(256-audio_stereos[audio_mixmode][2]+1)/3; // 3rd chip is R
+			sid_stereo[0][0]=(256+audio_stereos[x][1]+1)/3,sid_stereo[0][1]=(256-audio_stereos[x][1]+1)/3, // 1st chip is M
+			sid_stereo[1][0]=(256+audio_stereos[x][0]+1)/3,sid_stereo[1][1]=(256-audio_stereos[x][0]+1)/3, // 2nd chip is L
+			sid_stereo[2][0]=(256+audio_stereos[x][2]+1)/3,sid_stereo[2][1]=(256-audio_stereos[x][2]+1)/3; // 3rd chip is R
 			break;
 		case 1: case 2:
-			sid_stereo[0][0]=(256+audio_stereos[audio_mixmode][0])>>1,sid_stereo[0][1]=(256-audio_stereos[audio_mixmode][0])>>1, // 1st chip is LEFT
-			sid_stereo[1][0]=(256+audio_stereos[audio_mixmode][2])>>1,sid_stereo[1][1]=(256-audio_stereos[audio_mixmode][2])>>1; // 2nd chip is RIGHT
+			sid_stereo[0][0]=(256+audio_stereos[x][0])>>1,sid_stereo[0][1]=(256-audio_stereos[x][0])>>1, // 1st chip is LEFT
+			sid_stereo[1][0]=(256+audio_stereos[x][2])>>1,sid_stereo[1][1]=(256-audio_stereos[x][2])>>1; // 2nd chip is RIGHT
 			break;
 		default: // the "ideal" stereo SID A:B:C:4TH order is LEFT:RIGHT:MIDDLE:MIDDLE because C can be sampled ("ECHOFIED") and thus 4TH must be MIDDLE;
 			// however, some songs (f.e. "CATWALK") could overflow with stereo separation at 100%: after all, the SID has one filter, not two :-/
 			sid_stereo[0][0]=sid_stereo[0][1]=256;
+	}
+	#else
+	switch (sid_extras)
+	{
+		case 3: case 4: sid_weight=85; break; // triple-chip mode, 33% each
+		case 1: case 2: sid_weight=128; break; // double-chip mode, 50% each
+		default: sid_weight=256; // single-chip mode
 	}
 	#endif
 	video_resetscanline(),debug_dirty=1; sprintf(session_info,"%d:%dK %s %sx%c %d.0MHz"//" | disc %s | tape %s | %s"
@@ -3758,6 +3771,7 @@ void session_user(int k) // handle the user's commands
 			#endif
 			audio_filter=k-0x8401;
 			break;
+		case 0x8408: { if (session_shift) audio_surround^=1; } break;
 		case 0x0400: // ^F4: TOGGLE JOYSTICK
 			if (session_shift)
 				key2joy_flag=!key2joy_flag; // FLIP JOYSTICK PORTS
@@ -4087,12 +4101,12 @@ void session_user(int k) // handle the user's commands
 			break;
 		case 0x9100: // ^NUM.+
 		case 0x1100: // NUM.+: INCREASE FRAMESKIP
-			if ((video_framelimit&MAIN_FRAMESKIP_MASK)<MAIN_FRAMESKIP_MASK)
+			if (video_framelimit<MAIN_FRAMESKIP_MASK)
 				++video_framelimit;
 			break;
 		case 0x9200: // ^NUM.-
 		case 0x1200: // NUM.-: DECREASE FRAMESKIP
-			if ((video_framelimit&MAIN_FRAMESKIP_MASK)>0)
+			if (video_framelimit>0)
 				--video_framelimit;
 			break;
 		case 0x9300: // ^NUM.*
@@ -4227,7 +4241,9 @@ int main(int argc,char *argv[])
 						session_audio=0;
 						break;
 					case 't':
+						#if AUDIO_CHANNELS > 1
 						audio_mixmode=length(audio_stereos)-1;
+						#endif
 						break;
 					case 'T':
 						audio_mixmode=0;
@@ -4270,7 +4286,7 @@ int main(int argc,char *argv[])
 				}
 			while ((i<argc)&&(argv[i][j]));
 		}
-		else if (any_load(puff_makebasepath(argv[i]),1))
+		else if (k=0,any_load(puff_makebasepath(argv[i]),1)) // a succesful any_load() would be destroyed by a "k=1"!
 			i=argc; // help!
 	if (i>argc)
 		return
@@ -4327,17 +4343,8 @@ int main(int argc,char *argv[])
 			if (audio_required)
 			{
 				if (audio_pos_z<AUDIO_LENGTH_Z) audio_main(TICKS_PER_FRAME); // fill sound buffer to the brim!
-				#if AUDIO_CHANNELS > 1
-				if (sid_chips==1&&audio_mixmode) // a single chip is mono, but we can add pseudo-stereo surround
-				{
-					#define AUDIO_SURROUND 0 // 0..N; the higher this value, the more nuanced the delay
-					static AUDIO_UNIT zz[(AUDIO_PLAYBACK/50)>>AUDIO_SURROUND]; // backups of past samples
-					int zi=0,zo=(AUDIO_PLAYBACK/50)>>(AUDIO_SURROUND+1); if (video_pos_z&1) i=zi,zi=zo,zo=i;
-					int zn=AUDIO_LENGTH_Z>>(AUDIO_SURROUND+4-audio_mixmode),zm=AUDIO_LENGTH_Z-zn;
-					for (i=zn;--i>=0;) zz[zo+i]=audio_frame[(zm+i)*AUDIO_CHANNELS];
-					for (i=zm;--i>=0;) audio_frame[(zn+i)*AUDIO_CHANNELS]=audio_frame[i*AUDIO_CHANNELS];
-					for (i=zn;--i>=0;) audio_frame[i*AUDIO_CHANNELS]=zz[zi+i];
-				}
+				#if AUDIO_CHANNELS > 1 // a single SID is mono, multiple SIDs are stereo
+				if (audio_surround||!sid_extras) if (audio_mixmode) session_surround(length(audio_stereos)-1-audio_mixmode);
 				#endif
 				audio_playframe();
 			}
@@ -4433,9 +4440,9 @@ int main(int argc,char *argv[])
 				mmu_inp|=+16;
 			if (tape_browsing) mmu_inp^=--tape_browsing&16; // introduce irregularities in the signal! (f.e. detect the REWIND button)
 			if (tape&&tape_filetell<tape_filesize&&tape_skipload&&!session_filmfile&&!tape_disabled&&!tape_song) // no `tape_loud` but `!tape_song`
-				session_fast|=+2,audio_disabled|=+2,video_framelimit|=MAIN_FRAMESKIP_MASK+1; // abuse binary logic to reduce activity
+				session_fast|=+2,audio_disabled|=+2; // abuse binary logic to reduce activity
 			else
-				session_fast&=~2,audio_disabled&=~2,video_framelimit&=MAIN_FRAMESKIP_MASK  ; // ditto, to restore normal activity
+				session_fast&=~2,audio_disabled&=~2; // ditto, to restore normal activity
 			session_update();
 			//if (!audio_disabled) audio_main(1+(video_pos_x>>4)); // preload audio buffer
 		}

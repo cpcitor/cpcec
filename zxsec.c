@@ -8,7 +8,6 @@
 
 #define MY_CAPTION "ZXSEC"
 #define my_caption "zxsec"
-#define MY_LICENSE "Copyright (C) 2019-2024 Cesar Nicolas-Gonzalez"
 
 /* This notice applies to the source code of CPCEC and its binaries.
 
@@ -81,12 +80,15 @@ unsigned char kbd_joy[]= // ATARI norm: up, down, left, right, fire1-4
 #define MAUS_EMULATION // emulation can examine the mouse
 #define MAUS_LIGHTGUNS // lightguns are emulated with the mouse
 #define VIDEO_LO_X_RES // no "half" (hi-res) pixels are ever drawn
+#define video_hi_x_res 0 // constant, see above
 #define INFLATE_RFC1950 // reading SZX files requires inflating RFC1950 data
 #define DEFLATE_RFC1950 // writing SZX files may need deflating RFC1950 data
 //#define SHA1_CALCULATOR // unused
 #define PNG_OUTPUT_MODE 0 // PNG_OUTPUT_MODE implies DEFLATE_RFC1950 and forbids QOI
 #define POWER_BOOST1 3 // power_boost default value (enabled)
 #define POWER_BOOST0 8
+#define AUDIO_ALWAYS_MONO (AUDIO_CHANNELS==1) // false, the PSG is stereo (ACB by default on the 128K)
+unsigned char audio_surround=0; // ditto
 #include "cpcec-rt.h" // emulation framework!
 
 BYTE joy1_type=1; // i.e. 9867+0 Interface II
@@ -682,7 +684,6 @@ void ula_reset(void) // reset the ULA
 #define PSG_PLAYCITY_RESET (playcity_active=0) // the TURBO SOUND card uses a switch
 int playcity_disabled=1,playcity_active=0; // this chip is an extension (disabled by default)
 int dac_disabled=1; // Covox $FB DAC, enabled by default on almost every Pentagon 128, but missing everywhere else :-(
-
 #include "cpcec-ay.h"
 
 #include "cpcec-ym.h"
@@ -715,7 +716,7 @@ int tape_enabled=0; // tape playback length, in frames
 #define tape_disabled (!tape_enabled) // the machine cannot disable the tape when we enable it
 #define TAPE_TAP_FORMAT // required!
 //#define TAPE_CAS_FORMAT // useless outside MSX
-//#define TAPE_TZX_KANSAS // useless outside MSX AFAIK, are there any non-MSX protections using this method?
+#define TAPE_TZX_KANSAS // useless outside MSX, are there any non-MSX tapes (besides our own!) using this method?
 //#define FASTTAPE_DUMPER // overkill!
 #include "cpcec-k7.h"
 
@@ -1137,6 +1138,7 @@ BYTE z80_tape_fastload[][32] = { // codes that read pulses : <offset, length, da
 /* 32 */ {  -4,  11,0X3E,0X7F,0XDB,0XFE,0X1F,0XD0,0X04,0XC8,0XA9,0XA4,0XCA,-128, -13 }, // "LA ABADIA DEL CRIMEN" (MAC)
 /* 33 */ {  -5,   2,0X0C,0X28,  +1,   3,0XDB,0XFE,0XEE,  +1,   4,0XE6,0X40,0X28,0XF5 }, // "THE GREAT ESCAPE" (XLR-8)
 /* 34 */ {  -8,   2,0X04,0XCA,  +2,   1,0X3E,  +1,   8,0XDB,0XFE,0X1F,0XA9,0XE6,0X20,0X28,0XF2 }, // OS9 ("FORBIDDEN PLANET")
+/* 35 */ { -14,   4,0X04,0X20,0X09,0XC9,  +8,   9,0XDB,0XFE,0X1F,0XC8,0XA9,0XE6,0X20,0X28,0XEB }, // "TURBO OUT RUN" LEVELS
 };
 BYTE z80_tape_fastfeed[][32] = { // codes that build bytes
 /*  0 */ {  -0,   2,0XD0,0X3E,  +1,   4,0XB8,0XCB,0X15,0X06,  +1,   1,0XD2,-128, -14 }, // ZX SPECTRUM FIRMWARE + TOPO
@@ -1397,7 +1399,8 @@ void z80_tape_trap(void)
 			w=z80_pc.w+1,z80_r7+=fasttape_add8(PEEK(w)>>6,48,&z80_bc.b.l,1)*6; // self-modifying code :-(
 			break;
 		case 34: // OS9 ("FORBIDDEN PLANET")
-			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==0)
+		case 35: // "TURBO OUT RUN" LEVELS
+			if (z80_hl.b.l==0x01&&FASTTAPE_CAN_FEED()&&z80_tape_testfeed(z80_tape_spystack(0))==(i==34?0:2))
 				k=fasttape_feed(z80_bc.b.l>>5,59),tape_skipping=z80_hl.b.l=128+(k>>1),z80_bc.b.h=-(k&1);
 			else
 				fasttape_add8(z80_bc.b.l>>5,59,&z80_bc.b.h,1); // z80_r7+=...*8;
@@ -2481,7 +2484,7 @@ char session_menudata[]=
 	"0x8511 DRAM screen snow\n"
 	"0x8515 NMOS-like OUT (C)\n"
 	"0x8516 NEC-like SCF/CCF\n"
-	"0x851A Chromatron effect\n"
+	"0x851A Chromatron effects\n"
 	"=\n"
 	"0x8521 Kempston joystick\n"
 	"0x8522 Sinclair 1 joystick\n" // 98670: this is port 2 of Interface 2
@@ -2531,6 +2534,7 @@ char session_menudata[]=
 	"0xC402 25% stereo\n"
 	"0xC403 50% stereo\n"
 	"0xC404 100% stereo\n"
+	"0xC408 Surround mode\n"
 	#endif
 	"=\n"
 	"0x8401 No filtering\n"
@@ -2553,7 +2557,7 @@ char session_menudata[]=
 	//"0x8B00 Next palette\tF11\n"
 	//"0xCB00 Prev. palette\tShift-F11\n"
 	"=\n"
-	"0x8907 Microwave static\n"
+	"0x8907 Microwaves\n"
 	"0x8903 X-masking\n"
 	"0x8902 Y-masking\n"
 	//"0x0B00 Next scanline\tCtrl-F11\n"
@@ -2646,6 +2650,8 @@ void session_clean(void) // refresh options
 	session_menucheck(0x851A,chromatrons&1);
 	session_menucheck(0x851F,!(snap_extended));
 	session_menucheck(0x852F,!!printer);
+	session_menucheck(0x9300,video_framelimit==MAIN_FRAMESKIP_MASK);
+	session_menucheck(0x9400,!video_framelimit);
 	session_menucheck(0x8901,onscreen_flag);
 	session_menucheck(0x8902,video_filter&VIDEO_FILTER_MASK_Y);
 	session_menucheck(0x8903,video_filter&VIDEO_FILTER_MASK_X);
@@ -2663,15 +2669,18 @@ void session_clean(void) // refresh options
 	session_menuradio(0x0B01+video_scanline,0x0B01,0x0B04);
 	MEMLOAD(kbd_joy,joy1_types[joy1_type]);
 	#if AUDIO_CHANNELS > 1
+	session_menucheck(0xC408,audio_surround);
 	session_menuradio(0xC401+audio_mixmode,0xC401,0xC404);
-	for (int i=0;i<3;++i)
+	#if !AUDIO_ALWAYS_MONO
+	for (int i=0,x=audio_surround?0:audio_mixmode;i<3;++i)
 	{
 		int j=i?!psg_disabled?3-i:i:0; // swap B and C if AY-Melodik is enabled: 128K is LEFT:RIGHT:MIDDLE, Melodik is LEFT:MIDDLE:RIGHT
-		psg_stereo[i][0]=256+audio_stereos[audio_mixmode][j],psg_stereo[i][1]=256-audio_stereos[audio_mixmode][j];
+		psg_stereo[i][0]=256+audio_stereos[x][j],psg_stereo[i][1]=256-audio_stereos[x][j];
 		#ifdef PSG_PLAYCITY
 		playcity_stereo[0][i][0]=psg_stereo[i][0],playcity_stereo[0][i][1]=psg_stereo[i][1]; // TURBO SOUND chip shares stereo with the PSG
 		#endif
 	}
+	#endif
 	#endif
 	video_resetscanline(),debug_dirty=1; sprintf(session_info,"%d:%s %s %0.1fMHz"//" | disc %s | tape %s | %s"
 		,(ula_v2&32)?ula_sixteen&&!type_id?16:48:128,
@@ -2820,6 +2829,7 @@ void session_user(int k) // handle the user's commands
 			#endif
 			audio_filter=k-0x8401;
 			break;
+		case 0x8408: { if (session_shift) audio_surround^=1; } break;
 		case 0x0400: // ^F4: TOGGLE JOYSTICK
 			session_key2joy=!session_key2joy;
 			break;
@@ -3142,12 +3152,12 @@ void session_user(int k) // handle the user's commands
 			break;
 		case 0x9100: // ^NUM.+
 		case 0x1100: // NUM.+: INCREASE FRAMESKIP
-			if ((video_framelimit&MAIN_FRAMESKIP_MASK)<MAIN_FRAMESKIP_MASK)
+			if (video_framelimit<MAIN_FRAMESKIP_MASK)
 				++video_framelimit;
 			break;
 		case 0x9200: // ^NUM.-
 		case 0x1200: // NUM.-: DECREASE FRAMESKIP
-			if ((video_framelimit&MAIN_FRAMESKIP_MASK)>0)
+			if (video_framelimit>0)
 				--video_framelimit;
 			break;
 		case 0x9300: // ^NUM.*
@@ -3297,7 +3307,9 @@ int main(int argc,char *argv[])
 						session_audio=0;
 						break;
 					case 't':
+						#if AUDIO_CHANNELS > 1
 						audio_mixmode=length(audio_stereos)-1;
+						#endif
 						break;
 					case 'T':
 						audio_mixmode=0;
@@ -3340,7 +3352,7 @@ int main(int argc,char *argv[])
 				}
 			while ((i<argc)&&(argv[i][j]));
 		}
-		else if (any_load(puff_makebasepath(argv[i]),1))
+		else if (k=0,any_load(puff_makebasepath(argv[i]),1)) // a succesful any_load() would be destroyed by a "k=1"!
 			i=argc; // help!
 	if (i>argc)
 		return
@@ -3401,6 +3413,9 @@ int main(int argc,char *argv[])
 				if (!playcity_disabled)
 					playcity_main(audio_frame,AUDIO_LENGTH_Z);
 				#endif
+				#if AUDIO_CHANNELS > 1
+				if (audio_surround) if (audio_mixmode) session_surround(length(audio_stereos)-1-audio_mixmode);
+				#endif
 				audio_playframe();
 			}
 			if (video_required&&onscreen_flag)
@@ -3451,6 +3466,7 @@ int main(int argc,char *argv[])
 				#endif
 				session_status();
 			}
+			{ static int z=-1; if (z!=!!dac_extra) z=!!dac_extra,psg_weight(dac_disabled?PSG_MAX_VOICE:PSG_MAX_VOICE*2/3); } // the COVOX DAC is loud and can't coexist with normal PSGs!
 			// update session and continue
 			if (!--autorun_t) autorun_next();
 			dac_frame(); if (ym3_file) ym3_write(),ym3_flush();
@@ -3468,9 +3484,9 @@ int main(int argc,char *argv[])
 				tape_signal=0,session_dirty=1; // update config
 			}
 			if (tape&&tape_filetell<tape_filesize&&tape_skipload&&!session_filmfile&&!tape_disabled&&tape_loud) // `tape_loud` implies `!tape_song`
-				session_fast|=+2,audio_disabled|=+2,video_framelimit|=MAIN_FRAMESKIP_MASK+1; // abuse binary logic to reduce activity
+				session_fast|=+2,audio_disabled|=+2; // abuse binary logic to reduce activity
 			else
-				session_fast&=~2,audio_disabled&=~2,video_framelimit&=MAIN_FRAMESKIP_MASK  ; // ditto, to restore normal activity
+				session_fast&=~2,audio_disabled&=~2; // ditto, to restore normal activity
 			session_update();
 			//if (!audio_disabled) audio_main(1+ula_clash_z); // preload audio buffer
 		}
