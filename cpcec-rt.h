@@ -12,7 +12,7 @@
 // knowledge of the emulation's intrinsic properties.
 
 #define MY_LICENSE "Copyright (C) 2019-2024 Cesar Nicolas-Gonzalez"
-#define MY_VERSION "20241216" // all emulators share the same release date
+#define MY_VERSION "20241224" // all emulators share the same release date
 
 #define INLINE // 'inline' is useless in TCC and GCC4, and harmful in GCC5!
 #define UNUSED // '__attribute__((unused))' may be missing outside GCC
@@ -573,9 +573,8 @@ BYTE audio_mixmode=length(audio_stereos)-1; // 0 = pure mono... n-1 = pure stere
 #else
 BYTE audio_mixmode=0; // useless in single-channel mode, but it must stick
 #endif
-BYTE video_lineblend=0,video_pageblend=0,video_microwave=0;
+BYTE video_lineblend=0,video_pageblend=0,video_finemicro=0;
 BYTE video_scanline=0,frame_scanline=8; // 0 = all scanlines, 1 = avg. scanlines, 2 = full interlace, 3 = half interlace
-int video_microwavez=1; // the microwave noise
 #ifdef MAUS_LIGHTGUNS
 VIDEO_UNIT video_litegun; // lightgun data
 #endif
@@ -606,20 +605,24 @@ VIDEO_UNIT *video_xlat_all(VIDEO_UNIT *t,VIDEO_UNIT const *s,int n) // turn pale
 #define VIDEO_FILTER_7525(x,y) (((((x&0XFF00FF)*3+(y&0XFF00FF)+0X30003)&0X3FC03FC)+(((x&0XFF00)*3+(y&0XFF00)+0X300)&0X3FC00))>>2) // 75% 1st + 25% 2nd; always raw RGB!
 
 //#define RAWWW // couples of X and Y instead of (X+Y)/2
-#define VIDEO_FILTER_DOT0(x) ((x)-(((x)>>2)&0X3F3F3F)) // 0..255 => 0..192, a bit too bright
+//#define VIDEO_FILTER_DOT0(x) ((x)-(((x)>>2)&0X3F3F3F)) // 0..255 => 0..192, a bit too bright
 //#define VIDEO_FILTER_DOT0(x) ((x)-(((x)>>3)&0X1F1F1F)*3) // 0..255 => 0..162, way too dark
+#define VIDEO_FILTER_DOT0(x) (video_dot0[(x)>>16]<<16|video_dot0[255&((x)>>8)]<<8|video_dot0[255&(x)])
 #define VIDEO_FILTER_DOT1(x) (video_dot1[(x)>>16]<<16|video_dot1[255&((x)>>8)]<<8|video_dot1[255&(x)])
 #define VIDEO_FILTER_DOT2(x) (video_dot2[(x)>>16]<<16|video_dot2[255&((x)>>8)]<<8|video_dot2[255&(x)])
-BYTE video_srgb[1<<16],video_dot1[256],video_dot2[256]; // the sRGB-to-linear-and-back operations need precalc'd tables, they're too expensive :-(
+#define VIDEO_FILTER_DOT3(x) (video_dot3[(x)>>16]<<16|video_dot3[255&((x)>>8)]<<8|video_dot3[255&(x)]) // =DOT0(DOT1)
+#define VIDEO_FILTER_DOT4(x) (video_dot4[(x)>>16]<<16|video_dot4[255&((x)>>8)]<<8|video_dot4[255&(x)]) // =DOT0(DOT2)
+BYTE video_srgb[1<<16],video_dot0[256],video_dot1[256],video_dot2[256],video_dot3[256],video_dot4[256]; // sRGB operations need precalc'd tables, they're too expensive :-(
 void video_praecalc(void) // build the precalc'd video filter tables
 {
 	for (int h=0;h<256;++h)
 	{
-		int z=(h*h)*2+h; // between h*h*2 and (h*h+h)*2
-		video_dot1[h]=((z<255*255?  sqrtu(z  ): 255 )+h+1)>>1;//h<191?(h*4+1)/3:255;//=h<128?  h*2:255;//
-		video_dot2[h]=((z<255*255?0:sqrtu(z-255*255))+h+1)>>1;//h> 64?(h*4-255)/3:0;//=h<128?0:h*2-255;//
-		for (int l=0;l<256;++l) video_srgb[h*256+l]=sqrtu((h*h+l*l+h+l)>>1);//=(h+l+1)>>1;
+		int z=h*h,zz=z*2+h; video_dot0[h]=sqrtu(zz>>2); // between h*h*2 and (h*h+h)*2
+		video_dot1[h]=sqrtu(((zz<65025?  zz:65025)+z+1)>>1);//((h<128?  h*2:255)+h+1)>>1;//=h<128?  h*2:255;//
+		video_dot2[h]=sqrtu(((zz<65025?0:zz-65025)+z+1)>>1);//((h<128?0:h*2-255)+h+1)>>1;//=h<128?0:h*2-255;//
+		for (int l=0;l<256;++l) video_srgb[h*256+l]=sqrtu(( z+l*l+h+l)>>1);//=(h+l+1)>>1;
 	}
+	for (int h=0;h<256;++h) video_dot3[h]=video_dot0[video_dot1[h]],video_dot4[h]=video_dot0[video_dot2[h]]; // this must happen last!
 }
 #define VIDEO_FILTER_SRGB(x,y) (video_srgb[((x>>8)&0XFF00)|(y>>16)]<<16)|(video_srgb[(x&0XFF00)|((y>>8)&255)]<<8)|video_srgb[((x&255)<<8)|(y&255)] // old-new avg.
 #define VIDEO_FILTER_HALF(x,y) (x==y?x:VIDEO_FILTER_SRGB(x,y))
@@ -695,72 +698,10 @@ void video_callscanline(VIDEO_UNIT *vl)
 			break;
 		case VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y+VIDEO_FILTER_MASK_Z:
 			do
-				vt=VIDEO_FILTER_DOT1(*vi),*vi=VIDEO_FILTER_DOT0(vt),++vi,
-				vt=VIDEO_FILTER_DOT2(*vi),*vi=VIDEO_FILTER_DOT0(vt);
+				*vi=VIDEO_FILTER_DOT3(*vi),++vi,
+				*vi=VIDEO_FILTER_DOT4(*vi);
 			while (++vi<vl);
 			break;
-	}
-}
-void video_callmicrowave(VIDEO_UNIT *vl)
-{
-	VIDEO_UNIT *vi=vl-VIDEO_PIXELS_X;
-	if (video_microwave) // single-bit LFSR: "microwave" static
-	{
-		#if 0 // coarse: shake whole scanlines
-		if (video_microwavez&1)
-		{
-			VIDEO_UNIT *vo=vi=vl-VIDEO_PIXELS_X; if (video_microwavez&2) ++vi; else ++vo;
-			memmove(vo,vi,(VIDEO_PIXELS_X-1)*sizeof(VIDEO_UNIT));
-		}
-		video_microwavez=(video_microwavez>>2)^((video_microwavez&3)*(0X90000000U>>2));
-		if (frame_scanline<2) // second line of non-interlaced modes
-		{
-			if (video_microwavez&1)
-			{
-				VIDEO_UNIT *vo=vi=vl-VIDEO_PIXELS_X+VIDEO_LENGTH_X; if (video_microwavez&2) ++vi; else ++vo;
-				memmove(vo,vi,(VIDEO_PIXELS_X-1)*sizeof(VIDEO_UNIT));
-			}
-			video_microwavez=(video_microwavez>>2)^((video_microwavez&3)*(0X90000000U>>2));
-		}
-		#else // fine: shake individual pixels
-		unsigned int vv=video_microwavez; *vl=vl[-1]; vi=vl-VIDEO_PIXELS_X;
-		#if 0 // harder
-		static const int vu[5]={2,1,0,1,2}; if (frame_scanline<2)
-		{
-			vl[VIDEO_LENGTH_X]=vl[VIDEO_LENGTH_X-1]; do
-			{
-				int vw=vv&3; vi[vu[vw+1]]=vi[vu[vw]],vi[vu[vw+1]+VIDEO_LENGTH_X]=vi[vu[vw]+VIDEO_LENGTH_X];
-				vv=(vv>>2)^(vw*(0X90000000U>>2)); vi+=(vw&2)+2;
-			}
-			while (vi<vl);
-		}
-		else
-			do
-			{
-				int vw=vv&3; vi[vu[vw+1]]=vi[vu[vw]];
-				vv=(vv>>2)^(vw*(0X90000000U>>2)); vi+=(vw&2)+2;
-			}
-			while (vi<vl);
-		#else // softer
-		static const int vu[9]={4,3,2,1,0,1,2,3,4}; if (frame_scanline<2)
-		{
-			vl[VIDEO_LENGTH_X]=vl[VIDEO_LENGTH_X-1]; do
-			{
-				int vw=vv&7; vi[vu[vw+1]]=vi[vu[vw]],vi[vu[vw+1]+VIDEO_LENGTH_X]=vi[vu[vw]+VIDEO_LENGTH_X];
-				vv=(vv>>3)^(vw*(0X90000000U>>3)); vi+=(vw&4)+4;
-			}
-			while (vi<vl);
-		}
-		else
-			do
-			{
-				int vw=vv&7; vi[vu[vw+1]]=vi[vu[vw]];
-				vv=(vv>>3)^(vw*(0X90000000U>>3)); vi+=(vw&4)+4;
-			}
-			while (vi<vl);
-		#endif
-		video_microwavez=vv;
-		#endif
 	}
 }
 INLINE void video_drawscanline(void) // call after each drawn scanline; memory caching makes this more convenient than gathering all operations in video_endscanlines()
@@ -876,7 +817,7 @@ INLINE void video_drawscanline(void) // call after each drawn scanline; memory c
 	{
 		vi+=video_hi_x_res&1; // 1st pixel
 		#ifdef VIDEO_FILTER_BLUR0
-		if (!video_fineblend)
+		if (!video_finemicro)
 		{
 			VIDEO_FILTER_BLURDATA;
 			vt=*vi,VIDEO_FILTER_BLUR0(vt);
@@ -969,7 +910,6 @@ INLINE void video_drawscanline(void) // call after each drawn scanline; memory c
 			}
 		}
 		else video_callscanline(vl); // also used in video_endscanlines()
-		video_callmicrowave(vl); // also used in video_endscanlines()
 	}
 }
 INLINE void video_nextscanline(int x) // call before each new scanline: move on to next scanline, where `x` is the new horizontal position
@@ -978,7 +918,7 @@ INLINE void video_endscanlines(void) // call after each drawn frame: end the cur
 {
 	// handle final scanline (100:0 neighbours, no next line after last!)
 	VIDEO_UNIT *vl=video_frame+VIDEO_OFFSET_X+(VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-2+(video_pos_y&1))*VIDEO_LENGTH_X+VIDEO_PIXELS_X;
-	video_callscanline(vl); video_callmicrowave(vl); // also used in video_drawscanline()
+	video_callscanline(vl); // also used in video_drawscanline()
 }
 INLINE void video_newscanlines(int x,int y) // call before each new frame: reset `video_target`, `video_pos_x` and `video_pos_y`
 {
@@ -1485,7 +1425,7 @@ FILE *puff_ffile=NULL; int puff_fshut=0; // used to know whether to keep a file 
 FILE *puff_fopen(char *s,const char *m) // mimics fopen(), so NULL on error, *FILE otherwise
 {
 	if (!s||!m) return NULL; // wrong parameters!
-	char *z; if (!(z=strrstr(s,PUFF_STR))||strchr(m,'w'))
+	char *z; if (!(z=strrstr(s,PUFF_STR))||strchr(m,'w')||strchr(m,'+')) // catch "write" and "read+write"
 		return fopen(s,m); // normal file activity
 	if (puff_ffile&&puff_fshut) // can we recycle the last closed file?
 	{
@@ -2951,10 +2891,10 @@ char *session_configread(void) // reads configuration file; session_parmtr holds
 		if (!strcasecmp(t,"hardvideo")) return video_scanline=(*s>>1)&3,video_pageblend=*s&1,NULL;
 		if (!strcasecmp(t,"softvideo")) return video_filter=*s&7,NULL;
 		if (!strcasecmp(t,"zoomvideo")) return session_zoomblit=(*s>>1)&7,session_zoomblit=session_zoomblit>4?4:session_zoomblit,video_lineblend=*s&1,NULL;
-		if (!strcasecmp(t,"safevideo")) return session_softblit=*s&1/*,video_gammaflag=!(*s&2)*/,video_microwave=(*s>>2)&1,NULL;
+		if (!strcasecmp(t,"safevideo")) return session_softblit=*s&1,video_fineblend=(*s>>1)&1,video_finemicro=(*s>>2)&1,NULL;
 		if (!strcasecmp(t,"safeaudio")) return session_softplay=(~*s)&3,NULL; // stay compatible with old configs (ZERO was accelerated, NONZERO wasn't)
 		if (!strcasecmp(t,"film")) return session_filmscale=*s&1,session_filmtimer=(*s>>1)&1,session_wavedepth=(*s>>2)&1,NULL;
-		if (!strcasecmp(t,"info")) return onscreen_flag=*s&1,session_scrn_flag=(*s>>1)&1,video_fineblend=(*s>>2)&1,NULL;
+		if (!strcasecmp(t,"info")) return onscreen_flag=*s&1,session_scrn_flag=(*s>>1)&1,NULL;
 	}
 	return s;
 }
@@ -2963,13 +2903,13 @@ void session_configwrite(FILE *f) // save common parameters
 	fprintf(f,"film %d\ninfo %d\n"
 		"hardaudio %d\nsoftaudio %d\nhardvideo %d\nsoftvideo %X\n"
 		"zoomvideo %d\nsafevideo %d\nsafeaudio %d\n"
-		,session_filmscale+session_filmtimer*2+session_wavedepth*4,onscreen_flag+session_scrn_flag*2+video_fineblend*4
+		,session_filmscale+session_filmtimer*2+session_wavedepth*4,onscreen_flag+session_scrn_flag*2
 		,audio_mixmode,audio_filter
 			#if !AUDIO_ALWAYS_MONO
 				+audio_surround*4
 			#endif
 		,video_scanline*2+video_pageblend,video_filter,
-		video_lineblend+session_zoomblit*2,session_softblit/*+(video_gammaflag?0:2)*/+video_microwave*4,session_softplay^3);
+		video_lineblend+session_zoomblit*2,session_softblit+video_fineblend*2+video_finemicro*4,session_softplay^3);
 }
 
 void session_configreadmore(char*); // must be defined by the emulator!
