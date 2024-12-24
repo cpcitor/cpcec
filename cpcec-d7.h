@@ -62,19 +62,20 @@ void disc_close(int drive) // close disc file. drive = 0 (A:) or 1 (B:)
 }
 #define disc_closeall() (disc_close(0),disc_close(1))
 
-int disc_open(char *s,int drive,int canwrite) // open a disc file. `s` path, `drive` = 0 (A:) or 1 (B:); 0 OK, !0 ERROR
+int disc_open(char *s,int d,int canwrite) // open a disc file. `s` path, `d` = 0 (A:) or 1 (B:); 0 OK, !0 ERROR
 {
-	disc_close(drive);
-	if (!(disc[drive]=puff_fopen(s,(disc_canwrite[drive]=canwrite)?"rb+":"rb")))
-		return 1; // cannot open disc!
+	disc_close(d);
+	if (!(disc_canwrite[d]=canwrite)||!(disc[d]=puff_fopen(s,"rb+"))) // "rb+" allows modifying the disc file;
+		if (disc_canwrite[d]=0,!(disc[d]=puff_fopen(s,"rb"))) // fall back to "rb" if "rb+" is unfeasible!
+			return 1; // cannot open disc!
 	int q=1; // error flag
-	if (fread(disc_index_table[drive],1,256,disc[drive])==256
-		&&disc_index_table[drive][0x30]<110&&disc_index_table[drive][0x31]>0&&disc_index_table[drive][0x31]<3
-		&&(!memcmp("MV - CPC",disc_index_table[drive],8)||!memcmp("EXTENDED",disc_index_table[drive],8)))
+	if (fread(disc_index_table[d],1,256,disc[d])==256
+		&&disc_index_table[d][0x30]<110&&disc_index_table[d][0x31]>0&&disc_index_table[d][0x31]<3
+		&&(!memcmp("MV - CPC",disc_index_table[d],8)||!memcmp("EXTENDED",disc_index_table[d],8)))
 			q=0; // ID and fields are valid
-	disc_track_reset(drive);
+	disc_track_reset(d);
 	if (q)
-		disc_close(drive); // unknown disc format!
+		disc_close(d); // unknown disc format!
 	else STRCOPY(disc_path,s); // valid format
 	return q;
 }

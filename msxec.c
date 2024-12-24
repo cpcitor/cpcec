@@ -427,14 +427,15 @@ int disc_create(char *s) // create a 720k disc file at `s`; !0 ERROR
 	memset(t,0XE5,sizeof(t)); for (int n=0;n<1440-1-1-12;++n) fwrite1(t,sizeof(t),f);
 	return fclose(f);
 }
-int disc_open(char *s,int d,int q) // insert a MSX-DOS disc from path `s` in drive `d`; !0 ERROR
+int disc_open(char *s,int d,int canwrite) // insert a MSX-DOS disc from path `s` in drive `d`; !0 ERROR
 {
 	disc_close(d);
 	if (!(diskette_mem[d]=malloc(DISC_MAXTRACKS*2*DISKETTE_SECTORS*DISKETTE_PAGE)))
 		return 1; // memory error!
 	memset(diskette_mem[d],0XE5,DISC_MAXTRACKS*2*DISKETTE_SECTORS*DISKETTE_PAGE); // sanitize space
-	if (!(disc[d]=puff_fopen(s,(diskette_canwrite[d]=q)?"rb+":"rb")))
-		return disc_close(d),1; // file error!
+	if (!(diskette_canwrite[d]=canwrite)||!(disc[d]=puff_fopen(s,"rb+"))) // "rb+" allows modifying the disc file;
+		if (diskette_canwrite[d]=0,!(disc[d]=puff_fopen(s,"rb"))) // fall back to "rb" if "rb+" is unfeasible!
+			return disc_close(d),1; // file error!
 	int i=fread1(diskette_mem[d],(DISC_MAXTRACKS*2*DISKETTE_SECTORS*DISKETTE_PAGE),disc[d]);
 	i+=fread1(diskette_mem[d],(DISC_MAXTRACKS*2*DISKETTE_SECTORS*DISKETTE_PAGE),disc[d]);
 	if ((i!=180*1024&&i!=360*1024&&i!=720*1024)//||!equalsii(&diskette_mem[d],0XFEEB) // signature $EB $FE [$90]
@@ -3395,7 +3396,6 @@ char session_menudata[]=
 	//"0x8B00 Next palette\tF11\n"
 	//"0xCB00 Prev. palette\tShift-F11\n"
 	"=\n"
-	"0x8907 Microwaves\n"
 	"0x8903 X-masking\n"
 	"0x8902 Y-masking\n"
 	//"0x0B00 Next scanline\tCtrl-F11\n"
@@ -3408,12 +3408,13 @@ char session_menudata[]=
 	"0x8905 Y-blending\n"
 	"0x8906 Gigascreen\n"
 	#ifdef VIDEO_FILTER_BLUR0
-	"0x8909 Fine Giga/X-blend\n"
+	"0x8908 Fine X-blending\n"
+	"0x8909 Fine Gigascreen\n"
 	#endif
 	"=\n"
 	"0x9100 Raise frameskip\tNum.+\n"
 	"0x9200 Lower frameskip\tNum.-\n"
-	"0x9300 Full frameskip\tNum.*\n"
+	"0x9300 Max frameskip\tNum.*\n"
 	"0x9400 No frameskip\tNum./\n"
 	"=\n"
 	"0x8C00 Save screenshot\tF12\n"
@@ -3490,8 +3491,8 @@ void session_clean(void) // refresh options
 	session_menucheck(0x8904,video_filter&VIDEO_FILTER_MASK_Z);
 	session_menucheck(0x8905,video_lineblend);
 	session_menucheck(0x8906,video_pageblend);
-	session_menucheck(0x8907,video_microwave);
 	#ifdef VIDEO_FILTER_BLUR0
+	session_menucheck(0x8908,video_finemicro);
 	session_menucheck(0x8909,video_fineblend);
 	#endif
 	session_menuradio(0x8A10+(session_fullblit?0:1+session_zoomblit),0X8A10,0X8A15);
@@ -3589,8 +3590,8 @@ void session_user(int k) // handle the user's commands
 				"\t(shift: record film)\t"
 				"\t(shift: ..YM file)"
 				"\n" // "\n"
-				"Num.+\tUpper frameskip" MESSAGEBOX_WIDETAB
-				"Num.*\tFull frameskip"
+				"Num.+\tRaise frameskip" MESSAGEBOX_WIDETAB
+				"Num.*\tMax frameskip"
 				"\n"
 				"Num.-\tLower frameskip" MESSAGEBOX_WIDETAB
 				"Num./\tNo frameskip"
@@ -3816,7 +3817,7 @@ void session_user(int k) // handle the user's commands
 			if (!disc_disabled)
 				if (s=puff_session_getfilereadonly(disc_path,"*.dsk",session_shift?"Insert disc into B:":"Insert disc into A:",disc_filemode&1))
 					if (disc_open(s,session_shift,!session_filedialog_get_readonly()))
-						session_message("Cannot open disc!",txt_error);
+						session_message("Cannot open disc!",txt_error); // *!* shall we show a warning when disc_open() ignores "canwrite"?
 			break;
 		case 0x0700: // ^F7: EJECT DISC
 			disc_close(session_shift);
@@ -3876,10 +3877,10 @@ void session_user(int k) // handle the user's commands
 		case 0x8906: // FRAME BLENDING (GIGASCREEN)
 			video_pageblend^=1;
 			break;
-		case 0x8907: // MICROWAVES
-			video_microwave^=1;
-			break;
 		#ifdef VIDEO_FILTER_BLUR0
+		case 0x8908: // MICROWAVES
+			video_finemicro^=1;
+			break;
 		case 0x8909: // FINE/COARSE X-BLENDING
 			video_fineblend^=1;
 			break;
@@ -3930,7 +3931,7 @@ void session_user(int k) // handle the user's commands
 			if (session_filmfile) {} else if (session_shift)
 				{ if (!(video_filter=(video_filter+1)&7)) video_lineblend^=1; }
 			else if ((video_scanline=video_scanline+1)>3)
-				{ if (video_scanline=0,video_pageblend^=1) video_microwave^=1; }
+				{ video_scanline=0,video_pageblend^=1; }
 			break;
 		case 0x8C01:
 			if (!session_filmfile)

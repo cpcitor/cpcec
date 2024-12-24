@@ -1118,7 +1118,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 				if (playcity_ctc_count[1]>0)
 					if ((playcity_ctc_count[1]-=((playcity_ctc_flags[1]&32)?1:16))<=0)
 						z80_nmi_throw; // programmed NMI!
-				// *!* todo: ... playcity_ctc_count[3] ... z80_irq|=128; *!*
+				// *!* TODO: ... playcity_ctc_count[3] ... z80_irq|=128; *!*
 				#endif
 				CRTC_STATUS_HSYNC_RES; // stop horizontal sync!
 			}
@@ -2047,7 +2047,7 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 						(crtc_type!=2||crtc_table[2]+crtc_limit_r3x!=crtc_table[0]+1): // CRTC2 VSYNC fails if HSYNC sets and H_OFF resets at once!
 						((crtc_table[8]&2)&&irq_timer<3&&video_pos_y>=VIDEO_LENGTH_Y*5/12&&video_pos_y<VIDEO_LENGTH_Y*7/12)) // interlaced VSYNC
 						+(printer?0:64)+(tape_status>tape_delay?0x9E:0x1E); // TAPE SIGNAL (0x00/0x80 -- "LOGON DEMO 2" expects 0x00 w/o a tape)
-						// *!* todo: AMSTRAD MODEL (0x1E) *!*
+						// *!* TODO: AMSTRAD MODEL (0x1E) *!*
 				}
 				else
 					b&=pio_port_b; // CRTC0,CRTC1,CRTC2,CRTC4 have a good PIO
@@ -2056,7 +2056,7 @@ BYTE z80_recv(WORD p) // the Z80 receives a byte from a hardware port
 		else
 		{
 			if (!(p&0x0100)) // 0xF600, PIO PORT C
-				b&=(pio_control&1)?15|(pio_port_c&~15):pio_port_c; // *!* todo: else...? *!*
+				b&=(pio_control&1)?15|(pio_port_c&~15):pio_port_c; // *!* TODO: else...? *!*
 		}
 	}
 	if (!(p&0x2000)) // 0xDF00, GATE ARRAY (2/2)
@@ -3306,7 +3306,6 @@ char session_menudata[]=
 	//"0x8B00 Next palette\tF11\n"
 	//"0xCB00 Prev. palette\tShift-F11\n"
 	"=\n"
-	"0x8907 Microwaves\n"
 	"0x8903 X-masking\n"
 	"0x8902 Y-masking\n"
 	//"0x0B00 Next scanline\tCtrl-F11\n"
@@ -3319,12 +3318,13 @@ char session_menudata[]=
 	"0x8905 Y-blending\n"
 	"0x8906 Gigascreen\n"
 	#ifdef VIDEO_FILTER_BLUR0
-	"0x8909 Fine Giga/X-blend\n"
+	"0x8908 Fine X-blending\n"
+	"0x8909 Fine Gigascreen\n"
 	#endif
 	"=\n"
 	"0x9100 Raise frameskip\tNum.+\n"
 	"0x9200 Lower frameskip\tNum.-\n"
-	"0x9300 Full frameskip\tNum.*\n"
+	"0x9300 Max frameskip\tNum.*\n"
 	"0x9400 No frameskip\tNum./\n"
 	"=\n"
 	"0x8C00 Save screenshot\tF12\n"
@@ -3400,8 +3400,8 @@ void session_clean(void) // refresh options
 	session_menucheck(0x8904,video_filter&VIDEO_FILTER_MASK_Z);
 	session_menucheck(0x8905,video_lineblend);
 	session_menucheck(0x8906,video_pageblend);
-	session_menucheck(0x8907,video_microwave);
 	#ifdef VIDEO_FILTER_BLUR0
+	session_menucheck(0x8908,video_finemicro);
 	session_menucheck(0x8909,video_fineblend);
 	#endif
 	session_menuradio(0x8A10+(session_fullblit?0:1+session_zoomblit),0X8A10,0X8A15);
@@ -3513,8 +3513,8 @@ void session_user(int k) // handle the user's commands
 				"\t(shift: record film)\t"
 				"\t(shift: ..YM file)"
 				"\n" // "\n"
-				"Num.+\tUpper frameskip" MESSAGEBOX_WIDETAB
-				"Num.*\tFull frameskip"
+				"Num.+\tRaise frameskip" MESSAGEBOX_WIDETAB
+				"Num.*\tMax frameskip"
 				"\n"
 				"Num.-\tLower frameskip" MESSAGEBOX_WIDETAB
 				"Num./\tNo frameskip"
@@ -3745,7 +3745,7 @@ void session_user(int k) // handle the user's commands
 			if (!disc_disabled)
 				if (s=puff_session_getfilereadonly(disc_path,"*.dsk",session_shift?"Insert disc into B:":"Insert disc into A:",disc_filemode&1))
 					if (disc_open(s,session_shift,!session_filedialog_get_readonly()))
-						session_message("Cannot open disc!",txt_error);
+						session_message("Cannot open disc!",txt_error); // *!* shall we show a warning when disc_open() ignores "canwrite"?
 			break;
 		case 0x0700: // ^F7: EJECT DISC
 			disc_close(session_shift);
@@ -3805,10 +3805,10 @@ void session_user(int k) // handle the user's commands
 		case 0x8906: // FRAME BLENDING (GIGASCREEN)
 			video_pageblend^=1;
 			break;
-		case 0x8907: // MICROWAVES
-			video_microwave^=1;
-			break;
 		#ifdef VIDEO_FILTER_BLUR0
+		case 0x8908: // MICROWAVES
+			video_finemicro^=1;
+			break;
 		case 0x8909: // FINE/COARSE X-BLENDING
 			video_fineblend^=1;
 			break;
@@ -3862,7 +3862,7 @@ void session_user(int k) // handle the user's commands
 			if (session_filmfile) {} else if (session_shift)
 				{ if (!(video_filter=(video_filter+1)&7)) video_lineblend^=1; }
 			else if ((video_scanline=video_scanline+1)>3)
-				{ if (video_scanline=0,video_pageblend^=1) video_microwave^=1; }
+				{ video_scanline=0,video_pageblend^=1; }
 			break;
 		case 0x8C01:
 			if (!session_filmfile)

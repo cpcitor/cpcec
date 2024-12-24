@@ -1337,3 +1337,8 @@ one SID chip) and ZXSEC. X-masking and Y-masking changed again, trying to grow
 closer to light-and-dark pixel analog screen patterns. X-blending adjusts itself
 to the machine's video mode, f.e. it will perform simpler pixel blur
 calculations in CPCEC when MODE 2 isn't selected.
+- 20241224 -- minor patch fixing a bug where the disc file handler in all emus
+would not fall back to read-only modes when inserting read-only files in
+non-read-only modes (reported by Dlfrsilver). Removed the "microwave static"
+mode, it never looked right; instead, the user can now independently set whether
+Gigascreen and X-blending are fine or coarse.
