@@ -6,7 +6,7 @@ This repository was created by a script turning the zip files available on http:
 
 The emulator can compile on Windows and SDL2-supported platforms including Linux desktop.
 
-See [cpcec-e.txt] for instructions in English, [cpcec-s.txt] for Spanish.
+See [cpcec.txt](cpcec.txt) for instructions in English, including build instructions.
 
 Below is a snapshot of http://cngsoft.no-ip.org/cpcec.htm turned into markdown format.
 
