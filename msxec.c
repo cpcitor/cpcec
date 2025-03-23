@@ -8,7 +8,7 @@
 
 #define MY_CAPTION "MSXEC"
 #define my_caption "msxec"
-#
+
 /* This notice applies to the source code of CPCEC and its binaries.
 
 This program is free software: you can redistribute it and/or modify
@@ -137,45 +137,30 @@ const unsigned char kbd_map_xlt[]=
 };
 
 VIDEO_UNIT video_table[16+24]= // colour table, 0xRRGGBB style, according to https://en.wikipedia.org/wiki/TMS9918
-{
+{ // these values assume that PAL / sRGB GAMMA = 1.28
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // VDP palette, to be filled later
-	#if 1 // MSX2 V9938 additive GREEN, RED and BLUE channels (linear RGB)
-	0X000000,0X002400,0X004900,0X006D00,0X009200,0X00B600,0X00DB00,0X00FF00, // G
-	0X000000,0X240000,0X490000,0X6D0000,0X920000,0XB60000,0XDB0000,0XFF0000, // R
-	0X000000,0X000024,0X000049,0X00006D,0X000092,0X0000B6,0X0000DB,0X0000FF, // B
-	#else // MSX2 V9938 additive GREEN, RED and BLUE channels (gamma: 1.6)
-	0X000000,0X004B00,0X007400,0X009600,0X00B400,0X00CF00,0X00E800,0X00FF00, // G
-	0X000000,0X4B0000,0X740000,0X960000,0XB40000,0XCF0000,0XE80000,0XFF0000, // R
-	0X000000,0X00004B,0X000074,0X000096,0X0000B4,0X0000CF,0X0000E8,0X0000FF, // B
-	#endif
+	// MSX2 V9938 additive GREEN, RED and BLUE channels (linear RGB)
+	0X000000,0X003800,0X006000,0X008400,
+	0X00A500,0X00C400,0X00E200,0X00FF00,
+	0X000000,0X380000,0X600000,0X840000,
+	0XA50000,0XC40000,0XE20000,0XFF0000,
+	0X000000,0X000038,0X000060,0X000084,
+	0X0000A5,0X0000C4,0X0000E2,0X0000FF,
+	//0X000000,0X002400,0X004900,0X006D00,0X009200,0X00B600,0X00DB00,0X00FF00, // G
+	//0X000000,0X240000,0X490000,0X6D0000,0X920000,0XB60000,0XDB0000,0XFF0000, // R
+	//0X000000,0X000024,0X000049,0X00006D,0X000092,0X0000B6,0X0000DB,0X0000FF, // B
 };
 VIDEO_UNIT video_xlat[16]; // static colours only (dynamic V9938 colours go elsewhere)
+const VIDEO_UNIT video_table_const[16]={
+	// https://en.wikipedia.org/wiki/TMS9918 (NTSC rather than PAL?)
+	0X000000,0X000000,0X0AAD1E,0X34C84C,0X2B2DE3,0X514BFB,0XBD2925,0X1EE2EF,
+	0XFB2C2B,0XFF5F4C,0XBDA22B,0XD7B454,0X0A8C18,0XAF329A,0XB2B2B2,0XFFFFFF,
+	// https://github.com/mamedev/mame/blob/master/src/devices/video/tms9928a.cpp (NTSC only) // = above but brighter
+	//0X000000,0X000000,0X21C842,0X5EDC78,0X5455ED,0X7D76FC,0XD4524D,0X42EBF5,
+	//0XFC5554,0XFF7978,0XD4C154,0XE6CE80,0X21B03B,0XC95BBA,0XCCCCCC,0XFFFFFF,
+};
 
 char palette_path[STRMAX]="";
-int video_table_load(char *s) // shared with CSFEC, based on VICE's palette files, but ink #0 is unused
-{
-	FILE *f=puff_fopen(s,"r"); if (!f) return -1;
-	unsigned char t[STRMAX],n=1; VIDEO_UNIT p[16];
-	while (fgets(t,STRMAX,f)&&n<=16) if (*t>'#') // skip "# comment" and others
-		{ unsigned int r,g,b; if (sscanf(UTF8_BOM(t),"%X%X%X",&r,&g,&b)!=3) n=16; else if (n<16) p[n]=((r&255)<<16)+((g&255)<<8)+(b&255); ++n; }
-	puff_fclose(f); if (n!=16) return -1;
-	STRCOPY(palette_path,s); for (n=1;n<16;++n) video_table[n]=p[n]; return 0;
-}
-void video_table_reset(void)
-{
-	VIDEO_UNIT const p[]={
-		// https://en.wikipedia.org/wiki/TMS9918 (NTSC rather than PAL?)
-		0X000000,0X000000,0X0AAD1E,0X34C84C,0X2B2DE3,0X514BFB,0XBD2925,0X1EE2EF,
-		0XFB2C2B,0XFF5F4C,0XBDA22B,0XD7B454,0X0A8C18,0XAF329A,0XB2B2B2,0XFFFFFF,
-		// https://github.com/mamedev/mame/blob/master/src/devices/video/tms9928a.cpp (NTSC only) // = above but brighter
-		//0X000000,0X000000,0X21C842,0X5EDC78,0X5455ED,0X7D76FC,0XD4524D,0X42EBF5,
-		//0XFC5554,0XFF7978,0XD4C154,0XE6CE80,0X21B03B,0XC95BBA,0XCCCCCC,0XFFFFFF,
-		// https://www.msx.org/wiki/VDP_Color_Palette_Registers (MSX2 default palette)
-		//0X000000,0X000000,0X24DB24,0X6DFF6D,0X2424FF,0X496DFF,0XB62424,0X49DBFF,
-		//0XFF2424,0XFF6D6D,0XDBDB24,0XDBDB92,0X249224,0XDB49B6,0XB6B6B6,0XFFFFFF,
-	};
-	for (int n=0;n<16;++n) video_table[n]=p[n];
-}
 
 // GLOBAL DEFINITIONS =============================================== //
 
@@ -483,7 +468,7 @@ void ram_setcfg(int x) { ram_depth=((ram_map=x)?x-1:0); ram_bit=(4<<ram_depth)-1
 int ram_getcfg(void) { return ram_map?ram_depth+1:0; }
 
 BYTE *cart=NULL; // external cartridge, empty by default
-#define CART_BITS 22 // 1<<22 = 4 MEGABYTES! "Sword of Ianna" is 704k; late Koei titles are 1M; "King's Valley Enhanced" is almost 4M!
+#define CART_BITS 23 // 1<<23 = 8 MEGABYTES! "Sword of Ianna" is 704k; late Koei titles are 1M; "King's Valley Enhanced" is 4M; "movie.rom" is 8M!
 #define CART_MASK ((1<<CART_BITS)-1)
 #define CART_IDS 10 // supported types, see `mmu_update` below
 
@@ -496,9 +481,10 @@ int sram_makepath(char *s) // build `sram_path` using string `s` as a base; NONZ
 }
 
 char cart_path[STRMAX]="";
-unsigned int cart_sha1_size=0,cart_sha1_list[2<<10][6];
-BYTE cart_bank[4],cart_id=0,cart_log=0; // cart_id is the mapper type, cart_log is the ceiling of the binary logarithm of the cartridge size
+unsigned int cart_sha1_size=0,cart_sha1_list[2<<10][6],cart_bank[8]; // cart_bank[] used to be 4 BYTES but ASCII16X, NEO8 and NEO16 mappers need more words and bits!
+BYTE cart_id=0,cart_log=0; // cart_id is the mapper type, cart_log is the ceiling of the binary logarithm of the cartridge size
 BYTE cart_big=0; // overrides cart_id if nonzero: 1: 32K/48K/64K cartridges that "invade" $0000-$3FFF; 2: 16K/32K/48K cartridges that start at $4000
+BYTE cart_miscel=0; // the "Miscellaneous" type handles multiple "self-signing" subtypes, including ASCII16K and NEO 8K/16K that use more than 8 bits per page!
 int cart_insert(char *s) // insert a cartridge; zero OK, nonzero error!
 {
 	FILE *f=puff_fopen(s,"rb"); if (!f) return 1; // cannot open file!
@@ -516,7 +502,7 @@ int cart_insert(char *s) // insert a cartridge; zero OK, nonzero error!
 	if (!cart) { if (!(cart=malloc(1<<CART_BITS))) return puff_fclose(f),1; } // memory full!
 	memset(cart,255,1<<CART_BITS);
 	fseek(f,0,SEEK_SET); fread1(cart,i,f); puff_fclose(f);
-	cart_log=12; while ((1<<++cart_log)<i) {}
+	cart_miscel=0; cart_log=12; while ((1<<++cart_log)<i) {}
 	if (i<=(1<<14)) // mirror pages; 16K is special!
 	{
 		// "Nausicaa" (incompatible with MSX-DISK!), "3D Golf Simulation", etc. are tokenized BASIC cartridges (no $4000-$7FFF range); the header is diagnostic
@@ -527,12 +513,28 @@ int cart_insert(char *s) // insert a cartridge; zero OK, nonzero error!
 	sccplus_ready=sram_dirt=sram_cart=sram_mask=0; MEMBYTE(sram,-1); MEMBYTE(sccplus_ram,-1);
 	if (sram_makepath(s)) // load SRAM if possible, but don't tag it as dirty yet
 		if (f=puff_fopen(sram_path,"rb")) fread1(sram,sizeof(sram),f),puff_fclose(f);
-	// cartridge type detection based on a pre-made SHA-1 list with types: "012356789abcdef012356789abcdef0123567 4" (roughly compatible with FMSX)
-	o=0; sha1_init(); while (o+64<=i) sha1_hash(&cart[o]),o+=64; sha1_exit(&cart[o],i&63);
-	cprintf("SHA-1: %08X%08X%08X%08X%08X",sha1_o[0],sha1_o[1],sha1_o[2],sha1_o[3],sha1_o[4]);
-	for (o=0;o<cart_sha1_size;++o)
-		if (!memcmp(sha1_o,cart_sha1_list[o],sizeof(sha1_o)))
-			{ cart_id=cart_sha1_list[o][5]; break; }
+	// very modern cartridges include an ASCII string after the standard header;
+	/**/ if (!memcmp(&cart[16],"ROM_",4))
+	{
+		/**/ if (!memcmp(&cart[20],"ASC8",4)) cart_id=4,cprintf("ROM_: ASCII 8K\n");
+		else if (!memcmp(&cart[20],"AS16",4)) cart_id=5,cprintf("ROM_: ASCII 16K\n");
+		else if (!memcmp(&cart[20],"KON4",4)) cart_id=3,cprintf("ROM_: KONAMI 8K\n");
+		else if (!memcmp(&cart[20],"KON5",4)) cart_id=2,cprintf("ROM_: KONAMI SCC\n");
+		else if (!memcmp(&cart[20],"NEO8",4)) cart_id=9,cart_miscel=1,cprintf("ROM_: NEO 8K\n");
+		else if (!memcmp(&cart[20],"NE16",4)) cart_id=9,cart_miscel=2,cprintf("ROM_: NEO 16K\n");
+		/*else if (!memcmp(&cart[20],"YAM8",4)) cart_id=9,cart_miscel=3,cprintf("ROM_: YAMANOOTO\n");*/
+	}
+	else if (!memcmp(&cart[16],"ASCII16X",8))
+		cart_id=9,cart_miscel=4,cprintf("ASCI: ASCII16X\n"); // not a simple superset of ASCII 16K
+	else
+	{
+		// cartridge type detection based on a pre-made SHA-1 list with types: "012356789abcdef012356789abcdef0123567 4" (roughly compatible with FMSX)
+		o=0; sha1_init(); while (o+64<=i) sha1_hash(&cart[o]),o+=64; sha1_exit(&cart[o],i&63);
+		cprintf("SHA-1: %08X%08X%08X%08X%08X",sha1_o[0],sha1_o[1],sha1_o[2],sha1_o[3],sha1_o[4]);
+		for (o=0;o<cart_sha1_size;++o)
+			if (!memcmp(sha1_o,cart_sha1_list[o],sizeof(sha1_o)))
+				{ cart_id=cart_sha1_list[o][5]; break; }
+	}
 	cprintf(":%X (%d)\n",cart_id,o<cart_sha1_size?o:-1); // not sure what to do when the type is unknown...
 	/**/ if (cart_id==6) // KONAMI SRAM configuration seems to be always the same
 		sram_cart=16; // 8K: "GAME MASTER 2"
@@ -551,9 +553,8 @@ int cart_insert(char *s) // insert a cartridge; zero OK, nonzero error!
 }
 void cart_reset(void)
 {
-	cart_bank[0]=cart_bank[1]=cart_bank[2]=cart_bank[3]=0; // default to zero
-	if (!cart||cart_big)
-		; // nothing to bank!
+	MEMZERO(cart_bank); // default to zero
+	if (!cart||cart_big||cart_miscel) {} // nothing to bank!
 	else if (cart_id==5) // ASCII 16K: "Gall Force" requires the second bank to boot as 0; "Eggerland 2" suggests that this is normal
 	{
 		if (equalsmmmm(&cart[0X2804C],0X4259444F))
@@ -561,8 +562,7 @@ void cart_reset(void)
 	}
 	else if (cart_id<8)
 		cart_bank[0]=0,cart_bank[1]=1,cart_bank[2]=2,cart_bank[3]=3; // normal boot values for Generic, Konami and ASCII 8K carts
-	else
-		; // types 8 and 9 (ASCII 16K + SRAM: "A-TRAIN"; "HARRY FOX: YUKI NO MAOH", "SUPER LODE RUNNER", "CROSS BLAIM") use zeros
+	//else {} // types 8 and 9 (ASCII 16K + SRAM: "A-TRAIN"; "HARRY FOX: YUKI NO MAOH", "SUPER LODE RUNNER", "CROSS BLAIM") use zeros
 }
 void cart_remove(void) // remove the cartridge
 {
@@ -825,45 +825,119 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 			break;
 		}
 		case 9: // Miscellaneous
-			/**/ if (equalsmmmm(&cart[0X05350],0X64426553)) // "CROSS BLAIM"
+			switch (cart_miscel)
 			{
-				if (ps_slot[1]==slots_1st)
-					mmu_bit[ 4]=2; // detect POKE at $4045
-				if (ps_slot[2]==slots_1st)
-					mmu_rom[ 8]=mmu_rom[ 9]=
-					mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[1]<<14)&CART_MASK)-0X8000];
+				case 1: // NEO 8K
+					if (ps_slot[0]==slots_1st)
+					{
+						mmu_bit[ 0]=mmu_bit[ 1]=mmu_bit[ 2]=mmu_bit[ 3]=2; // detect POKE at $1000-$3FFF
+						mmu_rom[ 0]=mmu_rom[ 1]=&cart[((cart_bank[0]<<13)&CART_MASK)-0X0000];
+						mmu_rom[ 2]=mmu_rom[ 3]=&cart[((cart_bank[1]<<13)&CART_MASK)-0X0000];
+					}
+					if (ps_slot[1]==slots_1st)
+					{
+						mmu_bit[ 4]=mmu_bit[ 5]=mmu_bit[ 6]=mmu_bit[ 7]=2; // detect POKE at $5000-$7FFF
+						mmu_rom[ 4]=mmu_rom[ 5]=&cart[((cart_bank[2]<<13)&CART_MASK)-0X4000];
+						mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[3]<<13)&CART_MASK)-0X4000];
+					}
+					if (ps_slot[2]==slots_1st)
+					{
+						mmu_bit[ 8]=mmu_bit[ 9]=mmu_bit[10]=mmu_bit[11]=2; // detect POKE at $9000-$BFFF
+						mmu_rom[ 8]=mmu_rom[ 9]=&cart[((cart_bank[4]<<13)&CART_MASK)-0X8000];
+						mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[5]<<13)&CART_MASK)-0X8000];
+					}
+					if (ps_slot[3]==slots_1st) // "Implementations of the NEO mapper should return the value FFh if page 3 is read..."
+					{
+						mmu_bit[12]=mmu_bit[13]=mmu_bit[14]=mmu_bit[15]=2; // detect POKE at $D000-$FFFF
+						mmu_rom[12]=mmu_rom[13]=mmu_rom[14]=mmu_rom[15]=&bad_rom[0-0XC000];
+					}
+					break;
+				case 2: // NEO 16K
+					if (ps_slot[0]==slots_1st)
+					{
+						mmu_bit[ 0]=mmu_bit[ 1]=mmu_bit[ 2]=mmu_bit[ 3]=2; // detect POKE at $1000-$3FFF
+						mmu_rom[ 0]=mmu_rom[ 1]=mmu_rom[ 2]=mmu_rom[ 3]=&cart[((cart_bank[0]<<14)&CART_MASK)-0X0000];
+					}
+					if (ps_slot[1]==slots_1st)
+					{
+						mmu_bit[ 4]=mmu_bit[ 5]=mmu_bit[ 6]=mmu_bit[ 7]=2; // detect POKE at $5000-$7FFF
+						mmu_rom[ 4]=mmu_rom[ 5]=mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[1]<<14)&CART_MASK)-0X4000];
+					}
+					if (ps_slot[2]==slots_1st)
+					{
+						mmu_bit[ 8]=mmu_bit[ 9]=mmu_bit[10]=mmu_bit[11]=2; // detect POKE at $9000-$BFFF
+						mmu_rom[ 8]=mmu_rom[ 9]=mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[2]<<14)&CART_MASK)-0X8000];
+					}
+					if (ps_slot[3]==slots_1st) // identical to NEO 8K
+					{
+						mmu_bit[12]=mmu_bit[13]=mmu_bit[14]=mmu_bit[15]=2; // detect POKE at $D000-$FFFF
+						mmu_rom[12]=mmu_rom[13]=mmu_rom[14]=mmu_rom[15]=&bad_rom[0-0XC000];
+					}
+					break;
+				/*case 3: // YAMANOOTO, like KONAMI SCC and KONAMI 8K, but configurable on the fly
+					if (ps_slot[1]==slots_1st)
+						mmu_rom[ 4]=mmu_rom[ 5]=&cart[((cart_bank[0]<<13)&CART_MASK)-0X4000],
+						mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[1]<<13)&CART_MASK)-0X6000],
+						mmu_bit[ 4]=mmu_bit[ 5]=mmu_bit[ 6]=mmu_bit[ 7]=2; // detect POKE at $4000-$7FFF
+					if (ps_slot[2]==slots_1st)
+						mmu_rom[ 8]=mmu_rom[ 9]=&cart[((cart_bank[2]<<13)&CART_MASK)-0X8000],
+						mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[3]<<13)&CART_MASK)-0XA000],
+						mmu_bit[ 8]=mmu_bit[ 9]=mmu_bit[10]=mmu_bit[11]=2; // detect POKE at $8000-$BFFF
+					break;*/
+				case 4: // ASCII16X, like ASCII 16K but wider-paged and (AFAIK) without SRAM
+					if (ps_slot[1]==slots_1st)
+					{
+						mmu_rom[ 4]=mmu_rom[ 5]=mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[0]<<14)&CART_MASK)-0X4000];
+						mmu_bit[ 6]=mmu_bit[ 7]=2; // detect POKE at $6000-$7FFF
+					}
+					if (ps_slot[2]==slots_1st)
+					{
+						mmu_rom[ 8]=mmu_rom[ 9]=mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[1]<<14)&CART_MASK)-0X8000];
+						mmu_bit[10]=mmu_bit[11]=2; // detect POKE at $A000-$BFFF (used by any title?)
+					}
+					break;
+				default:
+					/**/ if (equalsmmmm(&cart[0X05350],0X64426553)) // "CROSS BLAIM"
+					{
+						if (ps_slot[1]==slots_1st)
+							mmu_bit[ 4]=2; // detect POKE at $4045
+						if (ps_slot[2]==slots_1st)
+							mmu_rom[ 8]=mmu_rom[ 9]=
+							mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[1]<<14)&CART_MASK)-0X8000];
+					}
+					else if (equalsmmmm(&cart[0X1FA74],0X4D453150)) // "SUPER LODE RUNNER"
+					{
+						if (ps_slot[1]==slots_1st)
+							mmu_rom[ 4]=mmu_rom[ 5]=mmu_rom[ 6]=mmu_rom[ 7]=&bad_rom[0-0X4000];
+						if (ps_slot[2]==slots_1st)
+							mmu_bit[ 0]=2, // detect POKE at $0000
+							mmu_rom[ 8]=mmu_rom[ 9]=
+							mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[1]<<14)&CART_MASK)-0X8000];
+					}
+					else if (equalsmmmm(&cart[0X004E4],0X384C7C78)) // "HARRY FOX: YUKI NO MAOH"
+					{
+						if (ps_slot[1]==slots_1st)
+							mmu_bit[ 6]=mmu_bit[ 7]=2, // detect POKE at $6000-$7FFF
+							mmu_rom[ 4]=mmu_rom[ 5]=mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[0]<<15)&CART_MASK)-0X4000];
+						if (ps_slot[2]==slots_1st)
+							mmu_rom[ 8]=mmu_rom[ 9]=mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[1]<<15)&CART_MASK)+0X4000-0X8000];
+					}
+					/*
+					else if (equalsmmmm(&cart[0X00018],0X50414332)) // "PAC2" <= "PAC2OPLL"
+					{
+						if (ps_slot[1]==slots_1st)
+						{
+							if (equalsmm(&sram[0X1FFE],0X4D69)) // the FM-PAC SRAM is visible when the chars "Mi" are poked
+								mmu_ram[ 5]=mmu_rom[ 5]=mmu_ram[ 4]=mmu_rom[ 4]=&sram[0X0000-0X4000];
+							else // ROM only, but still catches writes to 5FFE and 5FFF that reveal the SRAM
+								mmu_bit[5]=2; // detect POKE at $5000-$5FFF (actually $5FFE-$5FFF)
+						}
+						//if (ps_slot[2]==slots_1st)
+							//mmu_rom[ 8]=mmu_rom[ 9]=mmu_rom[10]=mmu_rom[11]=&bad_rom[0-0X8000];
+					}
+					*/
+					break;
 			}
-			else if (equalsmmmm(&cart[0X1FA74],0X4D453150)) // "SUPER LODE RUNNER"
-			{
-				if (ps_slot[1]==slots_1st)
-					mmu_rom[ 4]=mmu_rom[ 5]=mmu_rom[ 6]=mmu_rom[ 7]=&bad_rom[0-0X4000];
-				if (ps_slot[2]==slots_1st)
-					mmu_bit[ 0]=2, // detect POKE at $0000
-					mmu_rom[ 8]=mmu_rom[ 9]=
-					mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[1]<<14)&CART_MASK)-0X8000];
-			}
-			else if (equalsmmmm(&cart[0X004E4],0X384C7C78)) // "HARRY FOX: YUKI NO MAOH"
-			{
-				if (ps_slot[1]==slots_1st)
-					mmu_bit[ 6]=mmu_bit[ 7]=2, // detect POKE at $6000-$7FFF
-					mmu_rom[ 4]=mmu_rom[ 5]=mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[0]<<15)&CART_MASK)-0X4000];
-				if (ps_slot[2]==slots_1st)
-					mmu_rom[ 8]=mmu_rom[ 9]=mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[1]<<15)&CART_MASK)+0X4000-0X8000];
-			}
-			/*
-			else if (equalsmmmm(&cart[0X00018],0X50414332)) // "PAC2" <= "PAC2OPLL"
-			{
-				if (ps_slot[1]==slots_1st)
-				{
-					if (equalsmm(&sram[0X1FFE],0X4D69)) // the FM-PAC SRAM is visible when the chars "Mi" are poked
-						mmu_ram[ 5]=mmu_rom[ 5]=mmu_ram[ 4]=mmu_rom[ 4]=&sram[0X0000-0X4000];
-					else // ROM only, but still catches writes to 5FFE and 5FFF that reveal the SRAM
-						mmu_bit[5]=2; // detect POKE at $5000-$5FFF (actually $5FFE-$5FFF)
-				}
-				//if (ps_slot[2]==slots_1st)
-					//mmu_rom[ 8]=mmu_rom[ 9]=mmu_rom[10]=mmu_rom[11]=&bad_rom[0-0X8000];
-			}
-			*/
 			break;
 	}
 }
@@ -953,29 +1027,51 @@ void mmu_slowpoke(WORD w,BYTE b) // notice that the caller already filters out i
 				cart_bank[(w>>12)- 6]=b,mmu_update();
 			break;
 		case 9: // Miscellaneous
-			/**/ if (w==0X4045)
+			switch (cart_miscel)
 			{
-				if (equalsmmmm(&cart[0X05350],0X64426553)) // "CROSS BLAIM"
-					cart_bank[1]=b,mmu_update();
+				case 1: // NEO 8K
+					cprintf("NEO 8K: %08X:%04X,%02X\n",z80_pc.w,w,b);
+					//if (!(w&0X07FE))
+						{ BYTE q=w&1,z=(w>>11)&7; if (z>1) (w=cart_bank[z-2]),(cart_bank[z-2]=(q?(w&255)|(b<<8):(w&-256)|b)),mmu_update(); }
+					break;
+				case 2: // NEO 16K
+					cprintf("NEO 16K: %08X:%04X,%02X\n",z80_pc.w,w,b);
+					if (!(w&0X0800))
+						{ BYTE q=w&1,z=(w>>12)&3; if (z>0) w=cart_bank[z-1],cart_bank[z-1]=(q?(w&255)|(b<<8):(w&-256)|b),mmu_update(); }
+					break;
+				/*case 3: // YAMANOOTO
+					cart_bank[(w>>13)-2]=b,mmu_update();
+					break;*/
+				case 4: // ASCII16X
+					cprintf("ASCII16X: %08X:%04X,%02X\n",z80_pc.w,w,b);
+					cart_bank[(w>>12)&1]=(w&0X0F00)|b,mmu_update();
+					break;
+				default: // cartridges that "attack" unique addresses
+					/**/ if (w==0X4045)
+					{
+						if (equalsmmmm(&cart[0X05350],0X64426553)) // "CROSS BLAIM"
+							cart_bank[1]=b,mmu_update();
+					}
+					else if (w==0X0000) // this pokes the BIOS, but the cartridge traps it!
+					{
+						if (equalsmmmm(&cart[0X1FA74],0X4D453150)) // "SUPER LODE RUNNER"
+							cart_bank[1]=b,mmu_update();
+					}
+					else if (!(w&0X0FFF)) // AFAIK only $6000 and $7000 are used here
+					{
+						if (equalsmmmm(&cart[0X004E4],0X384C7C78)) // "HARRY FOX: YUKI NO MAOH"
+							cart_bank[(w>>12)- 6]=b,mmu_update();
+					}
+					/*
+					else if (w>=0X5FFE&&w<=0X5FFF) // only $5FFE and $5FFF can make the FM-PAC SRAM visible
+					{
+						if (equalsmmmm(&cart[0X00018],0X50414332)) // "PAC2" <= "PAC2OPLL"
+							{ if (sram[w-0X4000]!=b) sram[w-0X4000]=b,mmu_update(); }
+					}
+					*/
+					//else POKE(w)=b; // redundant
+					break;
 			}
-			else if (!w)//==0X0000
-			{
-				if (equalsmmmm(&cart[0X1FA74],0X4D453150)) // "SUPER LODE RUNNER"
-					cart_bank[1]=b,mmu_update();
-			}
-			else if (!(w&0X0FFF)) // AFAIK only $6000 and $7000 are used here
-			{
-				if (equalsmmmm(&cart[0X004E4],0X384C7C78)) // "HARRY FOX: YUKI NO MAOH"
-					cart_bank[(w>>12)- 6]=b,mmu_update();
-			}
-			/*
-			else if (w>=0X5FFE&&w<=0X5FFF) // only $5FFE and $5FFF can make the FM-PAC SRAM visible
-			{
-				if (equalsmmmm(&cart[0X00018],0X50414332)) // "PAC2" <= "PAC2OPLL"
-					{ if (sram[w-0X4000]!=b) sram[w-0X4000]=b,mmu_update(); }
-			}
-			*/
-			//else POKE(w)=b; // redundant
 			break;
 	}
 }
@@ -1106,6 +1202,24 @@ BYTE vdp_table[64],vdp_latch,vdp_state[16],vdp_palette[32]; int vdp_where,vdp_wh
 //const BYTE vdp_palette0[32]={0X00,0,0X00,0,0X11,6,0X33,7,0X17,1,0X27,3,0X51,1,0X27,6,0X71,1,0X73,3,0X61,6,0X64,6,0X11,4,0X65,2,0X55,5,0X77,7}; // MSX2 MSX1-like palette
 const BYTE vdp_palette7[32]={0X00,0,0X03,0,0X30,0,0X33,0,0X00,3,0X03,3,0X30,3,0X33,3,
 	0X73,4,0X07,0,0X70,0,0X77,0,0X00,7,0X07,7,0X70,7,0X77,7}; // MSX2 G7 sprite palette
+
+#define video_table_override(n,p) (vdp_palette[(n)*2+0]=(((p)>>5)&7)|(((p)>>17)&112),vdp_palette[(n)*2+1]=(((p)>>13)&7))
+void video_table_reset(void)
+{
+	for (int n=0;n<16;++n) //video_table_override(n,p[n]), // uncomment this to overwrite MSX2 palettes! (see below as well)
+		video_table[n]=video_table_const[n];
+}
+int video_table_load(char *s) // shared with CSFEC, based on VICE's palette files, but ink #0 is unused; it also overwrites the MSX2 palette!
+{
+	FILE *f=puff_fopen(s,"r"); if (!f) return -1;
+	unsigned char t[STRMAX],n=1; VIDEO_UNIT p[16];
+	while (fgets(t,STRMAX,f)&&n<=16) if (*t>'#') // skip "# comment" and others
+		{ unsigned int r,g,b; if (sscanf(UTF8_BOM(t),"%X%X%X",&r,&g,&b)!=3) n=16; else if (n<16) p[n]=((r&255)<<16)+((g&255)<<8)+(b&255); ++n; }
+	puff_fclose(f); if (n!=16) return -1;
+	STRCOPY(palette_path,s); for (n=1;n<16;++n) //video_table_override(n,p[n]), // uncomment this to overwrite MSX2 palettes!
+		video_table[n]=p[n];
+	return 0;
+}
 
 // VDP maps: PATTERN NAME X2, COLOUR TABLE X2, PATTERN GENERATOR X2, SPRITE ATTRIBUTE X2, SPRITE GENERATOR
 BYTE *vdp_map_pn1,*vdp_map_pn2,*vdp_map_ct1,*vdp_map_ct2,*vdp_map_pg1,*vdp_map_pg2,*vdp_map_sa1,*vdp_map_sa2,*vdp_map_sa7,*vdp_map_sg1,*vdp_map_sg7;
@@ -1746,7 +1860,7 @@ INLINE void video_main(int t) // render video output for `t` Z80 clock ticks; t 
 	#define VDP_LIMIT_X_V 684 // =228*3
 	static int vdp_limit_x_l=VDP_LIMIT_X_H+VDP_LIMIT_X_8,vdp_limit_x_r=VDP_LIMIT_X_V-VDP_LIMIT_X_8,vdp_limit_x_z=0,vdp_hscroll_p=0;
 	static BYTE a,b,c,n,x,h; // character caches, counter and index
-	static VIDEO_UNIT *lz=NULL,pz,rz; static int mz; // the V9958 LEFT MASK location and colour
+	static VIDEO_UNIT *lz=NULL,pz,rz; static unsigned int yyyy,jk,mz; // the V9958 LEFT MASK location and the YJK/YAE colours
 	// update the BACKDROP and BORDER colours, not always identical; cfr. "TERRORPODS"
 	int i=vdp_table[7];
 	if ((vdp_raster_mode&31)==7) // MSX2 G7: the border is the whole byte in R#7
@@ -1997,21 +2111,19 @@ INLINE void video_main(int t) // render video output for `t` Z80 clock ticks; t 
 								else if (vdp_table[25]&16) // V9958 YAE hybrid mode
 									do
 									{
-										static int jk=0; static unsigned int yyyy=0;
 										if (!--n)
 										{
 											BYTE *vvvv=&vdp_ram[(j^vdp_hscroll_p)+i+(x>>1)]; // fetch four bytes at once
 											n=4,yyyy=(vvvv[65537]<<24)+(vvvv[1]<<16)+(vvvv[65536]<<8)+vvvv[0]; // planar :-(
 											jk=((yyyy>>15)&(7<<9))+((yyyy>>10)&(7<<6))+((yyyy>>5)&(7<<3))+(yyyy&7);
 										}
-										VIDEO_NEXT=p=((y=yyyy>>3)&1)?video_clut[y>>1]:video_wide_clut[(y<<12)+jk]; VIDEO_NEXT=p;
+										VIDEO_NEXT=p=((y=yyyy,y>>=3)&1)?video_clut[y>>1]:video_wide_clut[(y<<12)+jk]; VIDEO_NEXT=p;
 										if (yyyy>>=8,!(x=(x+1)&255)) if (h) vdp_hscroll_p^=32768;
 									}
 									while ((w+=2)<t);
 								else // V9958 YJK high colour; what does vdp_table[25]&32 (VDS) do by the way!?
 									do
 									{
-										static int jk=0; static unsigned int yyyy=0;
 										if (!--n)
 										{
 											BYTE *vvvv=&vdp_ram[(j^vdp_hscroll_p)+i+(x>>1)]; // fetch four bytes at once
@@ -2749,10 +2861,27 @@ void z80_magick(void) // virtual magick!
 #define DEBUG_INFOX 20 // panel width
 BYTE debug_pook(int q,WORD w) { return q?vdp_ram[((vdp_table[14]&4)<<14)+w]:PEEK(w); } // show either VDP or Z80 space (hacky, can't write on VDP)
 //BYTE debug_pook(int q,WORD w) { return PEEK(w); } // `q` doesn't matter on MSX! empty banks are unreadable AND unwritable!
+BYTE debug_bigdigit(int i) { return (i&=31)<10?i+'0':i+'A'-10; }
+BYTE debug_bigshiny(int i) { return debug_bigdigit(i)+128; }
 void debug_info(int q)
 {
 	if (cart&&!cart_big)
-		sprintf(DEBUG_INFOZ( 0),"MAP:   %c %02X:%02X:%02X:%02X",hexa1[cart_id],cart_bank[0],cart_bank[1],cart_bank[2],cart_bank[3]);
+	{
+		if (cart_miscel) // extended fields!
+		{
+			if (cart_miscel==1) // NEO 8K has six fields!
+				sprintf(DEBUG_INFOZ( 0),"1:%c%02X%c%02X%c%02X%c%02X%c%02X%c%02X",
+					debug_bigshiny(cart_bank[0]>>8),cart_bank[0]&255,debug_bigshiny(cart_bank[1]>>8),cart_bank[1]&255,
+					debug_bigshiny(cart_bank[2]>>8),cart_bank[2]&255,debug_bigshiny(cart_bank[3]>>8),cart_bank[3]&255,
+					debug_bigshiny(cart_bank[4]>>8),cart_bank[4]&255,debug_bigshiny(cart_bank[5]>>8),cart_bank[5]&255);
+			else // NEO 16K and others have four fields
+				sprintf(DEBUG_INFOZ( 0),"%c:--:%c%02X:%c%02X:%c%02X:%c%02X",hexa1[cart_miscel],
+					debug_bigdigit(cart_bank[0]>>8),cart_bank[0]&255,debug_bigdigit(cart_bank[0]>>8),cart_bank[1]&255,
+					debug_bigdigit(cart_bank[0]>>8),cart_bank[2]&255,debug_bigdigit(cart_bank[0]>>8),cart_bank[3]&255);
+		}
+		else
+			sprintf(DEBUG_INFOZ( 0),"MAP:   %c %02X:%02X:%02X:%02X",hexa1[cart_id],cart_bank[0]&255,cart_bank[1]&255,cart_bank[2]&255,cart_bank[3]&255);
+	}
 	else
 		sprintf(DEBUG_INFOZ( 0),"MAP:   - --:--:--:--");
 	sprintf(DEBUG_INFOZ( 1)+4,"PIO%c %02X:%02X:%02X:%02X",cart?'*':'-',pio_port_a,pio_port_b,pio_port_c,pio_control);
@@ -3059,7 +3188,7 @@ int snap_save(char *s) // save a snapshot `s`; zero OK, nonzero error!
 		memcpy(&header[96+16],vdp_table,8), // the MSX1 VDP is smaller and simpler
 		header[96+96]=vdp_state[0]; // just one STATUS byte!
 	// CARTRIDGE (if any)
-	memcpy(&header[240],cart_bank,4); // cartridge configuration bytes, all ZERO if no cartridge is present
+	for (int n=0;n<8;++n) header[240+n]=cart_bank[n],header[248+n]=cart_bank[n]>>8; // cartridge configuration bytes, all ZERO if no cartridge is present
 	fwrite1(header,256,f);
 	// VDP 16K/64K + 64K RAM
 	j?fwrite1(session_scratch,j,f):fwrite1(vdp_ram,i,f);
@@ -3163,10 +3292,9 @@ int snap_load(char *s) // load a snapshot `s`; zero OK, nonzero error!
 	z80_irq=((vdp_state[0]&128)&&(vdp_table[1]&32)?1:0)+((vdp_state[1]&  1)&&(vdp_table[0]&16)?2:0);
 	z80_int=0; // avoid nasty surprises!..?
 	// CARTRIDGE (if any)
-	memcpy(cart_bank,&header[240],4); // if any byte here isn't zero we have to insert a cartridge!
-	if (!cart) // we must also check whether the Z80 PC is located on a cartridge, i.e. PSLOT[PC>>14] is 1
-		if ((cart_bank[0]|cart_bank[1]|cart_bank[2]|cart_bank[3])||((pio_port_a>>((z80_pc.w>>14)*2))&3)==1)
-			if (cart_insert(cart_path)) MEMZERO(cart_bank); // nuke these variables on failure :-(
+	i=0; for (int n=0;n<8;++n) i|=cart_bank[n]=header[248+n]*256+header[240+n]; // extension of the old [240..243] for 4 BYTE banks
+	if (!cart&&i) // if any byte here isn't zero we have to insert a cartridge!
+		if (cart_insert(cart_path)) MEMZERO(cart_bank); // nuke these variables on failure :-(
 	// VDP 16K/64K + 64K RAM
 	if (j>=(i=type_id?1<<16:(1<<14))) j=0; // old snapshots wrote "16K" in the MSX1 VDP size
 	j?snap_x2bin(vdp_ram,i,session_scratch,fread1(session_scratch,j,f),q):fread1(vdp_ram,i,f);

@@ -148,6 +148,18 @@ const unsigned char kbd_map_xlt[]=
 
 VIDEO_UNIT video_table[16]; // colour table, 0xRRGGBB style: the 16 original colours
 VIDEO_UNIT video_xlat[16]; // all colours are static in the VIC-II
+VIDEO_UNIT video_table_const[16]= // different gamma and saturation levels
+{ // these values assume that PAL / sRGB GAMMA = 1.28
+	// Community-Colors v1.2a -- p1x3l.net
+	0X000000,0XFFFFFF,0XAF2A2A,0X62D8CC,0XB03FB6,0X4AC64A,0X3739C4,0XE4ED4E,
+	0XB6591C,0X683808,0XEA746C,0X4D4D4D,0X848484,0XA6FA9E,0X707CE6,0XB6B6B6,
+	// Pepto's Colodore v1 -- colodore.com
+	//0X000000,0XFFFFFF,0X813338,0X75CEC8,0X8E3C97,0X56AC4D,0X2E2C9B,0XEDF171,
+	//0X8E5029,0X553800,0XC46C71,0X4A4A4A,0X7B7B7B,0XA9FF9F,0X706DEB,0XB2B2B2,
+	// VICE 2.4 -- vice-emu.sourceforge.io
+	//0X000000,0XFFFFFF,0X924A40,0X84C5CC,0X9351B6,0X72B14B,0X483AAA,0XD5DF7C,
+	//0X99692D,0X675200,0XC18178,0X606060,0X8A8A8A,0XB3EC91,0X867ADE,0XB3B3B3,
+};
 
 char palette_path[STRMAX]="";
 int video_table_load(char *s) // based on VICE's palette files (either RR GG BB or RR GG BB X) for the 16 inks
@@ -160,20 +172,7 @@ int video_table_load(char *s) // based on VICE's palette files (either RR GG BB 
 	STRCOPY(palette_path,s); for (n=0;n<16;++n) video_table[n]=p[n]; return 0;
 }
 void video_table_reset(void)
-{
-	VIDEO_UNIT const p[]={ // different gamma and saturation levels
-		// Community-Colors v1.2a -- p1x3l.net
-		0X000000,0XFFFFFF,0XAF2A2A,0X62D8CC,0XB03FB6,0X4AC64A,0X3739C4,0XE4ED4E,
-		0XB6591C,0X683808,0XEA746C,0X4D4D4D,0X848484,0XA6FA9E,0X707CE6,0XB6B6B6,
-		// Pepto's Colodore v1 -- colodore.com
-		//0X000000,0XFFFFFF,0X813338,0X75CEC8,0X8E3C97,0X56AC4D,0X2E2C9B,0XEDF171,
-		//0X8E5029,0X553800,0XC46C71,0X4A4A4A,0X7B7B7B,0XA9FF9F,0X706DEB,0XB2B2B2,
-		// VICE 2.4 -- vice-emu.sourceforge.io
-		//0X000000,0XFFFFFF,0X924A40,0X84C5CC,0X9351B6,0X72B14B,0X483AAA,0XD5DF7C,
-		//0X99692D,0X675200,0XC18178,0X606060,0X8A8A8A,0XB3EC91,0X867ADE,0XB3B3B3,
-	};
-	for (int n=0;n<16;++n) video_table[n]=p[n];
-}
+	{ for (int n=0;n<16;++n) video_table[n]=video_table_const[n]; }
 
 // GLOBAL DEFINITIONS =============================================== //
 

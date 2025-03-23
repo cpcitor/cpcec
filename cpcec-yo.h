@@ -6,7 +6,7 @@
 //  ##  ##  ##      ##  ##  ##   #  ##  ##  since 2018-12-01 till now //
  //  ####  ####      ####  #######   ####  ------------------------- //
 
-// The Yamaha FM-Operator Type-L (YM2143/OPLL) sound chip is a cutdown
+// The Yamaha FM-Operator Type-L (YM2413/OPLL) sound chip is a cutdown
 // version of Yamaha's own YM3812/OPL2. We find these chips in several
 // systems of the late 1980s and early 1990s, such as the arcade games
 // "Rampart" and "Time Soldiers" and the MSX2+ home computers.

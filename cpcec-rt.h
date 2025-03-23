@@ -11,8 +11,8 @@
 // interface of variables and procedures that don't require particular
 // knowledge of the emulation's intrinsic properties.
 
-#define MY_LICENSE "Copyright (C) 2019-2024 Cesar Nicolas-Gonzalez"
-#define MY_VERSION "20241224" // all emulators share the same release date
+#define MY_LICENSE "Copyright (C) 2019-2025 Cesar Nicolas-Gonzalez"
+#define MY_VERSION "20250321" // all emulators share the same release date
 
 #define INLINE // 'inline' is useless in TCC and GCC4, and harmful in GCC5!
 #define UNUSED // '__attribute__((unused))' may be missing outside GCC
@@ -252,10 +252,15 @@ int xtoy(int x,int y) { return (x+y+(x<y))>>1; } // average of `x` and `y`; the 
 unsigned int uxtoy(unsigned int x,unsigned int y) { return (x+y+(x<y))>>1; } // = `cmp x,y: adc x,y: shr x,1`
 
 #if __GNUC__ >= 4 // GCC4+ intrinsic!
-#define log2u(x) (__builtin_clz(x)^(sizeof(unsigned int)*8-1)) // `x` must be >0!
+int log2u(unsigned int x) { return __builtin_clz(x)^(sizeof(unsigned int)*8-1); } // `x` must be >0!
+#define log2u8 log2u
+#define log2u16 log2u
+#define log2u32 log2u
 //#define sqrtu(x) ((int)(__builtin_sqrt(x)))
 #else // slow but compatible
-int log2u(unsigned int x) { int i=0; while (x>>=1) ++i; return i; } // same here!
+int log2u8(BYTE x) { int i=0; if (x>=16) x>>=4,i=4; if (x>=4) x>>=2,i+=2; if (x>=2) ++i; return i; }
+int log2u16(WORD x) { int i=0; if (x>=256) x>>=8,i=8; if (x>=16) x>>=4,i+=4; if (x>=4) x>>=2,i+=2; if (x>=2) ++i; return i; }
+int log2u32(DWORD x) { int i=0; if (x>=65536) x>>=16,i=16; if (x>=256) x>>=8,i+=8; if (x>=16) x>>=4,i+=4; if (x>=4) x>>=2,i+=2; if (x>=2) ++i; return i; }
 #endif
 int sqrtu(unsigned int x) { if (x<2) return x; unsigned int y=x>>1,z; while (y>(z=(x/y+y)>>1)) y=z; return y; } // kudos to Hero of Alexandria!
 #if 1 // precalc'd
@@ -386,7 +391,7 @@ int bin2rle(BYTE *t,int o,const BYTE *s,int i) // encode `i` exact bytes from so
 int rle2bin(BYTE *t,int o,const BYTE *s,int i) // decode up to `i` bytes from source `s` onto up to `o` bytes at target `t`; >=0 output length, <0 ERROR!
 {
 	const BYTE *u=t; BYTE k; while (i>=3) // source error!
-	{ int r=1; if (k=*s,k!=*++s) --i; else { if ((r=s[1])==255) return t-u; i-=3,s+=2,r+=2; } if ((o-=r)<0) break; do *t++=k; while (--r); } // exit!
+	{ int r=1; if (k=*s,k!=*++s) --i; else { if ((r=s[1])==255) return t-u; i-=3,s+=2,r+=2; } if ((o-=r)<0) break; else memset(t,k,r),t+=r; } // exit!
 	return -1; // from above: target error!
 }
 #endif
@@ -406,7 +411,7 @@ int bin2rlf(BYTE *t,int o,const BYTE *s,int i) // encode `i` exact bytes from so
 int rlf2bin(BYTE *t,int o,const BYTE *s,int i) // decode up to `i` bytes from source `s` onto up to `o` bytes at target `t`; >=0 output length, <0 ERROR!
 {
 	const BYTE *u=t; BYTE k,x=*s++,c=x; while (i>=3) // source error!
-	{ int r=0; if (--i,(k=*s++)==x) if (--i,(r=*s++)>=3) if (--i,k=*s++,r==255) return c-k?-1:t-u; if ((o-=++r)<0) break; do c+=*t++=k; while (--r); } // exit!
+	{ int r=0; if (--i,(k=*s++)==x) if (--i,(r=*s++)>=3) if (--i,k=*s++,r==255) return c-k?-1:t-u; if ((o-=++r)<0) break; else memset(t,k,r),c+=k*r,t+=r; } // exit!
 	return -1; // from above: bad checksum! target error!
 }
 #endif
@@ -414,37 +419,32 @@ int rlf2bin(BYTE *t,int o,const BYTE *s,int i) // decode up to `i` bytes from so
 // our built-in compressors rely on 2-byte hashes: faster than 1-byte hashes, lighter than 3-byte hashes, simpler than non-byte-aligned hashes!
 #define H16MAX 65536 // =256*256, the hash table length
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN // PPC, ARM...
-	#define H16GET(s,x) ((s)[(x)]<<8|(s)[(x)+1]) // big-endian hash function
+	#define H16GET(s,x) ((s)[(x)]<<8|(s)[(x)+1]) // lossless big-endian hash function that guarantees that both bytes match
 #else // i86, x64... following Z80, MOS 6502, etc.
-	#define H16GET(s,x) ((s)[(x)+1]<<8|(s)[(x)]) // lil-endian hash function
+	#define H16GET(s,x) ((s)[(x)+1]<<8|(s)[(x)]) // lossless lil-endian hash function that guarantees that both bytes match
 #endif
+#define H16TRI(s,x) ((s)[(x)+2]*239+(s)[(x)+1]*17+(s)[(x)]) // lossy 3-byte hash that does NOT guarantee that all three bytes match!
 BYTE *session_h16lz=NULL; // shared buffer for all hash-based operations (they never happen at once!)
 
 #ifndef LEMPELZIV_LEVEL
 #define LEMPELZIV_LEVEL 6 // catch when LEMPELZIV_ENCODING is enabled but LEMPELZIV_LEVEL is missing!
 #endif
-#if LEMPELZIV_LEVEL > 0
-#define LEMPELZIV_RETRY (1<<((LEMPELZIV_LEVEL)*2-1)) // a value between 2 (LEVEL 1) and 32768 (LEVEL 8); LEVEL >= 9 means RETRY >= RANGE
-#else
-#define LEMPELZIV_RETRY 0
-#endif
 #ifdef LEMPELZIV_OBSOLETE
 // quick'n'dirty implementation of Emmanuel Marty's bytewise 64K-ranged Lempel-Ziv encoding LZSA1, https://github.com/emmanuel-marty/lzsa (BlockFormat_LZSA1.md)
 // this implementation always stores the End of Data marker, whose otherwise unused final offset is used here as a simple 8-bit checksum.
 #if 0 // this isn't allowed anymore!
-#if !LEMPELZIV_RETRY
+#if LEMPELZIV_LEVEL < 1
 #define bin2lze(t,o,s,i) ((t),(o),(s),(i),-1) // never compress!
 #else
-#ifndef LEMPELZIV_ALLOC
 #define LEMPELZIV_ALLOC 65536
-#endif
 int bin2lze(BYTE *t,int o,const BYTE *s,int i) // encode `i` exact bytes from source `s` onto up to `o` bytes at target `t`; >=0 output length, <0 ERROR!
 {
 	BYTE *u=t; int h=0,p=0,k=0,z,*hh=(int*)session_h16lz,*pp; if (!hh) return -1; // memory error!
-	{ for (pp=hh+H16MAX,z=H16MAX+65536;z;) hh[--z]=~65536; } while (p+2<i) // ~65536 < -65536, i.e. setup hashes with values beyond the search range
-		{ int g=0,m=0,r=0,n=p-65536; for (int q=hh[H16GET(s,p)],e=LEMPELZIV_RETRY;q>=n&&e;q=pp[q&65535],(LEMPELZIV_RETRY<65536&&--e)) if (s[q+m]==s[p+m])
-			{ int y; if ((z=65535+p)>i) z=i; const BYTE *v=s+q+1,*w=s+p+1,*x=s+z; while (*++v==*++w&&w<x) {} // search in current minimum and maximum
-			if (z=w-s-p,g<(y=z-(p-q>256?1:0)-(z<18?0:z<256?1:z<512?2:3))) if (g=y,m=z,r=p-q,w>=x) break; } // early break!
+	{ for (pp=hh+H16MAX,z=H16MAX+65536;z;) hh[--z]=~65536; } while (i>=p+3) // ~65536 < -65536, i.e. setup hashes with values beyond the search range
+		{ int g=0,m=0,r=0,n=p-65536; const BYTE *x=s+((z=65535+p)<i?z:i); for (int e=65536>>3,q=hh[H16GET(s,p)];q>=n&&e>0;e-=256>>LEMPELZIV_LEVEL,q=pp[q&65535])
+			{ //if (pp[q&65535]>=q) { cprintf("LZSA1 64K hash bug!\n"); break; } // can this ever happen!?
+			if (s[q+m]==s[p+m]) { int y; const BYTE *v=s+q+1,*w=s+p+1; while (*++v==*++w&&w<x) {} // search if advantageous
+			if (z=w-s-p,g<(y=z-(p-q>256?1:0)-(z<18?0:z<256?1:z<512?2:3))) if (g=y,m=z,r=p-q,w>=x) break; } } // early break!
 		if (m<3) ++p; else // the LZSA1 standard can't handle more than 65535 literals in a row, hence the better-safe-than-sorry 64K limit
 			{ if ((z=p-k)>65535||(o-=z+2)<8) break; *t++=(r>256?128:0)+(z<7?z*16:112)+(m<18?m-3:15);
 			if (z>=7) { if (--o,z<256) *t++=z-7; else if (--o,z<512) *t++=250,*t++=z; else --o,*t++=249,*t++=z,*t++=z>>8; } // literal length
@@ -463,28 +463,27 @@ int lze2bin(BYTE *t,int o,const BYTE *s,int i) // decode up to `i` bytes from so
 		{ int r,m=((z=*s++)>>4)&7; if (m>=7&&(--i,(m+=*s++)>=256)) { if (--i,m>256) m=*s+++256; else if (--i,m=*s++,(m+=*s++<<8)<512) break; } // bad header!
 		{ if ((o-=m)<0||(i-=m+2)<3) break; } for (;m;--m) c+=*t++=*s++; r=*s++-256; if (z&128) if (--i,(r+=(*s++-255)<<8)>=-256) break; // bad source/length!
 		if ((m=(z&15)+3)>=18&&(--i,(m+=*s++)>=256)) { if (--i,m>256) m=*s+++256; else if (--i,m=*s++,(m+=*s++<<8)<512) return (m||(z&128)||r+256-c)?-1:t-u; } // exit!
-		const BYTE *v=t+r; if (v<u||(o-=m)<0) break; do c+=*t++=*v++; while (--m); } // bad offset/target!
+		const BYTE *v=t+r; if (v<u||(o-=m)<0) break; else if (-1==r) memset(t,*v,m),c+=*v*m,t+=m; else do c+=*t++=*v++; while (--m); } // bad offset/target! detect RLE
 	return -1; // something went wrong!
 }
 #endif
 #ifdef LEMPELZIV_ENCODING
 // quick'n'dirty implementation of Emmanuel Marty's nibblewise 64K-ranged Lempel-Ziv encoding LZSA2, https://github.com/emmanuel-marty/lzsa (BlockFormat_LZSA2.md)
 // this implementation always stores the End of Data marker, whose normally undefined final offset is used here as a simple 8-bit checksum.
-#if !LEMPELZIV_RETRY
+#if LEMPELZIV_LEVEL < 1
 #define bin2lzf(t,o,s,i) ((t),(o),(s),(i),-1) // never compress!
 #else
-#ifndef LEMPELZIV_ALLOC
 #define LEMPELZIV_ALLOC 65536
-#endif
 void bin2lzf_encode(BYTE **t,int *o,BYTE *a,BYTE **b,int n) { if (*a) *a=0,**b|=n&15; else --*o,*(*b=(*t)++)=n<<(*a=4); } // store a nibble; see below bin2lzf_n(n)
 #define bin2lzf_n(n) bin2lzf_encode(&t,&o,&a,&b,(n)) // without bin2lzf_encode(): (a?a=0,*b|=(n)&15:(--o,*(b=t++)=(n)<<(a=4)))
 int bin2lzf(BYTE *t,int o,const BYTE *s,int i) // encode `i` exact bytes from source `s` onto up to `o` bytes at target `t`; >=0 output length, <0 ERROR!
 {
 	BYTE *u=t,a=0,*b; int h=0,p=0,k=0,rr=0,z,*hh=(int*)session_h16lz,*pp; if (!hh) return -1; // memory error!
-	{ for (pp=hh+H16MAX,z=H16MAX+65536;z;) hh[--z]=~65536; } while (p+1<i) // ~65536 < -65536, i.e. setup hashes with values beyond the search range
-		{ int g=0,m=0,r=0,n=p-65536; for (int q=hh[H16GET(s,p)],e=LEMPELZIV_RETRY;q>=n&&e;q=pp[q&65535],(LEMPELZIV_RETRY<65536&&--e)) if (p-q==rr||s[q+m]==s[p+m])
-			{ int y; if ((z=65535+p)>i) z=i; const BYTE *v=s+q+1,*w=s+p+1,*x=s+z; while (*++v==*++w&&w<x) {} // search in current minimum and maximum
-			if (z=w-s-p,g<(y=z*2-(p-q==rr?1:p-q>512?p-q>8704?5:4:p-q>32?3:2)-(z<24?z<9?1:2:z<256?4:8))) if (g=y,m=z,r=p-q,w>=x) break; } // early break!
+	{ for (pp=hh+H16MAX,z=H16MAX+65536;z;) hh[--z]=~65536; } while (i>=p+2) // ~65536 < -65536, i.e. setup hashes with values beyond the search range
+		{ int g=0,m=0,r=0,n=p-65536; const BYTE *x=s+((z=65535+p)<i?z:i); for (int e=65536>>2,q=hh[H16GET(s,p)];q>=n&&e>0;e-=256>>LEMPELZIV_LEVEL,q=pp[q&65535])
+			{ //if (pp[q&65535]>=q) { cprintf("LZSA2 64K hash bug!\n"); break; } // can this ever happen!?
+			if (s[q+m]==s[p+m]||p-q==rr) { int y; const BYTE *v=s+q+1,*w=s+p+1; while (*++v==*++w&&w<x) {} // search if advantageous
+			if (z=w-s-p,g<(y=z*2-(p-q==rr?1:p-q>512?p-q>8704?5:4:p-q>32?3:2)-(z<24?z<9?1:2:z<256?4:8))) if (g=y,m=z,r=p-q,w>=x) break; } } // early break!
 		if (m<2) ++p; else // the LZSA2 standard can't handle more than 65535 literals in a row, hence the better-safe-than-sorry 64K limit
 			{ if ((z=p-k)>65535||(o-=z+1)<7) break; *t++=(r==rr?224:r>512?r>8704?192:160-((-r>>3)&32):r>32?96-((-r>>3)&32):((~r&1)<<5))+(z<3?z*8:24)+(m<9?m-2:7);
 			if (z>=3) { if (z<18) bin2lzf_n(z-3); else if (bin2lzf_n(15),z<256) --o,*t++=z-18; else o-=3,*t++=239,*t++=z,*t++=z>>8; } // literal length
@@ -507,7 +506,7 @@ int lzf2bin(BYTE *t,int o,const BYTE *s,int i) // decode up to `i` bytes from so
 		{ if ((o-=m)<0||(i-=m+1)<2) break; } for (;m;--m) c+=*t++=*s++; if (z<128) if (z<64) r=lzf2bin_n()*2-((z>>5)&1)-31; else { if (--i,(r=*s++-((z&32)*8)-256)>=-32) break; }
 		else if (z<192) --i,r=lzf2bin_n()*512-((z&32)*8)-8448,r+=*s++; else { if (z<224?i-=2,r=(*s++-256)<<8,(r+=*s++)>=-8704:!r) break; } // bad source/length!
 		if ((m=(z&7)+2)>=9&&((m+=lzf2bin_n())>=24)) { if (--i,(m+=*s++)==256) return ((z&~24)-103||r+512-c)?-1:t-u; else if (m>256&&(i-=2,m=*s++,(m+=*s++<<8)<256)) break; } // exit!
-		const BYTE *v=t+r; if (v<u||(o-=m)<0) break; do c+=*t++=*v++; while (--m); } // bad offset/target!
+		const BYTE *v=t+r; if (v<u||(o-=m)<0) break; else if (-1==r) memset(t,*v,m),c+=*v*m,t+=m; else do c+=*t++=*v++; while (--m); } // bad offset/target! detect RLE
 	return -1; // something went wrong!
 }
 #undef lzf2bin_n
@@ -610,17 +609,32 @@ VIDEO_UNIT *video_xlat_all(VIDEO_UNIT *t,VIDEO_UNIT const *s,int n) // turn pale
 #define VIDEO_FILTER_DOT0(x) (video_dot0[(x)>>16]<<16|video_dot0[255&((x)>>8)]<<8|video_dot0[255&(x)])
 #define VIDEO_FILTER_DOT1(x) (video_dot1[(x)>>16]<<16|video_dot1[255&((x)>>8)]<<8|video_dot1[255&(x)])
 #define VIDEO_FILTER_DOT2(x) (video_dot2[(x)>>16]<<16|video_dot2[255&((x)>>8)]<<8|video_dot2[255&(x)])
-#define VIDEO_FILTER_DOT3(x) (video_dot3[(x)>>16]<<16|video_dot3[255&((x)>>8)]<<8|video_dot3[255&(x)]) // =DOT0(DOT1)
-#define VIDEO_FILTER_DOT4(x) (video_dot4[(x)>>16]<<16|video_dot4[255&((x)>>8)]<<8|video_dot4[255&(x)]) // =DOT0(DOT2)
-BYTE video_srgb[1<<16],video_dot0[256],video_dot1[256],video_dot2[256],video_dot3[256],video_dot4[256]; // sRGB operations need precalc'd tables, they're too expensive :-(
+BYTE video_srgb[1<<16],video_dot0[256],video_dot1[256],video_dot2[256]; // sRGB operations need precalc'd tables, they're too expensive :-(
+#define VIDEO_FILTER_DOT3(x) (video_dot3[(x)>>16]<<16|video_dot3[255&((x)>>8)]<<8|video_dot3[255&(x)]) // =DOT1(DOT0)
+#define VIDEO_FILTER_DOT4(x) (video_dot4[(x)>>16]<<16|video_dot4[255&((x)>>8)]<<8|video_dot4[255&(x)]) // =DOT2(DOT0)
+BYTE video_dot3[256],video_dot4[256]; // to perform MASK_X and MASK_Y at once
+//#define video_praecalc_full 4072 // ~ 255**1.5
+//int video_praecalc_i(int x) { return SDL_pow(x,1.5/1.0)+.5; }
+//int video_praecalc_o(int x) { return SDL_pow(x,1.0/1.5)+.5; }
+//#define video_praecalc_full 65025 // = 255**2.0
+//int video_praecalc_i(int x) { return x*x; }
+//int video_praecalc_o(int x) { return sqrtu(x); }
+#define video_praecalc_full 196965 // ~ 255**2.2 // sRGB GAMMA = 2.2
+int video_praecalc_i(int x) { return SDL_pow(x,2.2/1.0); }
+int video_praecalc_o(int x) { return SDL_pow(x,1.0/2.2); }
 void video_praecalc(void) // build the precalc'd video filter tables
 {
 	for (int h=0;h<256;++h)
 	{
-		int z=h*h,zz=z*2+h; video_dot0[h]=sqrtu(zz>>2); // between h*h*2 and (h*h+h)*2
-		video_dot1[h]=sqrtu(((zz<65025?  zz:65025)+z+1)>>1);//((h<128?  h*2:255)+h+1)>>1;//=h<128?  h*2:255;//
-		video_dot2[h]=sqrtu(((zz<65025?0:zz-65025)+z+1)>>1);//((h<128?0:h*2-255)+h+1)>>1;//=h<128?0:h*2-255;//
-		for (int l=0;l<256;++l) video_srgb[h*256+l]=sqrtu(( z+l*l+h+l)>>1);//=(h+l+1)>>1;
+		int z=video_praecalc_i(h),zz=z*2; video_dot0[h]=video_praecalc_o((z+1)>>1);
+		#ifdef RAWWW // quick'n'dirty
+		video_dot1[h]=video_praecalc_o(zz<video_praecalc_full?  zz:video_praecalc_full);//=h<128?  h*2:255;//
+		video_dot2[h]=video_praecalc_o(zz<video_praecalc_full?0:zz-video_praecalc_full);//=h<128?0:h*2-255;//
+		#else // standard half'n'half
+		video_dot1[h]=video_praecalc_o(((zz<video_praecalc_full?  zz:video_praecalc_full)+z+1)>>1);//((h<128?  h*2:255)+h+1)>>1;//
+		video_dot2[h]=video_praecalc_o(((zz<video_praecalc_full?0:zz-video_praecalc_full)+z+1)>>1);//((h<128?0:h*2-255)+h+1)>>1;//
+		#endif
+		for (int l=0;l<256;++l) video_srgb[h*256+l]=video_praecalc_o((video_praecalc_i(h)+video_praecalc_i(l)+1)>>1);//=(h+l+1)>>1;
 	}
 	for (int h=0;h<256;++h) video_dot3[h]=video_dot0[video_dot1[h]],video_dot4[h]=video_dot0[video_dot2[h]]; // this must happen last!
 }
@@ -674,8 +688,8 @@ void video_callscanline(VIDEO_UNIT *vl)
 				break;
 			case VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y:
 				do
-					*vi=vt=VIDEO_FILTER_DOT1(*vi),*vo=VIDEO_FILTER_DOT0(vt),++vo,++vi,
-					*vi=vt=VIDEO_FILTER_DOT2(*vi),*vo=VIDEO_FILTER_DOT0(vt);
+					vt=*vi,*vi=VIDEO_FILTER_DOT1(*vi),*vo=VIDEO_FILTER_DOT3(vt),++vo,++vi,
+					vt=*vi,*vi=VIDEO_FILTER_DOT2(*vi),*vo=VIDEO_FILTER_DOT4(vt);
 				while (++vo,++vi<vl);
 				break;
 		}
@@ -902,8 +916,8 @@ INLINE void video_drawscanline(void) // call after each drawn scanline; memory c
 						*vi=vt=VIDEO_FILTER_DOT1(*vi),*vo=VIDEO_FILTER_DOT0(vt),++vj,++vo,++vi,
 						*vi=VIDEO_FILTER_DOT2(*vi),*vo=VIDEO_FILTER_DOT0(*vj);
 						#else // standard half'n'half
-						*vj=VIDEO_FILTER_DOT1(*vj),vt=VIDEO_FILTER_HALF(*vi,*vj),*vo=VIDEO_FILTER_DOT0(vt),++vj,++vo,++vi,
-						*vj=VIDEO_FILTER_DOT2(*vj),vt=VIDEO_FILTER_HALF(*vi,*vj),*vo=VIDEO_FILTER_DOT0(vt);
+						vt=VIDEO_FILTER_HALF(*vi,*vj),*vj=VIDEO_FILTER_DOT1(*vj),*vo=VIDEO_FILTER_DOT3(vt),++vj,++vo,++vi,
+						vt=VIDEO_FILTER_HALF(*vi,*vj),*vj=VIDEO_FILTER_DOT2(*vj),*vo=VIDEO_FILTER_DOT4(vt);
 						#endif
 					while (++vj,++vo,++vi<vl);
 					break;
@@ -1074,11 +1088,11 @@ const char puff_cnt_k[19]={ 16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15 }; //
 void puff_default(void) // generate the default static Huffman bit counts
 {
 	int i=0; // lengths: 8 x144, 9 x112, 7 x24, 8 x8; offsets: 5 x32
-	for (;i<144;++i) puff_cnt_c[i]=8; // 000..143 : 00110000...10111111.
-	for (;i<256;++i) puff_cnt_c[i]=9; // 144..255 : 110010000..111111111
-	for (;i<280;++i) puff_cnt_c[i]=7; // 256..279 : 0000000....0010111..
-	for (;i<288;++i) puff_cnt_c[i]=8; // 280..287 : 11000000...11000111.
-	for (;i<320;++i) puff_cnt_c[i]=5; // notice that the reserved codes take part in the calculations!
+	while (i<144) puff_cnt_c[i++]=8; // 000..143 : 00110000...10111111.
+	while (i<256) puff_cnt_c[i++]=9; // 144..255 : 110010000..111111111
+	while (i<280) puff_cnt_c[i++]=7; // 256..279 : 0000000....0010111..
+	while (i<288) puff_cnt_c[i++]=8; // 280..287 : 11000000...11000111.
+	while (i<320) puff_cnt_c[i++]=5; // notice that the reserved codes take part in the calculations!
 }
 // Huffman-bitwise operations
 int puff_recv(int n) // receive `n` bits from source; <0 ERROR, >=0 OUTPUT
@@ -1163,7 +1177,7 @@ int puff_main(BYTE *t,int o,BYTE *s,int i) // inflate source `s[i]` into target 
 					if (UNLIKELY(!(i=puff_len_k[0][i]+puff_recv(puff_len_k[1][i]))||(o-=i)<0|| // null! target overflow!
 						(j=puff_decode(puff_off_c))<0|| // bad value!
 						!(j=puff_off_k[0][j]+puff_recv(puff_off_k[1][j]))||j>t-u)) return -1; // null! source underrun!
-					s=t-j; do *t++=*s++; while (--i);
+					if (1==j) memset(t,t[-1],i),t+=i; else { s=t-j; do *t++=*s++; while (--i); } // detect RLE
 				}
 				else break; // end of block!
 			}
@@ -1204,12 +1218,12 @@ unsigned int puff_ccitt32(const BYTE *s,int i) { return ccitt32(0XFFFFFFFF,s,i)^
 int puff_gzip(BYTE *t,int o,BYTE *s,int i) // decodes a RFC1952 standard GZIP object; >=0 output length, <0 ERROR!
 {
 	if (!t||!s||o<0||(i-=8)<12) return -1; // NULL or empty!
-	if (!equalsii(s,0X8B1F)||s[2]!=8) return -1; // unknown ID or CM!
+	if (memcmp(s,"\037\213\010",3)) return -1; // unknown ID or CM!
 	int z=10; if (s[3]&4) z+=s[z+1]*256+s[z]+2; // FLG:FEXTRA
 	if (s[3]&8) while (z<i&&s[z++]) {} // FLG:FNAME
 	if (s[3]&16) while (z<i&&s[z++]) {} // FLG:FCOMMENT
 	if ((z+=s[3]&2)>=i||(o=puff_main(t,o,s+=z,i-=z))<0) return -1; // FLG:FHCRC // data error!
-	return mgetiiii(puff_data)==o&&mgetiiii(puff_data+4)==puff_ccitt32(t,o)?puff_data+=8,o:-1; // OK! // ISIZE or CRC32 error!
+	return mgetiiii(puff_data)==puff_ccitt32(t,o)&&mgetiiii(puff_data+4)==o?puff_data+=8,o:-1; // OK! // ISIZE or CRC32 error!
 }
 #endif
 
@@ -1228,7 +1242,7 @@ int huff_stored(BYTE *t,int o,BYTE *s,int i) // the storage part of DEFLATE; >=0
 	BYTE *u=t; while (i>65535) // cuts source into 64K-1B non-final blocks
 	{
 		if ((o-=65535+5)<0) return -1; // not enough room!
-		*t++=0,*t++=~0,*t++=~0,*t++=0,*t++=0,memcpy(t,s,65535),t+=65535,s+=65535,i-=65535;
+		*t++=0,*t++=255,*t++=255,*t++=0,*t++=0,memcpy(t,s,65535),t+=65535,s+=65535,i-=65535;
 	}
 	if ((o-=i+5)<0) return -1; // not enough room!
 	return *t++=1,*t++=i,*t++=i>>8,*t++=~i,*t++=~i>>8,memcpy(t,s,i),t-u+i; // final block!
@@ -1250,10 +1264,7 @@ void huff_tables(int *h,char *l,int n) // generates Huffman output table from ca
 		if (l[i]==j) // do the bit counts match?
 			h[i]=((rbit16(k++)>>(16-j))<<8)+j; // store Huffman bits backwards
 }
-#define DEFLATE_RETRY (1<<(DEFLATE_LEVEL*2-2)) // i.e. from 4 to 16K retries for LEVELS 2..8; LEVEL >= 9 means RETRY >= RANGE
-#ifndef DEFLATE_ALLOC
 #define DEFLATE_ALLOC 32768
-#endif
 int huff_static(BYTE *t,int o,BYTE *s,int i) // the static compression of DEFLATE; >=0 output length, <0 ERROR!
 {
 	puff_data=t,puff_size=o,puff_word=puff_bits=0; // beware, a bitstream isn't a bytestream!
@@ -1265,28 +1276,25 @@ int huff_static(BYTE *t,int o,BYTE *s,int i) // the static compression of DEFLAT
 	puff_default(); // default static Huffman tables
 	huff_tables(puff_len_c,puff_cnt_c,288); // 288 codes, but the last two are reserved
 	huff_tables(puff_off_c,puff_cnt_c+288,32); // ditto, 32 codes but only 30 are valid
-	while (p+3<=i) // the minimum match length is 3 bytes, a match can't begin any later!
+	while (puff_size>5&&i>=p+3) // target overflow! // the minimum match length is 3 bytes, a match can't begin any later!
 	{
-		if (6>puff_size) break; // target overflow!
-		while (h<p) { int x=s[h]+s[h+1]*17+s[h+2]*239; pp[h&32767]=hh[x],hh[x]=h,++h; } // walk hash table
-		int len=0,off=p+258,x=p-32768; if (off>i) off=i; const BYTE *y=s+off;
-		for (int q=hh[s[p]+s[p+1]*17+s[p+2]*239],e=DEFLATE_RETRY;q>=x&&e;q=pp[q&32767],(DEFLATE_RETRY<32768&&--e)) // search for matches
+		int len=0,off=p+258,n=p-32768; const BYTE *x=s+(off<i?off:i);
+		for (int e=32768>>3,q=hh[H16TRI(s,p)];q>=n&&e>0;e-=256>>DEFLATE_LEVEL,q=pp[q&32767]) // search for matches
 		{
+			//if (pp[q&32767]>=q) { cprintf("DEFLATE 32K hash bug!\n"); break; } // can this ever happen!?
 			const BYTE *cmp1=s+q,*cmp2=s+p; if (cmp1[len]==cmp2[len]) // can this match be an improvement?
-				{ { while (*cmp1==*cmp2&&++cmp2<y) ++cmp1; } int z=cmp2-s-p; if (len<z) if (len=z,off=p-q,cmp2>=y) break; }
+				{ { while (*cmp1==*cmp2&&++cmp2<x) ++cmp1; } int z=cmp2-s-p; if (len<z) if (len=z,off=p-q,cmp2>=x) break; }
 		}
 		if (len>=(off>32*64?4:3)) // was there a match? is it beneficial? (empirical 24*64<<<x<=32*64; one case favours 29, another 31, another one 32...)
 		{
 			p+=len; // greedy algorithm: grab the longest match and move on
-			if (len<11) x=len-2; else if (len>=258) x=29; else //for (x=log2u(len-3)*4;len<puff_len_k[0][x];--x) {}
-				x=log2u(len-3)*4-3,x+=(len-puff_len_k[0][x])>>puff_len_k[1][x];
-			huff_encode(puff_len_c, 256+x),huff_append(puff_len_k,x,len);
-			if (off<5) x=off-1; else //for (x=log2u(off-1)*2+1;off<puff_off_k[0][x];--x) {}
-				x=log2u(off-1)*2,x+=(off-puff_off_k[0][x])>>puff_off_k[1][x];
-			huff_encode(puff_off_c,     x),huff_append(puff_off_k,x,off);
+			if (len<11) n=len-2; else if (len>=258) n=29; else n=log2u8(len-3)*4-3,n+=(len-puff_len_k[0][n])>>puff_len_k[1][n];
+			huff_encode(puff_len_c,256+n),huff_append(puff_len_k,n,len);
+			if (off< 5) n=off-1; else n=log2u16(off-1)*2 ,n+=(off-puff_off_k[0][n])>>puff_off_k[1][n];
+			huff_encode(puff_off_c,    n),huff_append(puff_off_k,n,off);
 		}
-		else
-			huff_encode(puff_len_c,s[p++]); // too short, store a literal
+		else huff_encode(puff_len_c,s[p++]); // too short, store a literal
+		while (h<p) { int q=H16TRI(s,h); pp[h&32767]=hh[q],hh[q]=h,++h; } // walk hash table
 	}
 	if ((i-p)*2+6>puff_size) return -1; // target overflow!
 	while (p<i) huff_encode(puff_len_c,s[p++]); // last bytes (if any) are always literals
@@ -1311,11 +1319,9 @@ int huff_zlib(BYTE *t,int o,BYTE *s,int i) // encodes a RFC1950 standard ZLIB ob
 int huff_gzip(BYTE *t,int o,BYTE *s,int i) // encodes a RFC1952 standard GZIP object; >=0 output length, <0 ERROR!
 {
 	if (!t||!s||(o-=20)<0||i<0) return -1; // NULL or empty!
-	mputiiii(t,0X88B1F); // ID1(31)+ID2(139)+CM(8)+FLG(0)
-	memset(t+=4,0,6); // MTIME(0),XFL(0)+OS(0)
-	if ((o=huff_main(t+=6,o,s,i))<0) return -1; // ERROR!
-	mputiiii(t,puff_ccitt32(s,i)); // CRC32
-	mputiiii(t+=4,i); // ISIZE
+	memcpy(t,"\037\213\010\000\000\000\000\000\004\377",10); // ID1(31),ID2(139),CM(8),FLG(0),MTIME(0,0,0,0),XFL(4),OS(255)
+	if ((o=huff_main(t+=10,o,s,i))<0) return -1; // ERROR!
+	mputiiii(t+=o,puff_ccitt32(s,i)),mputiiii(t+=4,i); // CRC32+ISIZE
 	return o+18; // OK
 }
 #endif
@@ -2430,7 +2436,7 @@ BYTE session_filmdirt,session_filmboth=0; // used to detect skipped frames and t
 void xrf_encodebool(BYTE **t,BYTE *a,BYTE **b,int n) // write "0" (zero) or "1" (nonzero)
 	{ { if (UNLIKELY(!(*a>>=1))) *(*b=(*t)++)=0,*a=128; } if (n) **b|=*a; }
 void xrf_encodegamma(BYTE **t,BYTE *a,BYTE **b,int n) // kind-of Elias Gamma code: [1a[1b[1c[..]]]]0 = 1[a[b[c[..]]]]
-	{ { for (int k=log2u(n);k;) --k,xrf_encodebool(t,a,b,1),xrf_encodebool(t,a,b,(n>>k)&1); } xrf_encodebool(t,a,b,0); }
+	{ { for (int k=log2u32(n);k;) --k,xrf_encodebool(t,a,b,1),xrf_encodebool(t,a,b,(n>>k)&1); } xrf_encodebool(t,a,b,0); }
 int xrf_encode(BYTE *t,BYTE *s,int l,int x) // the second terribly hacky encoder!
 {
 	BYTE *u=t,a=0,*b,r=128,q=x<0?(x=-x,128):0; // x<0 = perform XOR 128 on bytes, used when turning 16s audio into 8u
