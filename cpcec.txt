@@ -1348,3 +1348,7 @@ colour palettes (CPCEC: OLD+PLUS; ZXSEC: ULA+ULAPLUS; MSXEC: V9938) and a bug in
 the scarcely used GZIP writer. MSXEC now supports 8-MB cartridges and new
 cartridge headers ("ROM_ASC8", "ROM_AS16", "ROM_KON4", "ROM_KON5", "ROM_NEO8",
 "ROM_NE16", "ASCII16X") and patches a bug in the V9958 YAE video render.
+- 20250420 -- minor patch fixing a bug in MXSEC (the NEO8 cartridge type) and
+tweaking the sRGB calculations again. The redundant combination "X-masking mode
++ X-blending + Fine X-blending" (the current X-masking clashes with fine
+X-blending) now simulates a softer X-masking without any blending.

@@ -56,7 +56,7 @@ Contact information: <mailto:cngsoft@gmail.com> */
 //#define VIDEO_OFFSET_Y (32<<2) // original MSX1 512x384
 //#define VIDEO_PIXELS_Y (24<<4)
 #endif
-#define VIDEO_RGB2Y(r,g,b) ((r)*3+(g)*6+(b)) // generic RGB-to-Y expression
+#define VIDEO_RGB2Y(r,g,b) (video_gamma_post((video_gamma_prae(r)*77+video_gamma_prae(g)*152+video_gamma_prae(b)*28)>>8)) // generic RGB-to-Y expression
 
 #if defined(SDL2)||!defined(_WIN32)
 unsigned short session_icon32xx16[32*32] = {
@@ -136,19 +136,24 @@ const unsigned char kbd_map_xlt[]=
 	KBCODE_X_4	,0070,	KBCODE_X_5	,0071,	KBCODE_X_6	,0076, // "SELECT" is NUM.6; NUM.0 might be better
 };
 
-VIDEO_UNIT video_table[16+24]= // colour table, 0xRRGGBB style, according to https://en.wikipedia.org/wiki/TMS9918
-{ // these values assume that PAL / sRGB GAMMA = 1.28
+VIDEO_UNIT video_table[16+8+32]= // colour table, 0xRRGGBB style; it's dynamically calculated from either V9918 tables or V9938/V9958 G/R/B values
+{ // using Gamma = 1.6 as a theoretical middle point between 1.0 (linear) and 2.2 (sRGB)
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // VDP palette, to be filled later
 	// MSX2 V9938 additive GREEN, RED and BLUE channels (linear RGB)
-	0X000000,0X003800,0X006000,0X008400,
-	0X00A500,0X00C400,0X00E200,0X00FF00,
-	0X000000,0X380000,0X600000,0X840000,
-	0XA50000,0XC40000,0XE20000,0XFF0000,
-	0X000000,0X000038,0X000060,0X000084,
-	0X0000A5,0X0000C4,0X0000E2,0X0000FF,
-	//0X000000,0X002400,0X004900,0X006D00,0X009200,0X00B600,0X00DB00,0X00FF00, // G
-	//0X000000,0X240000,0X490000,0X6D0000,0X920000,0XB60000,0XDB0000,0XFF0000, // R
-	//0X000000,0X000024,0X000049,0X00006D,0X000092,0X0000B6,0X0000DB,0X0000FF, // B
+	////0X00,0X24,0X49,0X6D,0X92,0XB6,0XDB,0XFF, // 1.0
+	//0X00,0X2B,0X52,0X76,0X99,0XBC,0XDE,0XFF, // 1.1 is the default in OpenMSX 20.0
+	////0X00,0X4C,0X75,0X96,0XB4,0XCF,0XE8,0XFF, // 1.6
+	////0X00,0X69,0X90,0XAD,0XC6,0XDB,0XEE,0XFF, // 2.2
+	// these 8 levels should be a subset of the 32 levels (_0,_4,_9,13,18,22,27,31)... should they?
+	//0X00,0X21,0X4A,0X6B,0X94,0XB5,0XDE,0XFF, // 1.0
+	0X00,0X28,0X53,0X74,0X9C,0XBB,0XE1,0XFF, // 32>>2, 1.1
+	//0X00,0X47,0X76,0X94,0XB6,0XCE,0XEA,0XFF, // 1.6
+	//0X00,0X65,0X91,0XAC,0XC7,0XDA,0XEF,0XFF, // 2.0
+	// the 32 levels used in the YJK and YAE modes ((x*33)>>2, etc)
+	//0X00,0X08,0X10,0X19,0X21,0X29,0X31,0X3A,0X42,0X4A,0X52,0X5A,0X63,0X6B,0X73,0X7B,0X84,0X8C,0X94,0X9C,0XA5,0XAD,0XB5,0XBD,0XC5,0XCE,0XD6,0XDE,0XE6,0XEF,0XF7,0XFF, // 1.0
+	0X00,0X0B,0X15,0X1F,0X28,0X31,0X39,0X42,0X4A,0X53,0X5B,0X63,0X6C,0X74,0X7C,0X84,0X8C,0X94,0X9C,0XA3,0XAB,0XB3,0XBB,0XC2,0XCA,0XD2,0XD9,0XE1,0XE8,0XF0,0XF8,0XFF, // 1.1
+	//0X00,0X1E,0X2E,0X3B,0X47,0X52,0X5B,0X65,0X6D,0X76,0X7E,0X85,0X8D,0X94,0X9B,0XA2,0XA9,0XAF,0XB6,0XBC,0XC2,0XC8,0XCE,0XD4,0XD9,0XDF,0XE4,0XEA,0XEF,0XF5,0XFA,0XFF, // 1.6
+	//0X00,0X36,0X49,0X58,0X65,0X6F,0X79,0X82,0X8A,0X91,0X98,0X9F,0XA6,0XAC,0XB2,0XB7,0XBD,0XC2,0XC7,0XCC,0XD1,0XD6,0XDA,0XDF,0XE3,0XE7,0XEB,0XEF,0XF3,0XF7,0XFB,0XFF, // 2.0
 };
 VIDEO_UNIT video_xlat[16]; // static colours only (dynamic V9938 colours go elsewhere)
 const VIDEO_UNIT video_table_const[16]={
@@ -832,19 +837,19 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 					{
 						mmu_bit[ 0]=mmu_bit[ 1]=mmu_bit[ 2]=mmu_bit[ 3]=2; // detect POKE at $1000-$3FFF
 						mmu_rom[ 0]=mmu_rom[ 1]=&cart[((cart_bank[0]<<13)&CART_MASK)-0X0000];
-						mmu_rom[ 2]=mmu_rom[ 3]=&cart[((cart_bank[1]<<13)&CART_MASK)-0X0000];
+						mmu_rom[ 2]=mmu_rom[ 3]=&cart[((cart_bank[1]<<13)&CART_MASK)-0X2000];
 					}
 					if (ps_slot[1]==slots_1st)
 					{
 						mmu_bit[ 4]=mmu_bit[ 5]=mmu_bit[ 6]=mmu_bit[ 7]=2; // detect POKE at $5000-$7FFF
 						mmu_rom[ 4]=mmu_rom[ 5]=&cart[((cart_bank[2]<<13)&CART_MASK)-0X4000];
-						mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[3]<<13)&CART_MASK)-0X4000];
+						mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[3]<<13)&CART_MASK)-0X6000];
 					}
 					if (ps_slot[2]==slots_1st)
 					{
 						mmu_bit[ 8]=mmu_bit[ 9]=mmu_bit[10]=mmu_bit[11]=2; // detect POKE at $9000-$BFFF
 						mmu_rom[ 8]=mmu_rom[ 9]=&cart[((cart_bank[4]<<13)&CART_MASK)-0X8000];
-						mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[5]<<13)&CART_MASK)-0X8000];
+						mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[5]<<13)&CART_MASK)-0XA000];
 					}
 					if (ps_slot[3]==slots_1st) // "Implementations of the NEO mapper should return the value FFh if page 3 is read..."
 					{
@@ -1230,7 +1235,7 @@ char vdp_legalsprites=0,vdp_finalsprite=32,vdp_impactsprite=32; // sprite limits
 int vdp_finalraster; // MSX1: 192 always; MSX2: 192 or 212
 int vdp_flash=0; // counter for ODD and EVEN blinking effects
 BYTE vdp_table_last=99; // last modified register, for debug purposes
-#define video_clut_r3g3b3(v,i) (video_xlat_rgb(video_table[16+( v[i*2+1]    &7)]+video_table[24+((v[i*2+0]>>4)&7)]+video_table[32+( v[i*2+0]    &7)]))
+#define video_clut_r3g3b3(v,i) (video_xlat_rgb(video_table[16+( v[i*2+1]    &7)]*256+video_table[16+((v[i*2+0]>>4)&7)]*65536+video_table[16+( v[i*2+0]    &7)]))
 void video_xlat_clut(void) // update the entire colour palette according to user choice and VDP modes
 {
 	for (int i=0;i<16;++i)
@@ -1238,16 +1243,17 @@ void video_xlat_clut(void) // update the entire colour palette according to user
 }
 void video_wide_xlat(void) // update the static high-colour palettes according to user choice alone
 {
+	static const BYTE kblu[8]={0,2,4,7}; // BLUE: 0/1/2/3 => 0/2/4/7 (NOT 0/2/5/7! f.e. the MSX2 "ABADIA" title)
 	for (int i=0;i<16;++i) // MSX2: V9938 G7 mode (sprite)
 		video_clut[i+16]=video_clut_r3g3b3(vdp_palette7,i);
 	for (int i=0;i<256;++i) // MSX2: V9938 G7 mode (bitmap)
-		video_clut[i+32]=video_xlat_rgb(video_table[(i>>5)+16]+video_table[((i>>2)&7)+24]+ // GREEN and RED are straightforward 0..7
-			video_table[(i&3)*7/3+32]); // BLUE: 0/1/2/3 => 0/2/4/7 (NOT 0/2/5/7! f.e. the MSX2 "ABADIA" title)
-	if (type_id>1) for (char y=0;y<32;++y) for (char j=0;j<64;++j) for (char k=0;k<64;++k) // MSX2P: V9958 lossy 15-bit colour modes YJK and YAE
+		video_clut[i+32]=video_xlat_rgb(video_table[16+(i>>5)]*256+video_table[16+((i>>2)&7)]*65536+ // GREEN and RED are straightforward 0..7
+			video_table[16+kblu[i&3]]);
+	if (type_id>1) for (int y=0;y<32;++y) for (int j=0;j<64;++j) for (int k=0;k<64;++k) // MSX2P: V9958 lossy 15-bit colour modes YJK and YAE
 	{
-		char r=j<32?j:j-64,g=k<32?k:k-64,b=(y*5-r*2-g)>>2; if (b<0) b=0; else if (b>31) b=31;
+		int r=j<32?j:j-64,g=k<32?k:k-64,b=(y*5-r*2-g)>>2; if (b<0) b=0; else if (b>31) b=31;
 		if ((g+=y)<0) g=0; else if (g>31) g=31; if ((r+=y)<0) r=0; else if (r>31) r=31;
-		video_wide_clut[(y<<12)+(j<<6)+k]=video_xlat_rgb((((r*33)>>2)<<16)+(((g*33)>>2)<<8)+((b*33)>>2));
+		video_wide_clut[(y<<12)+(j<<6)+k]=video_xlat_rgb((video_table[16+8+r]<<16)+(video_table[16+8+g]<<8)+video_table[16+8+b]);
 	}
 	//FILE *f; if (f=fopen("wideclut","wb")) fwrite1(video_wide_clut,sizeof(video_wide_clut),f),fclose(f);
 }

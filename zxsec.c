@@ -54,7 +54,7 @@ Contact information: <mailto:cngsoft@gmail.com> */
 #define VIDEO_PIXELS_X (32<<4)
 #define VIDEO_PIXELS_Y (24<<4)
 #endif
-#define VIDEO_RGB2Y(r,g,b) ((r)*3+(g)*6+(b)) // generic RGB-to-Y expression
+#define VIDEO_RGB2Y(r,g,b) (video_gamma_post((video_gamma_prae(r)*77+video_gamma_prae(g)*152+video_gamma_prae(b)*28)>>8)) // generic RGB-to-Y expression
 
 #if defined(SDL2)||!defined(_WIN32)
 unsigned short session_icon32xx16[32*32] = {
@@ -155,19 +155,17 @@ const unsigned char kbd_map_xlt[]=
 	KBCODE_X_DOT	,0172, // SYMBOL SHIFT + "M" (0x3A) ditto
 };
 
-const VIDEO_UNIT video_table[16+8+8+4]= // colour table, 0xRRGGBB style, followed by the 8-8-4 components of ULAPLUS
-{ // these values assume that PAL / sRGB GAMMA = 1.28
-	0X000000,0X0000C4,0XC40000,0XC400C4,
-	0X00C400,0X00C4C4,0XC4C400,0XC4C4C4,
+const VIDEO_UNIT video_table[16+8+4]= // colour table, 0xRRGGBB style, followed by the 8+4 (R/G+B) components of ULAPLUS
+{ // using Gamma = 1.6 as a theoretical middle point between 1.0 (linear) and 2.2 (sRGB)
+	0X000000,0X0000A5,0XA50000,0XA500A5,
+	0X00A500,0X00A5A5,0XA5A500,0XA5A5A5,
 	0X000000,0X0000FF,0XFF0000,0XFF00FF,
 	0X00FF00,0X00FFFF,0XFFFF00,0XFFFFFF,
-	// ULAPLUS subcomponents: 8G,8R,4B
-	0X000000,0X003800,0X006000,0X008400,
-	0X00A500,0X00C400,0X00E200,0X00FF00,
-	0X000000,0X380000,0X600000,0X840000,
-	0XA50000,0XC40000,0XE20000,0XFF0000,
-	0X000000,0X000084,0X0000C4,0X0000FF,
-	// n.b.: ULAPLUS 5-5-2 must match ink 7 (GREY)
+	// ULAPLUS subcomponents: 8G,4B
+	//0X0000,0X2400,0X4900,0X6D00,0X9200,0XB600,0XDB00,0XFF00,0X00,0X6D,0XB6,0XFF, // 1.0
+	0X0000,0X4C00,0X7500,0X9600,0XB400,0XCF00,0XE800,0XFF00,0X00,0X96,0XCF,0XFF, // 1.6
+	//0X0000,0X6900,0X9000,0XAD00,0XC600,0XDB00,0XEE00,0XFF00,0X00,0XAD,0XDB,0XFF, // 2.2
+	// n.b.: ULAPLUS 5-5-2 looks like ink 7 (GREY)
 };
 VIDEO_UNIT video_xlat[16]; // static colours only (dynamic ULAPLUS colours go elsewhere)
 
@@ -533,7 +531,7 @@ void dandanator_reset(void)
 
 BYTE ulaplus_enabled=1,ulaplus_index,ulaplus_table[65]; // ULAPLUS 64-colour palette + configuration byte (default 0, disabled)
 
-#define ulaplus_clut_calc(i) (video_xlat_rgb(video_table[16+(i>>5)]+video_table[24+((i>>2)&7)]+video_table[32+(i&3)]))
+#define ulaplus_clut_calc(i) (video_xlat_rgb(video_table[16+(i>>5)]+video_table[16+((i>>2)&7)]*256+video_table[24+(i&3)]))
 VIDEO_UNIT ula_clut[2][256];
 void ula_clut_flash(void) // swap the FLASH-enabled entries in the CLUT
 {

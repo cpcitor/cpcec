@@ -12,7 +12,7 @@
 // knowledge of the emulation's intrinsic properties.
 
 #define MY_LICENSE "Copyright (C) 2019-2025 Cesar Nicolas-Gonzalez"
-#define MY_VERSION "20250321" // all emulators share the same release date
+#define MY_VERSION "20250420" // all emulators share the same release date
 
 #define INLINE // 'inline' is useless in TCC and GCC4, and harmful in GCC5!
 #define UNUSED // '__attribute__((unused))' may be missing outside GCC
@@ -92,7 +92,7 @@ int session_maus_x=0,session_maus_y=0; // mouse coordinates (debugger + SDL2 UI 
 #ifdef MAUS_EMULATION
 unsigned char session_maus_z=0; // optional mouse and lightgun
 #endif
-char video_filter=0,audio_filter=0,video_fineblend=0; // filter flags
+char video_filter=0,video_filterz=0,audio_filter=0,video_fineblend=0; // filter flags
 char session_fullblit=0,session_zoomblit=0,session_version[16]; // OS label, [8] was too short
 char session_paused=0,session_signal=0,session_signal_frames=0,session_signal_scanlines=0;
 char session_dirty=0,debug_dirty=0; // cfr. session_clean()
@@ -579,16 +579,21 @@ VIDEO_UNIT video_litegun; // lightgun data
 #endif
 // *!* are there any systems where VIDEO_UNIT is NOT the DWORD 0X00RRGGBB!? *!*
 
+int video_gamma_map[256];
+#define video_gamma_ceil 196965 // ~ 255**2.2 // sRGB GAMMA = 2.2
+int video_gamma_init(int x) { return SDL_pow(x,2.2/1.0)+.5; }
+#define video_gamma_prae(x) video_gamma_map[x]
+int video_gamma_post(int x) { return SDL_pow(x,1.0/2.2)+.5; }
+
 BYTE video_type=2; // 0 = monochrome, 1=dark palette, 2=normal palette, 3=light palette, 4=green screen
-int video_type_less(int i) { return SDL_pow(i,3.0/2.0)/16.0+.5; }
-int video_type_more(int i) { return SDL_pow(i*16.0,2.0/3.0)+.5; }
-#define VIDEO_RGB2Y_255 (VIDEO_RGB2Y(255,255,255))
+int video_type_less(int i) { return SDL_pow(i/255.0,1.6/1.0)*255.0+.5; }
+int video_type_more(int i) { return SDL_pow(i/255.0,1.6/2.2)*255.0+.5; }
 VIDEO_UNIT video_xlat_rgb(VIDEO_UNIT i)
 {
 	int r=i>>16,g=(i>>8)&255,b=i&255; switch (video_type)
 	{
-		case 0: return (i=VIDEO_RGB2Y(r,g,b)),((i*2+1)*255/(VIDEO_RGB2Y_255*2))*0X10101; // monochrome
-		case 4: return (i=VIDEO_RGB2Y(r,g,b)),((i*2+1)*65/VIDEO_RGB2Y_255)*0X10001+(((i*3+1)*65/VIDEO_RGB2Y_255)<<8)+0X003C00; // green screen; cfr. video_xlat_fix()
+		case 0: return (i=VIDEO_RGB2Y(r,g,b)),((i))*0X10101; // monochrome
+		case 4: return (i=VIDEO_RGB2Y(r,g,b)),((i)>>1)*0X10001+((i*3)>>2)*0X00100+0X003C00; // green screen; cfr. video_xlat_fix()
 		case 1: return (video_type_less(r)<<16)+(video_type_less(g)<<8)+video_type_less(b); // dark palette
 		case 3: return (video_type_more(r)<<16)+(video_type_more(g)<<8)+video_type_more(b); // light palette
 		default: return i; // normal palette
@@ -613,30 +618,28 @@ BYTE video_srgb[1<<16],video_dot0[256],video_dot1[256],video_dot2[256]; // sRGB 
 #define VIDEO_FILTER_DOT3(x) (video_dot3[(x)>>16]<<16|video_dot3[255&((x)>>8)]<<8|video_dot3[255&(x)]) // =DOT1(DOT0)
 #define VIDEO_FILTER_DOT4(x) (video_dot4[(x)>>16]<<16|video_dot4[255&((x)>>8)]<<8|video_dot4[255&(x)]) // =DOT2(DOT0)
 BYTE video_dot3[256],video_dot4[256]; // to perform MASK_X and MASK_Y at once
-//#define video_praecalc_full 4072 // ~ 255**1.5
-//int video_praecalc_i(int x) { return SDL_pow(x,1.5/1.0)+.5; }
-//int video_praecalc_o(int x) { return SDL_pow(x,1.0/1.5)+.5; }
-//#define video_praecalc_full 65025 // = 255**2.0
-//int video_praecalc_i(int x) { return x*x; }
-//int video_praecalc_o(int x) { return sqrtu(x); }
-#define video_praecalc_full 196965 // ~ 255**2.2 // sRGB GAMMA = 2.2
-int video_praecalc_i(int x) { return SDL_pow(x,2.2/1.0); }
-int video_praecalc_o(int x) { return SDL_pow(x,1.0/2.2); }
+BYTE video_praecalc_flag=0; // normally this is off!
 void video_praecalc(void) // build the precalc'd video filter tables
 {
+	for (int h=0;h<256;++h) video_gamma_map[h]=video_gamma_init(h); // this must happen first!
 	for (int h=0;h<256;++h)
 	{
-		int z=video_praecalc_i(h),zz=z*2; video_dot0[h]=video_praecalc_o((z+1)>>1);
+		int z=video_gamma_prae(h),zz=z*2; video_dot0[h]=video_gamma_post((z+1)>>1);
 		#ifdef RAWWW // quick'n'dirty
-		video_dot1[h]=video_praecalc_o(zz<video_praecalc_full?  zz:video_praecalc_full);//=h<128?  h*2:255;//
-		video_dot2[h]=video_praecalc_o(zz<video_praecalc_full?0:zz-video_praecalc_full);//=h<128?0:h*2-255;//
+		video_dot1[h]=video_gamma_post(zz<video_gamma_ceil?  zz:video_gamma_ceil);
+		video_dot2[h]=video_gamma_post(zz<video_gamma_ceil?0:zz-video_gamma_ceil);
 		#else // standard half'n'half
-		video_dot1[h]=video_praecalc_o(((zz<video_praecalc_full?  zz:video_praecalc_full)+z+1)>>1);//((h<128?  h*2:255)+h+1)>>1;//
-		video_dot2[h]=video_praecalc_o(((zz<video_praecalc_full?0:zz-video_praecalc_full)+z+1)>>1);//((h<128?0:h*2-255)+h+1)>>1;//
+		if (video_praecalc_flag) // softer
+			video_dot1[h]=video_gamma_post(((zz<video_gamma_ceil?  zz:video_gamma_ceil)+z+1)>>1),
+			video_dot2[h]=video_gamma_post(((zz<video_gamma_ceil?0:zz-video_gamma_ceil)+z+1)>>1);
+		else // harder!
+			video_dot1[h]=video_gamma_post(zz<video_gamma_ceil?  zz:video_gamma_ceil),
+			video_dot2[h]=video_gamma_post(zz<video_gamma_ceil?0:zz-video_gamma_ceil);
 		#endif
-		for (int l=0;l<256;++l) video_srgb[h*256+l]=video_praecalc_o((video_praecalc_i(h)+video_praecalc_i(l)+1)>>1);//=(h+l+1)>>1;
+		for (int l=0;l<256;++l) video_srgb[h*256+l]=video_gamma_post((video_gamma_prae(h)+video_gamma_prae(l)+1)>>1);//=(h+l+1)>>1;
 	}
-	for (int h=0;h<256;++h) video_dot3[h]=video_dot0[video_dot1[h]],video_dot4[h]=video_dot0[video_dot2[h]]; // this must happen last!
+	//for (int h=0;h<256;++h) video_dot3[h]=video_dot1[video_dot0[h]],video_dot4[h]=video_dot2[video_dot0[h]]; // this must happen last! (reversed)
+	for (int h=0;h<256;++h) video_dot3[h]=video_dot0[video_dot1[h]],video_dot4[h]=video_dot0[video_dot2[h]]; // this must happen last! (normal)
 }
 #define VIDEO_FILTER_SRGB(x,y) (video_srgb[((x>>8)&0XFF00)|(y>>16)]<<16)|(video_srgb[(x&0XFF00)|((y>>8)&255)]<<8)|video_srgb[((x&255)<<8)|(y&255)] // old-new avg.
 #define VIDEO_FILTER_HALF(x,y) (x==y?x:VIDEO_FILTER_SRGB(x,y))
@@ -670,7 +673,7 @@ void video_callscanline(VIDEO_UNIT *vl)
 	VIDEO_UNIT *vi=vl-VIDEO_PIXELS_X,vt; if (frame_scanline<2) // all scanlines + avg. scanlines in final line
 	{
 		VIDEO_UNIT *vo=vi+VIDEO_LENGTH_X;
-		switch (video_filter&(VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y))
+		switch (video_filterz&(VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y))
 		{
 			case 0:
 				MEMNCPY(vo,vi,VIDEO_PIXELS_X);
@@ -694,7 +697,7 @@ void video_callscanline(VIDEO_UNIT *vl)
 				break;
 		}
 	}
-	else switch ((video_filter&(VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y))|((video_pos_y&1)?VIDEO_FILTER_MASK_Z:0))
+	else switch ((video_filterz&(VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y))|((video_pos_y&1)?VIDEO_FILTER_MASK_Z:0))
 	{
 		// half/single/double scanlines: bottom lines add VIDEO_FILTER_MASK_Z
 		case VIDEO_FILTER_MASK_Y+VIDEO_FILTER_MASK_Z:
@@ -827,7 +830,7 @@ INLINE void video_drawscanline(void) // call after each drawn scanline; memory c
 		vi=vl-VIDEO_PIXELS_X; // rewind
 	}
 	// last but not least, let's blur pixels together
-	if (video_filter&VIDEO_FILTER_MASK_Z)
+	if (video_filterz&VIDEO_FILTER_MASK_Z)
 	{
 		vi+=video_hi_x_res&1; // 1st pixel
 		#ifdef VIDEO_FILTER_BLUR0
@@ -879,7 +882,7 @@ INLINE void video_drawscanline(void) // call after each drawn scanline; memory c
 		if (frame_scanline==1) // avg. scanlines!
 		{
 			VIDEO_UNIT *vj=(vo=vi+VIDEO_LENGTH_X)+VIDEO_LENGTH_X;
-			switch(video_filter&(VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y))
+			switch(video_filterz&(VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y))
 			{
 				case 0:
 					do
@@ -936,7 +939,13 @@ INLINE void video_endscanlines(void) // call after each drawn frame: end the cur
 }
 INLINE void video_newscanlines(int x,int y) // call before each new frame: reset `video_target`, `video_pos_x` and `video_pos_y`
 {
-	if (!video_framecount) video_endscanlines(); // finish old frame if needed!
+	if (!video_framecount) // finish old frame if needed!
+	{
+		BYTE b=video_finemicro&&(video_filter&(VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Z))==VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Z;
+		video_filterz=b?video_filter&~VIDEO_FILTER_MASK_Z:video_filter; // detect the special case MASK_X && MASK_Z && FINEMICRO!
+		if (video_praecalc_flag!=b) video_praecalc_flag=b,video_praecalc(); // recalc this as seldom as possible!
+		video_endscanlines();
+	}
 	++video_pos_z; session_signal|=SESSION_SIGNAL_FRAME+session_signal_frames; // frame event!
 	#ifdef MAUS_LIGHTGUNS
 	video_litegun=0; // the lightgun signal fades away between frames
@@ -2665,6 +2674,8 @@ unsigned int session_nextbitmap=1;
 
 // Optional PNG 24-bit output, once again based on three steps: init, main and exit
 // However, because DEFLATE must see the whole data at once, we have to do things differently
+
+// TODO: perhaps we should dither pixels together in lo-res screenshots, despite the "not worth it" below :-/
 
 #if PNG_OUTPUT_MODE > 1
 #define session_png3_prev session_scratch // more than enough to keep a whole scanline in RGB

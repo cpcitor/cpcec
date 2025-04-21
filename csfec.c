@@ -54,7 +54,7 @@ Contact information: <mailto:cngsoft@gmail.com> */
 #define VIDEO_PIXELS_X (40<<4)
 #define VIDEO_PIXELS_Y (25<<4)
 #endif
-#define VIDEO_RGB2Y(r,g,b) ((r)*3+(g)*6+(b)) // generic RGB-to-Y expression
+#define VIDEO_RGB2Y(r,g,b) (video_gamma_post((video_gamma_prae(r)*77+video_gamma_prae(g)*152+video_gamma_prae(b)*28)>>8)) // generic RGB-to-Y expression
 
 #if defined(SDL2)||!defined(_WIN32)
 unsigned short session_icon32xx16[32*32] = {
@@ -149,7 +149,7 @@ const unsigned char kbd_map_xlt[]=
 VIDEO_UNIT video_table[16]; // colour table, 0xRRGGBB style: the 16 original colours
 VIDEO_UNIT video_xlat[16]; // all colours are static in the VIC-II
 VIDEO_UNIT video_table_const[16]= // different gamma and saturation levels
-{ // these values assume that PAL / sRGB GAMMA = 1.28
+{
 	// Community-Colors v1.2a -- p1x3l.net
 	0X000000,0XFFFFFF,0XAF2A2A,0X62D8CC,0XB03FB6,0X4AC64A,0X3739C4,0XE4ED4E,
 	0XB6591C,0X683808,0XEA746C,0X4D4D4D,0X848484,0XA6FA9E,0X707CE6,0XB6B6B6,

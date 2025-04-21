@@ -58,7 +58,8 @@ Contact information: <mailto:cngsoft@gmail.com> */
 #define VIDEO_HSYNC_HI (66<<4)
 #define VIDEO_VSYNC_LO (37<<4)
 #define VIDEO_VSYNC_HI (44<<4)
-#define VIDEO_RGB2Y(r,g,b) ((r)*3+(g)*9+(b)) // the CPC generates a distinct RGB-to-Y signal!
+//#define VIDEO_RGB2Y(r,g,b) (video_gamma_post((video_gamma_prae(r)*77+video_gamma_prae(g)*152+video_gamma_prae(b)*28)>>8)) // generic RGB-to-Y expression
+#define VIDEO_RGB2Y(r,g,b) (video_gamma_post((video_gamma_prae(r)*59+video_gamma_prae(g)*178+video_gamma_prae(b)*20)>>8)) // custom RGB-to-Y expression
 
 #if defined(SDL2)||!defined(_WIN32)
 unsigned short session_icon32xx16[32*32] = {
@@ -144,30 +145,22 @@ const int video_asic_table[32]= // the 0GRB format used in ASIC PLUS
 	0X006,0XF06,0XF00,0XF0F,0X000,0X00F,0X600,0X60F,
 	0X066,0XF66,0XF60,0XF6F,0X060,0X06F,0X660,0X66F,
 };
-const VIDEO_UNIT video_table[32+16+16+16]= // colour table, 0xRRGGBB style: the 32 original colours, followed by 16 levels of G, 16 of R and 16 of B
-{ // these values assume that PAL / sRGB GAMMA = 1.28
-	0X7D7D7D,0X7D7D7D,0X00FF7D,0XFFFF7D,
-	0X00007D,0XFF007D,0X007D7D,0XFF7D7D,
-	0XFF007D,0XFFFF7D,0XFFFF00,0XFFFFFF,
-	0XFF0000,0XFF00FF,0XFF7D00,0XFF7DFF,
-	0X00007D,0X00FF7D,0X00FF00,0X00FFFF,
-	0X000000,0X0000FF,0X007D00,0X007DFF,
-	0X7D007D,0X7DFF7D,0X7DFF00,0X7DFFFF,
-	0X7D0000,0X7D00FF,0X7D7D00,0X7D7DFF,
-	// OLD above -/- NEW G/R/B below //
-	0X000000,0X001F00,0X003500,0X004900,
-	0X005B00,0X006C00,0X007D00,0X008D00,
-	0X009C00,0X00AB00,0X00BA00,0X00C800,
-	0X00D600,0X00E400,0X00F200,0X00FF00,
-	0X000000,0X1F0000,0X350000,0X490000,
-	0X5B0000,0X6C0000,0X7D0000,0X8D0000,
-	0X9C0000,0XAB0000,0XBA0000,0XC80000,
-	0XD60000,0XE40000,0XF20000,0XFF0000,
-	0X000000,0X00001F,0X000035,0X000049,
-	0X00005B,0X00006C,0X00007D,0X00008D,
-	0X00009C,0X0000AB,0X0000BA,0X0000C8,
-	0X0000D6,0X0000E4,0X0000F2,0X0000FF,
-	// n.b. NEW 6-6-6 must match ink 0 (GREY)
+const VIDEO_UNIT video_table[32+16]= // colour table, 0xRRGGBB style: the 32 original colours, followed by 16 levels of G/R/B
+{ // empirical; Gamma = 2.0 for the OLD colours behaves well with the custom monochrome scale
+	0XB4B4B4,0XB4B4B4,0X00FFB4,0XFFFFB4,
+	0X0000B4,0XFF00B4,0X00B4B4,0XFFB4B4,
+	0XFF00B4,0XFFFFB4,0XFFFF00,0XFFFFFF,
+	0XFF0000,0XFF00FF,0XFFB400,0XFFB4FF,
+	0X0000B4,0X00FFB4,0X00FF00,0X00FFFF,
+	0X000000,0X0000FF,0X00B400,0X00B4FF,
+	0XB400B4,0XB4FFB4,0XB4FF00,0XB4FFFF,
+	0XB40000,0XB400FF,0XB4B400,0XB4B4FF,
+	// OLD above -/- NEW G/R/B below // the NEW palette doesn't behave like the OLD one!
+	//0X00,0X11,0X22,0X33,0X44,0X55,0X66,0X77,0X88,0X99,0XAA,0XBB,0XCC,0XDD,0XEE,0XFF, // gamma 1.0
+	0X00,0X2F,0X48,0X5D,0X70,0X80,0X90,0X9E,0XAC,0XB9,0XC6,0XD2,0XDE,0XE9,0XF4,0XFF, // gamma 1.6
+	//0X00,0X39,0X53,0X68,0X7A,0X8B,0X99,0XA7,0XB4,0XC0,0XCC,0XD7,0XE1,0XEC,0XF5,0XFF, // gamma 1.8
+	//0X00,0X42,0X5D,0X72,0X84,0X93,0XA1,0XAE,0XBA,0XC6,0XD0,0XDA,0XE4,0XED,0XF6,0XFF, // gamma 2.0
+	//0X00,0X4A,0X66,0X7B,0X8C,0X9B,0XA8,0XB4,0XC0,0XCA,0XD4,0XDD,0XE6,0XEF,0XF7,0XFF, // gamma 2.2
 };
 VIDEO_UNIT video_xlat[32]; // static colours only (dynamic ASIC PLUS colours go elsewhere)
 
@@ -558,7 +551,7 @@ void video_xlat_clut(void) // precalculate palette following `video_type`; part 
 			video_clut[i]=video_xlat[gate_table[i]];
 	else
 		for (int i=0;i<32;++i)
-			video_clut[i]=video_xlat_rgb(video_table[32+(plus_palette[i*2+1]&15)]+video_table[48+(plus_palette[i*2+0]>>4)]+video_table[64+(plus_palette[i*2+0]&15)]);
+			video_clut[i]=video_xlat_rgb(video_table[32+(plus_palette[i*2+1]&15)]*256+video_table[32+(plus_palette[i*2+0]>>4)]*65536+video_table[32+(plus_palette[i*2+0]&15)]);
 	video_clut_value=*(video_clut_index=video_clut+gate_index);
 }
 INLINE void gate_table_select(BYTE i) { gate_index=(i&16)?16:(i&15); }
@@ -573,7 +566,7 @@ INLINE void gate_table_send(BYTE i)
 	else
 	{
 		int j=video_asic_table[i]; // set both colour and the PLUS ASIC palette
-		video_clut_value=video_xlat_rgb(video_table[32+((j>>8)&15)]+video_table[48+((j>>4)&15)]+video_table[64+(j&15)]);
+		video_clut_value=video_xlat_rgb(video_table[32+((j>>8)&15)]*256+video_table[32+((j>>4)&15)]*65536+video_table[32+(j&15)]);
 		mputii(&plus_palette[gate_index*2],j);
 	}
 }
@@ -2097,7 +2090,7 @@ void z80_trap(WORD p,BYTE b) // catch Z80 write operations
 				plus_bank[p-0x4000]=b;
 				p&=64-2; // select ink
 				video_clut_index=video_clut+p/2; // keep ASIC and Gate Array from clashing
-				video_clut_value=video_xlat_rgb(video_table[32+plus_palette[p+1]]+video_table[48+(plus_palette[p]>>4)]+video_table[64+(plus_palette[p]&15)]);
+				video_clut_value=video_xlat_rgb(video_table[32+plus_palette[p+1]]*256+video_table[32+(plus_palette[p]>>4)]*65536+video_table[32+(plus_palette[p]&15)]);
 				if (plus_sprite_adjust<8) *video_clut_index=video_clut_value; // fast update
 			}
 			break;
