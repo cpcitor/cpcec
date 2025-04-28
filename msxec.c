@@ -627,10 +627,14 @@ BYTE slots_sub=0x31,slots_mus=0x33; // later MSX2, MSX2P and MSXTR slots
 
 void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bitmask!
 {
-	if (!type_id) rom_cfg[3]=2+8+32+128; // MSX1: no SSLOT logic!
-	if (type_id<2) rom_cfg[0]=rom_cfg[1]=rom_cfg[2]=0; // MSX2: SSLOT logic limited to PSLOT3!
 	BYTE z=(ram_cfg[0]|ram_cfg[1]|ram_cfg[2]|ram_cfg[3]|3)&ram_bit,*s,*t;
 	if (ram_dirty<z) session_dirty=ram_dirty=z;
+	//if (type_id<2) // extremely few MSX2+ machines have any SSLOT in PSLOT0, and slots_1st and slots_2nd NEVER have SSLOT logic!
+	{
+		// TODO: research whether NEO 8K and NEO 16K (able to map C000-FFFF) can disable the SSLOT logic
+		rom_cfg[0]=rom_cfg[1]=rom_cfg[2]=0; // MSX2: the SSLOT logic is limited to PSLOT3!
+		if (!type_id) rom_cfg[3]=2+8+32+128; // MSX1: no SSLOT logic at all!
+	}
 	MEMZERO(mmu_bit); // by default no PEEK or POKE events are raised
 	// range $0000-$3FFF
 	s=&bad_rom[0-0X0000]; t=&bad_ram[0-0X0000]; z=(pio_port_a>>0)&3; ps_slot[0]=z=((rom_cfg[z]>>0)&3)+z*16;
@@ -669,7 +673,7 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 	mmu_rom[ 8]=mmu_rom[ 9]=mmu_rom[10]=mmu_rom[11]=s;
 	mmu_ram[ 8]=mmu_ram[ 9]=mmu_ram[10]=mmu_ram[11]=t;
 	// range $C000-$FFFF
-	mmu_bit[15]=type_id&&(pio_port_a>=0XC0)?3:0; // detect/ignore PEEK/POKE at $FFFF (SSLOT) (MSX2/MSX1)
+	mmu_bit[15]=type_id&&(pio_port_a>=192)?3:0; // detect/ignore PEEK/POKE at $FFFF (SSLOT) (MSX2/MSX1)
 	s=&bad_rom[0-0XC000]; t=&bad_ram[0-0XC000]; z=(pio_port_a>>6)&3; ps_slot[3]=z=((rom_cfg[z]>>6)&3)+z*16;
 	/**/ if (!z) ;//s=&mem_rom[0X0C000-0X0000]; // XYZ1! (is there any machine where this is NOT like bad_rom?)
 	else if (z==slots_ram) s=t=&mem_ram[(((ram_cfg[3]^3)&ram_bit)<<14)-0XC000];
@@ -955,7 +959,7 @@ void mmu_reset(void) // notice that pio_reset() must happen first on a cold boot
 void mmu_slowpoke(WORD w,BYTE b) // notice that the caller already filters out invalid ranges and conditions
 {
 	/**/ if (w>=0XF000) // SSLOT!
-		{ if (w==0XFFFF&&type_id>(pio_port_a<192?1:0)) rom_cfg[pio_port_a>>6]=b,mmu_update(); else POKE(w)=b; }
+		{ if (w==0XFFFF&&type_id>(pio_port_a<192?1:0)) cprintf("%08X: %02X (SLOWPOKE)\n",z80_pc.w,b),rom_cfg[pio_port_a>>6]=b,mmu_update(); else POKE(w)=b; }
 	else if (mmu_rom[w>>12]==disc_mapping[w>>14]) switch(w&0X3FFF) // MSX-DISK I/O?
 	{
 		case 0X3FB8: case 0X3FF8: diskette_send_command(b); break;
@@ -1083,7 +1087,7 @@ void mmu_slowpoke(WORD w,BYTE b) // notice that the caller already filters out i
 BYTE mmu_slowpeek(WORD w) // ditto, we can only reach this function if the MMU_BIT fields are right and the address isn't
 {
 	/**/ if (w>=0XF000) // SSLOT!
-		return (w==0XFFFF&&type_id>(pio_port_a<192?1:0))?~rom_cfg[pio_port_a>>6]:PEEK(w);
+		return (w==0XFFFF&&type_id>(pio_port_a<192?1:0))?cprintf("%08X: %02X (SLOWPEEK)\n",z80_pc.w,~rom_cfg[pio_port_a>>6]),~rom_cfg[pio_port_a>>6]:PEEK(w);
 	else if (mmu_rom[w>>12]==disc_mapping[w>>14]) switch(w&0X3FFF) // MSX-DISK I/O?
 	{
 		case 0X3FB8: case 0X3FF8: return diskette_recv_status();
@@ -1661,6 +1665,7 @@ void vdp_table_send(BYTE r,BYTE b) // send byte `b` to register `r` (0-63, altho
 		case 10: // CT2
 		case 11: // SA2
 		case 14: // 16K
+			if (r==9&&((z^b)&2)) cprintf("%08X: %02X=>%02X\n",z80_pc.w,z,b); // catch PAL/NTSC switch
 			if (z!=b) vdp_update(); // reduce clobbering
 			break;
 		case 16:
