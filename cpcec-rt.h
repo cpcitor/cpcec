@@ -12,7 +12,7 @@
 // knowledge of the emulation's intrinsic properties.
 
 #define MY_LICENSE "Copyright (C) 2019-2025 Cesar Nicolas-Gonzalez"
-#define MY_VERSION "20250420" // all emulators share the same release date
+#define MY_VERSION "20250427" // all emulators share the same release date
 
 #define INLINE // 'inline' is useless in TCC and GCC4, and harmful in GCC5!
 #define UNUSED // '__attribute__((unused))' may be missing outside GCC

@@ -1352,3 +1352,6 @@ cartridge headers ("ROM_ASC8", "ROM_AS16", "ROM_KON4", "ROM_KON5", "ROM_NEO8",
 tweaking the sRGB calculations again. The redundant combination "X-masking mode
 + X-blending + Fine X-blending" (the current X-masking clashes with fine
 X-blending) now simulates a softer X-masking without any blending.
+- 20250427 -- minor patch limiting all secondary slot logic to the primary slot
+3 in MSXEC: primary slots 1 and 2 never carry any secondary logic, and primary
+slot 0 carried secondary logic in very few MSX2+ models.
