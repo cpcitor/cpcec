@@ -12,17 +12,20 @@ Below is a snapshot of [http://cngsoft.no-ip.org/cpcec.htm](http://cngsoft.no-ip
 
 ------------------------------------------------------------------------
 
-![](http://cngsoft.no-ip.org/cpcec192.png) ![](http://cngsoft.no-ip.org/zxsec192.png) ![](http://cngsoft.no-ip.org/csfec192.png) ![](http://cngsoft.no-ip.org/msxec192.png)
-**CPCEC** Amstrad CPC emulator
-and its siblings **ZXSEC**, **CSFEC** and **MSXEC**
-81746 hits
+---
+---
 
+![](http://cngsoft.no-ip.org/cpcec192.png) ![](http://cngsoft.no-ip.org/zxsec192.png) ![](http://cngsoft.no-ip.org/csfec192.png) ![](http://cngsoft.no-ip.org/msxec192.png)  
+**CPCEC** Amstrad CPC emulator  
+and its siblings **ZXSEC**, **CSFEC** and **MSXEC**  
+82692 hits  
+  
 
 ## Foreword
 
 **CPCEC** is an emulator of the family of home microcomputers **Amstrad CPC** (models 464, 664, 6128 and Plus) whose goal is to be loyal to the original hardware and efficient in standard modern systems. Thus it brings a faithful emulation of the Z80 microprocessor and it replicates the behavior of the CRTC 6845 and Gate Array video chips, the PSG AY-3-8912 sound chip, the remaining circuits found in the original hardware, and the tape deck and floppy disc drive that made possible loading and running software.
 
-CPCEC includes several related projects. **ZXSEC** is an emulator of the **Sinclair Spectrum family (48K, 128K, +2/Plus2 and +3/Plus3)** based on the components it shared with the Amstrad CPC family: the Z80 microprocessor, the PSG AY-3-8192 sound chip, the tape system and the NEC765 disc drive controller; **CSFEC** is an emulator of the **Commodore 64** platform, similarly based on shared code; and **MSXEC** is an emulator of the **MSX family (1983 MSX, 1985 MSX2, 1988 MSX2+)**, also based on shared code.
+CPCEC includes several related projects. **ZXSEC** is an emulator of the **Sinclair Spectrum family (48K, 128K, +2/Plus2 and +3/Plus3)** based on the components it shared with the Amstrad CPC family: the Z80 microprocessor, the PSG AY-3-8912 sound chip, the tape system and the NEC765 disc drive controller; **CSFEC** is an emulator of the **Commodore 64** platform, similarly based on shared code; and **MSXEC** is an emulator of the **MSX family (1983 MSX, 1985 MSX2, 1988 MSX2+)**, also based on shared code.
 
 The default build of CPCEC requires a Microsoft Windows 2000 operating system or later, while the SDL2 build requires any operating system supported by the SDL2 library. The minimal hardware requirements are those fitting the operating system, and it's advised that the main microprocessor runs at 400 MHz at least. Screen resolution in pixels must be 800x600 at least. A sound card is optional. Using a joystick is optional, too.
 
@@ -51,8 +54,8 @@ See [git history](https://github.com/cpcitor/cpcec/commits)
 
 ------------------------------------------------------------------------
 
-
-[Spanish CPC firmware](http://cngsoft.no-ip.org/cpc-rom-esp.zip) (1049 hits) [French CPC firmware](http://cngsoft.no-ip.org/cpc-rom-fra.zip) (967 hits)
+  
+[Spanish CPC firmware](http://cngsoft.no-ip.org/cpc-rom-esp.zip) (1052 hits) [French CPC firmware](http://cngsoft.no-ip.org/cpc-rom-fra.zip) (970 hits)
 
 ------------------------------------------------------------------------
 
