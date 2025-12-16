@@ -1,4 +1,64 @@
-# CPCEC
+# CPCEC-Web
+
+**Amstrad CPC emulator running in your browser via WebAssembly**
+
+This is a fork of [CPCEC](https://github.com/cpcitor/cpcec) by [CNGSOFT](http://cngsoft.no-ip.org/cpcec.htm) with added WebAssembly/browser support.
+
+## 🎮 Try it online
+
+> **[Launch CPCEC-Web](https://iiiivan37.github.io/cpcec-web/)** *(coming soon)*
+
+## ✨ What's new in this fork
+
+- **Browser support**: Run the emulator directly in modern web browsers (Chrome, Firefox, Safari, Edge)
+- **WebAssembly**: Compiled with Emscripten for near-native performance
+- **Drag & Drop**: Load `.dsk`, `.sna`, `.cdt` files by dropping them on the emulator
+- **Touch controls**: Basic support for mobile devices
+- **No installation**: Just open the webpage and play
+
+## 🛠️ Building for Web
+
+### Prerequisites
+- [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html)
+- ROM files (cpc464.rom, cpc664.rom, cpc6128.rom, cpcplus.rom, cpcados.rom)
+
+### Build
+```bash
+# Activate Emscripten
+source /path/to/emsdk/emsdk_env.sh
+
+# Build
+./build-web.sh
+
+# Test locally
+./build-web.sh serve
+# Open http://localhost:8080
+```
+
+## 📁 Files added/modified
+
+| File | Description |
+|------|-------------|
+| `cpcec-web.c` | Emscripten wrapper with async main loop |
+| `cpcec.c` | Added `CPCEC_NO_MAIN` guard |
+| `cpcec-rt.h` | Auto-detect Emscripten |
+| `web/index.html` | Browser UI |
+| `build-web.sh` | Build script |
+| `Makefile.emscripten` | Makefile for web builds |
+
+## 📜 License
+
+GPLv3 - Same as the original project.
+
+## 🙏 Credits
+
+- **Original CPCEC**: [CNGSOFT](http://cngsoft.no-ip.org/cpcec.htm) (Cesar Nicolas-Gonzalez)
+- **Git archive**: [cpcitor](https://github.com/cpcitor/cpcec)
+- **WebAssembly port**: [IIIvan37](https://github.com/IIIvan37)
+
+---
+
+# Original README
 
 An emulator by CNGSOFT under GPLv3 license.
 
