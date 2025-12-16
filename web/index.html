@@ -739,6 +739,10 @@
                 if ([32, 37, 38, 39, 40].includes(e.keyCode)) {
                     e.preventDefault();
                 }
+                // Prevent F11 and F12 from being captured by browser
+                if (e.keyCode === 122 || e.keyCode === 123) { // F11, F12
+                    e.preventDefault();
+                }
             }
         });
 
