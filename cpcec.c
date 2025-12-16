@@ -3955,6 +3955,7 @@ void session_configwritemore(FILE *f) // update the configuration file `f` with 
 
 // START OF USER INTERFACE ========================================== //
 
+#ifndef CPCEC_NO_MAIN
 int main(int argc,char *argv[])
 {
 	session_prae(ARGVZERO); all_setup(); all_reset();
@@ -4220,6 +4221,7 @@ int main(int argc,char *argv[])
 	tape_close(); ym3_close(); if (printer) printer_close();
 	return session_byebye(),session_post();
 }
+#endif // CPCEC_NO_MAIN
 
 BOOTSTRAP
 

@@ -1,0 +1,193 @@
+# CPCEC Emscripten/WebAssembly Build Makefile
+# Compiles CPCEC for running in web browsers using Emscripten SDK
+#
+# Prerequisites:
+#   - Install Emscripten SDK: https://emscripten.org/docs/getting_started/downloads.html
+#   - Activate the SDK: source /path/to/emsdk/emsdk_env.sh
+#
+# Usage:
+#   make -f Makefile.emscripten        # Build the emulator
+#   make -f Makefile.emscripten clean  # Clean build artifacts
+#   make -f Makefile.emscripten serve  # Start local web server for testing
+
+# Emscripten compiler
+CC = emcc
+CXX = em++
+
+# Project name
+PROJECT = cpcec
+TARGET = web/$(PROJECT).js
+
+# Source files - use the web wrapper that includes proper Emscripten main loop
+SOURCES = cpcec-web.c
+
+# ROM files to embed
+ROMS = cpc464.rom cpc664.rom cpc6128.rom cpcplus.rom cpcados.rom
+
+# Compiler flags
+CFLAGS = -DSDL2 -DEMSCRIPTEN
+CFLAGS += -O3
+CFLAGS += -Wall -Wno-unused-variable -Wno-unused-but-set-variable
+CFLAGS += -fno-strict-aliasing
+
+# Debug build (uncomment for debugging)
+# CFLAGS += -g -DDEBUG -O0
+
+# Emscripten-specific flags
+EM_FLAGS = -s USE_SDL=2
+EM_FLAGS += -s ALLOW_MEMORY_GROWTH=1
+EM_FLAGS += -s INITIAL_MEMORY=67108864
+EM_FLAGS += -s STACK_SIZE=1048576
+EM_FLAGS += -s ASYNCIFY=1
+EM_FLAGS += -s ASYNCIFY_STACK_SIZE=65536
+EM_FLAGS += -s FORCE_FILESYSTEM=1
+EM_FLAGS += -s EXPORTED_RUNTIME_METHODS=['allocateUTF8','UTF8ToString','ccall','cwrap']
+EM_FLAGS += -s EXPORTED_FUNCTIONS=['_main','_em_load_file','_em_reset','_em_pause','_em_set_speed','_em_is_running','_malloc','_free']
+EM_FLAGS += -s MODULARIZE=0
+EM_FLAGS += -s ENVIRONMENT='web'
+EM_FLAGS += -s EXIT_RUNTIME=0
+
+# SDL2 Configuration
+EM_FLAGS += -s USE_SDL_MIXER=0
+EM_FLAGS += -s SDL2_MIXER_FORMATS=[]
+
+# WebGL/Canvas options
+EM_FLAGS += -s MIN_WEBGL_VERSION=1
+EM_FLAGS += -s MAX_WEBGL_VERSION=2
+
+# Filesystem preloading - embed ROM files
+PRELOAD_FLAGS = 
+$(foreach rom,$(ROMS),$(eval PRELOAD_FLAGS += --preload-file $(rom)@/roms/$(rom)))
+
+# Shell template (optional - use custom HTML shell)
+# EM_FLAGS += --shell-file web/shell.html
+
+# Output options
+EM_FLAGS += -o $(TARGET)
+
+# All flags combined
+ALL_FLAGS = $(CFLAGS) $(EM_FLAGS) $(PRELOAD_FLAGS)
+
+# Default target
+all: prepare $(TARGET)
+
+# Create output directory
+prepare:
+	@mkdir -p web
+
+# Main build target
+$(TARGET): $(SOURCES)
+	@echo "Building CPCEC for WebAssembly..."
+	@echo "Compiler: $(CC)"
+	@echo "Sources: $(SOURCES)"
+	@echo "Output: $(TARGET)"
+	$(CC) $(ALL_FLAGS) $(SOURCES)
+	@echo "Build complete!"
+	@echo ""
+	@echo "Output files:"
+	@ls -la web/$(PROJECT).*
+	@echo ""
+	@echo "To test locally, run: make -f Makefile.emscripten serve"
+
+# Debug build
+debug: CFLAGS += -g -DDEBUG -O0 -s ASSERTIONS=2 -s SAFE_HEAP=1
+debug: all
+
+# Optimized release build
+release: CFLAGS += -O3 -DNDEBUG
+release: EM_FLAGS += --closure 1
+release: all
+
+# Size-optimized build
+small: CFLAGS += -Os -DNDEBUG
+small: EM_FLAGS += --closure 1 -s MINIMAL_RUNTIME=0
+small: all
+
+# Clean build artifacts
+clean:
+	rm -f web/$(PROJECT).js
+	rm -f web/$(PROJECT).wasm
+	rm -f web/$(PROJECT).data
+	rm -f web/$(PROJECT).js.mem
+	rm -f web/$(PROJECT).worker.js
+	@echo "Cleaned build artifacts"
+
+# Start a local web server for testing
+serve: all
+	@echo "Starting local web server..."
+	@echo "Open http://localhost:8080 in your browser"
+	@echo "Press Ctrl+C to stop the server"
+	@cd web && python3 -m http.server 8080
+
+# Alternative: use emrun for testing (includes better CORS support)
+emrun: all
+	@echo "Starting emrun server..."
+	emrun --browser chrome web/index.html
+
+# Watch for changes and rebuild
+watch:
+	@echo "Watching for changes... Press Ctrl+C to stop."
+	@while true; do \
+		inotifywait -q -e modify $(SOURCES) *.h 2>/dev/null || sleep 2; \
+		make -f Makefile.emscripten all; \
+	done
+
+# Show build info
+info:
+	@echo "CPCEC WebAssembly Build Configuration"
+	@echo "======================================"
+	@echo "Compiler: $(CC)"
+	@echo "Sources: $(SOURCES)"
+	@echo "ROMs: $(ROMS)"
+	@echo "Output: $(TARGET)"
+	@echo ""
+	@echo "CFLAGS: $(CFLAGS)"
+	@echo ""
+	@echo "Emscripten version:"
+	@$(CC) --version
+
+# Check Emscripten installation
+check:
+	@echo "Checking Emscripten installation..."
+	@which emcc >/dev/null 2>&1 || (echo "ERROR: emcc not found. Please install and activate Emscripten SDK." && exit 1)
+	@echo "emcc found at: $$(which emcc)"
+	@emcc --version
+	@echo ""
+	@echo "Checking for required ROMs..."
+	@for rom in $(ROMS); do \
+		if [ -f $$rom ]; then \
+			echo "  ✓ $$rom found"; \
+		else \
+			echo "  ✗ $$rom NOT FOUND (emulator will not work without this)"; \
+		fi \
+	done
+
+# Help
+help:
+	@echo "CPCEC Emscripten/WebAssembly Build System"
+	@echo "=========================================="
+	@echo ""
+	@echo "Targets:"
+	@echo "  all      - Build the emulator (default)"
+	@echo "  debug    - Build with debug symbols and assertions"
+	@echo "  release  - Build optimized release version"
+	@echo "  small    - Build size-optimized version"
+	@echo "  clean    - Remove build artifacts"
+	@echo "  serve    - Start local web server for testing"
+	@echo "  emrun    - Start emrun server (better CORS support)"
+	@echo "  watch    - Watch for changes and auto-rebuild"
+	@echo "  info     - Show build configuration"
+	@echo "  check    - Check Emscripten installation and ROM files"
+	@echo "  help     - Show this help message"
+	@echo ""
+	@echo "Prerequisites:"
+	@echo "  1. Install Emscripten SDK from https://emscripten.org"
+	@echo "  2. Activate the SDK: source /path/to/emsdk/emsdk_env.sh"
+	@echo "  3. Ensure ROM files are present in the project directory"
+	@echo ""
+	@echo "Example:"
+	@echo "  make -f Makefile.emscripten check  # Verify setup"
+	@echo "  make -f Makefile.emscripten        # Build"
+	@echo "  make -f Makefile.emscripten serve  # Test in browser"
+
+.PHONY: all prepare debug release small clean serve emrun watch info check help

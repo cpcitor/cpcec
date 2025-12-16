@@ -24,6 +24,14 @@
 #define UNLIKELY(x) (x) // ditto
 #endif
 
+#ifdef __EMSCRIPTEN__
+#ifndef SDL2
+#define SDL2 // Emscripten uses SDL2 port
+#endif
+#include <emscripten.h>
+#include <emscripten/html5.h>
+#endif
+
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN 1 // reduce dependencies!

@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CPCEC - Amstrad CPC Emulator</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg-color: #1a1a2e;
+            --panel-color: #16213e;
+            --accent-color: #0f3460;
+            --highlight-color: #e94560;
+            --text-color: #eaeaea;
+            --text-muted: #888;
+            --border-radius: 8px;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background: var(--panel-color);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid var(--accent-color);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logo h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--highlight-color);
+        }
+
+        .logo span {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem;
+            gap: 1.5rem;
+        }
+
+        .emulator-container {
+            background: #000;
+            border-radius: var(--border-radius);
+            padding: 1rem;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+
+        #canvas {
+            display: block;
+            background: #000;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .btn {
+            background: var(--accent-color);
+            color: var(--text-color);
+            border: none;
+            padding: 0.6rem 1.2rem;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn:hover {
+            background: var(--highlight-color);
+            transform: translateY(-2px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary {
+            background: var(--highlight-color);
+        }
+
+        .btn-primary:hover {
+            background: #ff6b6b;
+        }
+
+        .btn svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+
+        .status-bar {
+            background: var(--panel-color);
+            padding: 0.5rem 1rem;
+            border-radius: var(--border-radius);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            font-size: 0.85rem;
+        }
+
+        #status {
+            color: var(--text-muted);
+        }
+
+        .spinner {
+            display: none;
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--text-muted);
+            border-top-color: var(--highlight-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .loading .spinner {
+            display: block;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .progress-container {
+            display: none;
+            width: 200px;
+            height: 6px;
+            background: var(--accent-color);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .loading .progress-container {
+            display: block;
+        }
+
+        #progress {
+            height: 100%;
+            background: var(--highlight-color);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .file-drop-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(233, 69, 96, 0.9);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--border-radius);
+            pointer-events: none;
+        }
+
+        .file-drop-overlay.active {
+            display: flex;
+        }
+
+        .file-drop-overlay p {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .info-panel {
+            background: var(--panel-color);
+            padding: 1.5rem;
+            border-radius: var(--border-radius);
+            max-width: 800px;
+            width: 100%;
+        }
+
+        .info-panel h2 {
+            color: var(--highlight-color);
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+        }
+
+        .keyboard-help {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 0.5rem;
+        }
+
+        .key-item {
+            display: flex;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+        }
+
+        .key {
+            background: var(--accent-color);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        footer {
+            background: var(--panel-color);
+            padding: 1rem 2rem;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            border-top: 1px solid var(--accent-color);
+        }
+
+        footer a {
+            color: var(--highlight-color);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--panel-color);
+            padding: 2rem;
+            border-radius: var(--border-radius);
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .modal h3 {
+            color: var(--highlight-color);
+            margin-bottom: 1rem;
+        }
+
+        .modal p {
+            margin-bottom: 1rem;
+            line-height: 1.6;
+        }
+
+        .modal-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.5rem;
+        }
+
+        /* Hidden file input */
+        #file-input {
+            display: none;
+        }
+
+        /* Touch controls for mobile */
+        .touch-controls {
+            display: none;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        @media (pointer: coarse) {
+            .touch-controls {
+                display: flex;
+            }
+        }
+
+        .touch-btn {
+            width: 60px;
+            height: 60px;
+            background: var(--accent-color);
+            border: 2px solid var(--text-muted);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        .touch-btn:active {
+            background: var(--highlight-color);
+        }
+
+        .dpad {
+            display: grid;
+            grid-template-columns: repeat(3, 50px);
+            grid-template-rows: repeat(3, 50px);
+            gap: 2px;
+        }
+
+        .dpad-btn {
+            background: var(--accent-color);
+            border: 1px solid var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .dpad-btn:active {
+            background: var(--highlight-color);
+        }
+
+        .dpad-center {
+            background: transparent;
+            border: none;
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            header {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+
+            main {
+                padding: 1rem;
+            }
+
+            .emulator-container {
+                padding: 0.5rem;
+            }
+
+            #canvas {
+                max-width: 100%;
+                height: auto;
+            }
+
+            .controls {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <div class="logo">
+            <h1>CPCEC</h1>
+            <span>Amstrad CPC Emulator</span>
+        </div>
+        <div class="status-bar">
+            <div class="spinner"></div>
+            <div class="progress-container">
+                <div id="progress"></div>
+            </div>
+            <span id="status">Initializing...</span>
+        </div>
+    </header>
+
+    <main>
+        <div class="emulator-container" id="emulator-container">
+            <canvas id="canvas" width="768" height="544" tabindex="1"></canvas>
+            <div class="file-drop-overlay" id="drop-overlay">
+                <p>📁 Drop file here</p>
+            </div>
+
+            <div class="controls">
+                <button class="btn btn-primary" id="btn-load" title="Load disk, tape or snapshot">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
+                    </svg>
+                    Load File
+                </button>
+                <button class="btn" id="btn-reset" title="Reset the CPC">
+                    <svg viewBox="0 0 24 24">
+                        <path
+                            d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
+                    </svg>
+                    Reset
+                </button>
+                <button class="btn" id="btn-pause" title="Pause/Resume emulation">
+                    <svg viewBox="0 0 24 24" id="pause-icon">
+                        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                    </svg>
+                    Pause
+                </button>
+                <button class="btn" id="btn-fullscreen" title="Toggle fullscreen">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" />
+                    </svg>
+                    Fullscreen
+                </button>
+                <button class="btn" id="btn-fast" title="Toggle fast mode">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z" />
+                    </svg>
+                    Fast
+                </button>
+            </div>
+
+            <!-- Touch controls for mobile -->
+            <div class="touch-controls">
+                <div class="dpad">
+                    <div></div>
+                    <button class="dpad-btn" data-key="up">▲</button>
+                    <div></div>
+                    <button class="dpad-btn" data-key="left">◀</button>
+                    <div class="dpad-center"></div>
+                    <button class="dpad-btn" data-key="right">▶</button>
+                    <div></div>
+                    <button class="dpad-btn" data-key="down">▼</button>
+                    <div></div>
+                </div>
+                <button class="touch-btn" data-key="fire1">A</button>
+                <button class="touch-btn" data-key="fire2">B</button>
+            </div>
+        </div>
+
+        <div class="info-panel">
+            <h2>⌨️ Keyboard Shortcuts</h2>
+            <div class="keyboard-help">
+                <div class="key-item"><span class="key">F1-F10</span> CPC F0-F9</div>
+                <div class="key-item"><span class="key">F11</span> Palette</div>
+                <div class="key-item"><span class="key">F12</span> Screenshot</div>
+                <div class="key-item"><span class="key">Pause</span> Pause</div>
+                <div class="key-item"><span class="key">Alt+Enter</span> Fullscreen</div>
+                <div class="key-item"><span class="key">Arrow Keys</span> Joystick</div>
+                <div class="key-item"><span class="key">Z/X</span> Fire 1/2</div>
+                <div class="key-item"><span class="key">Escape</span> Menu</div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>
+            CPCEC by <a href="http://cngsoft.no-ip.org/cpcec.htm" target="_blank">CNGSOFT</a> |
+            WebAssembly port |
+            Licensed under <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank">GPLv3</a>
+        </p>
+    </footer>
+
+    <!-- Modal for messages -->
+    <div class="modal-overlay" id="modal">
+        <div class="modal">
+            <h3 id="modal-title">Message</h3>
+            <p id="modal-message"></p>
+            <div class="modal-buttons">
+                <button class="btn btn-primary" id="modal-close">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden file input -->
+    <input type="file" id="file-input" accept=".dsk,.sna,.cdt,.wav,.zip,.bin,.rom">
+
+    <script>
+        // Module configuration for Emscripten
+        var Module = {
+            canvas: document.getElementById('canvas'),
+
+            // Status handling
+            setStatus: function (text) {
+                var status = document.getElementById('status');
+                if (status) {
+                    if (text === '') {
+                        status.textContent = 'Ready';
+                        document.body.classList.remove('loading');
+                    } else {
+                        status.textContent = text;
+                        // Check for progress
+                        var m = text.match(/(\d+)%/);
+                        if (m) {
+                            var progress = document.getElementById('progress');
+                            if (progress) progress.style.width = m[1] + '%';
+                        }
+                    }
+                }
+            },
+
+            // Progress handling
+            monitorRunDependencies: function (left) {
+                document.body.classList.toggle('loading', left > 0);
+                if (left === 0) {
+                    Module.setStatus('Ready');
+                }
+            },
+
+            // Print handling
+            print: function (text) {
+                console.log('CPCEC:', text);
+            },
+
+            printErr: function (text) {
+                console.error('CPCEC Error:', text);
+            },
+
+            // Show message modal
+            showMessage: function (title, message) {
+                document.getElementById('modal-title').textContent = title;
+                document.getElementById('modal-message').textContent = message;
+                document.getElementById('modal').classList.add('active');
+            },
+
+            // File handling callbacks
+            onFileLoaded: function (path, size) {
+                console.log('File loaded:', path, size, 'bytes');
+                if (Module._em_load_file) {
+                    var pathPtr = Module.allocateUTF8(path);
+                    Module._em_load_file(pathPtr);
+                    Module._free(pathPtr);
+                }
+            },
+
+            onFileDrop: function (path) {
+                console.log('File dropped:', path);
+                Module.onFileLoaded(path, 0);
+            },
+
+            // Pre-run tasks
+            preRun: [function () {
+                // Create necessary directories
+                try {
+                    FS.mkdir('/roms');
+                    FS.mkdir('/disks');
+                    FS.mkdir('/tapes');
+                    FS.mkdir('/snaps');
+                    FS.mkdir('/tmp');
+                } catch (e) { }
+            }],
+
+            // Post-run tasks
+            postRun: [function () {
+                Module.setStatus('Ready');
+                // Focus the canvas
+                Module.canvas.focus();
+            }]
+        };
+
+        // Button event handlers
+        document.getElementById('btn-load').addEventListener('click', function () {
+            document.getElementById('file-input').click();
+        });
+
+        document.getElementById('file-input').addEventListener('change', function (e) {
+            var file = e.target.files[0];
+            if (file) {
+                var reader = new FileReader();
+                reader.onload = function (event) {
+                    var data = new Uint8Array(event.target.result);
+                    var filename = '/tmp/' + file.name;
+                    try {
+                        FS.writeFile(filename, data);
+                        Module.onFileLoaded(filename, data.length);
+                    } catch (err) {
+                        console.error('Failed to load file:', err);
+                        Module.showMessage('Error', 'Failed to load file: ' + err.message);
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            }
+            e.target.value = ''; // Reset for same file selection
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', function () {
+            if (Module._em_reset) Module._em_reset();
+        });
+
+        var isPaused = false;
+        document.getElementById('btn-pause').addEventListener('click', function () {
+            if (Module._em_pause) {
+                Module._em_pause();
+                isPaused = !isPaused;
+                this.querySelector('svg').innerHTML = isPaused
+                    ? '<path d="M8 5v14l11-7z"/>'  // Play icon
+                    : '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>'; // Pause icon
+                this.childNodes[2].textContent = isPaused ? ' Resume' : ' Pause';
+            }
+        });
+
+        document.getElementById('btn-fullscreen').addEventListener('click', function () {
+            var container = document.getElementById('emulator-container');
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            } else {
+                container.requestFullscreen().catch(function (err) {
+                    Module.showMessage('Fullscreen Error', err.message);
+                });
+            }
+        });
+
+        var isFast = false;
+        document.getElementById('btn-fast').addEventListener('click', function () {
+            isFast = !isFast;
+            if (Module._em_set_speed) Module._em_set_speed(isFast ? 1 : 0);
+            this.style.background = isFast ? 'var(--highlight-color)' : '';
+        });
+
+        // Modal close
+        document.getElementById('modal-close').addEventListener('click', function () {
+            document.getElementById('modal').classList.remove('active');
+        });
+
+        // Drag and drop
+        var container = document.getElementById('emulator-container');
+        var overlay = document.getElementById('drop-overlay');
+
+        container.addEventListener('dragenter', function (e) {
+            e.preventDefault();
+            overlay.classList.add('active');
+        });
+
+        container.addEventListener('dragover', function (e) {
+            e.preventDefault();
+        });
+
+        container.addEventListener('dragleave', function (e) {
+            if (e.target === container || e.target === overlay) {
+                overlay.classList.remove('active');
+            }
+        });
+
+        container.addEventListener('drop', function (e) {
+            e.preventDefault();
+            overlay.classList.remove('active');
+            var file = e.dataTransfer.files[0];
+            if (file) {
+                var reader = new FileReader();
+                reader.onload = function (event) {
+                    var data = new Uint8Array(event.target.result);
+                    var filename = '/tmp/' + file.name;
+                    try {
+                        FS.writeFile(filename, data);
+                        Module.onFileLoaded(filename, data.length);
+                    } catch (err) {
+                        console.error('Drop failed:', err);
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        });
+
+        // Touch controls
+        var touchButtons = document.querySelectorAll('.dpad-btn, .touch-btn');
+        touchButtons.forEach(function (btn) {
+            var key = btn.dataset.key;
+            btn.addEventListener('touchstart', function (e) {
+                e.preventDefault();
+                // Simulate key press via Emscripten
+                simulateKey(key, true);
+            });
+            btn.addEventListener('touchend', function (e) {
+                e.preventDefault();
+                simulateKey(key, false);
+            });
+        });
+
+        function simulateKey(key, pressed) {
+            // Map touch controls to SDL2 scan codes
+            var keyMap = {
+                'up': 82,     // SDL_SCANCODE_UP
+                'down': 81,   // SDL_SCANCODE_DOWN
+                'left': 80,   // SDL_SCANCODE_LEFT
+                'right': 79,  // SDL_SCANCODE_RIGHT
+                'fire1': 29,  // SDL_SCANCODE_Z
+                'fire2': 27   // SDL_SCANCODE_X
+            };
+            var scancode = keyMap[key];
+            if (scancode !== undefined) {
+                // Create synthetic keyboard event
+                var eventType = pressed ? 'keydown' : 'keyup';
+                var event = new KeyboardEvent(eventType, {
+                    keyCode: scancode,
+                    which: scancode,
+                    bubbles: true,
+                    cancelable: true
+                });
+                Module.canvas.dispatchEvent(event);
+            }
+        }
+
+        // Prevent default for arrow keys and space when canvas is focused
+        document.addEventListener('keydown', function (e) {
+            if (document.activeElement === Module.canvas) {
+                if ([32, 37, 38, 39, 40].includes(e.keyCode)) {
+                    e.preventDefault();
+                }
+            }
+        });
+
+        // Initial status
+        Module.setStatus('Downloading...');
+        document.body.classList.add('loading');
+    </script>
+
+    <!-- Load the Emscripten-generated JavaScript -->
+    <script async src="cpcec.js"></script>
+</body>
+
+</html>
