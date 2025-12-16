@@ -1,0 +1,45 @@
+# Netlify configuration for CPCEC-Web
+
+[build]
+  # Publish the web directory containing the built files
+  publish = "web"
+  
+  # Build command - installs Emscripten and builds
+  command = """
+    git clone https://github.com/emscripten-core/emsdk.git /tmp/emsdk && \
+    cd /tmp/emsdk && \
+    ./emsdk install latest && \
+    ./emsdk activate latest && \
+    source ./emsdk_env.sh && \
+    cd $NETLIFY_BUILD_BASE/repo && \
+    chmod +x build-web.sh && \
+    ./build-web.sh
+  """
+
+[build.environment]
+  # Use Node 18 for better compatibility
+  NODE_VERSION = "18"
+
+# Headers for WebAssembly support
+[[headers]]
+  for = "/*.wasm"
+  [headers.values]
+    Content-Type = "application/wasm"
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*.data"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Enable SharedArrayBuffer (needed for some Emscripten features)
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cross-Origin-Opener-Policy = "same-origin"
+    Cross-Origin-Embedder-Policy = "require-corp"
