@@ -473,19 +473,28 @@
 
         <div class="info-panel">
             <h2>⌨️ Keyboard Shortcuts</h2>
+            <h3 style="color: var(--highlight-color); margin-top: 1rem; font-size: 0.95rem;">Emulator Controls</h3>
             <div class="keyboard-help">
                 <div class="key-item"><span class="key">F1</span> Help</div>
                 <div class="key-item"><span class="key">F2</span> Save snapshot</div>
                 <div class="key-item"><span class="key">F3</span> Load file</div>
-                <div class="key-item"><span class="key">F5</span> Select firmware / Reset</div>
+                <div class="key-item"><span class="key">F5</span> Firmware / Reset</div>
                 <div class="key-item"><span class="key">F7</span> Insert disc</div>
                 <div class="key-item"><span class="key">F8</span> Insert tape</div>
                 <div class="key-item"><span class="key">F9</span> Debug</div>
                 <div class="key-item"><span class="key">F11</span> Palette</div>
                 <div class="key-item"><span class="key">F12</span> Screenshot</div>
                 <div class="key-item"><span class="key">Pause</span> Pause</div>
-                <div class="key-item"><span class="key">Escape</span> ESC (CPC)</div>
-                <div class="key-item"><span class="key">Arrow Keys</span> Cursors / Joystick</div>
+            </div>
+            <h3 style="color: var(--highlight-color); margin-top: 1rem; font-size: 0.95rem;">CPC Function Keys</h3>
+            <div class="keyboard-help">
+                <div class="key-item"><span class="key">Shift+1-9</span> CPC F1-F9</div>
+                <div class="key-item"><span class="key">Shift+0</span> CPC F0</div>
+                <div class="key-item"><span class="key">Numpad</span> (alternative)</div>
+            </div>
+            <h3 style="color: var(--highlight-color); margin-top: 1rem; font-size: 0.95rem;">Joystick</h3>
+            <div class="keyboard-help">
+                <div class="key-item"><span class="key">Arrow Keys</span> Directions</div>
                 <div class="key-item"><span class="key">Z/X</span> Fire 1/2</div>
             </div>
         </div>
@@ -747,6 +756,57 @@
                 // Prevent F11 and F12 from being captured by browser
                 if (e.keyCode === 122 || e.keyCode === 123) { // F11, F12
                     e.preventDefault();
+                }
+                // Map Shift+1-9,0 to Numpad 1-9,0 for CPC function keys F1-F9,F0
+                // Without numpad: Shift+1=F1, Shift+2=F2, ... Shift+9=F9, Shift+0=F0
+                if (e.shiftKey && e.keyCode >= 48 && e.keyCode <= 57) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    // Map: Shift+1-9 -> Numpad 1-9, Shift+0 -> Numpad 0
+                    var numpadMap = {
+                        49: 89,  // 1 -> Numpad 1 (CPC F1)
+                        50: 90,  // 2 -> Numpad 2 (CPC F2)
+                        51: 91,  // 3 -> Numpad 3 (CPC F3)
+                        52: 92,  // 4 -> Numpad 4 (CPC F4)
+                        53: 93,  // 5 -> Numpad 5 (CPC F5)
+                        54: 94,  // 6 -> Numpad 6 (CPC F6)
+                        55: 95,  // 7 -> Numpad 7 (CPC F7)
+                        56: 96,  // 8 -> Numpad 8 (CPC F8)
+                        57: 97,  // 9 -> Numpad 9 (CPC F9)
+                        48: 98   // 0 -> Numpad 0 (CPC F0)
+                    };
+                    var scancode = numpadMap[e.keyCode];
+                    if (scancode) {
+                        var syntheticEvent = new KeyboardEvent('keydown', {
+                            keyCode: scancode,
+                            which: scancode,
+                            bubbles: true,
+                            cancelable: true
+                        });
+                        Module.canvas.dispatchEvent(syntheticEvent);
+                    }
+                }
+            }
+        });
+
+        // Handle Shift+number key release for CPC function keys
+        document.addEventListener('keyup', function (e) {
+            if (document.activeElement === Module.canvas) {
+                if (e.keyCode >= 48 && e.keyCode <= 57) {
+                    var numpadMap = {
+                        49: 89, 50: 90, 51: 91, 52: 92, 53: 93,
+                        54: 94, 55: 95, 56: 96, 57: 97, 48: 98
+                    };
+                    var scancode = numpadMap[e.keyCode];
+                    if (scancode) {
+                        var syntheticEvent = new KeyboardEvent('keyup', {
+                            keyCode: scancode,
+                            which: scancode,
+                            bubbles: true,
+                            cancelable: true
+                        });
+                        Module.canvas.dispatchEvent(syntheticEvent);
+                    }
                 }
             }
         });
