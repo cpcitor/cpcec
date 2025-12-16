@@ -6,7 +6,7 @@ This is a fork of [CPCEC](https://github.com/cpcitor/cpcec) by [CNGSOFT](http://
 
 ## 🎮 Try it online
 
-> **[Launch CPCEC-Web](https://iiiivan37.github.io/cpcec-web/)** *(coming soon)*
+> **[Launch CPCEC-Web](https://cpcec-web.netlify.app/)** *(coming soon)*
 
 ## ✨ What's new in this fork
 
