@@ -205,6 +205,62 @@ const char* em_get_status(void)
     return status;
 }
 
+// ===== CPC Key simulation for keyboards without numpad ===== //
+// CPC keyboard matrix codes for function keys (from cpcec.c header)
+// F0=0x0F, F1=0x0D, F2=0x0E, F3=0x05, F4=0x14, F5=0x0C, F6=0x04
+// F7=0x0A, F8=0x0B, F9=0x03, F.=0x07
+
+EMSCRIPTEN_KEEPALIVE
+void em_key_press(int cpc_code)
+{
+    // Press a CPC key by its matrix code
+    if (cpc_code >= 0 && cpc_code < 128) {
+        kbd_bit_set(cpc_code);
+    }
+}
+
+EMSCRIPTEN_KEEPALIVE
+void em_key_release(int cpc_code)
+{
+    // Release a CPC key by its matrix code
+    if (cpc_code >= 0 && cpc_code < 128) {
+        kbd_bit_res(cpc_code);
+    }
+}
+
+// Helper to press a CPC function key by number (0-9)
+EMSCRIPTEN_KEEPALIVE
+void em_press_fn(int fn_num)
+{
+    // CPC function key matrix codes
+    static const int fn_codes[] = {
+        0x0F,  // F0
+        0x0D,  // F1
+        0x0E,  // F2
+        0x05,  // F3
+        0x14,  // F4
+        0x0C,  // F5
+        0x04,  // F6
+        0x0A,  // F7
+        0x0B,  // F8
+        0x03   // F9
+    };
+    if (fn_num >= 0 && fn_num <= 9) {
+        kbd_bit_set(fn_codes[fn_num]);
+    }
+}
+
+EMSCRIPTEN_KEEPALIVE
+void em_release_fn(int fn_num)
+{
+    static const int fn_codes[] = {
+        0x0F, 0x0D, 0x0E, 0x05, 0x14, 0x0C, 0x04, 0x0A, 0x0B, 0x03
+    };
+    if (fn_num >= 0 && fn_num <= 9) {
+        kbd_bit_res(fn_codes[fn_num]);
+    }
+}
+
 // ===== Main function for Emscripten ===== //
 
 int main(int argc, char *argv[])
