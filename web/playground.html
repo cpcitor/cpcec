@@ -114,7 +114,14 @@
         }
 
         /* Main layout */
-        main {
+        .main-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .panels-row {
             flex: 1;
             display: flex;
             overflow: hidden;
@@ -177,13 +184,14 @@
             max-height: 100%;
         }
 
-        /* Console output */
+        /* Console output - full width at bottom */
         .console-panel {
             height: 150px;
             background: #0d1117;
-            border-top: 1px solid var(--accent-color);
+            border-top: 2px solid var(--accent-color);
             display: flex;
             flex-direction: column;
+            flex-shrink: 0;
         }
 
         #console {
@@ -197,6 +205,7 @@
 
         .console-line {
             margin: 0.1rem 0;
+            white-space: pre-wrap;
         }
 
         .console-info {
@@ -346,6 +355,118 @@
         .dropdown-item:hover {
             background: var(--accent-color);
         }
+
+        .dropdown-divider {
+            height: 1px;
+            background: var(--accent-color);
+            margin: 0.3rem 0;
+        }
+
+        .dropdown-item .shortcut {
+            float: right;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        /* Hidden file input */
+        #file-input {
+            display: none;
+        }
+
+        /* Save dialog */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--panel-color);
+            border: 1px solid var(--accent-color);
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            min-width: 350px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal h3 {
+            margin-bottom: 1rem;
+            color: var(--highlight-color);
+        }
+
+        .modal input[type="text"] {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--accent-color);
+            border-radius: var(--border-radius);
+            background: var(--bg-color);
+            color: var(--text-color);
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+
+        .modal input[type="text"]:focus {
+            outline: none;
+            border-color: var(--highlight-color);
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: flex-end;
+        }
+
+        .saved-programs-list {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-bottom: 1rem;
+            border: 1px solid var(--accent-color);
+            border-radius: var(--border-radius);
+        }
+
+        .saved-program-item {
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .saved-program-item:hover {
+            background: var(--accent-color);
+        }
+
+        .saved-program-item.selected {
+            background: var(--highlight-color);
+        }
+
+        .saved-program-item .delete-btn {
+            color: var(--error-color);
+            cursor: pointer;
+            padding: 0.2rem 0.5rem;
+            opacity: 0.7;
+        }
+
+        .saved-program-item .delete-btn:hover {
+            opacity: 1;
+        }
+
+        .empty-list {
+            padding: 1rem;
+            text-align: center;
+            color: var(--text-muted);
+        }
     </style>
 </head>
 
@@ -356,12 +477,55 @@
         <div class="loading-text">Loading CPC Playground...</div>
     </div>
 
+    <!-- Hidden file input for import -->
+    <input type="file" id="file-input" accept=".asm,.z80,.s">
+
+    <!-- Save Modal -->
+    <div class="modal-overlay" id="save-modal">
+        <div class="modal">
+            <h3>💾 Save Program</h3>
+            <input type="text" id="save-name" placeholder="Program name...">
+            <div class="modal-buttons">
+                <button class="btn" id="save-cancel">Cancel</button>
+                <button class="btn btn-primary" id="save-confirm">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Modal -->
+    <div class="modal-overlay" id="load-modal">
+        <div class="modal">
+            <h3>📂 Load Program</h3>
+            <div class="saved-programs-list" id="saved-programs-list">
+                <div class="empty-list">No saved programs</div>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn" id="load-cancel">Cancel</button>
+                <button class="btn btn-primary" id="load-confirm" disabled>Load</button>
+            </div>
+        </div>
+    </div>
+
     <header>
         <div class="logo">
             <h1>CPC Playground</h1>
             <span>Z80 Assembly for Amstrad CPC</span>
         </div>
         <div class="toolbar">
+            <!-- Files menu -->
+            <div class="dropdown">
+                <button class="btn">📄 File ▾</button>
+                <div class="dropdown-content">
+                    <div class="dropdown-item" id="file-new">New <span class="shortcut">⌘N</span></div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-item" id="file-save">Save... <span class="shortcut">⌘S</span></div>
+                    <div class="dropdown-item" id="file-load">Load...</div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-item" id="file-import">Import .asm</div>
+                    <div class="dropdown-item" id="file-export">Export .asm</div>
+                </div>
+            </div>
+            <!-- Examples menu -->
             <div class="dropdown">
                 <button class="btn">📁 Examples ▾</button>
                 <div class="dropdown-content">
@@ -369,6 +533,10 @@
                     <div class="dropdown-item" data-example="colors">Color Bars</div>
                     <div class="dropdown-item" data-example="scroll">Scroll Text</div>
                     <div class="dropdown-item" data-example="sprite">Simple Sprite</div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-item" data-example="keyboard">Keyboard Input</div>
+                    <div class="dropdown-item" data-example="sound">Sound Effects</div>
+                    <div class="dropdown-item" data-example="lines">Draw Lines</div>
                 </div>
             </div>
             <select class="btn" id="output-format" style="padding: 0.4rem 0.5rem;">
@@ -381,38 +549,41 @@
         </div>
     </header>
 
-    <main>
-        <!-- Editor Panel -->
-        <div class="panel panel-editor">
-            <div class="panel-header">
-                <span>📝 source.asm</span>
-                <span id="editor-status">Ready</span>
-            </div>
-            <div id="editor-container"></div>
-        </div>
-
-        <!-- Resizer -->
-        <div class="resizer" id="resizer"></div>
-
-        <!-- Emulator Panel -->
-        <div class="panel panel-emulator">
-            <div class="panel-header">
-                <span>🖥️ Emulator</span>
-                <span id="emu-status">Loading...</span>
-            </div>
-            <div class="emulator-wrapper">
-                <canvas id="canvas" width="768" height="544" tabindex="1"></canvas>
-            </div>
-            <div class="console-panel">
+    <div class="main-container">
+        <div class="panels-row">
+            <!-- Editor Panel -->
+            <div class="panel panel-editor">
                 <div class="panel-header">
-                    <span>📋 Console</span>
-                    <button class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;"
-                        id="btn-clear">Clear</button>
+                    <span>📝 source.asm</span>
+                    <span id="editor-status">Ready</span>
                 </div>
-                <div id="console"></div>
+                <div id="editor-container"></div>
+            </div>
+
+            <!-- Resizer -->
+            <div class="resizer" id="resizer"></div>
+
+            <!-- Emulator Panel -->
+            <div class="panel panel-emulator">
+                <div class="panel-header">
+                    <span>🖥️ Emulator</span>
+                    <span id="emu-status">Loading...</span>
+                </div>
+                <div class="emulator-wrapper">
+                    <canvas id="canvas" width="768" height="544" tabindex="-1"></canvas>
+                </div>
             </div>
         </div>
-    </main>
+
+        <!-- Console Panel - full width -->
+        <div class="console-panel">
+            <div class="panel-header">
+                <span>📋 Console</span>
+                <button class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" id="btn-clear">Clear</button>
+            </div>
+            <div id="console"></div>
+        </div>
+    </div>
 
     <div class="status-bar">
         <div class="status-item">
@@ -433,17 +604,132 @@
     <script>
         // ===== Global state =====
         let editor = null;
-        let RASM = null;
         let compiledBinary = null;
         let compiledFormat = 'sna'; // 'sna' or 'dsk'
 
         // ===== Console logging =====
         const consoleEl = document.getElementById('console');
 
+        // ANSI color code to CSS color mapping
+        const ansiColors = {
+            '30': '#000',      // Black
+            '31': '#e74c3c',   // Red
+            '32': '#2ecc71',   // Green
+            '33': '#f1c40f',   // Yellow
+            '34': '#3498db',   // Blue
+            '35': '#9b59b6',   // Magenta
+            '36': '#1abc9c',   // Cyan
+            '37': '#ecf0f1',   // White
+            '90': '#7f8c8d',   // Bright Black (Gray)
+            '91': '#ff6b6b',   // Bright Red
+            '92': '#4caf50',   // Bright Green
+            '93': '#ffeb3b',   // Bright Yellow
+            '94': '#64b5f6',   // Bright Blue
+            '95': '#ce93d8',   // Bright Magenta
+            '96': '#4dd0e1',   // Bright Cyan
+            '97': '#fff'       // Bright White
+        };
+
+        // Convert ANSI codes to HTML spans
+        function ansiToHtml(text) {
+            // Replace ANSI escape sequences with HTML
+            // Pattern: ESC[<code>m or just [<code>m
+            return text.replace(/\x1b?\[([0-9;]+)m/g, (match, codes) => {
+                const codeList = codes.split(';');
+                for (const code of codeList) {
+                    if (code === '0') {
+                        return '</span>';
+                    }
+                    if (ansiColors[code]) {
+                        return `<span style="color: ${ansiColors[code]}">`;
+                    }
+                }
+                return '';
+            }).replace(/</g, (m, offset, str) => {
+                // Don't escape our span tags
+                if (str.substr(offset, 5) === '<span' || str.substr(offset, 7) === '</span>') {
+                    return '<';
+                }
+                return '&lt;';
+            });
+        }
+
+        // Simpler ANSI parser that handles the [0m[32m pattern
+        // Only matches ANSI codes: [digits;digits...m (must be only digits/semicolons before m)
+        function parseAnsi(text) {
+            let result = '';
+            let i = 0;
+            let inSpan = false;
+
+            while (i < text.length) {
+                // Check for ESC[ or just [ followed by only digits/semicolons then m
+                let isAnsi = false;
+                let escLen = 0;
+                
+                if (text[i] === '\x1b' && text[i + 1] === '[') {
+                    escLen = 2;
+                    isAnsi = true;
+                } else if (text[i] === '[') {
+                    // Check if this looks like an ANSI code: [digits;...m
+                    let j = i + 1;
+                    while (j < text.length && (/[0-9;]/.test(text[j]))) {
+                        j++;
+                    }
+                    // Must have at least one digit and end with 'm'
+                    if (j > i + 1 && text[j] === 'm') {
+                        escLen = 1;
+                        isAnsi = true;
+                    }
+                }
+                
+                if (isAnsi) {
+                    i += escLen; // skip ESC[ or [
+
+                    // Read the code until 'm'
+                    let code = '';
+                    while (i < text.length && text[i] !== 'm') {
+                        code += text[i];
+                        i++;
+                    }
+                    i++; // skip 'm'
+
+                    // Close previous span
+                    if (inSpan) {
+                        result += '</span>';
+                        inSpan = false;
+                    }
+
+                    // Open new span if it's a color code
+                    if (code !== '0' && ansiColors[code]) {
+                        result += `<span style="color: ${ansiColors[code]}">`;
+                        inSpan = true;
+                    }
+                } else {
+                    // Escape HTML special chars
+                    if (text[i] === '<') result += '&lt;';
+                    else if (text[i] === '>') result += '&gt;';
+                    else if (text[i] === '&') result += '&amp;';
+                    else result += text[i];
+                    i++;
+                }
+            }
+
+            if (inSpan) result += '</span>';
+            return result;
+        }
+
         function log(message, type = 'info') {
             const line = document.createElement('div');
             line.className = `console-line console-${type}`;
-            line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            const timestamp = `[${new Date().toLocaleTimeString()}] `;
+
+            // Check if message contains ANSI codes (look for [ followed by digits and m)
+            if (/\[\d+m/.test(message)) {
+                line.innerHTML = timestamp + parseAnsi(message);
+            } else {
+                line.textContent = timestamp + message;
+            }
+
             consoleEl.appendChild(line);
             consoleEl.scrollTop = consoleEl.scrollHeight;
         }
@@ -616,6 +902,168 @@ sprite_data:
     db %11111111
     db %01111110
     db %00111100
+`,
+            keyboard: `; Keyboard Input - CPC Playground
+; Move a character with cursor keys
+
+    org #4000
+
+start:
+    ld a, 1
+    call #bc0e      ; MODE 1
+    
+    ; Initial position (center of screen)
+    ld bc, 20       ; Column
+    ld de, 12       ; Row
+    
+main_loop:
+    push bc
+    push de
+    
+    ; Position cursor
+    call #bb75      ; TXT SET CURSOR
+    
+    ; Draw character
+    ld a, '*'
+    call #bb5a      ; TXT OUTPUT
+    
+    ; Wait for key
+    call #bb18      ; KM WAIT KEY
+    
+    ; Erase character
+    pop de
+    pop bc
+    push bc
+    push de
+    call #bb75
+    ld a, ' '
+    call #bb5a
+    pop de
+    pop bc
+    
+    ; Check direction
+    cp 240          ; Up
+    jr nz, not_up
+    dec d
+    jr main_loop
+not_up:
+    cp 241          ; Down
+    jr nz, not_down
+    inc d
+    jr main_loop
+not_down:
+    cp 242          ; Left
+    jr nz, not_left
+    dec c
+    jr main_loop
+not_left:
+    cp 243          ; Right
+    jr nz, not_right
+    inc c
+not_right:
+    jr main_loop
+`,
+            sound: `; Sound Effects - CPC Playground
+; Play simple sounds using firmware
+
+    org #4000
+
+start:
+    ; Play a sequence of notes
+    ld hl, notes
+    ld b, 8         ; Number of notes
+    
+play_loop:
+    push bc
+    push hl
+    
+    ; Get note period
+    ld c, (hl)
+    inc hl
+    ld b, (hl)
+    inc hl
+    
+    ; Play note
+    ld a, 1         ; Channel A
+    ld d, 0         ; Volume envelope
+    ld e, 15        ; Volume (max)
+    ld h, 0
+    ld l, 20        ; Duration
+    call #bcaa      ; SOUND QUEUE
+    
+    ; Wait for sound
+wait:
+    ld a, 1
+    call #bca7      ; SOUND CHECK
+    or a
+    jr nz, wait
+    
+    pop hl
+    inc hl
+    inc hl
+    pop bc
+    djnz play_loop
+    
+    ret
+
+notes:
+    ; Period values for notes (lower = higher pitch)
+    dw 478          ; C
+    dw 426          ; D
+    dw 379          ; E
+    dw 358          ; F
+    dw 319          ; G
+    dw 284          ; A
+    dw 253          ; B
+    dw 239          ; C (octave up)
+`,
+            lines: `; Draw Lines - CPC Playground
+; Draw colorful lines pattern
+
+    org #4000
+
+start:
+    ; Set mode 0 (160x200, 16 colors)
+    ld a, 0
+    call #bc0e      ; SCR SET MODE
+    
+    ld b, 32        ; Number of lines
+    ld de, 0        ; X start
+    
+draw_loop:
+    push bc
+    push de
+    
+    ; Set pen color
+    ld a, b
+    and 15
+    call #bc32      ; GRA SET PEN
+    
+    ; Move to start
+    pop de
+    push de
+    ld hl, 0
+    call #bbc0      ; GRA MOVE ABSOLUTE
+    
+    ; Draw to opposite corner
+    pop de
+    push de
+    ld a, 159
+    sub e
+    ld e, a
+    ld d, 0
+    ld hl, 399
+    call #bbf6      ; GRA LINE ABSOLUTE
+    
+    pop de
+    ld a, e
+    add a, 5
+    ld e, a
+    
+    pop bc
+    djnz draw_loop
+    
+    ret
 `
         };
 
@@ -679,11 +1127,38 @@ sprite_data:
                 insertSpaces: true
             });
 
+            // Ensure editor gets focus when clicked
+            document.getElementById('editor-container').addEventListener('click', () => {
+                editor.focus();
+            });
+
+            // Stop keyboard events from propagating to CPCEC when editor is focused
+            // This prevents the emulator from capturing keys while typing in the editor
+            document.getElementById('editor-container').addEventListener('keydown', (e) => {
+                e.stopPropagation();
+            }, true);
+            document.getElementById('editor-container').addEventListener('keyup', (e) => {
+                e.stopPropagation();
+            }, true);
+            document.getElementById('editor-container').addEventListener('keypress', (e) => {
+                e.stopPropagation();
+            }, true);
+
             log('Monaco Editor initialized', 'success');
             document.getElementById('editor-status').textContent = 'Ready';
         });
 
-        // ===== Load RASM =====
+        // ===== RASM output capture =====
+        let rasmStdout = [];
+        let rasmStderr = [];
+        let rasmLoaded = false;
+
+        function clearRasmOutput() {
+            rasmStdout = [];
+            rasmStderr = [];
+        }
+
+        // ===== Load RASM script =====
         async function loadRASM() {
             try {
                 log('Loading RASM assembler...');
@@ -696,8 +1171,7 @@ sprite_data:
                     script.onerror = reject;
                 });
 
-                // Create the RASM module instance (reused for all compilations)
-                RASM = await createRASM();
+                rasmLoaded = true;
                 log('RASM loaded successfully', 'success');
                 document.getElementById('status-rasm').classList.add('ready');
                 return true;
@@ -706,6 +1180,21 @@ sprite_data:
                 document.getElementById('status-rasm').classList.add('error');
                 return false;
             }
+        }
+
+        // Create a fresh RASM instance for each compilation
+        async function createRasmInstance() {
+            clearRasmOutput();
+            return await createRASM({
+                print: (text) => {
+                    rasmStdout.push(text);
+                    console.log('RASM:', text);
+                },
+                printErr: (text) => {
+                    rasmStderr.push(text);
+                    console.error('RASM ERR:', text);
+                }
+            });
         }
 
         // ===== Extract ORG address from source =====
@@ -743,15 +1232,16 @@ run #${orgHex}
             const orgHex = orgAddress.toString(16).toUpperCase();
 
             // Wrap with RASM directives for DSK generation
-            // SAVE 'filename', start, size, DSK, 'diskname.dsk'
-            // start = org address, size = $ - start (current position - start)
+            // Use labels to calculate size properly
             const wrapped = `; === Auto-generated DSK wrapper ===
+
+__DSK_START__ equ #${orgHex}
 
 ${source}
 
+__DSK_END__:
 ; === Save binary to disk ===
-; start = #${orgHex}, size = $ - #${orgHex}
-save 'program.bin', #${orgHex}, $ - #${orgHex}, DSK, 'output.dsk'
+save "program.bin",__DSK_START__,__DSK_END__-__DSK_START__,DSK,"output.dsk"
 `;
 
             return { wrapped, orgAddress, format: 'dsk' };
@@ -764,12 +1254,16 @@ save 'program.bin', #${orgHex}, $ - #${orgHex}, DSK, 'output.dsk'
 
         // ===== Compile =====
         async function compile() {
-            if (!RASM || !editor) return null;
+            if (!rasmLoaded || !editor) return null;
 
             const source = editor.getValue();
             const format = getOutputFormat();
 
             try {
+                // Create fresh RASM instance for this compilation
+                log('Creating RASM instance...');
+                const rasm = await createRasmInstance();
+                
                 // Wrap source code based on format
                 const wrapper = format === 'dsk' ? wrapForDSK(source) : wrapForSNA(source);
                 const { wrapped, orgAddress } = wrapper;
@@ -777,7 +1271,7 @@ save 'program.bin', #${orgHex}, $ - #${orgHex}, DSK, 'output.dsk'
                 log(`Output format: ${format.toUpperCase()}`);
 
                 // Write wrapped source to virtual FS
-                RASM.FS.writeFile('/source.asm', wrapped);
+                rasm.FS.writeFile('/source.asm', wrapped);
 
                 // Debug: show wrapped source
                 console.log('=== Wrapped source ===');
@@ -785,13 +1279,6 @@ save 'program.bin', #${orgHex}, $ - #${orgHex}, DSK, 'output.dsk'
                 console.log('======================');
 
                 log(`Compiling to ${format.toUpperCase()}...`);
-
-                // Capture stdout/stderr
-                let output = '';
-                const originalPrint = RASM.print;
-                const originalPrintErr = RASM.printErr;
-                RASM.print = (text) => { output += text + '\n'; console.log('RASM:', text); };
-                RASM.printErr = (text) => { output += text + '\n'; console.log('RASM ERR:', text); log(text, 'error'); };
 
                 // Run RASM with format-specific arguments
                 let exitCode = 0;
@@ -807,10 +1294,10 @@ save 'program.bin', #${orgHex}, $ - #${orgHex}, DSK, 'output.dsk'
 
                 try {
                     // Verify the source file exists and show its content
-                    const sourceContent = RASM.FS.readFile('/source.asm', { encoding: 'utf8' });
+                    const sourceContent = rasm.FS.readFile('/source.asm', { encoding: 'utf8' });
                     log(`Source file size: ${sourceContent.length} chars`);
 
-                    exitCode = RASM.callMain(rasmArgs);
+                    exitCode = rasm.callMain(rasmArgs);
                     log(`RASM exit code: ${exitCode}`, exitCode === 0 ? 'success' : 'error');
                 } catch (e) {
                     // RASM may call exit() which throws - check if it's a normal exit
@@ -822,19 +1309,21 @@ save 'program.bin', #${orgHex}, $ - #${orgHex}, DSK, 'output.dsk'
                     }
                 }
 
-                RASM.print = originalPrint;
-                RASM.printErr = originalPrintErr;
-
                 // Log RASM output
-                if (output.trim()) {
-                    log('RASM output: ' + output.trim(), 'info');
-                } else {
-                    log('RASM produced no output', 'warning');
+                if (rasmStdout.length > 0) {
+                    rasmStdout.forEach(line => {
+                        if (line.trim()) log(line, 'info');
+                    });
+                }
+                if (rasmStderr.length > 0) {
+                    rasmStderr.forEach(line => {
+                        if (line.trim()) log(line, 'error');
+                    });
                 }
 
                 // List files in virtual FS to see what was created
                 try {
-                    const files = RASM.FS.readdir('/');
+                    const files = rasm.FS.readdir('/');
                     log('Files in FS: ' + files.filter(f => f !== '.' && f !== '..').join(', '), 'info');
                 } catch (e) { }
 
@@ -844,36 +1333,30 @@ save 'program.bin', #${orgHex}, $ - #${orgHex}, DSK, 'output.dsk'
                 if (format === 'dsk') {
                     // For DSK, RASM creates the DSK file with the name specified in SAVE directive
                     try {
-                        const dsk = RASM.FS.readFile('/output.dsk');
+                        const dsk = rasm.FS.readFile('/output.dsk');
                         compiledBinary = dsk;
                         compiledFormat = 'dsk';
                         log(`Compilation successful! DSK size: ${dsk.length} bytes`, 'success');
                         document.getElementById('binary-size').textContent = `DSK: ${dsk.length} bytes`;
                         result = dsk;
                     } catch (e) {
-                        log('Compilation failed - no DSK generated. Error: ' + e.message, 'error');
-                        if (output) log(output, 'warning');
+                        log('Compilation failed - no DSK generated', 'error');
                     }
                 } else {
                     // SNA output
                     try {
-                        const sna = RASM.FS.readFile('/output.sna');
+                        const sna = rasm.FS.readFile('/output.sna');
                         compiledBinary = sna;
                         compiledFormat = 'sna';
                         log(`Compilation successful! SNA size: ${sna.length} bytes`, 'success');
                         document.getElementById('binary-size').textContent = `SNA: ${sna.length} bytes`;
                         result = sna;
                     } catch (e) {
-                        log('Compilation failed - no SNA generated. Error: ' + e.message, 'error');
-                        if (output) log(output, 'warning');
+                        log('Compilation failed - no SNA generated', 'error');
                     }
                 }
 
-                // Cleanup
-                try { RASM.FS.unlink('/source.asm'); } catch (e) { }
-                try { RASM.FS.unlink('/output.bin'); } catch (e) { }
-                try { RASM.FS.unlink('/output.sna'); } catch (e) { }
-                try { RASM.FS.unlink('/output.dsk'); } catch (e) { }
+                // No cleanup needed - rasm instance is discarded after each compilation
 
                 return result;
             } catch (e) {
@@ -934,6 +1417,185 @@ save 'program.bin', #${orgHex}, $ - #${orgHex}, DSK, 'output.dsk'
             log(`${compiledFormat.toUpperCase()} downloaded`, 'info');
         }
 
+        // ===== File Management =====
+        const STORAGE_KEY = 'cpc-playground-programs';
+        let currentProgramName = '';
+        let selectedProgramToLoad = '';
+
+        function getSavedPrograms() {
+            const data = localStorage.getItem(STORAGE_KEY);
+            return data ? JSON.parse(data) : {};
+        }
+
+        function saveProgram(name, code) {
+            const programs = getSavedPrograms();
+            programs[name] = {
+                code: code,
+                savedAt: new Date().toISOString()
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(programs));
+        }
+
+        function deleteProgram(name) {
+            const programs = getSavedPrograms();
+            delete programs[name];
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(programs));
+        }
+
+        function loadProgram(name) {
+            const programs = getSavedPrograms();
+            if (programs[name]) {
+                return programs[name].code;
+            }
+            return null;
+        }
+
+        // New file
+        function newFile() {
+            if (editor) {
+                editor.setValue('; New CPC Program\\n; Write your Z80 assembly code here\\n\\n    org #4000\\n\\nstart:\\n    ret\\n');
+                currentProgramName = '';
+                log('New file created', 'info');
+            }
+        }
+
+        // Show save modal
+        function showSaveModal() {
+            document.getElementById('save-modal').classList.add('active');
+            const input = document.getElementById('save-name');
+            input.value = currentProgramName || '';
+            input.focus();
+            input.select();
+        }
+
+        function hideSaveModal() {
+            document.getElementById('save-modal').classList.remove('active');
+        }
+
+        function confirmSave() {
+            const name = document.getElementById('save-name').value.trim();
+            if (!name) {
+                log('Please enter a program name', 'warning');
+                return;
+            }
+            if (editor) {
+                saveProgram(name, editor.getValue());
+                currentProgramName = name;
+                log(`Program "${name}" saved`, 'success');
+                hideSaveModal();
+            }
+        }
+
+        // Show load modal
+        function showLoadModal() {
+            selectedProgramToLoad = '';
+            document.getElementById('load-confirm').disabled = true;
+            updateSavedProgramsList();
+            document.getElementById('load-modal').classList.add('active');
+        }
+
+        function hideLoadModal() {
+            document.getElementById('load-modal').classList.remove('active');
+        }
+
+        function updateSavedProgramsList() {
+            const list = document.getElementById('saved-programs-list');
+            const programs = getSavedPrograms();
+            const names = Object.keys(programs).sort();
+
+            if (names.length === 0) {
+                list.innerHTML = '<div class="empty-list">No saved programs</div>';
+                return;
+            }
+
+            list.innerHTML = names.map(name => {
+                const date = new Date(programs[name].savedAt).toLocaleDateString();
+                return `
+                    <div class="saved-program-item" data-name="${name}">
+                        <span>${name} <small style="color: var(--text-muted)">(${date})</small></span>
+                        <span class="delete-btn" data-delete="${name}">🗑</span>
+                    </div>
+                `;
+            }).join('');
+
+            // Add click handlers
+            list.querySelectorAll('.saved-program-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('delete-btn')) return;
+                    list.querySelectorAll('.saved-program-item').forEach(i => i.classList.remove('selected'));
+                    item.classList.add('selected');
+                    selectedProgramToLoad = item.dataset.name;
+                    document.getElementById('load-confirm').disabled = false;
+                });
+
+                item.addEventListener('dblclick', (e) => {
+                    if (e.target.classList.contains('delete-btn')) return;
+                    confirmLoad();
+                });
+            });
+
+            // Delete buttons
+            list.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const name = btn.dataset.delete;
+                    if (confirm(`Delete "${name}"?`)) {
+                        deleteProgram(name);
+                        log(`Program "${name}" deleted`, 'info');
+                        updateSavedProgramsList();
+                    }
+                });
+            });
+        }
+
+        function confirmLoad() {
+            if (!selectedProgramToLoad) return;
+            const code = loadProgram(selectedProgramToLoad);
+            if (code && editor) {
+                editor.setValue(code);
+                currentProgramName = selectedProgramToLoad;
+                log(`Program "${selectedProgramToLoad}" loaded`, 'success');
+                hideLoadModal();
+            }
+        }
+
+        // Import .asm file
+        function importFile() {
+            document.getElementById('file-input').click();
+        }
+
+        function handleFileImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                if (editor) {
+                    editor.setValue(e.target.result);
+                    currentProgramName = file.name.replace(/\\.(asm|z80|s)$/i, '');
+                    log(`Imported: ${file.name}`, 'success');
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = ''; // Reset input
+        }
+
+        // Export .asm file
+        function exportFile() {
+            if (!editor) return;
+            const code = editor.getValue();
+            const filename = (currentProgramName || 'program') + '.asm';
+
+            const blob = new Blob([code], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+            log(`Exported: ${filename}`, 'info');
+        }
+
         // ===== Event handlers =====
         document.getElementById('btn-run').addEventListener('click', buildAndRun);
         document.getElementById('btn-reset').addEventListener('click', () => {
@@ -947,13 +1609,48 @@ save 'program.bin', #${orgHex}, $ - #${orgHex}, DSK, 'output.dsk'
             consoleEl.innerHTML = '';
         });
 
+        // File menu handlers
+        document.getElementById('file-new').addEventListener('click', newFile);
+        document.getElementById('file-save').addEventListener('click', showSaveModal);
+        document.getElementById('file-load').addEventListener('click', showLoadModal);
+        document.getElementById('file-import').addEventListener('click', importFile);
+        document.getElementById('file-export').addEventListener('click', exportFile);
+        document.getElementById('file-input').addEventListener('change', handleFileImport);
+
+        // Save modal handlers
+        document.getElementById('save-cancel').addEventListener('click', hideSaveModal);
+        document.getElementById('save-confirm').addEventListener('click', confirmSave);
+        
+        // Stop propagation on save input to prevent CPCEC from capturing keys
+        const saveInput = document.getElementById('save-name');
+        saveInput.addEventListener('keydown', (e) => {
+            e.stopPropagation();
+            if (e.key === 'Enter') confirmSave();
+            if (e.key === 'Escape') hideSaveModal();
+        });
+        saveInput.addEventListener('keyup', (e) => e.stopPropagation());
+        saveInput.addEventListener('keypress', (e) => e.stopPropagation());
+
+        // Load modal handlers
+        document.getElementById('load-cancel').addEventListener('click', hideLoadModal);
+        document.getElementById('load-confirm').addEventListener('click', confirmLoad);
+
+        // Close modals when clicking overlay
+        document.getElementById('save-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'save-modal') hideSaveModal();
+        });
+        document.getElementById('load-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'load-modal') hideLoadModal();
+        });
+
         // Example buttons
-        document.querySelectorAll('.dropdown-item').forEach(item => {
+        document.querySelectorAll('.dropdown-item[data-example]').forEach(item => {
             item.addEventListener('click', () => {
                 const example = item.dataset.example;
                 if (examples[example] && editor) {
                     editor.setValue(examples[example]);
-                    log(`Loaded example: ${item.textContent}`, 'info');
+                    currentProgramName = '';
+                    log(`Loaded example: ${item.textContent.trim()}`, 'info');
                 }
             });
         });
@@ -982,11 +1679,53 @@ save 'program.bin', #${orgHex}, $ - #${orgHex}, DSK, 'output.dsk'
             document.body.style.cursor = '';
         });
 
-        // Keyboard shortcut: Ctrl+Enter to build & run
+        // Intercept Tab key globally - if editor has focus, insert spaces
         document.addEventListener('keydown', (e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            // Don't intercept if we're in a modal (input fields)
+            if (document.querySelector('.modal-overlay.active')) {
+                return;
+            }
+            if (e.key === 'Tab' && editor && editor.hasTextFocus()) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.shiftKey) {
+                    editor.trigger('keyboard', 'outdent', null);
+                } else {
+                    editor.trigger('keyboard', 'tab', null);
+                }
+                return false;
+            }
+        }, true); // Capture phase
+
+        // Keyboard shortcut: Ctrl+Enter to build & run, Cmd+S to save, Cmd+N for new
+        document.addEventListener('keydown', (e) => {
+            // Don't intercept shortcuts if we're typing in a modal input
+            const activeEl = document.activeElement;
+            const isInModal = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA');
+            
+            // Cmd/Ctrl + Enter = Build & Run (but not in modal)
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !isInModal) {
                 e.preventDefault();
                 buildAndRun();
+            }
+            // Cmd/Ctrl + S = Save (always works)
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                if (document.querySelector('.modal-overlay.active')) {
+                    confirmSave();
+                } else {
+                    showSaveModal();
+                }
+            }
+            // Cmd/Ctrl + N = New (only if not in modal)
+            if ((e.ctrlKey || e.metaKey) && e.key === 'n' && !document.querySelector('.modal-overlay.active')) {
+                e.preventDefault();
+                newFile();
+            }
+            // Escape = close modals
+            if (e.key === 'Escape') {
+                hideSaveModal();
+                hideLoadModal();
             }
             // Map Option/Alt key to CPC COPY (0x09) when canvas is focused
             const canvas = document.getElementById('canvas');
