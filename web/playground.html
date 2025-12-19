@@ -141,10 +141,55 @@
         }
 
         .panel-emulator {
-            width: 400px;
-            min-width: 300px;
+            width: 50%;
+            min-width: 400px;
             display: flex;
             flex-direction: column;
+        }
+
+        /* View modes */
+        .view-editor-only .panel-emulator,
+        .view-editor-only .resizer {
+            display: none;
+        }
+
+        .view-editor-only .panel-editor {
+            border-right: none;
+            width: 100%;
+            max-width: none;
+        }
+
+        .view-emulator-only .panel-editor,
+        .view-emulator-only .resizer {
+            display: none;
+        }
+
+        .view-emulator-only .panel-emulator {
+            width: 100%;
+            min-width: auto;
+        }
+
+        /* View toggle buttons */
+        .view-toggle {
+            display: flex;
+            gap: 2px;
+            background: var(--bg-color);
+            border-radius: var(--border-radius);
+            padding: 2px;
+        }
+
+        .view-toggle .btn {
+            padding: 0.3rem 0.6rem;
+            font-size: 0.8rem;
+            background: transparent;
+        }
+
+        .view-toggle .btn.active {
+            background: var(--accent-color);
+        }
+
+        .view-toggle .btn:hover:not(.active) {
+            background: rgba(255, 255, 255, 0.1);
         }
 
         .panel-header {
@@ -546,6 +591,11 @@
             <button class="btn btn-success" id="btn-run" disabled>▶ Build &amp; Run</button>
             <button class="btn" id="btn-reset">🔄 Reset</button>
             <button class="btn" id="btn-download">⬇ Download</button>
+            <div class="view-toggle">
+                <button class="btn" id="view-editor" title="Editor only">📝</button>
+                <button class="btn active" id="view-split" title="Split view">⬜</button>
+                <button class="btn" id="view-emulator" title="Emulator only">🖥️</button>
+            </div>
         </div>
     </header>
 
@@ -665,7 +715,7 @@
                 // Check for ESC[ or just [ followed by only digits/semicolons then m
                 let isAnsi = false;
                 let escLen = 0;
-                
+
                 if (text[i] === '\x1b' && text[i + 1] === '[') {
                     escLen = 2;
                     isAnsi = true;
@@ -681,7 +731,7 @@
                         isAnsi = true;
                     }
                 }
-                
+
                 if (isAnsi) {
                     i += escLen; // skip ESC[ or [
 
@@ -1263,7 +1313,7 @@ save "program.bin",__DSK_START__,__DSK_END__-__DSK_START__,DSK,"output.dsk"
                 // Create fresh RASM instance for this compilation
                 log('Creating RASM instance...');
                 const rasm = await createRasmInstance();
-                
+
                 // Wrap source code based on format
                 const wrapper = format === 'dsk' ? wrapForDSK(source) : wrapForSNA(source);
                 const { wrapped, orgAddress } = wrapper;
@@ -1609,6 +1659,33 @@ save "program.bin",__DSK_START__,__DSK_END__-__DSK_START__,DSK,"output.dsk"
             consoleEl.innerHTML = '';
         });
 
+        // View toggle handlers
+        function setView(view) {
+            const container = document.querySelector('.main-container');
+            container.classList.remove('view-editor-only', 'view-emulator-only');
+
+            document.querySelectorAll('.view-toggle .btn').forEach(btn => btn.classList.remove('active'));
+
+            if (view === 'editor') {
+                container.classList.add('view-editor-only');
+                document.getElementById('view-editor').classList.add('active');
+            } else if (view === 'emulator') {
+                container.classList.add('view-emulator-only');
+                document.getElementById('view-emulator').classList.add('active');
+            } else {
+                document.getElementById('view-split').classList.add('active');
+            }
+
+            // Trigger Monaco layout update
+            if (editor) {
+                setTimeout(() => editor.layout(), 100);
+            }
+        }
+
+        document.getElementById('view-editor').addEventListener('click', () => setView('editor'));
+        document.getElementById('view-split').addEventListener('click', () => setView('split'));
+        document.getElementById('view-emulator').addEventListener('click', () => setView('emulator'));
+
         // File menu handlers
         document.getElementById('file-new').addEventListener('click', newFile);
         document.getElementById('file-save').addEventListener('click', showSaveModal);
@@ -1620,7 +1697,7 @@ save "program.bin",__DSK_START__,__DSK_END__-__DSK_START__,DSK,"output.dsk"
         // Save modal handlers
         document.getElementById('save-cancel').addEventListener('click', hideSaveModal);
         document.getElementById('save-confirm').addEventListener('click', confirmSave);
-        
+
         // Stop propagation on save input to prevent CPCEC from capturing keys
         const saveInput = document.getElementById('save-name');
         saveInput.addEventListener('keydown', (e) => {
@@ -1702,7 +1779,7 @@ save "program.bin",__DSK_START__,__DSK_END__-__DSK_START__,DSK,"output.dsk"
             // Don't intercept shortcuts if we're typing in a modal input
             const activeEl = document.activeElement;
             const isInModal = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA');
-            
+
             // Cmd/Ctrl + Enter = Build & Run (but not in modal)
             if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !isInModal) {
                 e.preventDefault();
