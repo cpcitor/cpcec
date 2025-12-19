@@ -3,6 +3,10 @@
   publish = "web"
   command = "echo 'No build needed - serving static files'"
 
+[build.environment]
+  # Use Node 18 LTS - cached by Netlify, avoids slow source compilation
+  NODE_VERSION = "18"
+
 # CORS headers for CDN usage
 [[headers]]
   for = "/*"
