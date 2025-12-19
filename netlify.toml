@@ -1,6 +1,7 @@
 # Netlify configuration for CPCEC
 [build]
   publish = "web"
+  command = "echo 'No build needed - serving static files'"
 
 # CORS headers for CDN usage
 [[headers]]
