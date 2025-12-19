@@ -1,0 +1,25 @@
+# Netlify configuration for CPCEC
+[build]
+  publish = "."
+
+# CORS headers for CDN usage
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+
+[[headers]]
+  for = "/*.wasm"
+  [headers.values]
+    Content-Type = "application/wasm"
+    Access-Control-Allow-Origin = "*"
+
+[[headers]]
+  for = "/*.js"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+
+[[headers]]
+  for = "/*.data"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
