@@ -2,7 +2,7 @@
  * Hook to fetch debug state from the WASM emulator
  */
 import { useCallback, useEffect, useState } from 'react'
-import type { CpuState, DisassemblyLine, MemoryView } from '@/types'
+import type { CpuState, DisassemblyLine, MemoryView, CrtcState, GateArrayState, AsicState, SpriteInfo } from '@/types'
 import { disassembleInstruction } from '@/utils/z80-disassembler'
 
 interface EmulatorModule {
@@ -25,11 +25,23 @@ interface EmulatorModule {
   _em_get_stack: (count: number) => number
   _em_is_paused: () => number
   _em_step: () => void
-  _em_step_over?: () => void // Optional - may not exist in WASM
+  _em_step_over?: () => void
   _em_pause: () => void
-  _em_run?: () => void // Optional - may not exist in WASM
-  _em_run_to?: (address: number) => void // Optional - may not exist in WASM
+  _em_run?: () => void
+  _em_run_to?: (address: number) => void
   _em_reset: () => void
+  // CRTC functions
+  _em_get_crtc_reg?: (reg: number) => number
+  _em_get_crtc_state?: () => number
+  // Gate Array functions
+  _em_get_gate_palette?: (index: number) => number
+  _em_get_gate_state?: () => number
+  _em_get_screen_mode?: () => number
+  // ASIC functions
+  _em_is_plus_enabled?: () => number
+  _em_is_asic_unlocked?: () => number
+  _em_get_asic_state?: () => number
+  _em_get_sprite_info?: (sprite: number) => number
   HEAPU8?: Uint8Array
   wasmMemory?: WebAssembly.Memory
 }
@@ -45,6 +57,10 @@ export interface DebugState {
   stack: number[] | null
   disassembly: DisassemblyLine[]
   isPaused: boolean
+  crtc: CrtcState | null
+  gateArray: GateArrayState | null
+  asic: AsicState | null
+  sprites: SpriteInfo[]
 }
 
 export function useDebugState(enabled: boolean, refreshInterval = 100) {
@@ -53,7 +69,11 @@ export function useDebugState(enabled: boolean, refreshInterval = 100) {
     memory: null,
     stack: null,
     disassembly: [],
-    isPaused: false
+    isPaused: false,
+    crtc: null,
+    gateArray: null,
+    asic: null,
+    sprites: []
   })
 
   const fetchCpuState = useCallback((): CpuState | null => {
@@ -171,6 +191,176 @@ export function useDebugState(enabled: boolean, refreshInterval = 100) {
     return lines
   }, [])
 
+  // Fetch CRTC state
+  const fetchCrtcState = useCallback((): CrtcState | null => {
+    const Module = getModule()
+    if (!Module) return null
+
+    try {
+      // Try to use dedicated function if available
+      if (Module._em_get_crtc_reg) {
+        const registers: number[] = []
+        for (let i = 0; i < 18; i++) {
+          registers.push(Module._em_get_crtc_reg(i))
+        }
+        return {
+          registers,
+          index: 0,
+          hcc: 0,
+          vcc: 0,
+          vlc: 0,
+          vtac: 0,
+          hsc: 0,
+          vsc: 0,
+          type: 1,
+          status: 0,
+          screenAddr: (registers[12] << 8) | registers[13],
+          line: 0,
+          isLive: true
+        }
+      }
+      
+      // Fallback: return placeholder data
+      // Standard CPC CRTC values
+      return {
+        registers: [63, 40, 46, 142, 38, 0, 25, 30, 0, 7, 0, 0, 48, 0, 0, 0, 0, 0],
+        index: 0,
+        hcc: 0,
+        vcc: 0,
+        vlc: 0,
+        vtac: 0,
+        hsc: 0,
+        vsc: 0,
+        type: 1, // UMC
+        status: 0,
+        screenAddr: 0xC000,
+        line: 0,
+        isLive: false
+      }
+    } catch {
+      return null
+    }
+  }, [])
+
+  // Fetch Gate Array state
+  const fetchGateArrayState = useCallback((): GateArrayState | null => {
+    const Module = getModule()
+    if (!Module) return null
+
+    try {
+      // Try to use dedicated functions if available
+      if (Module._em_get_gate_palette) {
+        const palette: number[] = []
+        for (let i = 0; i < 17; i++) {
+          palette.push(Module._em_get_gate_palette(i))
+        }
+        const mode = Module._em_get_screen_mode?.() ?? 1
+        return {
+          palette,
+          index: 0,
+          status: mode,
+          mcr: mode,
+          ram: 0,
+          rom: 0,
+          hCounter: 0,
+          vCounter: 0,
+          irqSteps: 0,
+          isLive: true
+        }
+      }
+      
+      // Fallback: return placeholder data to show the panel works
+      // Real data will show after WASM recompilation
+      return {
+        palette: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 1],
+        index: 0,
+        status: 1,
+        mcr: 1,
+        ram: 0,
+        rom: 0,
+        hCounter: 0,
+        vCounter: 0,
+        irqSteps: 0,
+        isLive: false
+      }
+    } catch {
+      return null
+    }
+  }, [])
+
+  // Fetch ASIC state (CPC Plus)
+  const fetchAsicState = useCallback((): AsicState | null => {
+    const Module = getModule()
+    if (!Module) return null
+
+    try {
+      // Default CPC Plus palette (similar to CPC hardware colors in 12-bit RGB)
+      const defaultPalette = [
+        0x111, 0x111, 0x00F, 0x11F, 0xF00, 0xF0F, 0xFF0, 0xFFF,
+        0x00F, 0x0FF, 0xFF0, 0xFFF, 0x00F, 0x0FF, 0xFF0, 0xFFF,
+        0x000, 0x111, 0x222, 0x333, 0x444, 0x555, 0x666, 0x777,
+        0x888, 0x999, 0xAAA, 0xBBB, 0xCCC, 0xDDD, 0xEEE, 0xFFF
+      ]
+      
+      // Try to use dedicated function if available
+      if (Module._em_is_plus_enabled) {
+        const enabled = Module._em_is_plus_enabled() !== 0
+        if (!enabled) return null
+
+        const unlocked = Module._em_is_asic_unlocked?.() !== 0
+        return {
+          enabled,
+          unlocked,
+          lockCounter: 0,
+          rmr2: 0,
+          irqBug: false,
+          dmaIndex: 0,
+          dmaDelay: 0,
+          dmaCache: [0, 0, 0],
+          palette: defaultPalette,
+          isLive: true
+        }
+      }
+      
+      // Fallback: return placeholder showing ASIC as locked
+      // User can see the panel structure
+      return {
+        enabled: true,
+        unlocked: false,
+        lockCounter: 0,
+        rmr2: 0,
+        irqBug: false,
+        dmaIndex: 0,
+        dmaDelay: 0,
+        dmaCache: [0, 0, 0],
+        palette: defaultPalette,
+        isLive: false
+      }
+    } catch {
+      return null
+    }
+  }, [])
+
+  // Fetch sprite info (CPC Plus)
+  const fetchSprites = useCallback((): SpriteInfo[] => {
+    const Module = getModule()
+    if (!Module || !Module._em_is_plus_enabled || !Module._em_get_sprite_info) return []
+
+    try {
+      if (Module._em_is_plus_enabled() === 0) return []
+
+      const sprites: SpriteInfo[] = []
+      for (let i = 0; i < 16; i++) {
+        // Call em_get_sprite_info and read the result via em_peek
+        // Since we can't access the returned pointer, we'll just return placeholder
+        sprites.push({ x: 0, y: 0, magnification: 0 })
+      }
+      return sprites
+    } catch {
+      return []
+    }
+  }, [])
+
   // Refresh state periodically when enabled
   useEffect(() => {
     if (!enabled) return
@@ -181,9 +371,14 @@ export function useDebugState(enabled: boolean, refreshInterval = 100) {
       const memory = cpu ? fetchMemory(cpu.pc, 256) : null
       const stack = fetchStack(8)
       const disassembly = cpu ? fetchDisassembly(cpu.pc) : []
+      
+      // Only fetch hardware state when paused to avoid interfering with emulation
+      const crtc = isPaused ? fetchCrtcState() : null
+      const gateArray = isPaused ? fetchGateArrayState() : null
+      const asic = isPaused ? fetchAsicState() : null
+      const sprites = isPaused ? fetchSprites() : []
 
-      console.log('[DEBUG] refresh - cpu:', !!cpu, 'stack:', stack?.length, 'disasm:', disassembly.length)
-      setState({ cpu, memory, stack, disassembly, isPaused })
+      setState({ cpu, memory, stack, disassembly, isPaused, crtc, gateArray, asic, sprites })
     }
 
     // Initial fetch
@@ -192,7 +387,7 @@ export function useDebugState(enabled: boolean, refreshInterval = 100) {
     // Set up interval
     const interval = setInterval(refresh, refreshInterval)
     return () => clearInterval(interval)
-  }, [enabled, refreshInterval, fetchCpuState, fetchMemory, fetchStack, fetchDisassembly, checkPaused])
+  }, [enabled, refreshInterval, fetchCpuState, fetchMemory, fetchStack, fetchDisassembly, checkPaused, fetchCrtcState, fetchGateArrayState, fetchAsicState, fetchSprites])
 
   // Control functions
   const step = useCallback(() => {
@@ -306,7 +501,11 @@ export function useDebugState(enabled: boolean, refreshInterval = 100) {
       const memory = cpu ? fetchMemory(cpu.pc, 256) : null
       const stack = fetchStack(8)
       const disassembly = cpu ? fetchDisassembly(cpu.pc) : []
-      setState({ cpu, memory, stack, disassembly, isPaused })
-    }, [checkPaused, fetchCpuState, fetchMemory, fetchStack, fetchDisassembly])
+      const crtc = fetchCrtcState()
+      const gateArray = fetchGateArrayState()
+      const asic = fetchAsicState()
+      const sprites = fetchSprites()
+      setState({ cpu, memory, stack, disassembly, isPaused, crtc, gateArray, asic, sprites })
+    }, [checkPaused, fetchCpuState, fetchMemory, fetchStack, fetchDisassembly, fetchCrtcState, fetchGateArrayState, fetchAsicState, fetchSprites])
   }
 }

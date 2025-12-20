@@ -690,6 +690,136 @@ void em_run_to(int address) {
     }
 }
 
+#if 0  // TEMPORARILY DISABLED - DEBUG FUNCTIONS
+
+// ===== CRTC (Cathode Ray Tube Controller) ===== //
+
+// Get CRTC register value (0-17)
+EMSCRIPTEN_KEEPALIVE
+int em_get_crtc_reg(int reg) {
+    if (reg >= 0 && reg < 18) return crtc_table[reg];
+    return 0;
+}
+
+// Get all CRTC registers as a packed buffer
+EMSCRIPTEN_KEEPALIVE
+unsigned char* em_get_crtc_state(void) {
+    static unsigned char buffer[32];
+    // CRTC registers 0-17
+    for (int i = 0; i < 18; i++) buffer[i] = crtc_table[i];
+    // CRTC counters and status
+    buffer[18] = crtc_index;
+    buffer[19] = crtc_count_r0;  // HCC
+    buffer[20] = crtc_count_r4;  // VCC
+    buffer[21] = crtc_count_r9;  // VLC
+    buffer[22] = crtc_count_r5;  // VTAC
+    buffer[23] = crtc_count_r3x; // HSC
+    buffer[24] = crtc_count_r3y; // VSC
+    buffer[25] = crtc_type;
+    buffer[26] = crtc_status & 0xFF;
+    buffer[27] = (crtc_status >> 8) & 0xFF;
+    buffer[28] = (crtc_screen >> 0) & 0xFF;
+    buffer[29] = (crtc_screen >> 8) & 0xFF;
+    buffer[30] = crtc_line & 0xFF;
+    buffer[31] = (crtc_line >> 8) & 0xFF;
+    return buffer;
+}
+
+// ===== Gate Array ===== //
+
+// Get Gate Array palette entry (0-16, 16=border)
+EMSCRIPTEN_KEEPALIVE
+int em_get_gate_palette(int index) {
+    if (index >= 0 && index < 17) return gate_table[index];
+    return 0;
+}
+
+// Get Gate Array state
+EMSCRIPTEN_KEEPALIVE
+unsigned char* em_get_gate_state(void) {
+    static unsigned char buffer[32];
+    // Palette entries 0-16
+    for (int i = 0; i < 17; i++) buffer[i] = gate_table[i];
+    buffer[17] = gate_index;
+    buffer[18] = gate_status;
+    buffer[19] = gate_mcr;
+    buffer[20] = gate_ram;
+    buffer[21] = gate_rom;
+    buffer[22] = gate_count_r3x & 0xFF;
+    buffer[23] = gate_count_r3y & 0xFF;
+    buffer[24] = irq_steps & 0xFF;
+    buffer[25] = (irq_steps >> 8) & 0xFF;
+    return buffer;
+}
+
+// Get screen mode from gate_mcr
+EMSCRIPTEN_KEEPALIVE
+int em_get_screen_mode(void) {
+    return gate_mcr & 3;
+}
+
+// ===== ASIC (CPC Plus) ===== //
+
+// Check if ASIC is enabled (CPC Plus model)
+EMSCRIPTEN_KEEPALIVE
+int em_is_plus_enabled(void) {
+    return plus_enabled ? 1 : 0;
+}
+
+// Check if ASIC is unlocked
+EMSCRIPTEN_KEEPALIVE
+int em_is_asic_unlocked(void) {
+    return plus_gate_enabled ? 1 : 0;
+}
+
+// Get ASIC state
+EMSCRIPTEN_KEEPALIVE
+unsigned char* em_get_asic_state(void) {
+    static unsigned char buffer[32];
+    buffer[0] = plus_enabled ? 1 : 0;
+    buffer[1] = plus_gate_enabled;
+    buffer[2] = plus_gate_counter;
+    buffer[3] = plus_gate_mcr;
+    buffer[4] = plus_8k_bug;
+    buffer[5] = plus_dma_index & 0xFF;
+    buffer[6] = (plus_dma_index >> 8) & 0xFF;
+    buffer[7] = plus_dma_delay & 0xFF;
+    buffer[8] = (plus_dma_delay >> 8) & 0xFF;
+    // DMA cache
+    buffer[9] = plus_dma_cache[0] & 0xFF;
+    buffer[10] = (plus_dma_cache[0] >> 8) & 0xFF;
+    buffer[11] = plus_dma_cache[1] & 0xFF;
+    buffer[12] = (plus_dma_cache[1] >> 8) & 0xFF;
+    buffer[13] = plus_dma_cache[2] & 0xFF;
+    buffer[14] = (plus_dma_cache[2] >> 8) & 0xFF;
+    return buffer;
+}
+
+// Get ASIC sprite data (x, y, magnification for sprite 0-15)
+EMSCRIPTEN_KEEPALIVE
+unsigned char* em_get_sprite_info(int sprite) {
+    static unsigned char buffer[8];
+    if (sprite >= 0 && sprite < 16 && plus_enabled) {
+        int offset = sprite * 8;
+        // X position (16-bit)
+        buffer[0] = plus_sprite_xyz[offset + 0];
+        buffer[1] = plus_sprite_xyz[offset + 1];
+        // Y position (16-bit)
+        buffer[2] = plus_sprite_xyz[offset + 2];
+        buffer[3] = plus_sprite_xyz[offset + 3];
+        // Magnification
+        buffer[4] = plus_sprite_xyz[offset + 4];
+        buffer[5] = 0; // reserved
+        buffer[6] = 0;
+        buffer[7] = 0;
+    } else {
+        for (int i = 0; i < 8; i++) buffer[i] = 0;
+    }
+    return buffer;
+}
+
+#endif  // TEMPORARILY DISABLED - DEBUG FUNCTIONS
+
 // ===== CPC Key simulation for keyboards without numpad ===== //
 // CPC keyboard matrix codes for function keys (from cpcec.c header)
 // F0=0x0F, F1=0x0D, F2=0x0E, F3=0x05, F4=0x14, F5=0x0C, F6=0x04
@@ -897,8 +1027,7 @@ int main(int argc, char *argv[])
         }
     });
     
-    // Start the main loop - 0 means use requestAnimationFrame (typically 60fps)
-    // The second parameter (0) means don't simulate an infinite loop
+    // Start the main loop
     emscripten_set_main_loop(em_main_loop, 0, 0);
     
     return 0;

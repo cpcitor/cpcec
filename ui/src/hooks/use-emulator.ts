@@ -52,20 +52,13 @@ export function useEmulator() {
             canvas.width = 768
             canvas.height = 576
 
-            // Get 2D context - CPCEC needs this
-            const ctx = canvas.getContext('2d', {
-              alpha: false,
-              desynchronized: true
-            })
-
-            if (!ctx) {
-              reject(new Error('Failed to get canvas 2D context'))
-              return
-            }
+            // Don't pre-create context - let Emscripten handle it for Chrome 143 compatibility
+            // Force Chrome 143 to use software rendering to bypass GPU compositing bugs
+            canvas.style.imageRendering = 'pixelated'
 
             const Module = {
               canvas,
-              ctx,
+              // Don't pass ctx - let Emscripten create it
               wasmBinary,
               locateFile: (path: string) => `${CPCEC_BASE_URL}/${path}`,
               preRun: [],

@@ -767,3 +767,296 @@
   border-color: var(--color-primary);
 }
 
+/* CRTC Panel */
+.crtcPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.placeholderWarning {
+  background-color: rgba(255, 193, 7, 0.15);
+  border: 1px solid rgba(255, 193, 7, 0.5);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-size: 9px;
+  color: #ffc107;
+  text-align: center;
+  margin-bottom: var(--spacing-xs);
+}
+
+.crtcType {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-primary);
+  padding-bottom: var(--spacing-xs);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.crtcScreenAddr {
+  font-size: 10px;
+  color: var(--color-text);
+  margin-bottom: var(--spacing-xs);
+}
+
+.crtcRegisters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.crtcReg {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 4px;
+  background-color: var(--color-surface-alt);
+  border-radius: 2px;
+  font-size: 9px;
+}
+
+.crtcRegName {
+  color: var(--color-text-muted);
+}
+
+.crtcRegValue {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.crtcCounters {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-xs);
+  padding-top: var(--spacing-xs);
+  border-top: 1px solid var(--color-border);
+}
+
+.crtcCounter {
+  display: flex;
+  gap: var(--spacing-xs);
+  padding: 2px 6px;
+  background-color: var(--color-surface-alt);
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+}
+
+.crtcCounterName {
+  color: var(--color-text-muted);
+}
+
+.crtcCounterValue {
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+/* Gate Array Panel */
+.gateArrayPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.gateMode {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-primary);
+  padding-bottom: var(--spacing-xs);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.gateRegisters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+}
+
+.gateReg {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 6px;
+  background-color: var(--color-surface-alt);
+  border-radius: 2px;
+  font-size: 10px;
+}
+
+.gateRegName {
+  color: var(--color-text-muted);
+}
+
+.gateRegValue {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.paletteLabel {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  margin-top: var(--spacing-xs);
+}
+
+.gatePalette {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+}
+
+.paletteEntry {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  background-color: var(--color-surface-alt);
+  border-radius: 2px;
+  font-size: 9px;
+}
+
+.paletteIndex {
+  color: var(--color-text-muted);
+  min-width: 10px;
+}
+
+.paletteColor {
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 2px;
+}
+
+.paletteValue {
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+.borderColor {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-xs);
+  padding: 4px 6px;
+  background-color: var(--color-surface-alt);
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+}
+
+/* ASIC Panel */
+.asicPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.asicStatus {
+  padding-bottom: var(--spacing-xs);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.asicUnlocked {
+  font-size: 11px;
+  font-weight: 600;
+  color: #22c55e;
+}
+
+.asicLocked {
+  font-size: 11px;
+  font-weight: 600;
+  color: #f59e0b;
+}
+
+.asicRegisters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+}
+
+.asicReg {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 6px;
+  background-color: var(--color-surface-alt);
+  border-radius: 2px;
+  font-size: 10px;
+}
+
+.asicRegName {
+  color: var(--color-text-muted);
+}
+
+.asicRegValue {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.dmaSection {
+  margin-top: var(--spacing-xs);
+  padding-top: var(--spacing-xs);
+  border-top: 1px solid var(--color-border);
+}
+
+.dmaSectionTitle {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin-bottom: var(--spacing-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dmaChannels {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-xs);
+}
+
+.dmaChannel {
+  padding: 2px 6px;
+  background-color: var(--color-surface-alt);
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  color: var(--color-text);
+}
+
+/* ASIC Palette (CPC Plus 12-bit RGB) */
+.asicPaletteSection {
+  margin-top: var(--spacing-xs);
+  padding-top: var(--spacing-xs);
+  border-top: 1px solid var(--color-border);
+}
+
+.asicPalette {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.asicPaletteEntry {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 4px;
+  background-color: var(--color-surface-alt);
+  border-radius: 2px;
+  font-size: 8px;
+}
+
+.asicPaletteIndex {
+  color: var(--color-text-muted);
+  min-width: 12px;
+}
+
+.asicPaletteColor {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.asicPaletteValue {
+  color: var(--color-text);
+  font-weight: 500;
+  font-size: 9px;
+}

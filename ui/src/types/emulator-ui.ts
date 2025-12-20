@@ -109,6 +109,58 @@ export interface DisassemblyLine {
   isCurrent?: boolean
 }
 
+// CRTC state (6845 compatible)
+export interface CrtcState {
+  registers: number[] // R0-R17
+  index: number // Current selected register
+  hcc: number // Horizontal Char Count (R0 counter)
+  vcc: number // Vertical Char Count (R4 counter)
+  vlc: number // Vertical Line Count (R9 counter)
+  vtac: number // V_T_A Line Count (R5 counter)
+  hsc: number // HSYNC Char Count
+  vsc: number // VSYNC Line Count
+  type: number // CRTC type (0=Hitachi, 1=UMC, 2=Motorola, 3=Amstrad+, 4=Amstrad-)
+  status: number
+  screenAddr: number // Current screen address
+  line: number // Current line
+  isLive: boolean // True if data is from WASM, false if placeholder
+}
+
+// Gate Array state
+export interface GateArrayState {
+  palette: number[] // 17 entries (0-15 + border)
+  index: number // Selected palette entry
+  status: number
+  mcr: number // Mode/ROM Enable Register
+  ram: number // Memory Mapping Register
+  rom: number // ROM configuration
+  hCounter: number
+  vCounter: number
+  irqSteps: number
+  isLive: boolean // True if data is from WASM, false if placeholder
+}
+
+// ASIC state (CPC Plus)
+export interface AsicState {
+  enabled: boolean // Is this a CPC Plus?
+  unlocked: boolean // ASIC unlocked?
+  lockCounter: number
+  rmr2: number // RMR2 register
+  irqBug: boolean // 8K bug flag
+  dmaIndex: number
+  dmaDelay: number
+  dmaCache: number[]
+  isLive: boolean // True if data is from WASM, false if placeholder
+  palette: number[] // 32 entries, 12-bit RGB (0x0GRB format)
+}
+
+// Sprite info (CPC Plus)
+export interface SpriteInfo {
+  x: number
+  y: number
+  magnification: number
+}
+
 export interface DebugPanelProps {
   cpu: CpuState | null
   memory: MemoryView | null
