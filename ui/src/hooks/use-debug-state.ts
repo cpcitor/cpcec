@@ -23,7 +23,11 @@ interface EmulatorModule {
   _em_peek_range: (address: number, length: number) => number
   _em_is_paused: () => number
   _em_step: () => void
+  _em_step_over: () => void
   _em_pause: () => void
+  _em_run: () => void
+  _em_run_to: (address: number) => void
+  _em_reset: () => void
   HEAPU8: Uint8Array
 }
 
@@ -166,6 +170,61 @@ export function useDebugState(enabled: boolean, refreshInterval = 100) {
     }
   }, [])
 
+  const stepOver = useCallback(() => {
+    const Module = getModule()
+    if (Module) {
+      try {
+        Module._em_step_over()
+      } catch {
+        // Ignore errors
+      }
+    }
+  }, [])
+
+  const pause = useCallback(() => {
+    const Module = getModule()
+    if (Module) {
+      try {
+        Module._em_pause()
+      } catch {
+        // Ignore errors
+      }
+    }
+  }, [])
+
+  const run = useCallback(() => {
+    const Module = getModule()
+    if (Module) {
+      try {
+        Module._em_run()
+      } catch {
+        // Ignore errors
+      }
+    }
+  }, [])
+
+  const runTo = useCallback((address: number) => {
+    const Module = getModule()
+    if (Module) {
+      try {
+        Module._em_run_to(address)
+      } catch {
+        // Ignore errors
+      }
+    }
+  }, [])
+
+  const reset = useCallback(() => {
+    const Module = getModule()
+    if (Module) {
+      try {
+        Module._em_reset()
+      } catch {
+        // Ignore errors
+      }
+    }
+  }, [])
+
   const togglePause = useCallback(() => {
     const Module = getModule()
     if (Module) {
@@ -180,6 +239,11 @@ export function useDebugState(enabled: boolean, refreshInterval = 100) {
   return {
     ...state,
     step,
+    stepOver,
+    pause,
+    run,
+    runTo,
+    reset,
     togglePause,
     refresh: useCallback(() => {
       const isPaused = checkPaused()

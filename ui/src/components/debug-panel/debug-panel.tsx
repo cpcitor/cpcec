@@ -1,7 +1,25 @@
 import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import {
   ChevronDownIcon,
   ChevronRightIcon,
   Cross1Icon,
+  DragHandleDots2Icon,
   DoubleArrowRightIcon,
   PauseIcon,
   PlayIcon,
@@ -10,6 +28,8 @@ import {
 import { useCallback, useState } from 'react'
 import type { CpuState, DebugPanelProps, DisassemblyLine } from '@/types'
 import styles from './debug-panel.module.css'
+
+type SectionId = 'registers' | 'disassembly' | 'memory' | 'breakpoints'
 
 interface DebugPanelFullProps extends DebugPanelProps {
   onClose: () => void
@@ -30,17 +50,35 @@ export function DebugPanel({
   onClose,
   isRunning
 }: DebugPanelFullProps) {
-  const [expandedSections, setExpandedSections] = useState({
+  const [expandedSections, setExpandedSections] = useState<Record<SectionId, boolean>>({
     registers: true,
     disassembly: true,
     memory: true,
     breakpoints: true
   })
 
+  const [sectionOrder, setSectionOrder] = useState<SectionId[]>([
+    'registers',
+    'disassembly',
+    'memory',
+    'breakpoints'
+  ])
+
   const [newBreakpointAddr, setNewBreakpointAddr] = useState('')
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5
+      }
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates
+    })
+  )
+
   const toggleSection = useCallback(
-    (section: keyof typeof expandedSections) => {
+    (section: SectionId) => {
       setExpandedSections((prev) => ({
         ...prev,
         [section]: !prev[section]
@@ -48,6 +86,17 @@ export function DebugPanel({
     },
     []
   )
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event
+    if (over && active.id !== over.id) {
+      setSectionOrder((items) => {
+        const oldIndex = items.indexOf(active.id as SectionId)
+        const newIndex = items.indexOf(over.id as SectionId)
+        return arrayMove(items, oldIndex, newIndex)
+      })
+    }
+  }, [])
 
   const handleAddBreakpoint = useCallback(() => {
     const addr = Number.parseInt(newBreakpointAddr, 16)
@@ -119,154 +168,168 @@ export function DebugPanel({
       </div>
 
       <div className={styles.content}>
-        {/* Registers Section */}
-        <div className={styles.section}>
-          <div
-            className={styles.sectionHeader}
-            onClick={() => toggleSection('registers')}
-            onKeyDown={(e) => e.key === 'Enter' && toggleSection('registers')}
-            role='button'
-            tabIndex={0}
-          >
-            <span>CPU Registers</span>
-            {expandedSections.registers ? (
-              <ChevronDownIcon width={14} height={14} />
-            ) : (
-              <ChevronRightIcon width={14} height={14} />
-            )}
-          </div>
-          {expandedSections.registers && (
-            <div className={styles.sectionContent}>
-              {cpu ? (
-                <RegistersView cpu={cpu} />
-              ) : (
-                <div className={styles.empty}>Waiting for CPU state...</div>
-              )}
-            </div>
-          )}
-        </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext items={sectionOrder} strategy={verticalListSortingStrategy}>
+            {sectionOrder.map((sectionId) => {
+              const sectionConfig = {
+                registers: {
+                  title: 'CPU Registers',
+                  content: cpu ? (
+                    <RegistersView cpu={cpu} />
+                  ) : (
+                    <div className={styles.empty}>Waiting for CPU state...</div>
+                  )
+                },
+                disassembly: {
+                  title: 'Disassembly',
+                  content: disassembly.length > 0 ? (
+                    <DisassemblyView
+                      lines={disassembly}
+                      currentPc={cpu?.pc ?? 0}
+                      breakpoints={breakpoints}
+                      onToggleBreakpoint={(addr) =>
+                        breakpoints.includes(addr)
+                          ? onRemoveBreakpoint(addr)
+                          : onAddBreakpoint(addr)
+                      }
+                    />
+                  ) : (
+                    <div className={styles.empty}>No disassembly available</div>
+                  )
+                },
+                memory: {
+                  title: 'Memory',
+                  content: memory ? (
+                    <MemoryView startAddress={memory.startAddress} data={memory.data} />
+                  ) : (
+                    <div className={styles.empty}>No memory view</div>
+                  )
+                },
+                breakpoints: {
+                  title: `Breakpoints (${breakpoints.length})`,
+                  content: (
+                    <div className={styles.breakpoints}>
+                      {breakpoints.map((addr) => (
+                        <div key={addr} className={styles.breakpoint}>
+                          <span className={styles.breakpointAddress}>
+                            ${formatHex(addr, 4)}
+                          </span>
+                          <button
+                            className={styles.breakpointRemove}
+                            onClick={() => onRemoveBreakpoint(addr)}
+                            type='button'
+                            aria-label={`Remove breakpoint at ${formatHex(addr, 4)}`}
+                          >
+                            <Cross1Icon width={10} height={10} />
+                          </button>
+                        </div>
+                      ))}
+                      <div className={styles.addBreakpoint}>
+                        <input
+                          type='text'
+                          className={styles.addBreakpointInput}
+                          placeholder='Address (hex)'
+                          value={newBreakpointAddr}
+                          onChange={(e) => setNewBreakpointAddr(e.target.value)}
+                          onKeyDown={(e) =>
+                            e.key === 'Enter' && handleAddBreakpoint()
+                          }
+                        />
+                        <button
+                          className={styles.controlButton}
+                          onClick={handleAddBreakpoint}
+                          type='button'
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                  )
+                }
+              }
 
-        {/* Disassembly Section */}
-        <div className={styles.section}>
-          <div
-            className={styles.sectionHeader}
-            onClick={() => toggleSection('disassembly')}
-            onKeyDown={(e) => e.key === 'Enter' && toggleSection('disassembly')}
-            role='button'
-            tabIndex={0}
-          >
-            <span>Disassembly</span>
-            {expandedSections.disassembly ? (
-              <ChevronDownIcon width={14} height={14} />
-            ) : (
-              <ChevronRightIcon width={14} height={14} />
-            )}
-          </div>
-          {expandedSections.disassembly && (
-            <div className={styles.sectionContent}>
-              {disassembly.length > 0 ? (
-                <DisassemblyView
-                  lines={disassembly}
-                  currentPc={cpu?.pc ?? 0}
-                  breakpoints={breakpoints}
-                  onToggleBreakpoint={(addr) =>
-                    breakpoints.includes(addr)
-                      ? onRemoveBreakpoint(addr)
-                      : onAddBreakpoint(addr)
-                  }
-                />
-              ) : (
-                <div className={styles.empty}>No disassembly available</div>
-              )}
-            </div>
-          )}
-        </div>
+              const config = sectionConfig[sectionId]
+              return (
+                <SortableSection
+                  key={sectionId}
+                  id={sectionId}
+                  title={config.title}
+                  expanded={expandedSections[sectionId]}
+                  onToggle={() => toggleSection(sectionId)}
+                >
+                  {config.content}
+                </SortableSection>
+              )
+            })}
+          </SortableContext>
+        </DndContext>
+      </div>
+    </div>
+  )
+}
 
-        {/* Memory Section */}
-        <div className={styles.section}>
-          <div
-            className={styles.sectionHeader}
-            onClick={() => toggleSection('memory')}
-            onKeyDown={(e) => e.key === 'Enter' && toggleSection('memory')}
-            role='button'
-            tabIndex={0}
-          >
-            <span>Memory</span>
-            {expandedSections.memory ? (
-              <ChevronDownIcon width={14} height={14} />
-            ) : (
-              <ChevronRightIcon width={14} height={14} />
-            )}
-          </div>
-          {expandedSections.memory && (
-            <div className={styles.sectionContent}>
-              {memory ? (
-                <MemoryView startAddress={memory.startAddress} data={memory.data} />
-              ) : (
-                <div className={styles.empty}>No memory view</div>
-              )}
-            </div>
-          )}
-        </div>
+// Sortable Section Component
+interface SortableSectionProps {
+  id: string
+  title: string
+  expanded: boolean
+  onToggle: () => void
+  children: React.ReactNode
+}
 
-        {/* Breakpoints Section */}
-        <div className={styles.section}>
-          <div
-            className={styles.sectionHeader}
-            onClick={() => toggleSection('breakpoints')}
-            onKeyDown={(e) => e.key === 'Enter' && toggleSection('breakpoints')}
-            role='button'
-            tabIndex={0}
-          >
-            <span>Breakpoints ({breakpoints.length})</span>
-            {expandedSections.breakpoints ? (
-              <ChevronDownIcon width={14} height={14} />
-            ) : (
-              <ChevronRightIcon width={14} height={14} />
-            )}
-          </div>
-          {expandedSections.breakpoints && (
-            <div className={styles.sectionContent}>
-              <div className={styles.breakpoints}>
-                {breakpoints.map((addr) => (
-                  <div key={addr} className={styles.breakpoint}>
-                    <span className={styles.breakpointAddress}>
-                      ${formatHex(addr, 4)}
-                    </span>
-                    <button
-                      className={styles.breakpointRemove}
-                      onClick={() => onRemoveBreakpoint(addr)}
-                      type='button'
-                      aria-label={`Remove breakpoint at ${formatHex(addr, 4)}`}
-                    >
-                      <Cross1Icon width={10} height={10} />
-                    </button>
-                  </div>
-                ))}
-                <div className={styles.addBreakpoint}>
-                  <input
-                    type='text'
-                    className={styles.addBreakpointInput}
-                    placeholder='Address (hex)'
-                    value={newBreakpointAddr}
-                    onChange={(e) => setNewBreakpointAddr(e.target.value)}
-                    onKeyDown={(e) =>
-                      e.key === 'Enter' && handleAddBreakpoint()
-                    }
-                  />
-                  <button
-                    className={styles.controlButton}
-                    onClick={handleAddBreakpoint}
-                    type='button'
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
-            </div>
+function SortableSection({ id, title, expanded, onToggle, children }: SortableSectionProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 1000 : 'auto'
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} className={styles.section}>
+      <div className={styles.sectionHeader}>
+        <button
+          className={styles.dragHandle}
+          {...attributes}
+          {...listeners}
+          type="button"
+          aria-label="Drag to reorder"
+        >
+          <DragHandleDots2Icon width={12} height={12} />
+        </button>
+        <div
+          className={styles.sectionTitle}
+          onClick={onToggle}
+          onKeyDown={(e) => e.key === 'Enter' && onToggle()}
+          role='button'
+          tabIndex={0}
+        >
+          <span>{title}</span>
+          {expanded ? (
+            <ChevronDownIcon width={14} height={14} />
+          ) : (
+            <ChevronRightIcon width={14} height={14} />
           )}
         </div>
       </div>
+      {expanded && (
+        <div className={styles.sectionContent}>
+          {children}
+        </div>
+      )}
     </div>
   )
 }

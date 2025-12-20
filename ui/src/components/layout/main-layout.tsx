@@ -1,5 +1,5 @@
-import { useAtom } from 'jotai'
-import { ConnectedDebugPanel } from '@/components/debug-panel'
+import { useAtomValue } from 'jotai'
+import { DebugWindows } from '@/components/debug-panel'
 import { EmulatorCanvas } from '@/components/emulator'
 import { debugPanelVisibleAtom } from '@/store'
 import { Header } from './header'
@@ -7,7 +7,7 @@ import styles from './main-layout.module.css'
 import { Toolbar } from './toolbar'
 
 export function MainLayout() {
-  const [debugVisible, setDebugVisible] = useAtom(debugPanelVisibleAtom)
+  const debugVisible = useAtomValue(debugPanelVisibleAtom)
 
   return (
     <div className={styles.layout}>
@@ -17,9 +17,7 @@ export function MainLayout() {
         <div className={styles.emulatorWrapper}>
           <EmulatorCanvas />
         </div>
-        {debugVisible && (
-          <ConnectedDebugPanel onClose={() => setDebugVisible(false)} />
-        )}
+        {debugVisible && <DebugWindows />}
       </main>
       <footer className={styles.footer}>
         <span>CPCEC by CNGSoft</span>

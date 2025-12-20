@@ -49,24 +49,56 @@
 
 .section {
   border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-surface);
 }
 
 .sectionHeader {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: var(--spacing-xs);
   padding: var(--spacing-xs) var(--spacing-md);
+  padding-left: var(--spacing-xs);
   background-color: var(--color-surface-alt);
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  cursor: pointer;
   user-select: none;
 }
 
 .sectionHeader:hover {
   background-color: var(--color-border);
+}
+
+.dragHandle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xs);
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: grab;
+  border-radius: var(--radius-sm);
+  opacity: 0.5;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.dragHandle:hover {
+  opacity: 1;
+  color: var(--color-primary);
+}
+
+.dragHandle:active {
+  cursor: grabbing;
+}
+
+.sectionTitle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
 }
 
 .sectionContent {
@@ -432,4 +464,246 @@
   font-style: italic;
   padding: var(--spacing-sm);
   text-align: center;
+}
+
+/* ===== Floating Windows System ===== */
+
+.windowBar {
+  position: fixed;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: linear-gradient(180deg, var(--color-surface) 0%, rgba(30, 30, 30, 0.98) 100%);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  z-index: 1001;
+  backdrop-filter: blur(8px);
+}
+
+.controlsInline {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.controlsInline .controlButton {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: 14px;
+  min-width: 32px;
+  height: 28px;
+  justify-content: center;
+}
+
+.controlsInline .controlButton:first-child {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-text-inverse);
+}
+
+.controlsInline .controlButton:first-child:hover {
+  background-color: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+}
+
+.statusBadge {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-left: var(--spacing-xs);
+}
+
+.statusBadge[data-status="paused"] {
+  background-color: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.statusBadge[data-status="running"] {
+  background-color: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.windowBarSeparator {
+  width: 1px;
+  height: 24px;
+  background: linear-gradient(180deg, transparent 0%, var(--color-border) 50%, transparent 100%);
+}
+
+.windowSelect {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  padding-right: var(--spacing-lg);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  background-color: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  min-width: 120px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.windowSelect:hover {
+  border-color: var(--color-text-muted);
+}
+
+.windowSelect:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.windowSelect option:disabled {
+  color: var(--color-text-muted);
+}
+
+/* Registers Compact View */
+.registersCompact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.regRow {
+  display: grid;
+  grid-template-columns: 28px 45px 28px 45px;
+  gap: var(--spacing-xs);
+  align-items: center;
+}
+
+.regLabel {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  text-align: right;
+}
+
+.regValue {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-primary);
+  font-family: var(--font-mono);
+}
+
+.regValueAlt {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+}
+
+.flagsRow {
+  display: flex;
+  gap: 3px;
+  margin-top: var(--spacing-xs);
+  flex-wrap: wrap;
+}
+
+.flagBadge {
+  padding: 2px 4px;
+  font-size: 9px;
+  font-weight: 600;
+  background-color: var(--color-surface-alt);
+  color: var(--color-text-muted);
+  border-radius: 2px;
+}
+
+.flagActive {
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+}
+
+/* Disassembly List */
+.disassemblyList {
+  display: flex;
+  flex-direction: column;
+}
+
+.disasmLine {
+  display: grid;
+  grid-template-columns: 40px 50px 1fr;
+  gap: var(--spacing-xs);
+  padding: 2px 4px;
+  font-size: 10px;
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.disasmLine:hover {
+  background-color: var(--color-surface-alt);
+}
+
+.disasmCurrent {
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+}
+
+.disasmBreakpoint {
+  background-color: var(--color-error);
+  color: var(--color-text-inverse);
+}
+
+.disasmAddr {
+  color: var(--color-text-muted);
+}
+
+.disasmCurrent .disasmAddr,
+.disasmBreakpoint .disasmAddr {
+  color: inherit;
+  opacity: 0.7;
+}
+
+.disasmBytes {
+  color: var(--color-text-muted);
+  font-size: 9px;
+}
+
+.disasmCurrent .disasmBytes,
+.disasmBreakpoint .disasmBytes {
+  color: inherit;
+  opacity: 0.7;
+}
+
+.disasmInstr {
+  font-weight: 500;
+}
+
+/* Memory List */
+.memoryList {
+  display: flex;
+  flex-direction: column;
+}
+
+.memLine {
+  display: flex;
+  gap: var(--spacing-sm);
+  font-size: 10px;
+  padding: 1px 0;
+}
+
+.memAddr {
+  color: var(--color-text-muted);
+  min-width: 40px;
+}
+
+.memBytes {
+  flex: 1;
+  font-family: var(--font-mono);
+}
+
+.memAscii {
+  color: var(--color-text-muted);
+  min-width: 70px;
+  white-space: pre;
 }

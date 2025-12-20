@@ -634,6 +634,62 @@ void em_step(void) {
     }
 }
 
+// Step over: execute until next instruction (skip CALLs)
+EMSCRIPTEN_KEEPALIVE
+void em_step_over(void) {
+    if (session_signal & SESSION_SIGNAL_PAUSE) {
+        int opcode = PEEK(z80_pc.w);
+        // Check if current instruction is a CALL (CD, C4, CC, D4, DC, E4, EC, F4, FC)
+        // or RST (C7, CF, D7, DF, E7, EF, F7, FF)
+        int is_call = (opcode == 0xCD) ||
+                      (opcode == 0xC4) || (opcode == 0xCC) ||
+                      (opcode == 0xD4) || (opcode == 0xDC) ||
+                      (opcode == 0xE4) || (opcode == 0xEC) ||
+                      (opcode == 0xF4) || (opcode == 0xFC) ||
+                      ((opcode & 0xC7) == 0xC7); // RST instructions
+        
+        if (is_call) {
+            // Get instruction length to find return address
+            int next_pc;
+            if ((opcode & 0xC7) == 0xC7) {
+                // RST: 1 byte
+                next_pc = (z80_pc.w + 1) & 0xFFFF;
+            } else {
+                // CALL: 3 bytes
+                next_pc = (z80_pc.w + 3) & 0xFFFF;
+            }
+            // Execute until we return to next_pc or hit a limit
+            int limit = 100000;
+            while (z80_pc.w != next_pc && limit-- > 0) {
+                z80_main(1);
+            }
+        } else {
+            // Regular step
+            z80_main(1);
+        }
+    }
+}
+
+// Run/Continue execution
+EMSCRIPTEN_KEEPALIVE
+void em_run(void) {
+    if (session_signal & SESSION_SIGNAL_PAUSE) {
+        session_signal &= ~SESSION_SIGNAL_PAUSE;
+    }
+}
+
+// Run to specific address (breakpoint)
+EMSCRIPTEN_KEEPALIVE
+void em_run_to(int address) {
+    if (session_signal & SESSION_SIGNAL_PAUSE) {
+        address &= 0xFFFF;
+        int limit = 1000000;
+        while (z80_pc.w != address && limit-- > 0) {
+            z80_main(1);
+        }
+    }
+}
+
 // ===== CPC Key simulation for keyboards without numpad ===== //
 // CPC keyboard matrix codes for function keys (from cpcec.c header)
 // F0=0x0F, F1=0x0D, F2=0x0E, F3=0x05, F4=0x14, F5=0x0C, F6=0x04
