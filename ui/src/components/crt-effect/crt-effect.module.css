@@ -10,7 +10,7 @@
 
 /* CRT scanlines */
 .crtOverlay::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 0;
@@ -28,7 +28,7 @@
 
 /* Subtle vignette */
 .crtOverlay::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 0;

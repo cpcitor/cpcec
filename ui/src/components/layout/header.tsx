@@ -1,5 +1,5 @@
-import { GitHubLogoIcon } from "@radix-ui/react-icons";
-import styles from "./header.module.css";
+import { GitHubLogoIcon } from '@radix-ui/react-icons'
+import styles from './header.module.css'
 
 export function Header() {
   return (
@@ -11,15 +11,15 @@ export function Header() {
 
       <div className={styles.actions}>
         <a
-          href="https://github.com/cngsoft/cpcec"
-          target="_blank"
-          rel="noopener noreferrer"
+          href='https://github.com/cngsoft/cpcec'
+          target='_blank'
+          rel='noopener noreferrer'
           className={styles.link}
-          title="View on GitHub"
+          title='View on GitHub'
         >
           <GitHubLogoIcon width={20} height={20} />
         </a>
       </div>
     </header>
-  );
+  )
 }

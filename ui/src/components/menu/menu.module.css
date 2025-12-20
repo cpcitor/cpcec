@@ -1,0 +1,133 @@
+.menuBar {
+  display: flex;
+  align-items: stretch;
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  height: 28px;
+}
+
+.menuTrigger {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--spacing-md);
+  background: none;
+  border: none;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+  position: relative;
+}
+
+.menuTrigger:hover,
+.menuTriggerActive {
+  background-color: var(--color-surface-alt);
+}
+
+.menuTriggerActive {
+  color: var(--color-primary);
+}
+
+.dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 200px;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  z-index: 1000;
+  padding: var(--spacing-xs) 0;
+  animation: slideDown 0.1s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: none;
+  border: none;
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  transition: background-color 0.1s ease;
+}
+
+.menuItem:hover:not(:disabled) {
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+}
+
+.menuItem:disabled {
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+.menuItemSelected {
+  background-color: var(--color-surface-alt);
+}
+
+.menuItemLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.checkmark {
+  width: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shortcut {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  margin-left: var(--spacing-md);
+}
+
+.menuItem:hover:not(:disabled) .shortcut {
+  color: var(--color-text-inverse);
+  opacity: 0.7;
+}
+
+.separator {
+  height: 1px;
+  background-color: var(--color-border);
+  margin: var(--spacing-xs) 0;
+}
+
+.radioGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.radioDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: currentColor;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+}

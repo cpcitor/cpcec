@@ -1,0 +1,9 @@
+.message {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: var(--spacing-sm) 0;
+}

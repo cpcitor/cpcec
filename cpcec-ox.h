@@ -1774,31 +1774,62 @@ void session_menuradio(int id,int a,int z) // reset option range `a-z` and set o
 
 // message box ------------------------------------------------------ //
 
+#ifdef CPCEC_WEB_UI_OVERRIDE
+int session_message_web(char *s,char *t);
+int session_aboutme_web(char *s,char *t);
+int session_message(char *s,char *t) { return session_message_web(s,t); }
+int session_aboutme(char *s,char *t) { return session_aboutme_web(s,t); }
+#else
 int session_message(char *s,char *t) { return session_ui_text(s,t,0); } // show multi-lined text `s` under caption `t`
 int session_aboutme(char *s,char *t) { return session_ui_text(s,t,1); } // special case: "About.."
+#endif
 
 // input dialog ----------------------------------------------------- //
 
+#ifdef CPCEC_WEB_UI_OVERRIDE
+int session_line_web(char *t);
+#define session_line(t) session_line_web((t))
+#else
 #define session_line(t) session_ui_line((t)) // `t` is the caption; returns -1 on error or LENGTH on success; both the source and target strings are in `session_parmtr`
+#endif
 
-// list dialog ------------------------------------------------------ //
+// list dialog ------------------------------------------------------ // //
 
+#ifdef CPCEC_WEB_UI_OVERRIDE
+int session_list_web(int i,char *s,char *t);
+int session_list(int i,char *s,char *t) { return session_list_web(i,s,t); }
+#else
 int session_list(int i,char *s,char *t) { return session_ui_list(i,s,t,NULL,0); } // `s` is a list of ASCIZ entries, `i` is the default chosen item, `t` is the caption; returns -1 on error or 0..n-1 on success
+#endif
 
 // scan dialog ------------------------------------------------------ //
 
+#ifdef CPCEC_WEB_UI_OVERRIDE
+int session_scan_web(char *s);
+#define session_scan(s) session_scan_web((s))
+#else
 #define session_scan(s) session_ui_scan((s)) // `s` is the name of the event; returns <0 on error or 0..n-1 (keyboard code) on success
+#endif
 
 // file dialog ------------------------------------------------------ //
 
 #define session_filedialog_get_readonly() (session_ui_fileflags&1)
 #define session_filedialog_set_readonly(q) (q?(session_ui_fileflags|=1):(session_ui_fileflags&=~1))
+#ifdef CPCEC_WEB_UI_OVERRIDE
+char *session_newfile_web(char *r,char *s,char *t);
+char *session_getfile_web(char *r,char *s,char *t);
+char *session_getfilereadonly_web(char *r,char *s,char *t,int q);
+char *session_newfile(char *r,char *s,char *t) { return session_newfile_web(r,s,t); }
+char *session_getfile(char *r,char *s,char *t) { return session_getfile_web(r,s,t); }
+char *session_getfilereadonly(char *r,char *s,char *t,int q) { return session_getfilereadonly_web(r,s,t,q); }
+#else
 char *session_newfile(char *r,char *s,char *t) // "Create File" | ...and returns NULL on failure, or `session_parmtr` (with a file path) on success.
 	{ return session_ui_filedialog(r,s,t,0,0)?session_parmtr:NULL; }
 char *session_getfile(char *r,char *s,char *t) // "Open a File" | lists files in path `r` matching pattern `s` under caption `t`, etc.
 	{ return session_ui_filedialog(r,s,t,0,1)?session_parmtr:NULL; }
 char *session_getfilereadonly(char *r,char *s,char *t,int q) // "Open a File" with Read Only option | lists files in path `r` matching pattern `s` under caption `t`; `q` is the default Read Only value, etc.
 	{ return session_ui_filedialog(r,s,t,1,q)?session_parmtr:NULL; }
+#endif
 
 // final definitions ------------------------------------------------ //
 

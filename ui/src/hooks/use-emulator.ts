@@ -1,5 +1,6 @@
 import { useAtomValue, useSetAtom } from 'jotai'
 import { useCallback } from 'react'
+import { setupEmulatorUIBridge } from '@/lib/emulator-ui-bridge'
 import {
   addConsoleMessageAtom,
   emulatorPausedAtom,
@@ -73,6 +74,8 @@ export function useEmulator() {
               printErr: (text: string) => console.error('[CPCEC]', text),
               onRuntimeInitialized: () => {
                 cpcecModule = Module
+                // Set up UI bridge for React dialogs
+                setupEmulatorUIBridge()
                 setEmulatorReady(true)
                 addConsoleMessage({
                   type: 'success',

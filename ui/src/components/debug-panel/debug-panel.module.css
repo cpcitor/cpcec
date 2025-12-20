@@ -1,0 +1,325 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-surface);
+  border-left: 1px solid var(--color-border);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  width: 360px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  color: var(--color-text-inverse);
+  cursor: pointer;
+  padding: var(--spacing-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: background-color 0.15s ease;
+}
+
+.closeButton:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.section {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-xs) var(--spacing-md);
+  background-color: var(--color-surface-alt);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sectionHeader:hover {
+  background-color: var(--color-border);
+}
+
+.sectionContent {
+  padding: var(--spacing-sm) var(--spacing-md);
+}
+
+/* Controls */
+.controls {
+  display: flex;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background-color: var(--color-surface-alt);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.controlButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  gap: var(--spacing-xs);
+  transition: all 0.15s ease;
+}
+
+.controlButton:hover:not(:disabled) {
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+  border-color: var(--color-primary);
+}
+
+.controlButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* CPU Registers */
+.registers {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--spacing-xs);
+}
+
+.register {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--spacing-xs);
+  background-color: var(--color-surface-alt);
+  border-radius: var(--radius-sm);
+}
+
+.registerName {
+  color: var(--color-text-muted);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.registerValue {
+  color: var(--color-primary);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+}
+
+.registerWide {
+  grid-column: span 2;
+}
+
+/* Flags */
+.flags {
+  display: flex;
+  gap: var(--spacing-xs);
+  flex-wrap: wrap;
+}
+
+.flag {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-alt);
+  color: var(--color-text-muted);
+}
+
+.flagActive {
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+}
+
+/* Disassembly */
+.disassembly {
+  display: flex;
+  flex-direction: column;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.disasmLine {
+  display: grid;
+  grid-template-columns: 60px 80px 1fr;
+  gap: var(--spacing-sm);
+  padding: 2px var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.disasmLine:hover {
+  background-color: var(--color-surface-alt);
+}
+
+.disasmLineCurrent {
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+}
+
+.disasmLineCurrent:hover {
+  background-color: var(--color-primary-hover);
+}
+
+.disasmLineBreakpoint {
+  background-color: var(--color-error);
+  color: var(--color-text-inverse);
+}
+
+.disasmAddress {
+  color: var(--color-text-muted);
+}
+
+.disasmLineCurrent .disasmAddress,
+.disasmLineBreakpoint .disasmAddress {
+  color: inherit;
+  opacity: 0.7;
+}
+
+.disasmBytes {
+  color: var(--color-text-muted);
+}
+
+.disasmLineCurrent .disasmBytes,
+.disasmLineBreakpoint .disasmBytes {
+  color: inherit;
+  opacity: 0.7;
+}
+
+.disasmMnemonic {
+  font-weight: 600;
+}
+
+/* Memory view */
+.memoryView {
+  display: flex;
+  flex-direction: column;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.memoryLine {
+  display: flex;
+  gap: var(--spacing-sm);
+  padding: 2px var(--spacing-sm);
+  font-size: 10px;
+}
+
+.memoryAddress {
+  color: var(--color-text-muted);
+  min-width: 50px;
+}
+
+.memoryBytes {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+
+.memoryByte {
+  width: 20px;
+  text-align: center;
+}
+
+.memoryAscii {
+  color: var(--color-text-muted);
+  min-width: 70px;
+  white-space: pre;
+}
+
+/* Breakpoints */
+.breakpoints {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.breakpoint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background-color: var(--color-surface-alt);
+  border-radius: var(--radius-sm);
+}
+
+.breakpointAddress {
+  color: var(--color-error);
+  font-weight: 600;
+}
+
+.breakpointRemove {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+}
+
+.breakpointRemove:hover {
+  color: var(--color-error);
+  background-color: var(--color-surface);
+}
+
+.addBreakpoint {
+  display: flex;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-xs);
+}
+
+.addBreakpointInput {
+  flex: 1;
+  padding: var(--spacing-xs);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+}
+
+.empty {
+  color: var(--color-text-muted);
+  font-style: italic;
+  padding: var(--spacing-sm);
+  text-align: center;
+}

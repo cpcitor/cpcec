@@ -17,9 +17,19 @@
 #include <emscripten.h>
 #include <emscripten/html5.h>
 
+// ===== UI Override flags ===== //
+// When set to 1, UI functions will call JavaScript instead of SDL
+// The JavaScript callbacks are non-blocking - dialogs are shown but code continues
+static int ui_use_web = 1;
+
+// ===== Macro to skip original UI function definitions ===== //
+// We define these to override them after include
+#define CPCEC_WEB_UI_OVERRIDE 1
+
 // ===== Global state for Emscripten main loop ===== //
 static int em_initialized = 0;
 static int em_quit_requested = 0;
+static int dialog_active = 0;  // Flag to pause main loop during dialogs
 
 // Forward declaration of the main loop iteration
 static void em_main_loop(void);
@@ -32,10 +42,340 @@ static void em_main_loop(void);
 #include "cpcec.c"
 #undef CPCEC_NO_MAIN
 
+// ===== Web UI Override Functions ===== //
+// NON-BLOCKING approach: dialogs are shown but C code doesn't wait.
+// - Messages: fire-and-forget (show dialog, return immediately)
+// - Inputs/Lists: show dialog but return -1 (cancelled), user must use F1 menu
+// This avoids Asyncify issues with emscripten_set_main_loop and SDL audio.
+
+// Forward declaration
+static void em_main_loop(void);
+
+// ===== Dialog state for polling approach ===== //
+// When a dialog needs a result, we pause emulation and poll for the answer
+static int pending_dialog_type = 0;  // 0=none, 1=message, 2=input, 3=list, 4=scan, 5=file
+static int pending_dialog_result = -1;
+static int pending_dialog_done = 0;
+static char pending_dialog_string[STRMAX+1];
+
+// Non-blocking: just send to JS, don't wait (fire-and-forget for messages)
+EM_JS(void, web_ui_show_message, (const char* message, const char* title, int isAbout), {
+    var msg = UTF8ToString(message);
+    var ttl = UTF8ToString(title);
+    
+    if (typeof Module.onShowMessage === 'function') {
+        // The callback just acknowledges - we don't wait for it
+        Module.onShowMessage(msg, ttl, isAbout, function() {
+            // Message dismissed - nothing to do
+        });
+    } else {
+        // Queue alert for next frame to not block
+        setTimeout(function() { alert(ttl + "\n\n" + msg); }, 0);
+    }
+});
+
+// Non-blocking: show input dialog, will call back when done
+EM_JS(void, web_ui_show_input, (const char* title, const char* currentValue), {
+    var ttl = UTF8ToString(title);
+    var val = UTF8ToString(currentValue);
+    
+    if (typeof Module.onShowInput === 'function') {
+        Module.onShowInput(ttl, val, function(result) {
+            if (result !== null) {
+                Module._em_dialog_complete_string(result.length, allocateUTF8(result));
+            } else {
+                Module._em_dialog_complete(-1);
+            }
+        });
+    } else {
+        setTimeout(function() {
+            var result = prompt(ttl, val);
+            if (result !== null) {
+                Module._em_dialog_complete_string(result.length, allocateUTF8(result));
+            } else {
+                Module._em_dialog_complete(-1);
+            }
+        }, 0);
+    }
+});
+
+// Non-blocking: show list dialog
+EM_JS(void, web_ui_show_list, (int defaultItem, const char* items, const char* title), {
+    var ttl = UTF8ToString(title);
+    
+    // Parse null-terminated list of items
+    var itemList = [];
+    var ptr = items;
+    while (true) {
+        var str = UTF8ToString(ptr);
+        if (str === "") break;
+        itemList.push(str);
+        ptr += lengthBytesUTF8(str) + 1;
+    }
+    
+    if (typeof Module.onShowList === 'function') {
+        Module.onShowList(ttl, itemList, defaultItem, function(result) {
+            Module._em_dialog_complete(result !== null ? result : -1);
+        });
+    } else {
+        setTimeout(function() {
+            var msg = itemList.map(function(item, idx) {
+                return (idx + 1) + ": " + item;
+            }).join("\n");
+            var result = prompt(ttl + "\n\n" + msg + "\n\nEnter number:", String(defaultItem + 1));
+            if (result !== null) {
+                var idx = parseInt(result, 10) - 1;
+                Module._em_dialog_complete(idx >= 0 && idx < itemList.length ? idx : -1);
+            } else {
+                Module._em_dialog_complete(-1);
+            }
+        }, 0);
+    }
+});
+
+// Non-blocking: show key scan dialog
+EM_JS(void, web_ui_show_scan, (const char* eventName), {
+    var name = UTF8ToString(eventName);
+    
+    if (typeof Module.onShowKeyScan === 'function') {
+        Module.onShowKeyScan(name, function(keyCode) {
+            Module._em_dialog_complete(keyCode !== null ? keyCode : -1);
+        });
+    } else {
+        setTimeout(function() {
+            alert("Press a key for: " + name);
+            var handler = function(e) {
+                document.removeEventListener('keydown', handler);
+                Module._em_dialog_complete(e.keyCode);
+            };
+            document.addEventListener('keydown', handler);
+        }, 0);
+    }
+});
+
+// Non-blocking: show file dialog
+EM_JS(void, web_ui_show_file, (const char* path, const char* pattern, const char* title, int showReadOnly, int isOpen), {
+    var p = UTF8ToString(path);
+    var pat = UTF8ToString(pattern);
+    var ttl = UTF8ToString(title);
+    
+    if (typeof Module.onShowFileDialog === 'function') {
+        Module.onShowFileDialog(ttl, pat, isOpen, showReadOnly, function(result) {
+            if (result !== null) {
+                Module._em_dialog_complete_string(1, allocateUTF8(result));
+            } else {
+                Module._em_dialog_complete(0);
+            }
+        });
+    } else {
+        setTimeout(function() {
+            if (isOpen) {
+                var input = document.createElement('input');
+                input.type = 'file';
+                input.accept = pat.split(";").map(function(p) { return p.replace("*", ""); }).join(",");
+                input.onchange = function(e) {
+                    var file = e.target.files[0];
+                    if (file) {
+                        Module._em_dialog_complete_string(1, allocateUTF8(file.name));
+                    } else {
+                        Module._em_dialog_complete(0);
+                    }
+                };
+                input.click();
+            } else {
+                var result = prompt(ttl + "\nEnter filename:", "");
+                if (result) {
+                    Module._em_dialog_complete_string(1, allocateUTF8(result));
+                } else {
+                    Module._em_dialog_complete(0);
+                }
+            }
+        }, 0);
+    }
+});
+
+// Called from JS when dialog completes (int result)
+EMSCRIPTEN_KEEPALIVE
+void em_dialog_complete(int result) {
+    pending_dialog_result = result;
+    pending_dialog_done = 1;
+    // Resume emulation
+    session_signal &= ~SESSION_SIGNAL_PAUSE;
+}
+
+// Called from JS when dialog completes with string (file/input)
+EMSCRIPTEN_KEEPALIVE
+void em_dialog_complete_string(int result, char* str) {
+    pending_dialog_result = result;
+    if (str && result >= 0) {
+        strncpy(pending_dialog_string, str, STRMAX);
+        pending_dialog_string[STRMAX] = 0;
+        free(str);  // allocated by allocateUTF8
+    }
+    pending_dialog_done = 1;
+    // Resume emulation
+    session_signal &= ~SESSION_SIGNAL_PAUSE;
+}
+
+// ===== Wait for dialog completion (called in a loop) ===== //
+// Returns 1 when dialog is done, 0 if still waiting
+static int wait_for_dialog(void) {
+    if (pending_dialog_done) {
+        pending_dialog_done = 0;
+        pending_dialog_type = 0;
+        return 1;
+    }
+    // Keep emulation paused while waiting
+    session_signal |= SESSION_SIGNAL_PAUSE;
+    return 0;
+}
+
+// ===== Override the SDL UI functions ===== //
+
+int session_message_web(char *s, char *t) {
+    if (ui_use_web) {
+        // Fire and forget - just show the message
+        web_ui_show_message(s, t, 0);
+        return 0;
+    }
+    return session_ui_text(s, t, 0);
+}
+
+int session_aboutme_web(char *s, char *t) {
+    if (ui_use_web) {
+        // Fire and forget - just show the message
+        web_ui_show_message(s, t, 1);
+        return 0;
+    }
+    return session_ui_text(s, t, 1);
+}
+
+int session_line_web(char *t) {
+    if (ui_use_web) {
+        // Start dialog and pause emulation
+        pending_dialog_type = 2;
+        pending_dialog_done = 0;
+        pending_dialog_result = -1;
+        strcpy(pending_dialog_string, session_parmtr);
+        session_signal |= SESSION_SIGNAL_PAUSE;
+        web_ui_show_input(t, session_parmtr);
+        // Poll until done (main loop continues with paused emulation)
+        while (!wait_for_dialog()) {
+            emscripten_sleep(16);  // ~60fps polling
+        }
+        if (pending_dialog_result >= 0) {
+            strcpy(session_parmtr, pending_dialog_string);
+        }
+        return pending_dialog_result;
+    }
+    return session_ui_line(t);
+}
+
+int session_list_web(int i, char *s, char *t) {
+    if (ui_use_web) {
+        // Start dialog and pause emulation
+        pending_dialog_type = 3;
+        pending_dialog_done = 0;
+        pending_dialog_result = -1;
+        session_signal |= SESSION_SIGNAL_PAUSE;
+        web_ui_show_list(i, s, t);
+        // Poll until done
+        while (!wait_for_dialog()) {
+            emscripten_sleep(16);
+        }
+        return pending_dialog_result;
+    }
+    return session_ui_list(i, s, t, NULL, 0);
+}
+
+int session_scan_web(char *s) {
+    if (ui_use_web) {
+        // Start dialog and pause emulation
+        pending_dialog_type = 4;
+        pending_dialog_done = 0;
+        pending_dialog_result = -1;
+        session_signal |= SESSION_SIGNAL_PAUSE;
+        web_ui_show_scan(s);
+        // Poll until done
+        while (!wait_for_dialog()) {
+            emscripten_sleep(16);
+        }
+        return pending_dialog_result;
+    }
+    return session_ui_scan(s);
+}
+
+char *session_getfile_web(char *r, char *s, char *t) {
+    if (ui_use_web) {
+        pending_dialog_type = 5;
+        pending_dialog_done = 0;
+        pending_dialog_result = 0;
+        pending_dialog_string[0] = 0;
+        session_signal |= SESSION_SIGNAL_PAUSE;
+        web_ui_show_file(r ? r : "", s, t, 0, 1);
+        while (!wait_for_dialog()) {
+            emscripten_sleep(16);
+        }
+        if (pending_dialog_result > 0) {
+            strcpy(session_parmtr, pending_dialog_string);
+            return session_parmtr;
+        }
+        return NULL;
+    }
+    return session_ui_filedialog(r, s, t, 0, 1) ? session_parmtr : NULL;
+}
+
+char *session_newfile_web(char *r, char *s, char *t) {
+    if (ui_use_web) {
+        pending_dialog_type = 5;
+        pending_dialog_done = 0;
+        pending_dialog_result = 0;
+        pending_dialog_string[0] = 0;
+        session_signal |= SESSION_SIGNAL_PAUSE;
+        web_ui_show_file(r ? r : "", s, t, 0, 0);
+        while (!wait_for_dialog()) {
+            emscripten_sleep(16);
+        }
+        if (pending_dialog_result > 0) {
+            strcpy(session_parmtr, pending_dialog_string);
+            return session_parmtr;
+        }
+        return NULL;
+    }
+    return session_ui_filedialog(r, s, t, 0, 0) ? session_parmtr : NULL;
+}
+
+char *session_getfilereadonly_web(char *r, char *s, char *t, int q) {
+    if (ui_use_web) {
+        pending_dialog_type = 5;
+        pending_dialog_done = 0;
+        pending_dialog_result = 0;
+        pending_dialog_string[0] = 0;
+        session_signal |= SESSION_SIGNAL_PAUSE;
+        web_ui_show_file(r ? r : "", s, t, 1, q);
+        while (!wait_for_dialog()) {
+            emscripten_sleep(16);
+        }
+        if (pending_dialog_result > 0) {
+            strcpy(session_parmtr, pending_dialog_string);
+            return session_parmtr;
+        }
+        return NULL;
+    }
+    return session_ui_filedialog(r, s, t, 1, q) ? session_parmtr : NULL;
+}
+
+// Expose control functions to JavaScript
+EMSCRIPTEN_KEEPALIVE
+void em_set_web_ui(int enable) {
+    ui_use_web = enable;
+}
+
 // ===== Main loop for Emscripten (one frame per call) ===== //
 static void em_main_loop(void)
 {
-    if (!em_initialized || em_quit_requested) {
+    // Skip main loop while a dialog is active (Asyncify is suspended)
+    if (!em_initialized || em_quit_requested || dialog_active) {
         return;
     }
     

@@ -113,3 +113,29 @@ img {
   background: var(--color-accent);
   color: var(--color-background);
 }
+
+/* === Additional CSS variables for dialogs and panels === */
+:root {
+  /* Extended color palette */
+  --color-info: #5b9bd5;
+  --color-warning: #f5a623;
+  --color-error: #d97373;
+  --color-success: #6b9e6b;
+
+  /* Primary with RGB for alpha */
+  --color-primary: var(--color-accent, #6b9e6b);
+  --color-primary-hover: var(--color-accentHover, #8fb88f);
+  --color-primary-rgb: 107, 158, 107;
+
+  /* Surface colors */
+  --color-surface: var(--color-backgroundPanel, #111118);
+  --color-surface-alt: var(--color-backgroundHover, #1a1a24);
+
+  /* Text colors */
+  --color-text: var(--color-foreground, #a8b5a8);
+  --color-text-muted: var(--color-textMuted, #5a6b5a);
+  --color-text-inverse: var(--color-background, #0a0a12);
+
+  /* Font */
+  --font-mono: var(--font-family, "JetBrains Mono", monospace);
+}

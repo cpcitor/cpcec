@@ -25,7 +25,7 @@ SOURCES = cpcec-web.c
 ROMS = cpc464.rom cpc664.rom cpc6128.rom cpcplus.rom cpcados.rom
 
 # Compiler flags
-CFLAGS = -DSDL2 -DEMSCRIPTEN
+CFLAGS = -DSDL2 -DEMSCRIPTEN -DCPCEC_WEB_UI_OVERRIDE
 CFLAGS += -O3
 CFLAGS += -Wall -Wno-unused-variable -Wno-unused-but-set-variable
 CFLAGS += -fno-strict-aliasing
@@ -41,8 +41,8 @@ EM_FLAGS += -s STACK_SIZE=1048576
 EM_FLAGS += -s ASYNCIFY=1
 EM_FLAGS += -s ASYNCIFY_STACK_SIZE=65536
 EM_FLAGS += -s FORCE_FILESYSTEM=1
-EM_FLAGS += -s EXPORTED_RUNTIME_METHODS=['allocateUTF8','UTF8ToString','ccall','cwrap']
-EM_FLAGS += -s EXPORTED_FUNCTIONS=['_main','_em_load_file','_em_reset','_em_pause','_em_set_speed','_em_is_running','_malloc','_free']
+EM_FLAGS += -s EXPORTED_RUNTIME_METHODS=['allocateUTF8','UTF8ToString','ccall','cwrap','stringToUTF8','lengthBytesUTF8']
+EM_FLAGS += -s EXPORTED_FUNCTIONS=['_main','_em_load_file','_em_reset','_em_pause','_em_set_speed','_em_is_running','_em_set_web_ui','_em_key_press','_em_key_release','_em_press_fn','_em_release_fn','_em_dialog_complete','_em_dialog_complete_string','_malloc','_free']
 EM_FLAGS += -s MODULARIZE=0
 EM_FLAGS += -s ENVIRONMENT='web'
 EM_FLAGS += -s EXIT_RUNTIME=0

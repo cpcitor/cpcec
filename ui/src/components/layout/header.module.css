@@ -39,7 +39,9 @@
   padding: var(--spacing-xs);
   color: var(--color-foreground);
   opacity: 0.7;
-  transition: opacity 0.2s ease, color 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    color 0.2s ease;
 }
 
 .link:hover {

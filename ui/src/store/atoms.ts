@@ -38,3 +38,7 @@ export const crtEffectEnabledAtom = atom(true)
 // Model selection
 export type CpcModel = 'cpc464' | 'cpc664' | 'cpc6128' | 'cpcplus'
 export const selectedModelAtom = atom<CpcModel>('cpc6128')
+
+// Debug state
+export const debugModeAtom = atom(false)
+export const debugPanelVisibleAtom = atom(false)
