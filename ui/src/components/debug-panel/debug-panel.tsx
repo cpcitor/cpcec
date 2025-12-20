@@ -201,7 +201,7 @@ export function DebugPanel({
           {expandedSections.memory && (
             <div className={styles.sectionContent}>
               {memory ? (
-                <MemoryView address={memory.address} bytes={memory.bytes} />
+                <MemoryView startAddress={memory.startAddress} data={memory.data} />
               ) : (
                 <div className={styles.empty}>No memory view</div>
               )}
@@ -286,75 +286,80 @@ function RegistersView({ cpu }: { cpu: CpuState }) {
     C: !!(flags & 0x01)
   }
 
+  // Helper to render a register pair (16-bit = 2x8-bit)
+  const RegPair = ({ name, value, altName, altValue }: { 
+    name: string
+    value: number
+    altName?: string
+    altValue?: number 
+  }) => {
+    const hi = (value >> 8) & 0xff
+    const lo = value & 0xff
+    const hiName = name[0]
+    const loName = name[1] || name[0]
+    
+    return (
+      <div className={styles.registerPair}>
+        <div className={styles.registerPairMain}>
+          <span className={styles.registerPairName}>{name}</span>
+          <span className={styles.registerPairValue}>{formatHex(value, 4)}</span>
+          <span className={styles.registerPairBytes}>
+            <span className={styles.registerByte}>
+              <span className={styles.byteName}>{hiName}</span>
+              <span className={styles.byteValue}>{formatHex(hi, 2)}</span>
+            </span>
+            <span className={styles.registerByte}>
+              <span className={styles.byteName}>{loName}</span>
+              <span className={styles.byteValue}>{formatHex(lo, 2)}</span>
+            </span>
+          </span>
+        </div>
+        {altName !== undefined && altValue !== undefined && (
+          <div className={styles.registerPairAlt}>
+            <span className={styles.registerPairName}>{altName}</span>
+            <span className={styles.registerPairValue}>{formatHex(altValue, 4)}</span>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <>
-      <div className={styles.registers}>
-        <div className={`${styles.register} ${styles.registerWide}`}>
+      {/* Program Counter & Stack Pointer */}
+      <div className={styles.registerRow}>
+        <div className={styles.registerSingle}>
           <span className={styles.registerName}>PC</span>
           <span className={styles.registerValue}>{formatHex(cpu.pc, 4)}</span>
         </div>
-        <div className={`${styles.register} ${styles.registerWide}`}>
+        <div className={styles.registerSingle}>
           <span className={styles.registerName}>SP</span>
           <span className={styles.registerValue}>{formatHex(cpu.sp, 4)}</span>
         </div>
-        <div className={styles.register}>
-          <span className={styles.registerName}>A</span>
-          <span className={styles.registerValue}>
-            {formatHex((cpu.af >> 8) & 0xff, 2)}
-          </span>
-        </div>
-        <div className={styles.register}>
-          <span className={styles.registerName}>F</span>
-          <span className={styles.registerValue}>
-            {formatHex(cpu.af & 0xff, 2)}
-          </span>
-        </div>
-        <div className={styles.register}>
-          <span className={styles.registerName}>B</span>
-          <span className={styles.registerValue}>
-            {formatHex((cpu.bc >> 8) & 0xff, 2)}
-          </span>
-        </div>
-        <div className={styles.register}>
-          <span className={styles.registerName}>C</span>
-          <span className={styles.registerValue}>
-            {formatHex(cpu.bc & 0xff, 2)}
-          </span>
-        </div>
-        <div className={styles.register}>
-          <span className={styles.registerName}>D</span>
-          <span className={styles.registerValue}>
-            {formatHex((cpu.de >> 8) & 0xff, 2)}
-          </span>
-        </div>
-        <div className={styles.register}>
-          <span className={styles.registerName}>E</span>
-          <span className={styles.registerValue}>
-            {formatHex(cpu.de & 0xff, 2)}
-          </span>
-        </div>
-        <div className={styles.register}>
-          <span className={styles.registerName}>H</span>
-          <span className={styles.registerValue}>
-            {formatHex((cpu.hl >> 8) & 0xff, 2)}
-          </span>
-        </div>
-        <div className={styles.register}>
-          <span className={styles.registerName}>L</span>
-          <span className={styles.registerValue}>
-            {formatHex(cpu.hl & 0xff, 2)}
-          </span>
-        </div>
-        <div className={`${styles.register} ${styles.registerWide}`}>
+      </div>
+
+      {/* Main registers with alternates */}
+      <div className={styles.registerPairs}>
+        <RegPair name="AF" value={cpu.af} altName="AF'" altValue={cpu.af2} />
+        <RegPair name="BC" value={cpu.bc} altName="BC'" altValue={cpu.bc2} />
+        <RegPair name="DE" value={cpu.de} altName="DE'" altValue={cpu.de2} />
+        <RegPair name="HL" value={cpu.hl} altName="HL'" altValue={cpu.hl2} />
+      </div>
+
+      {/* Index registers */}
+      <div className={styles.registerRow}>
+        <div className={styles.registerSingle}>
           <span className={styles.registerName}>IX</span>
           <span className={styles.registerValue}>{formatHex(cpu.ix, 4)}</span>
         </div>
-        <div className={`${styles.register} ${styles.registerWide}`}>
+        <div className={styles.registerSingle}>
           <span className={styles.registerName}>IY</span>
           <span className={styles.registerValue}>{formatHex(cpu.iy, 4)}</span>
         </div>
       </div>
-      <div className={styles.flags} style={{ marginTop: 'var(--spacing-sm)' }}>
+
+      {/* Flags */}
+      <div className={styles.flags}>
         {Object.entries(flagBits).map(([name, active]) => (
           <div
             key={name}
@@ -365,19 +370,19 @@ function RegistersView({ cpu }: { cpu: CpuState }) {
           </div>
         ))}
         <div className={styles.flag} title={`IM: ${cpu.im}`}>
-          {cpu.im}
+          IM{cpu.im}
         </div>
         <div
           className={`${styles.flag} ${cpu.iff1 ? styles.flagActive : ''}`}
           title={`IFF1: ${cpu.iff1 ? 'enabled' : 'disabled'}`}
         >
-          I1
+          IF1
         </div>
         <div
           className={`${styles.flag} ${cpu.iff2 ? styles.flagActive : ''}`}
           title={`IFF2: ${cpu.iff2 ? 'enabled' : 'disabled'}`}
         >
-          I2
+          IF2
         </div>
       </div>
     </>
@@ -401,8 +406,9 @@ function DisassemblyView({
   return (
     <div className={styles.disassembly}>
       {lines.map((line) => {
-        const isCurrent = line.address === currentPc
+        const isCurrent = line.isCurrent ?? line.address === currentPc
         const hasBreakpoint = breakpoints.includes(line.address)
+        const bytesStr = line.bytes.map(b => formatHex(b, 2)).join(' ')
 
         return (
           <div
@@ -422,9 +428,9 @@ function DisassemblyView({
             <span className={styles.disasmAddress}>
               {formatHex(line.address, 4)}
             </span>
-            <span className={styles.disasmBytes}>{line.bytes}</span>
+            <span className={styles.disasmBytes}>{bytesStr}</span>
             <span className={styles.disasmMnemonic}>
-              {line.mnemonic} {line.operands}
+              {line.instruction}
             </span>
           </div>
         )
@@ -434,11 +440,11 @@ function DisassemblyView({
 }
 
 function MemoryView({
-  address,
-  bytes
+  startAddress,
+  data
 }: {
-  address: number
-  bytes: Uint8Array
+  startAddress: number
+  data: number[]
 }) {
   const formatHex = (value: number, digits: number) =>
     value.toString(16).toUpperCase().padStart(digits, '0')
@@ -446,13 +452,13 @@ function MemoryView({
   const lines: { addr: number; data: number[]; ascii: string }[] = []
   const bytesPerLine = 8
 
-  for (let i = 0; i < bytes.length; i += bytesPerLine) {
-    const lineBytes = Array.from(bytes.slice(i, i + bytesPerLine))
+  for (let i = 0; i < data.length; i += bytesPerLine) {
+    const lineBytes = data.slice(i, i + bytesPerLine)
     const ascii = lineBytes
       .map((b) => (b >= 32 && b < 127 ? String.fromCharCode(b) : '.'))
       .join('')
     lines.push({
-      addr: address + i,
+      addr: startAddress + i,
       data: lineBytes,
       ascii
     })

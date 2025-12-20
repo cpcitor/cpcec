@@ -545,6 +545,95 @@ const char* em_get_status(void)
     return status;
 }
 
+// ===== Debug Panel API ===== //
+// Expose Z80 registers and memory for the React debug panel
+
+EMSCRIPTEN_KEEPALIVE
+int em_get_reg_af(void) { return z80_af.w; }
+
+EMSCRIPTEN_KEEPALIVE
+int em_get_reg_bc(void) { return z80_bc.w; }
+
+EMSCRIPTEN_KEEPALIVE
+int em_get_reg_de(void) { return z80_de.w; }
+
+EMSCRIPTEN_KEEPALIVE
+int em_get_reg_hl(void) { return z80_hl.w; }
+
+EMSCRIPTEN_KEEPALIVE
+int em_get_reg_af2(void) { return z80_af2.w; }
+
+EMSCRIPTEN_KEEPALIVE
+int em_get_reg_bc2(void) { return z80_bc2.w; }
+
+EMSCRIPTEN_KEEPALIVE
+int em_get_reg_de2(void) { return z80_de2.w; }
+
+EMSCRIPTEN_KEEPALIVE
+int em_get_reg_hl2(void) { return z80_hl2.w; }
+
+EMSCRIPTEN_KEEPALIVE
+int em_get_reg_ix(void) { return z80_ix.w; }
+
+EMSCRIPTEN_KEEPALIVE
+int em_get_reg_iy(void) { return z80_iy.w; }
+
+EMSCRIPTEN_KEEPALIVE
+int em_get_reg_sp(void) { return z80_sp.w; }
+
+EMSCRIPTEN_KEEPALIVE
+int em_get_reg_pc(void) { return z80_pc.w; }
+
+EMSCRIPTEN_KEEPALIVE
+int em_get_reg_ir(void) { return z80_ir.w; }
+
+EMSCRIPTEN_KEEPALIVE
+int em_get_reg_iff(void) { return z80_iff.w; }
+
+// Read a byte from memory (PEEK)
+EMSCRIPTEN_KEEPALIVE
+int em_peek(int address) {
+    return PEEK(address & 0xFFFF);
+}
+
+// Read multiple bytes from memory into a buffer
+// Returns pointer to static buffer with the data
+EMSCRIPTEN_KEEPALIVE
+unsigned char* em_peek_range(int address, int length) {
+    static unsigned char buffer[256];
+    if (length > 256) length = 256;
+    for (int i = 0; i < length; i++) {
+        buffer[i] = PEEK((address + i) & 0xFFFF);
+    }
+    return buffer;
+}
+
+// Get stack contents (up to 16 entries)
+EMSCRIPTEN_KEEPALIVE
+unsigned char* em_get_stack(int count) {
+    static unsigned char buffer[32];
+    if (count > 16) count = 16;
+    for (int i = 0; i < count * 2; i++) {
+        buffer[i] = PEEK((z80_sp.w + i) & 0xFFFF);
+    }
+    return buffer;
+}
+
+// Check if emulator is paused
+EMSCRIPTEN_KEEPALIVE
+int em_is_paused(void) {
+    return (session_signal & (SESSION_SIGNAL_PAUSE | SESSION_SIGNAL_DEBUG)) != 0;
+}
+
+// Step one instruction (for debugger)
+EMSCRIPTEN_KEEPALIVE
+void em_step(void) {
+    if (session_signal & SESSION_SIGNAL_PAUSE) {
+        // Execute one Z80 instruction
+        z80_main(1);
+    }
+}
+
 // ===== CPC Key simulation for keyboards without numpad ===== //
 // CPC keyboard matrix codes for function keys (from cpcec.c header)
 // F0=0x0F, F1=0x0D, F2=0x0E, F3=0x05, F4=0x14, F5=0x0C, F6=0x04

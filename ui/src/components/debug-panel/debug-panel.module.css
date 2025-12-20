@@ -141,20 +141,130 @@
   grid-column: span 2;
 }
 
+/* Register row (PC, SP, IX, IY) */
+.registerRow {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+}
+
+.registerSingle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background-color: var(--color-surface-alt);
+  border-radius: var(--radius-sm);
+}
+
+.registerSingle .registerName {
+  color: var(--color-text-muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.registerSingle .registerValue {
+  color: var(--color-primary);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+}
+
+/* Register pairs (AF, BC, DE, HL with alternates) */
+.registerPairs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-sm);
+}
+
+.registerPair {
+  display: flex;
+  align-items: stretch;
+  background-color: var(--color-surface-alt);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.registerPairMain {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+}
+
+.registerPairName {
+  color: var(--color-text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  min-width: 24px;
+}
+
+.registerPairValue {
+  color: var(--color-primary);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  min-width: 40px;
+}
+
+.registerPairBytes {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-left: auto;
+}
+
+.registerByte {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.byteName {
+  color: var(--color-text-muted);
+  font-size: 9px;
+}
+
+.byteValue {
+  color: var(--color-text);
+  font-size: 11px;
+}
+
+.registerPairAlt {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background-color: rgba(0, 0, 0, 0.1);
+  border-left: 1px solid var(--color-border);
+}
+
+.registerPairAlt .registerPairName {
+  color: var(--color-text-muted);
+  opacity: 0.7;
+}
+
+.registerPairAlt .registerPairValue {
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
 /* Flags */
 .flags {
   display: flex;
   gap: var(--spacing-xs);
   flex-wrap: wrap;
+  margin-top: var(--spacing-xs);
 }
 
 .flag {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  font-size: var(--font-size-xs);
+  min-width: 28px;
+  height: 22px;
+  padding: 0 var(--spacing-xs);
+  font-size: 10px;
   font-weight: 600;
   border-radius: var(--radius-sm);
   background-color: var(--color-surface-alt);

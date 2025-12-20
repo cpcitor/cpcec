@@ -98,15 +98,15 @@ export interface CpuState {
 }
 
 export interface MemoryView {
-  address: number
-  bytes: Uint8Array
+  startAddress: number
+  data: number[]
 }
 
 export interface DisassemblyLine {
   address: number
-  bytes: string
-  mnemonic: string
-  operands: string
+  bytes: number[]
+  instruction: string
+  isCurrent?: boolean
 }
 
 export interface DebugPanelProps {
@@ -120,7 +120,6 @@ export interface DebugPanelProps {
   onBreak: () => void
   onAddBreakpoint: (address: number) => void
   onRemoveBreakpoint: (address: number) => void
-  onMemoryRead: (address: number) => void
 }
 
 // Emulator events sent from WASM
