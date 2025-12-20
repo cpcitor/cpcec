@@ -1,0 +1,115 @@
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap");
+
+/* === Box sizing universel === */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* === HTML / body === */
+html {
+  font-size: 14px;
+  background-color: var(--color-background, #0a0a12);
+  color: var(--color-foreground, #a8b5a8);
+  font-family: var(--font-family, monospace);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  line-height: 1.4;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* === Liens === */
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: var(--color-accentHover);
+}
+
+/* === Titres === */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  font-weight: 500;
+  color: var(--color-foreground);
+}
+
+/* === Paragraphe et texte === */
+p {
+  margin: 0;
+}
+
+/* === Form controls === */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+}
+
+/* Désactiver l'outline par défaut sur tout sauf focus-visible */
+*:focus {
+  outline: none;
+}
+
+/* Focus visible global pour navigation clavier */
+*:focus-visible {
+  outline: 2px solid var(--color-accent, #6b9e6b);
+  outline-offset: 2px;
+}
+
+button {
+  cursor: pointer;
+}
+
+/* === Images === */
+img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+/* === Scrollbar custom === */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent);
+}
+
+/* === Selection === */
+::selection {
+  background: var(--color-accent);
+  color: var(--color-background);
+}

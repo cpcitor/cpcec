@@ -1,0 +1,103 @@
+.button {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-backgroundPanel);
+  color: var(--color-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(107, 158, 107, 0.2);
+}
+
+/* === Sizes === */
+.sm {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-xs);
+}
+
+.md {
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-sm);
+}
+
+.lg {
+  padding: var(--spacing-md) var(--spacing-lg);
+  font-size: var(--font-size-md);
+}
+
+/* === Variants === */
+.primary:hover {
+  background-color: var(--color-hover-primary);
+  border-color: var(--color-accent);
+  box-shadow: 0 0 4px var(--color-accent);
+}
+
+.primary:active {
+  background-color: var(--color-pressed-primary);
+}
+
+.secondary {
+  background-color: transparent;
+  color: var(--color-accent);
+  border: 1px dashed var(--color-accent);
+}
+
+.secondary:hover {
+  background-color: var(--color-hover-secondary);
+  border-style: solid;
+}
+
+.secondary:active {
+  background-color: var(--color-pressed-secondary);
+}
+
+.icon {
+  padding: var(--spacing-xs);
+  font-size: var(--font-size-md);
+  background: none;
+  color: var(--color-foreground);
+  border: none;
+}
+
+.icon:hover {
+  color: var(--color-accent);
+}
+
+.danger {
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+.danger:hover {
+  background-color: rgba(217, 115, 115, 0.1);
+  box-shadow: 0 0 4px var(--color-error);
+}
+
+/* === Disabled === */
+.disabled {
+  background-color: var(--color-disabled-track);
+  color: var(--color-disabled-text);
+  border-color: var(--color-disabled-border);
+  cursor: not-allowed;
+  pointer-events: none;
+  filter: grayscale(60%);
+  box-shadow: none;
+  opacity: 1;
+}

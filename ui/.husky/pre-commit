@@ -1,0 +1,9 @@
+#!/bin/sh
+
+echo "🔍 Running biome checks..."
+npx @biomejs/biome check . --write
+
+# Add any files that were auto-fixed by biome
+git add -u
+
+echo "✅ Pre-commit checks passed!"
