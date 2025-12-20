@@ -3,18 +3,18 @@
  * Manages multiple floating debug windows
  */
 import { Cross1Icon } from '@radix-ui/react-icons'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useDebugState } from '@/hooks/use-debug-state'
 import type { CpuState, DisassemblyLine } from '@/types'
 import styles from './debug-panel.module.css'
 import { DraggableWindow } from './draggable-window'
 
-type WindowId = 'registers' | 'disassembly' | 'memory' | 'breakpoints'
+type WindowId = 'registers' | 'disassembly' | 'memory' | 'stack' | 'breakpoints'
 
 export function DebugWindows() {
   const {
     cpu,
-    memory,
+    stack,
     disassembly,
     isPaused,
     step,
@@ -22,11 +22,15 @@ export function DebugWindows() {
     run,
     pause,
     reset,
+    peekMemory,
     refresh
   } = useDebugState(true, 100)
 
+  // Debug logging
+  console.log('[DebugWindows] cpu:', !!cpu, 'stack:', stack?.length, 'disasm:', disassembly?.length)
+
   const [openWindows, setOpenWindows] = useState<Set<WindowId>>(
-    new Set(['registers', 'disassembly', 'memory'])
+    new Set(['registers', 'disassembly', 'stack'])
   )
 
   const [breakpoints, setBreakpoints] = useState<number[]>([])
@@ -85,13 +89,15 @@ export function DebugWindows() {
   // Default positions for each window
   const defaultPositions = {
     registers: { x: 20, y: 120 },
-    disassembly: { x: 320, y: 80 },
-    memory: { x: 320, y: 350 },
-    breakpoints: { x: 620, y: 80 }
+    stack: { x: 20, y: 340 },
+    disassembly: { x: 220, y: 80 },
+    memory: { x: 480, y: 80 },
+    breakpoints: { x: 480, y: 350 }
   }
 
   const windowOptions: { id: WindowId; label: string }[] = [
     { id: 'registers', label: 'Registers' },
+    { id: 'stack', label: 'Stack' },
     { id: 'disassembly', label: 'Disassembly' },
     { id: 'memory', label: 'Memory' },
     { id: 'breakpoints', label: 'Breakpoints' }
@@ -193,6 +199,22 @@ export function DebugWindows() {
         </DraggableWindow>
       )}
 
+      {/* Stack Window */}
+      {openWindows.has('stack') && (
+        <DraggableWindow
+          id="stack"
+          title="Stack"
+          defaultPosition={defaultPositions.stack}
+          onClose={() => closeWindow('stack')}
+        >
+          {stack && cpu ? (
+            <StackContent stack={stack} sp={cpu.sp} />
+          ) : (
+            <div className={styles.empty}>No stack data</div>
+          )}
+        </DraggableWindow>
+      )}
+
       {/* Memory Window */}
       {openWindows.has('memory') && (
         <DraggableWindow
@@ -201,11 +223,7 @@ export function DebugWindows() {
           defaultPosition={defaultPositions.memory}
           onClose={() => closeWindow('memory')}
         >
-          {memory ? (
-            <MemoryContent startAddress={memory.startAddress} data={memory.data} />
-          ) : (
-            <div className={styles.empty}>No memory view</div>
-          )}
+          <MemoryBrowser peekMemory={peekMemory} initialAddress={cpu?.pc ?? 0} />
         </DraggableWindow>
       )}
 
@@ -364,35 +382,115 @@ function DisassemblyContent({
   )
 }
 
-// Memory Content Component
-function MemoryContent({ startAddress, data }: { startAddress: number; data: number[] }) {
+// Stack Content Component
+function StackContent({ stack, sp }: { stack: number[]; sp: number }) {
   const formatHex = (value: number, digits: number) =>
     value.toString(16).toUpperCase().padStart(digits, '0')
+
+  return (
+    <div className={styles.stackList}>
+      <div className={styles.stackHeader}>
+        <span>SP: ${formatHex(sp, 4)}</span>
+      </div>
+      {stack.map((value, i) => (
+        <div key={i} className={`${styles.stackEntry} ${i === 0 ? styles.stackTop : ''}`}>
+          <span className={styles.stackOffset}>+{i * 2}</span>
+          <span className={styles.stackAddr}>${formatHex((sp + i * 2) & 0xFFFF, 4)}</span>
+          <span className={styles.stackValue}>${formatHex(value, 4)}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// Memory Browser Component with navigation
+function MemoryBrowser({
+  peekMemory,
+  initialAddress
+}: {
+  peekMemory: (address: number, length?: number) => { startAddress: number; data: number[] } | null
+  initialAddress: number
+}) {
+  const [address, setAddress] = useState(initialAddress)
+  const [addressInput, setAddressInput] = useState('')
+  const [memoryData, setMemoryData] = useState<{ startAddress: number; data: number[] } | null>(null)
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
+
+  const formatHex = (value: number, digits: number) =>
+    value.toString(16).toUpperCase().padStart(digits, '0')
+
+  // Refresh memory periodically
+  useEffect(() => {
+    const data = peekMemory(address, 128)
+    setMemoryData(data)
+  }, [address, peekMemory, refreshTrigger])
+
+  // Auto-refresh every 200ms
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRefreshTrigger(prev => prev + 1)
+    }, 200)
+    return () => clearInterval(interval)
+  }, [])
+
+  const handleGoTo = () => {
+    const addr = Number.parseInt(addressInput, 16)
+    if (!Number.isNaN(addr) && addr >= 0 && addr <= 0xFFFF) {
+      setAddress(addr)
+      setAddressInput('')
+    }
+  }
+
+  const handlePageUp = () => setAddress((prev) => Math.max(0, prev - 128) & 0xFFFF)
+  const handlePageDown = () => setAddress((prev) => (prev + 128) & 0xFFFF)
 
   const lines: { addr: number; data: number[]; ascii: string }[] = []
   const bytesPerLine = 8
 
-  for (let i = 0; i < data.length; i += bytesPerLine) {
-    const lineBytes = data.slice(i, i + bytesPerLine)
-    const ascii = lineBytes
-      .map((b) => (b >= 32 && b < 127 ? String.fromCharCode(b) : '.'))
-      .join('')
-    lines.push({ addr: startAddress + i, data: lineBytes, ascii })
+  if (memoryData) {
+    for (let i = 0; i < memoryData.data.length; i += bytesPerLine) {
+      const lineBytes = memoryData.data.slice(i, i + bytesPerLine)
+      const ascii = lineBytes
+        .map((b) => (b >= 32 && b < 127 ? String.fromCharCode(b) : '.'))
+        .join('')
+      lines.push({ addr: (memoryData.startAddress + i) & 0xFFFF, data: lineBytes, ascii })
+    }
   }
 
   return (
-    <div className={styles.memoryList}>
-      {lines.map((line) => (
-        <div key={line.addr} className={styles.memLine}>
-          <span className={styles.memAddr}>{formatHex(line.addr, 4)}:</span>
-          <span className={styles.memBytes}>
-            {line.data.map((b, i) => (
-              <span key={i}>{formatHex(b, 2)} </span>
-            ))}
-          </span>
-          <span className={styles.memAscii}>{line.ascii}</span>
-        </div>
-      ))}
+    <div className={styles.memoryBrowser}>
+      <div className={styles.memoryNav}>
+        <button className={styles.memNavButton} onClick={handlePageUp} type="button" title="Page Up">
+          ▲
+        </button>
+        <input
+          type="text"
+          className={styles.memAddrInput}
+          placeholder="Address"
+          value={addressInput}
+          onChange={(e) => setAddressInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleGoTo()}
+        />
+        <button className={styles.memNavButton} onClick={handleGoTo} type="button">
+          Go
+        </button>
+        <button className={styles.memNavButton} onClick={handlePageDown} type="button" title="Page Down">
+          ▼
+        </button>
+      </div>
+      <div className={styles.memoryList}>
+        {lines.map((line) => (
+          <div key={line.addr} className={styles.memLine}>
+            <span className={styles.memAddr}>{formatHex(line.addr, 4)}:</span>
+            <span className={styles.memBytes}>
+              {line.data.map((b, i) => (
+                <span key={i}>{formatHex(b, 2)} </span>
+              ))}
+            </span>
+            <span className={styles.memAscii}>{line.ascii}</span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

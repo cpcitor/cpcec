@@ -3,6 +3,7 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import type { CpuState, DisassemblyLine, MemoryView } from '@/types'
+import { disassembleInstruction } from '@/utils/z80-disassembler'
 
 interface EmulatorModule {
   _em_get_reg_af: () => number
@@ -21,14 +22,16 @@ interface EmulatorModule {
   _em_get_reg_iff: () => number
   _em_peek: (address: number) => number
   _em_peek_range: (address: number, length: number) => number
+  _em_get_stack: (count: number) => number
   _em_is_paused: () => number
   _em_step: () => void
-  _em_step_over: () => void
+  _em_step_over?: () => void // Optional - may not exist in WASM
   _em_pause: () => void
-  _em_run: () => void
-  _em_run_to: (address: number) => void
+  _em_run?: () => void // Optional - may not exist in WASM
+  _em_run_to?: (address: number) => void // Optional - may not exist in WASM
   _em_reset: () => void
-  HEAPU8: Uint8Array
+  HEAPU8?: Uint8Array
+  wasmMemory?: WebAssembly.Memory
 }
 
 function getModule(): EmulatorModule | null {
@@ -39,6 +42,7 @@ function getModule(): EmulatorModule | null {
 export interface DebugState {
   cpu: CpuState | null
   memory: MemoryView | null
+  stack: number[] | null
   disassembly: DisassemblyLine[]
   isPaused: boolean
 }
@@ -47,6 +51,7 @@ export function useDebugState(enabled: boolean, refreshInterval = 100) {
   const [state, setState] = useState<DebugState>({
     cpu: null,
     memory: null,
+    stack: null,
     disassembly: [],
     isPaused: false
   })
@@ -84,14 +89,14 @@ export function useDebugState(enabled: boolean, refreshInterval = 100) {
     if (!Module) return null
 
     try {
-      const ptr = Module._em_peek_range(address, length)
-      const data = new Uint8Array(length)
+      // Use em_peek for individual bytes - more reliable than HEAPU8
+      const data: number[] = []
       for (let i = 0; i < length; i++) {
-        data[i] = Module.HEAPU8[ptr + i]
+        data.push(Module._em_peek((address + i) & 0xFFFF))
       }
       return {
         startAddress: address,
-        data: Array.from(data)
+        data
       }
     } catch {
       return null
@@ -108,31 +113,60 @@ export function useDebugState(enabled: boolean, refreshInterval = 100) {
     }
   }, [])
 
-  // Simple disassembly - just show bytes at PC for now
-  // A full disassembler would require more work
+  const fetchStack = useCallback((count = 8): number[] | null => {
+    const Module = getModule()
+    if (!Module) {
+      console.log('[DEBUG] fetchStack: Module not available')
+      return null
+    }
+
+    try {
+      // Get SP from registers
+      const sp = Module._em_get_reg_sp()
+      console.log('[DEBUG] fetchStack SP:', sp.toString(16))
+      const values: number[] = []
+      for (let i = 0; i < count; i++) {
+        // Stack entries are 16-bit values (little-endian)
+        const addr = (sp + i * 2) & 0xFFFF
+        const lo = Module._em_peek(addr)
+        const hi = Module._em_peek((addr + 1) & 0xFFFF)
+        values.push((hi << 8) | lo)
+      }
+      console.log('[DEBUG] fetchStack values:', values)
+      return values
+    } catch (e) {
+      console.error('[DEBUG] fetchStack error:', e)
+      return null
+    }
+  }, [])
+
+  // Z80 disassembly using proper disassembler
   const fetchDisassembly = useCallback((pc: number): DisassemblyLine[] => {
     const Module = getModule()
-    if (!Module) return []
+    if (!Module) {
+      console.log('[DEBUG] fetchDisassembly: Module not available')
+      return []
+    }
 
     const lines: DisassemblyLine[] = []
     try {
-      // Fetch 32 bytes starting from PC
-      const ptr = Module._em_peek_range(pc, 32)
+      console.log('[DEBUG] fetchDisassembly pc:', pc.toString(16))
       let addr = pc
 
-      // Simple byte display (not a real disassembler)
+      // Disassemble 16 instructions starting from PC
       for (let i = 0; i < 16; i++) {
-        const byte = Module.HEAPU8[ptr + i]
+        const result = disassembleInstruction((a) => Module._em_peek(a), addr)
         lines.push({
           address: addr,
-          bytes: [byte],
-          instruction: `DB $${byte.toString(16).toUpperCase().padStart(2, '0')}`,
+          bytes: result.bytes,
+          instruction: result.instruction,
           isCurrent: i === 0
         })
-        addr = (addr + 1) & 0xFFFF
+        addr = (addr + result.length) & 0xFFFF
       }
-    } catch {
-      // Ignore errors
+      console.log('[DEBUG] fetchDisassembly lines:', lines.length)
+    } catch (e) {
+      console.error('[DEBUG] fetchDisassembly error:', e)
     }
     return lines
   }, [])
@@ -145,9 +179,11 @@ export function useDebugState(enabled: boolean, refreshInterval = 100) {
       const isPaused = checkPaused()
       const cpu = fetchCpuState()
       const memory = cpu ? fetchMemory(cpu.pc, 256) : null
+      const stack = fetchStack(8)
       const disassembly = cpu ? fetchDisassembly(cpu.pc) : []
 
-      setState({ cpu, memory, disassembly, isPaused })
+      console.log('[DEBUG] refresh - cpu:', !!cpu, 'stack:', stack?.length, 'disasm:', disassembly.length)
+      setState({ cpu, memory, stack, disassembly, isPaused })
     }
 
     // Initial fetch
@@ -156,7 +192,7 @@ export function useDebugState(enabled: boolean, refreshInterval = 100) {
     // Set up interval
     const interval = setInterval(refresh, refreshInterval)
     return () => clearInterval(interval)
-  }, [enabled, refreshInterval, fetchCpuState, fetchMemory, fetchDisassembly, checkPaused])
+  }, [enabled, refreshInterval, fetchCpuState, fetchMemory, fetchStack, fetchDisassembly, checkPaused])
 
   // Control functions
   const step = useCallback(() => {
@@ -170,11 +206,17 @@ export function useDebugState(enabled: boolean, refreshInterval = 100) {
     }
   }, [])
 
+  // Step over - for now same as step (needs WASM recompile for full support)
   const stepOver = useCallback(() => {
     const Module = getModule()
     if (Module) {
       try {
-        Module._em_step_over()
+        // Try step_over if available, fallback to step
+        if (typeof Module._em_step_over === 'function') {
+          Module._em_step_over()
+        } else {
+          Module._em_step()
+        }
       } catch {
         // Ignore errors
       }
@@ -192,26 +234,22 @@ export function useDebugState(enabled: boolean, refreshInterval = 100) {
     }
   }, [])
 
+  // Run/continue - use pause toggle
   const run = useCallback(() => {
     const Module = getModule()
     if (Module) {
       try {
-        Module._em_run()
+        // em_pause toggles, so if paused it will run
+        Module._em_pause()
       } catch {
         // Ignore errors
       }
     }
   }, [])
 
-  const runTo = useCallback((address: number) => {
-    const Module = getModule()
-    if (Module) {
-      try {
-        Module._em_run_to(address)
-      } catch {
-        // Ignore errors
-      }
-    }
+  // runTo not available yet without WASM recompile
+  const runTo = useCallback((_address: number) => {
+    // Not implemented without WASM support
   }, [])
 
   const reset = useCallback(() => {
@@ -236,6 +274,22 @@ export function useDebugState(enabled: boolean, refreshInterval = 100) {
     }
   }, [])
 
+  // Function to peek at arbitrary memory addresses
+  const peekMemory = useCallback((address: number, length = 256): MemoryView | null => {
+    const Module = getModule()
+    if (!Module) return null
+
+    try {
+      const data: number[] = []
+      for (let i = 0; i < length && i < 256; i++) {
+        data.push(Module._em_peek((address + i) & 0xFFFF))
+      }
+      return { startAddress: address & 0xFFFF, data }
+    } catch {
+      return null
+    }
+  }, [])
+
   return {
     ...state,
     step,
@@ -245,12 +299,14 @@ export function useDebugState(enabled: boolean, refreshInterval = 100) {
     runTo,
     reset,
     togglePause,
+    peekMemory,
     refresh: useCallback(() => {
       const isPaused = checkPaused()
       const cpu = fetchCpuState()
       const memory = cpu ? fetchMemory(cpu.pc, 256) : null
+      const stack = fetchStack(8)
       const disassembly = cpu ? fetchDisassembly(cpu.pc) : []
-      setState({ cpu, memory, disassembly, isPaused })
-    }, [checkPaused, fetchCpuState, fetchMemory, fetchDisassembly])
+      setState({ cpu, memory, stack, disassembly, isPaused })
+    }, [checkPaused, fetchCpuState, fetchMemory, fetchStack, fetchDisassembly])
   }
 }

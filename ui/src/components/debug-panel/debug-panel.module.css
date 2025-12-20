@@ -679,31 +679,91 @@
   font-weight: 500;
 }
 
-/* Memory List */
-.memoryList {
+/* Stack List */
+.stackList {
   display: flex;
   flex-direction: column;
+  gap: 2px;
 }
 
-.memLine {
-  display: flex;
-  gap: var(--spacing-sm);
+.stackHeader {
   font-size: 10px;
-  padding: 1px 0;
+  font-weight: 600;
+  color: var(--color-primary);
+  padding-bottom: var(--spacing-xs);
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: var(--spacing-xs);
 }
 
-.memAddr {
+.stackEntry {
+  display: grid;
+  grid-template-columns: 24px 48px 48px;
+  gap: var(--spacing-xs);
+  font-size: 10px;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+}
+
+.stackTop {
+  background-color: rgba(59, 130, 246, 0.15);
+}
+
+.stackOffset {
   color: var(--color-text-muted);
-  min-width: 40px;
 }
 
-.memBytes {
-  flex: 1;
+.stackAddr {
+  color: var(--color-text-muted);
+}
+
+.stackValue {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* Memory Browser */
+.memoryBrowser {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.memoryNav {
+  display: flex;
+  gap: var(--spacing-xs);
+  padding-bottom: var(--spacing-xs);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.memNavButton {
+  padding: 2px 8px;
+  font-size: 10px;
   font-family: var(--font-mono);
+  background-color: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  cursor: pointer;
 }
 
-.memAscii {
-  color: var(--color-text-muted);
-  min-width: 70px;
-  white-space: pre;
+.memNavButton:hover {
+  background-color: var(--color-border);
 }
+
+.memAddrInput {
+  flex: 1;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  background-color: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  min-width: 60px;
+}
+
+.memAddrInput:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
