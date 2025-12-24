@@ -35,17 +35,22 @@ print_status "Building RASM for WebAssembly..."
 
 cd "$RASM_DIR"
 
-# Compile RASM to WebAssembly (same config as pixsaur)
+# Compile RASM to WebAssembly
+# - Increased memory to avoid out of bounds during SNA compression
+# - NO_EXIT_RUNTIME to prevent crash on exit()
 emcc rasm.c \
     -O2 \
     -s WASM=1 \
     -s ALLOW_MEMORY_GROWTH=1 \
-    -s INITIAL_MEMORY=33554432 \
+    -s INITIAL_MEMORY=134217728 \
+    -s MAXIMUM_MEMORY=536870912 \
     -s FILESYSTEM=1 \
     -s EXPORTED_RUNTIME_METHODS='["FS","callMain"]' \
     -s MODULARIZE=1 \
     -s EXPORT_NAME="createRASM" \
     -s ENVIRONMENT='web' \
+    -s EXIT_RUNTIME=0 \
+    -s NO_EXIT_RUNTIME=1 \
     -DNO_3RD_PARTIES \
     -lm \
     -o "$OUTPUT_DIR/rasm.js"
@@ -57,7 +62,7 @@ ls -lh "$OUTPUT_DIR/rasm.js" "$OUTPUT_DIR/rasm.wasm" 2>/dev/null || true
 
 echo ""
 print_status "Usage in JavaScript:"
-cat << 'EOF'
+cat << 'USAGE'
 
 // Load RASM module
 const RASM = await createRASM();
@@ -75,4 +80,4 @@ RASM.callMain(['/source.asm', '-o', '/output.bin']);
 // Read compiled binary
 const binary = RASM.FS.readFile('/output.bin');
 
-EOF
+USAGE
