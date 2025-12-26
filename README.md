@@ -18,7 +18,7 @@ Below is a snapshot of [http://cngsoft.no-ip.org/cpcec.htm](http://cngsoft.no-ip
 ![](http://cngsoft.no-ip.org/cpcec192.png) ![](http://cngsoft.no-ip.org/zxsec192.png) ![](http://cngsoft.no-ip.org/csfec192.png) ![](http://cngsoft.no-ip.org/msxec192.png)  
 **CPCEC** Amstrad CPC emulator  
 and its siblings **ZXSEC**, **CSFEC** and **MSXEC**  
-82692 hits  
+  
   
 
 ## Foreword
@@ -39,10 +39,10 @@ See [original CPCEC page](http://cngsoft.no-ip.org/cpcec.htm) for an image galle
 
 This emulator owes its existence to a series of people and societies that are listed as follows:
 
--   The firmware files included in the package are **Amstrad**'s properties, who allows the emulation of their old computer systems and supports the distribution of their firmwares as long as their authorship and contents are respected, and whom I wholeheartedly thank the creation of those magnificent computers and the good will towards their emulation.
--   This emulator was my final project for the Computer Engineering postdegree at the **Distance-Learning National University (Universidad Nacional de Enseñanza a Distancia, UNED)**, a project directed by professor **José Manuel Díaz Martínez** and ultimately awarded a 100% and the right to a honorable mention.
--   The documentation about the system comes from **cpcwiki.eu, cpc-power.com, cpcrulez.fr** and **quasar.cpcscene.net**.
--   The alpha tests were handled by **Denis Lechevalier**.
+- The firmware files included in the package are **Amstrad**'s properties, who allows the emulation of their old computer systems and supports the distribution of their firmwares as long as their authorship and contents are respected, and whom I wholeheartedly thank the creation of those magnificent computers and the good will towards their emulation.
+- This emulator was my final project for the Computer Engineering postdegree at the **Distance-Learning National University (Universidad Nacional de Enseñanza a Distancia, UNED)**, a project directed by professor **José Manuel Díaz Martínez** and ultimately awarded a 100% and the right to a honorable mention.
+- The documentation about the system comes from **cpcwiki.eu, cpc-power.com, cpcrulez.fr** and **quasar.cpcscene.net**.
+- The alpha tests were handled by **Denis Lechevalier**.
 
 ## Version log
 
@@ -55,7 +55,7 @@ See [git history](https://github.com/cpcitor/cpcec/commits)
 ------------------------------------------------------------------------
 
   
-[Spanish CPC firmware](http://cngsoft.no-ip.org/cpc-rom-esp.zip) (1052 hits) [French CPC firmware](http://cngsoft.no-ip.org/cpc-rom-fra.zip) (970 hits)
+[Spanish CPC firmware](http://cngsoft.no-ip.org/cpc-rom-esp.zip) [French CPC firmware](http://cngsoft.no-ip.org/cpc-rom-fra.zip)
 
 ------------------------------------------------------------------------
 
