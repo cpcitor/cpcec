@@ -11,8 +11,8 @@
 // interface of variables and procedures that don't require particular
 // knowledge of the emulation's intrinsic properties.
 
-#define MY_LICENSE "Copyright (C) 2019-2025 Cesar Nicolas-Gonzalez"
-#define MY_VERSION "20250427" // all emulators share the same release date
+#define MY_LICENSE "Copyright (C) 2019-2026 Cesar Nicolas-Gonzalez"
+#define MY_VERSION "20260117" // all emulators share the same release date
 
 #define INLINE // 'inline' is useless in TCC and GCC4, and harmful in GCC5!
 #define UNUSED // '__attribute__((unused))' may be missing outside GCC
@@ -579,24 +579,24 @@ VIDEO_UNIT video_litegun; // lightgun data
 #endif
 // *!* are there any systems where VIDEO_UNIT is NOT the DWORD 0X00RRGGBB!? *!*
 
-int video_gamma_map[256];
-#define video_gamma_ceil 196965 // ~ 255**2.2 // sRGB GAMMA = 2.2
+double video_gamma_map[256];
+#define video_gamma_ceil 196965 // 255**2.2+.5 // sRGB GAMMA = 2.2
 int video_gamma_init(int x) { return SDL_pow(x,2.2/1.0)+.5; }
 #define video_gamma_prae(x) video_gamma_map[x]
-int video_gamma_post(int x) { return SDL_pow(x,1.0/2.2)+.5; }
+int video_gamma_post(double x) { return SDL_pow(x,1.0/2.2); } // +.5 !?
 
 BYTE video_type=2; // 0 = monochrome, 1=dark palette, 2=normal palette, 3=light palette, 4=green screen
 int video_type_less(int i) { return SDL_pow(i/255.0,1.6/1.0)*255.0+.5; }
 int video_type_more(int i) { return SDL_pow(i/255.0,1.6/2.2)*255.0+.5; }
 VIDEO_UNIT video_xlat_rgb(VIDEO_UNIT i)
 {
-	int r=i>>16,g=(i>>8)&255,b=i&255; switch (video_type)
+	if (video_type==2) return i; // normal palette
+	unsigned char r=i>>16,g=(i>>8)&255,b=i&255; unsigned int y; switch (video_type)
 	{
-		case 0: return (i=VIDEO_RGB2Y(r,g,b)),((i))*0X10101; // monochrome
-		case 4: return (i=VIDEO_RGB2Y(r,g,b)),((i)>>1)*0X10001+((i*3)>>2)*0X00100+0X003C00; // green screen; cfr. video_xlat_fix()
+		case 4: return (y=video_gamma_post(VIDEO_RGB2Y(r,g,b)/256.0)),(y>>1)*0X10001+((y*3)>>2)*0X00100+0X003C00; // green screen; cfr. video_xlat_fix()
 		case 1: return (video_type_less(r)<<16)+(video_type_less(g)<<8)+video_type_less(b); // dark palette
 		case 3: return (video_type_more(r)<<16)+(video_type_more(g)<<8)+video_type_more(b); // light palette
-		default: return i; // normal palette
+		default: return (y=video_gamma_post(VIDEO_RGB2Y(r,g,b)/256-0)),(y>>0)*0X10101; // monochrome
 	}
 }
 VIDEO_UNIT *video_xlat_all(VIDEO_UNIT *t,VIDEO_UNIT const *s,int n) // turn palette `s` of `n` entries into palette `t` thru current filter
@@ -615,8 +615,10 @@ VIDEO_UNIT *video_xlat_all(VIDEO_UNIT *t,VIDEO_UNIT const *s,int n) // turn pale
 #define VIDEO_FILTER_DOT1(x) (video_dot1[(x)>>16]<<16|video_dot1[255&((x)>>8)]<<8|video_dot1[255&(x)])
 #define VIDEO_FILTER_DOT2(x) (video_dot2[(x)>>16]<<16|video_dot2[255&((x)>>8)]<<8|video_dot2[255&(x)])
 BYTE video_srgb[1<<16],video_dot0[256],video_dot1[256],video_dot2[256]; // sRGB operations need precalc'd tables, they're too expensive :-(
-#define VIDEO_FILTER_DOT3(x) (video_dot3[(x)>>16]<<16|video_dot3[255&((x)>>8)]<<8|video_dot3[255&(x)]) // =DOT1(DOT0)
-#define VIDEO_FILTER_DOT4(x) (video_dot4[(x)>>16]<<16|video_dot4[255&((x)>>8)]<<8|video_dot4[255&(x)]) // =DOT2(DOT0)
+//#define VIDEO_FILTER_DOT3 VIDEO_FILTER_DOT0 // too simple,
+//#define VIDEO_FILTER_DOT4 VIDEO_FILTER_DOT0 // not pretty!
+#define VIDEO_FILTER_DOT3(x) (video_dot3[(x)>>16]<<16|video_dot3[255&((x)>>8)]<<8|video_dot3[255&(x)]) // either DOT0(DOT1) or DOT1(DOT0)
+#define VIDEO_FILTER_DOT4(x) (video_dot4[(x)>>16]<<16|video_dot4[255&((x)>>8)]<<8|video_dot4[255&(x)]) // either DOT0(DOT2) or DOT2(DOT0)
 BYTE video_dot3[256],video_dot4[256]; // to perform MASK_X and MASK_Y at once
 BYTE video_praecalc_flag=0; // normally this is off!
 void video_praecalc(void) // build the precalc'd video filter tables
@@ -636,10 +638,10 @@ void video_praecalc(void) // build the precalc'd video filter tables
 			video_dot1[h]=video_gamma_post(zz<video_gamma_ceil?  zz:video_gamma_ceil),
 			video_dot2[h]=video_gamma_post(zz<video_gamma_ceil?0:zz-video_gamma_ceil);
 		#endif
-		for (int l=0;l<256;++l) video_srgb[h*256+l]=video_gamma_post((video_gamma_prae(h)+video_gamma_prae(l)+1)>>1);//=(h+l+1)>>1;
+		for (int l=0;l<256;++l) video_srgb[h*256+l]=h==l?h:video_gamma_post((video_gamma_prae(h)+video_gamma_prae(l))/2.0);//=(h+l+1)>>1;
 	}
-	//for (int h=0;h<256;++h) video_dot3[h]=video_dot1[video_dot0[h]],video_dot4[h]=video_dot2[video_dot0[h]]; // this must happen last! (reversed)
-	for (int h=0;h<256;++h) video_dot3[h]=video_dot0[video_dot1[h]],video_dot4[h]=video_dot0[video_dot2[h]]; // this must happen last! (normal)
+	for (int h=0;h<256;++h) video_dot3[h]=video_dot0[video_dot1[h]],video_dot4[h]=video_dot0[video_dot2[h]]; // this must happen last! DOT0(DOT1)+DOT0(DOT2)
+	//for (int h=0;h<256;++h) video_dot3[h]=video_dot1[video_dot0[h]],video_dot4[h]=video_dot2[video_dot0[h]]; // this must happen last! DOT1(DOT0)+DOT2(DOT0)
 }
 #define VIDEO_FILTER_SRGB(x,y) (video_srgb[((x>>8)&0XFF00)|(y>>16)]<<16)|(video_srgb[(x&0XFF00)|((y>>8)&255)]<<8)|video_srgb[((x&255)<<8)|(y&255)] // old-new avg.
 #define VIDEO_FILTER_HALF(x,y) (x==y?x:VIDEO_FILTER_SRGB(x,y))
@@ -685,14 +687,14 @@ void video_callscanline(VIDEO_UNIT *vl)
 				break;
 			case VIDEO_FILTER_MASK_X:
 				do
-					*vo=*vi=VIDEO_FILTER_DOT1(*vi),++vo,++vi,
-					*vo=*vi=VIDEO_FILTER_DOT2(*vi);
+					vt=*vi,*vo=*vi=VIDEO_FILTER_DOT1(vt),++vo,++vi,
+					vt=*vi,*vo=*vi=VIDEO_FILTER_DOT2(vt);
 				while (++vo,++vi<vl);
 				break;
 			case VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y:
 				do
-					vt=*vi,*vi=VIDEO_FILTER_DOT1(*vi),*vo=VIDEO_FILTER_DOT3(vt),++vo,++vi,
-					vt=*vi,*vi=VIDEO_FILTER_DOT2(*vi),*vo=VIDEO_FILTER_DOT4(vt);
+					vt=*vi,*vi=VIDEO_FILTER_DOT1(vt),*vo=VIDEO_FILTER_DOT3(vt),++vo,++vi,
+					vt=*vi,*vi=VIDEO_FILTER_DOT2(vt),*vo=VIDEO_FILTER_DOT4(vt);
 				while (++vo,++vi<vl);
 				break;
 		}
@@ -909,18 +911,20 @@ INLINE void video_drawscanline(void) // call after each drawn scanline; memory c
 						*vj=VIDEO_FILTER_DOT2(*vj),*vo=*vj;
 						#else // standard half'n'half
 						*vj=VIDEO_FILTER_DOT1(*vj),*vo=VIDEO_FILTER_HALF(*vi,*vj),++vj,++vo,++vi,
-						*vj=VIDEO_FILTER_DOT2(*vj),*vo=VIDEO_FILTER_HALF(*vi,*vj);
+						*vj=VIDEO_FILTER_DOT2(*vj),*vo=VIDEO_FILTER_HALF(*vi,*vj); // imprecise!?
 						#endif
 					while (++vj,++vo,++vi<vl);
 					break;
 				case VIDEO_FILTER_MASK_X+VIDEO_FILTER_MASK_Y:
 					do
 						#ifdef RAWWW // quick'n'dirty
-						*vi=vt=VIDEO_FILTER_DOT1(*vi),*vo=VIDEO_FILTER_DOT0(vt),++vj,++vo,++vi,
-						*vi=VIDEO_FILTER_DOT2(*vi),*vo=VIDEO_FILTER_DOT0(*vj);
+						*vi=vt=VIDEO_FILTER_DOT1(*vi),*vo=VIDEO_FILTER_DOT0( vt),++vj,++vo,++vi,
+						*vi=   VIDEO_FILTER_DOT2(*vi),*vo=VIDEO_FILTER_DOT0(*vj);
 						#else // standard half'n'half
 						vt=VIDEO_FILTER_HALF(*vi,*vj),*vj=VIDEO_FILTER_DOT1(*vj),*vo=VIDEO_FILTER_DOT3(vt),++vj,++vo,++vi,
-						vt=VIDEO_FILTER_HALF(*vi,*vj),*vj=VIDEO_FILTER_DOT2(*vj),*vo=VIDEO_FILTER_DOT4(vt);
+						vt=VIDEO_FILTER_HALF(*vi,*vj),*vj=VIDEO_FILTER_DOT2(*vj),*vo=VIDEO_FILTER_DOT4(vt); // imprecise!?
+						//*vj=vt=VIDEO_FILTER_DOT1(*vj),vt=VIDEO_FILTER_HALF(*vi,vt),*vo=VIDEO_FILTER_DOT3(vt),++vj,++vo,++vi,
+						//*vj=vt=VIDEO_FILTER_DOT2(*vj),vt=VIDEO_FILTER_HALF(*vi,vt),*vo=VIDEO_FILTER_DOT4(vt); // imprecise!?
 						#endif
 					while (++vj,++vo,++vi<vl);
 					break;

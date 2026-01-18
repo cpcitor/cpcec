@@ -66,6 +66,8 @@ void z80_setup(void) // setup the Z80
 		j=(i&0x10)+((i&128)>>5); // ---H-V--
 		z80_flags_sub[i]=2+(z80_flags_add[i]=j); // ---H-V!0
 		z80_flags_sub[256+i]=2+(z80_flags_add[256+i]=j^5); // ---H-V!1
+		//z80_flags_sub[256+i]=2+(z80_flags_add[i]=j); // ---H-V!0
+		//z80_flags_sub[i]=2+(z80_flags_add[256+i]=j^5); // ---H-V!1
 	}
 }
 
@@ -150,6 +152,7 @@ void z80_reset(void) // reset the Z80
 #define Z80_SBC2(x) do{ int z=z80_hl.w-x.w-(z80_af.b.l&1); z80_af.b.l=((z>>16)&1)+(((z80_hl.w^z^x.w)>>8)&0x10)+(((WORD)z)?((z>>8)&0xA8):0x40)+((((x.w^z80_hl.w)&(z80_hl.w^z))>>13)&4)+2; z80_wz=z80_hl.w+1; z80_hl.w=z; Z80_WAIT_IR1X(7); }while(0)
 #define Z80_ADDC(x,y) do{ int z=z80_af.b.h+x+y; z80_af.b.l=z80_flags_sgn[(BYTE)z]+z80_flags_add[(z^z80_af.b.h^x)]; z80_af.b.h=z; }while(0) // ADD safely stays within [0,511]
 #define Z80_SUBC(x,y) do{ int z=z80_af.b.h-x-y; z80_af.b.l=z80_flags_sgn[(BYTE)z]+z80_flags_sub[(z^z80_af.b.h^x)&511]; z80_af.b.h=z; }while(0) // SUB can fall beyond [0,511]
+//#define Z80_SUBC(x,y) do{ int z=z80_af.b.h-x-y; z80_af.b.l=z80_flags_sgn[(BYTE)z]+z80_flags_sub[(z^z80_af.b.h^x)+256]; z80_af.b.h=z; }while(0) // SUB stays within [-256,255]
 #define Z80_ADD1(x) Z80_ADDC(x,0)
 #define Z80_ADC1(x) Z80_ADDC(x,(z80_af.b.l&1))
 #define Z80_SUB1(x) Z80_SUBC(x,0)
@@ -157,7 +160,8 @@ void z80_reset(void) // reset the Z80
 #define Z80_AND1(x) z80_af.b.l=z80_flags_and[z80_af.b.h=z80_af.b.h&(x)]
 #define Z80_XOR1(x) z80_af.b.l=z80_flags_xor[z80_af.b.h=z80_af.b.h^(x)]
 #define Z80_OR1(x) z80_af.b.l=z80_flags_xor[z80_af.b.h=z80_af.b.h|(x)]
-#define Z80_CP1(x) do{ int z=z80_af.b.h-x; z80_af.b.l=(z80_flags_sgn[(BYTE)z]&0xD7)+z80_flags_sub[(z^z80_af.b.h^x)&511]+(x&0x28); }while(0) // unlike SUB, 1.- A intact, 2.- flags 3+5 from argument
+#define Z80_CP1(x) do{ int z=z80_af.b.h-x; z80_af.b.l=(z80_flags_sgn[(BYTE)z]&0xD7)+z80_flags_sub[(z^z80_af.b.h^x)&511]+(x&0x28); }while(0) // unlike SUB, 1.- A intact,
+//#define Z80_CP1(x) do{ int z=z80_af.b.h-x; z80_af.b.l=(z80_flags_sgn[(BYTE)z]&0xD7)+z80_flags_sub[(z^z80_af.b.h^x)+256]+(x&0x28); }while(0) // 2.- flags 3+5 from argument
 #ifdef DEBUG_HERE
 #define Z80_RET2 z80_wz=Z80_PEEK0(z80_sp.w); if (++z80_sp.w>debug_trap_sp) { _t_=0,session_signal|=SESSION_SIGNAL_DEBUG; } z80_pc.w=z80_wz+=Z80_PEEK0(z80_sp.w)<<8; ++z80_sp.w; // throw!
 #else

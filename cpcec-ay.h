@@ -167,7 +167,7 @@ void playcity_reset(void)
 	MEMZERO(playcity_table);
 	PSG_PLAYCITY_RESET;
 	#if PSG_PLAYCITY == 1
-	playcity_table[0][7]=0XFF; // channels+noise off
+	playcity_table[0][7]=0XFF; // channels+noise off *!* perhaps 0X3F
 	#else
 	playcity_table[0][7]=playcity_table[1][7]=0XFF;
 	#endif
@@ -178,8 +178,7 @@ void psg_reset(void) // reset the PSG AY-3-8910
 {
 	psg_index=0;
 	MEMZERO(psg_table);
-	//psg_table[7]=0x38; // all channels enabled, all noise disabled
-	psg_table[7]=0XFF; // everything disabled
+	psg_table[7]=0XFF; // channels+noise off *!* perhaps 0X3F
 	psg_all_update();
 	#ifdef PSG_PLAYCITY
 	playcity_reset();

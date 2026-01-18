@@ -508,7 +508,7 @@ void M65XX_MAIN(int _t_) // runs the M65XX chip for at least `_t_` clock ticks; 
 					M65XX_TRAP_0X58;
 					#endif
 					M65XX_TOCK; M65XX_WAIT; M65XX_PAGE(M65XX_PC.b.h);
-					if ((M65XX_PEEK(M65XX_PC.w)!=0X78)/*&&(M65XX_P&4)*/) M65XX_INT&=~  3; // IRQ delay: "RIMRUNNER" ($85DE) but not "4KRAWALL" ($8230)
+					if ((M65XX_PEEK(M65XX_PC.w)!=0X78)/*&&(M65XX_P&4)*/) M65XX_INT=0; // IRQ delay: "RIMRUNNER" ($85DE) but not "4KRAWALL" ($8230)
 					M65XX_P&=~4;
 					break;
 				case 0X78: // SEI

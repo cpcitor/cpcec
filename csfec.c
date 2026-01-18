@@ -54,7 +54,7 @@ Contact information: <mailto:cngsoft@gmail.com> */
 #define VIDEO_PIXELS_X (40<<4)
 #define VIDEO_PIXELS_Y (25<<4)
 #endif
-#define VIDEO_RGB2Y(r,g,b) (video_gamma_post((video_gamma_prae(r)*77+video_gamma_prae(g)*152+video_gamma_prae(b)*28)>>8)) // generic RGB-to-Y expression
+#define VIDEO_RGB2Y(r,g,b) (video_gamma_prae(r)*77+video_gamma_prae(g)*152+video_gamma_prae(b)*28) // generic RGB-to-Y16 expression
 
 #if defined(SDL2)||!defined(_WIN32)
 unsigned short session_icon32xx16[32*32] = {
@@ -1913,7 +1913,7 @@ char autorun_path[STRMAX]=""; BYTE *autorun_s=NULL,autorun_m=0;
 #define M6510_NMI_SET (m6510_irq|=+128)
 #define M6510_VIC_RES (m6510_irq&=~  1)
 #define M6510_CIA_RES (m6510_irq&=~  2)
-#define M6510_NMI_RES (m6510_irq&=~128)
+#define M6510_NMI_RES (m6510_irq&=~128) // check BADMOOD and others for special cases!
 
 // notice that nonzero "tape_thru_cia" and "tape_type<0" imply a valid tape
 #define M6510_62500HZ_H do{ if (!tape_disabled) { if (LIKELY(tape_thru_cia)) m6510_62500hz_playtape(); else if (tape_type<0) m6510_62500hz_savetape(); } \
@@ -3201,7 +3201,7 @@ int snap_load(char *s) // loads snapshot file `s`; 0 OK, !0 ERROR
 			cart_mode|=+128; // temporary bit, see below
 		}
 		// ... future blocks will go here ...
-		else cprintf("SNAP %08X:%08X?\n",k,i); // unknown type:size
+		//else cprintf("SNAP %08X:%08X?\n",k,i); // unknown type:size, skip it whole!
 		{ if (i<0) return puff_fclose(f),1; } fseek(f,i,SEEK_CUR); // abort on error!
 	}
 	if (georam_yes>=2) // adjust variables after loading REU data

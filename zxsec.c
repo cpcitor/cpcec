@@ -54,7 +54,7 @@ Contact information: <mailto:cngsoft@gmail.com> */
 #define VIDEO_PIXELS_X (32<<4)
 #define VIDEO_PIXELS_Y (24<<4)
 #endif
-#define VIDEO_RGB2Y(r,g,b) (video_gamma_post((video_gamma_prae(r)*77+video_gamma_prae(g)*152+video_gamma_prae(b)*28)>>8)) // generic RGB-to-Y expression
+#define VIDEO_RGB2Y(r,g,b) (video_gamma_prae(r)*77+video_gamma_prae(g)*152+video_gamma_prae(b)*28) // generic RGB-to-Y16 expression
 
 #if defined(SDL2)||!defined(_WIN32)
 unsigned short session_icon32xx16[32*32] = {
@@ -274,19 +274,20 @@ int trdos_open(char *s,int d,int canwrite) // insert a BETA128 disc from path `s
 	if (!(diskette_canwrite[d]=canwrite)||!(trdos[d]=puff_fopen(s,"rb+"))) // "rb+" allows modifying the disc file;
 		if (diskette_canwrite[d]=0,!(trdos[d]=puff_fopen(s,"rb"))) // fall back to "rb" if "rb+" is unfeasible!
 			return trdos_close(d),1; // file error!
-	int i=fread1(diskette_mem[d],9,trdos[d]);
+	int i=fread1(diskette_mem[d],9,trdos[d]); if (i<9) return trdos_close(d),1; // truncated!!
 	if (!memcmp(diskette_mem[d],"SINCLAIR",8)&&diskette_mem[d][8]<'B') // valid SCL header?
 	{
 		int j,k=diskette_mem[d][8];
 		memset(diskette_mem[d],0,4096);
 		for (i=16,j=0;j<k;++j) // build file list (the first 4k)
 		{
-			fread1(&diskette_mem[d][16*j],14,trdos[d]);
+			if (fread1(&diskette_mem[d][16*j],14,trdos[d])<14)
+				return trdos_close(d),1; // truncated file entry!
 			diskette_mem[d][16*j+14]=i&15;
 			diskette_mem[d][16*j+15]=i>>4;
 			i+=diskette_mem[d][16*j+13];
 		}
-		cprintf("SCL header: %d files in %d sectors.\n",k,i);
+		//cprintf("SCL header: %d files in %d sectors.\n",k,i);
 		diskette_mem[d][0X008E1]=i&15;
 		diskette_mem[d][0X008E2]=i>>4;
 		diskette_mem[d][0X008E3]=0X16; // 80 tracks, 2 sides
@@ -300,8 +301,8 @@ int trdos_open(char *s,int d,int canwrite) // insert a BETA128 disc from path `s
 	}
 	// either TRD or SCL, read the remainder of the file
 	i+=fread1(&diskette_mem[d][i],(TRDOS_MAXTRACKS*2*DISKETTE_SECTORS*DISKETTE_PAGE)-i,trdos[d]);
-	i+=fread1(diskette_mem[d],(TRDOS_MAXTRACKS*2*DISKETTE_SECTORS*DISKETTE_PAGE),trdos[d]);
-	if (i<8192||i>(TRDOS_MAXTRACKS*2*DISKETTE_SECTORS*DISKETTE_PAGE)||diskette_mem[d][0X008E7]!=0X10||(diskette_mem[d][0X31]>0&&diskette_mem[d][0X31]<3))
+	i+=fread1(diskette_mem[d],(TRDOS_MAXTRACKS*2*DISKETTE_SECTORS*DISKETTE_PAGE),trdos[d]); // catch overly big files!
+	if (i<4096||i>(TRDOS_MAXTRACKS*2*DISKETTE_SECTORS*DISKETTE_PAGE)||diskette_mem[d][0X008E7]!=0X10||(diskette_mem[d][0X31]>0&&diskette_mem[d][0X31]<3))
 		return trdos_close(d),1; // not a valid TR-DOS disc!
 	if (i<(TRDOS_MAXTRACKS*2*DISKETTE_SECTORS*DISKETTE_PAGE))
 		memset(&diskette_mem[d][i],0,(TRDOS_MAXTRACKS*2*DISKETTE_SECTORS*DISKETTE_PAGE)-i); // sanitize unused space

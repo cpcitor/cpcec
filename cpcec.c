@@ -58,8 +58,7 @@ Contact information: <mailto:cngsoft@gmail.com> */
 #define VIDEO_HSYNC_HI (66<<4)
 #define VIDEO_VSYNC_LO (37<<4)
 #define VIDEO_VSYNC_HI (44<<4)
-//#define VIDEO_RGB2Y(r,g,b) (video_gamma_post((video_gamma_prae(r)*77+video_gamma_prae(g)*152+video_gamma_prae(b)*28)>>8)) // generic RGB-to-Y expression
-#define VIDEO_RGB2Y(r,g,b) (video_gamma_post((video_gamma_prae(r)*59+video_gamma_prae(g)*178+video_gamma_prae(b)*20)>>8)) // custom RGB-to-Y expression
+#define VIDEO_RGB2Y(r,g,b) (video_gamma_prae(r)*59+video_gamma_prae(g)*178+video_gamma_prae(b)*20) // custom RGB-to-Y16 expression
 
 #if defined(SDL2)||!defined(_WIN32)
 unsigned short session_icon32xx16[32*32] = {
@@ -1479,8 +1478,10 @@ void z80_send(WORD p,BYTE b) // the Z80 sends a byte to a hardware port
 			playcity_reset(); MEMZERO(playcity_ctc_count); session_dirty|=playcity_dirty,playcity_dirty=dac_voice=0;
 		}
 		if (p==0xF880)
+		{
 			//cprintf("F880:%02X ",b),
-			{ if (b<16) playcity_setcfg(b); } // CTC CHANNEL 0 CONFIG
+			if (b<16) playcity_setcfg(b); // CTC CHANNEL 0 CONFIG
+		}
 		else if (!playcity_disabled)
 		{
 			//#ifdef Z80_NMI_ACK
@@ -2478,6 +2479,8 @@ void all_reset(void) // reset everything!
 	z80_reset();
 	z80_sp.w=0xC000; // implicit in "No Exit" PLUS!
 	z80_imd=1; // implicit in "Pro Tennis Tour" PLUS!
+	psg_table[7]=0X3F; // implicit in "Pang" and "Robocop 2" PLUS: it assumes the second joystick is always on if bit 6 is SET!
+	// it also hurts "Sonic GX", that boots in test mode for the same reasons; see psg_port_a_lock()
 	debug_reset();
 	disc_disabled&=1,z80_irq=snap_done=autorun_m=autorun_t=0; // avoid accidents!
 	MEMBYTE(z80_tape_index,-1); // TAPE_FASTLOAD, avoid false positives!

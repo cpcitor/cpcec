@@ -20,7 +20,7 @@ that made possible loading and running software.
 
 CPCEC includes several related projects. ZXSEC is an emulator of the Sinclair
 Spectrum family (48K, 128K, +2/Plus2 and +3/Plus3) based on the components it
-shared with the Amstrad CPC family: the Z80 microprocessor, the PSG AY-3-8192
+shared with the Amstrad CPC family: the Z80 microprocessor, the PSG AY-3-8912
 sound chip, the tape system and the NEC765 disc drive controller; CSFEC is an
 emulator of the Commodore 64 platform, similarly based on shared code; and MSXEC
 is an emulator of the MSX family (1983 MSX, 1985 MSX2, 1988 MSX2+), also based
@@ -407,7 +407,7 @@ task of encoding the AVI file. Read the documentation of FFMPEG on this matter.
 
 ZXSEC is an emulator of the Sinclair Spectrum family (48K, 128K, +2/Plus2 and
 +3/Plus3) based on the components it shared with the Amstrad CPC family: the Z80
-microprocessor, the PSG AY-3-8192 sound chip, the tape system and the NEC765
+microprocessor, the PSG AY-3-8912 sound chip, the tape system and the NEC765
 disc drive controller. It also optionally emulates several add-ons: the Spectrum
 Dandanator extension, the Beta128 disc interface, the Pentagon 128 board, the
 64-colour ULAplus video chip and the AY-Melodik 48K and Covox $FB sound chips.
@@ -1355,3 +1355,7 @@ X-blending) now simulates a softer X-masking without any blending.
 - 20250427 -- minor patch limiting all secondary slot logic to the primary slot
 3 in MSXEC: primary slots 1 and 2 never carry any secondary logic, and primary
 slot 0 carried secondary logic in very few MSX2+ models.
+- 20260117 -- minor patch resetting the PSG port 7 to 63 instead of 255 in CPCEC
+("Pang", "Robocop 2" and "Sonic GX" assumed the second joystick was always on:
+reported by Xenon) and fixing a bug in the SCL file parser in ZXSEC (reported by
+Megachur).

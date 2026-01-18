@@ -56,7 +56,7 @@ Contact information: <mailto:cngsoft@gmail.com> */
 //#define VIDEO_OFFSET_Y (32<<2) // original MSX1 512x384
 //#define VIDEO_PIXELS_Y (24<<4)
 #endif
-#define VIDEO_RGB2Y(r,g,b) (video_gamma_post((video_gamma_prae(r)*77+video_gamma_prae(g)*152+video_gamma_prae(b)*28)>>8)) // generic RGB-to-Y expression
+#define VIDEO_RGB2Y(r,g,b) (video_gamma_prae(r)*77+video_gamma_prae(g)*152+video_gamma_prae(b)*28) // generic RGB-to-Y16 expression
 
 #if defined(SDL2)||!defined(_WIN32)
 unsigned short session_icon32xx16[32*32] = {
@@ -620,7 +620,7 @@ int cart_hotfix(char *s) // patch cartridge according to IPS file `s`; zero OK, 
 	return puff_fclose(f),j>=0||i!=0X454F46; // "EOF"
 }
 
-BYTE ps_slot[4];
+BYTE ps_slot[4]; // for debug purposes: high nibble = PSLOT#, bottom nibble = SSLOT#
 BYTE slots_ram=0x32,slots_1st=0x10,slots_2nd=0x20,slots_dsk=0x20; // original MSX1 slots
 BYTE slots_sub=0x31,slots_mus=0x33; // later MSX2, MSX2P and MSXTR slots
 // some slots are compatible with each other; for example SUB is compatible with DSK or MUS in MSX2 but not in MSX2P
@@ -1087,7 +1087,7 @@ void mmu_slowpoke(WORD w,BYTE b) // notice that the caller already filters out i
 BYTE mmu_slowpeek(WORD w) // ditto, we can only reach this function if the MMU_BIT fields are right and the address isn't
 {
 	/**/ if (w>=0XF000) // SSLOT!
-		return (w==0XFFFF&&type_id>(pio_port_a<192?1:0))?cprintf("%08X: %02X (SLOWPEEK)\n",z80_pc.w,~rom_cfg[pio_port_a>>6]),~rom_cfg[pio_port_a>>6]:PEEK(w);
+		return (w==0XFFFF&&type_id>(pio_port_a<192?1:0))?cprintf("%08X: %02X (SLOWPEEK)\n",z80_pc.w,255^rom_cfg[pio_port_a>>6]),255^rom_cfg[pio_port_a>>6]:PEEK(w);
 	else if (mmu_rom[w>>12]==disc_mapping[w>>14]) switch(w&0X3FFF) // MSX-DISK I/O?
 	{
 		case 0X3FB8: case 0X3FF8: return diskette_recv_status();
@@ -3350,7 +3350,7 @@ int snap_load(char *s) // load a snapshot `s`; zero OK, nonzero error!
 			playcity_disabled=0,fread1(playcity_table[0],16,f),playcity_index[0]=fgetc(f),i-=17;
 		}
 		// ... future blocks will go here ...
-		else cprintf("SNAP %08X:%08X?\n",k,i); // unknown type:size
+		//else cprintf("SNAP %08X:%08X?\n",k,i); // unknown type:size, skip it whole!
 		{ if (i<0) return puff_fclose(f),1; } fseek(f,i,SEEK_CUR); // abort on error!
 	}
 	ram_dirty=(j>>14)-1; i=0; while (j>65536) ++i,j>>=1;
