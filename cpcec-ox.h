@@ -1396,7 +1396,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	if (SDL_Init(SDL_INIT_EVENTS|SDL_INIT_VIDEO|SDL_INIT_AUDIO|SDL_INIT_TIMER|SDL_INIT_JOYSTICK|SDL_INIT_GAMECONTROLLER)<0)
 		return (char*)SDL_GetError();
 	if (!(session_hwnd=SDL_CreateWindow(NULL,SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,VIDEO_PIXELS_X,VIDEO_PIXELS_Y,0))|| // SDL_WINDOWPOS_CENTERED is wonderful :-)
-		!(video_blend=malloc(sizeof(VIDEO_UNIT[(VIDEO_PIXELS_Y>>!!VIDEO_HALFBLEND)*VIDEO_PIXELS_X])))
+		!(video_blend=malloc(sizeof(VIDEO_UNIT[16+(VIDEO_PIXELS_Y>>!!VIDEO_HALFBLEND)*VIDEO_PIXELS_X])))
 		) return SDL_Quit(),(char*)SDL_GetError();
 
 	if (!session_softblit&&(session_blitter=SDL_CreateRenderer(session_hwnd,-1,0))) // ...SDL_CreateRenderer(session_hwnd,-1,SDL_RENDERER_SOFTWARE)

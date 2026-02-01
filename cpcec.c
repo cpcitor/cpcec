@@ -679,8 +679,8 @@ void video_main_sprites(void)
 		int spritey=(crtc_line-(plus_sprite_xyz[i+2]+256*plus_sprite_xyz[i+3]))&511; // 9-bit wrap!
 		if ((spritey>>=--zoomy)>=16) continue;
 		int spritex=(plus_sprite_xyz[i+0]+256*(INT8)plus_sprite_xyz[i+1])+plus_sprite_offset;
-		if (spritex&1) j=2; // misaligned = hi-res!
 		if (plus_sprite_latest>=spritex+(16<<--zoomx)||spritex>=video_pos_x) continue;
+		if (spritex&1) j=2; // misaligned = hi-res! // *!*
 		int x=0,xx=16; if ((spritex-=plus_sprite_latest)<0)
 			x=(0-spritex)>>zoomx,xx-=x,spritex+=x<<zoomx; // clip left edge
 		BYTE *s=&plus_sprite_bmp[i*32+spritey*16+x];
@@ -713,15 +713,17 @@ void video_main_sprites(void)
 	video_hi_x_res|=j; // catch hi-res sprites!
 	plus_sprite_latest=video_pos_x; //plus_dirtysprite=-1;
 }
-void video_main_borders(void)
+void video_plus_cleanup(void)
 {
 	if ((plus_sscr&128)&&plus_sprite_offset>VIDEO_OFFSET_X-16) // render extra border
 		for (int i=0;i<16;++i)
 			*plus_sprite_target++=plus_sprite_border;
+	if (plus_sprite_adjust==-1) // the only possible negative case!!
+		*video_target=video_clut[16];
 	video_target-=plus_sprite_adjust; // undo excess pixels
 	video_pos_x-=plus_sprite_adjust; // clip right border
-	plus_sprite_target=NULL;
 	plus_sprite_adjust=0;
+	plus_sprite_target=NULL;
 }
 
 void video_main(int t) // render video output for `t` clock ticks; t is always nonzero!
@@ -816,25 +818,26 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 
 			// special pixel rendering cases: start and end of bitmap rasterline
 
-			if (!(crtc_status&(CRTC_STATUS_V_OFF+CRTC_STATUS_VSYNC)) // these events only make sense inside the bitmap!
-				&&crtc_table[1]) // ...and if the bitmap size is nonzero!
+			if (!crtc_count_r0) // beginning of bitmap -- CRTC_STATUS_H_OFF_RES won't do because of retriggering, f.e. "SYNERGY 2"
 			{
-				if (!crtc_count_r0) // beginning of bitmap -- CRTC_STATUS_H_OFF_RES won't do because of retriggering, f.e. "SYNERGY 2"
+				// these events only make sense inside a bitmap!
+				if (!(crtc_status&(CRTC_STATUS_V_OFF+CRTC_STATUS_VSYNC))&&crtc_table[1])
 				{
 					if (plus_enabled)
 					{
 						if (plus_sprite_target)
 						{
 							if (video_pos_x>plus_sprite_latest) video_main_sprites(); // draw more sprites, "DELIRIUM" retriggers the horizontal bitmap!
-							video_main_borders(); // retrigger border cleanup
+							video_plus_cleanup(); // retrigger border cleanup
 						}
 						plus_sprite_border=video_clut[16];
 						plus_sprite_target=video_target;
 						plus_sprite_offset=video_pos_x;
-						plus_sprite_adjust=plus_gate_enabled?plus_sscr&15:gate_status&2?0:1; // "IMPERIAL MAHJONG" on PLUS relies on this!
+						plus_sprite_adjust=plus_gate_enabled?plus_sscr&15:(gate_status&3)==2?-1:0; // "IMPERIAL MAHJONG" on PLUS relies on this!
 						if (video_pos_x>VIDEO_OFFSET_X-16&&video_pos_x<VIDEO_OFFSET_X+VIDEO_PIXELS_X)
 						{
 							VIDEO_UNIT p=gate_status<32?video_clut[16]:video_xlat[20];
+							if (plus_sprite_adjust<=0) video_target+=plus_sprite_adjust; else
 							for (int i=0;i<plus_sprite_adjust;++i)
 								VIDEO_NEXT=p; // pad left border
 						}
@@ -842,17 +845,20 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 							video_target+=plus_sprite_adjust;
 						plus_sprite_latest=video_pos_x+=plus_sprite_adjust;
 					}
-					else if (!(crtc_type&5)&&video_pos_x>VIDEO_OFFSET_X) // CRTC0 and CRTC2 draw "shadows" on "SYNERGY 2" (5 stripes) and
-						video_target[-8]= video_target[-7]= video_target[-6]= video_target[-5]= // "ONESCREEN COLONIES" (brick wall):
-						video_target[-4]= video_target[-3]= video_target[-2]= video_target[-1]= video_clut[16]; // actually the border
-				}
-				else if (crtc_count_r0==crtc_table[1]) // end of bitmap -- CRTC_STATUS_H_OFF_SET will do
-				{
-					if (plus_sprite_target)
+					else
 					{
-						if (video_pos_x>plus_sprite_latest) video_main_sprites(); // last sprites
-						video_main_borders(); // border cleanup
+						if (!(crtc_type&5)&&video_pos_x>VIDEO_OFFSET_X) // CRTC0 and CRTC2 draw "shadows" on "SYNERGY 2" (5 stripes) and
+							video_target[-8]= video_target[-7]= video_target[-6]= video_target[-5]= // "ONESCREEN COLONIES" (brick wall):
+							video_target[-4]= video_target[-3]= video_target[-2]= video_target[-1]= video_clut[16]; // actually the border
 					}
+				}
+			}
+			else if (crtc_count_r0==crtc_table[1]) // end of bitmap -- CRTC_STATUS_H_OFF_SET will do
+			{
+				if (plus_sprite_target)
+				{
+					if (video_pos_x>plus_sprite_latest) video_main_sprites(); // last sprites
+					video_plus_cleanup(); // border cleanup
 				}
 			}
 		}
@@ -890,7 +896,7 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 			}
 			gate_status=(gate_status&(3+CRTC_STATUS_HSYNC+CRTC_STATUS_VSYNC))+
 				((crtc_before=crtc_status)&(CRTC_STATUS_H_OFF+CRTC_STATUS_V_OFF+CRTC_STATUS_INVIS));
-			if (gate_status<4) video_hi_x_res|=(gate_status==2?2:0)+(plus_sprite_adjust&1); // detect hi-res and odd x-scroll
+			if (gate_status<3) video_hi_x_res=gate_status==2?2:(plus_sprite_adjust&1); else if (gate_status>=CRTC_STATUS_V_OFF) video_hi_x_res=0;
 		}
 
 		// ASIC hardware sprites and DMA
@@ -1138,7 +1144,8 @@ void video_main(int t) // render video output for `t` clock ticks; t is always n
 				vsync_match=0; if (!(video_pos_z&255)&&crtc_type==1) crtc_syncs_update(); // "PHEELONE" watchdog
 				// all calculations are ready: feed everything to the video engine!
 				video_newscanlines(video_pos_x,(((VIDEO_LENGTH_Y-vsync_limit)/2)&-2)+((crtc_status&CRTC_STATUS_REG_8)?2:0)); // end of frame!
-				video_hi_x_res=0; video_threshold=VIDEO_LENGTH_X/4; // soft horizontal threshold
+				video_threshold=VIDEO_LENGTH_X/4; // soft horizontal threshold
+				video_hi_x_res=0; // its actual value will be set when pixels get drawn
 			}
 			vsync_count+=2; vsync_match+=2;
 			// "PREHISTORIK 2", "EDGE GRINDER" and the like perform smooth horizontal scrolling with the low nibble of REG3.

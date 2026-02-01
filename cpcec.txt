@@ -1359,3 +1359,7 @@ slot 0 carried secondary logic in very few MSX2+ models.
 ("Pang", "Robocop 2" and "Sonic GX" assumed the second joystick was always on:
 reported by Xenon) and fixing a bug in the SCL file parser in ZXSEC (reported by
 Megachur).
+- 20260131 -- minor patch fixing the behavior of the Y-blending and Gigascreen
+filters whenever hi-res graphics (MODE 2 in CPCEC, 512 px modes in MSXEC) shared
+screen with lo-res, and tweaked the behavior of the MODE 2 pixel shift in the
+Plus ASIC so the non-MODE 2 pixels are handled as lo-res.

@@ -12,7 +12,7 @@
 // knowledge of the emulation's intrinsic properties.
 
 #define MY_LICENSE "Copyright (C) 2019-2026 Cesar Nicolas-Gonzalez"
-#define MY_VERSION "20260117" // all emulators share the same release date
+#define MY_VERSION "20260131" // all emulators share the same release date
 
 #define INLINE // 'inline' is useless in TCC and GCC4, and harmful in GCC5!
 #define UNUSED // '__attribute__((unused))' may be missing outside GCC
@@ -658,6 +658,7 @@ void video_praecalc(void) // build the precalc'd video filter tables
 #define VIDEO_FILTER_BLUR0(z) v3z=v2z=v0z=z
 #define VIDEO_FILTER_BLUR1(r,z) v1z=VIDEO_FILTER_HALF(z,v0z),r=VIDEO_FILTER_HALF(v1z,v3z),v0z=z,v4z=v2z // = ((A+B)/2+(C+D)/2)/2
 #define VIDEO_FILTER_BLUR2(r,z) v2z=VIDEO_FILTER_HALF(z,v0z),r=VIDEO_FILTER_HALF(v2z,v4z),v0z=z,v3z=v1z // = ((B+C)/2+(D+E)/2)/2
+BYTE video_loxres[VIDEO_PIXELS_Y/2]={0}; // avoid "sticky" pixels when the modes change!
 #endif
 
 #define MAIN_FRAMESKIP_MASK ((1<<MAIN_FRAMESKIP_BITS)-1)
@@ -730,11 +731,11 @@ INLINE void video_drawscanline(void) // call after each drawn scanline; memory c
 	if (!(((session_maus_y+VIDEO_OFFSET_Y)^video_pos_y)&-2)) // does the lightgun aim at the current scanline?
 		video_litegun=session_maus_x>=0&&session_maus_x<VIDEO_PIXELS_X?vi[session_maus_x]|vi[session_maus_x^1]:0; // keep the colours BEFORE any filtering happens!
 	#endif
+	#ifndef VIDEO_LO_X_RES
+	BYTE vp=video_hi_x_res,*vx=&video_loxres[(video_pos_y-VIDEO_OFFSET_Y)>>1];
+	#endif
 	if (video_lineblend) // blend current and previous scanline together!
 	{
-		#ifndef VIDEO_LO_X_RES
-		static BYTE vj=0; // avoid "sticky" pixels when the modes change!
-		#endif
 		static VIDEO_UNIT vz[VIDEO_PIXELS_X]; // vertical blur
 		if (UNLIKELY(video_pos_y<VIDEO_OFFSET_Y+2))
 			MEMLOAD(vz,vi); // 1st line, backup only
@@ -747,37 +748,36 @@ INLINE void video_drawscanline(void) // call after each drawn scanline; memory c
 			while (++vo,++vi<vl);
 			#else // standard half'n'half
 			#ifndef VIDEO_LO_X_RES
-			if ((vj|video_hi_x_res)&2)
+			BYTE vq=vx[-1]==vp?vp:(vp=2);
+			if (vq&2)
 				do
 					if ((vt=*vo)!=(vs=*vi)) *vo=vs,*vi=VIDEO_FILTER_SRGB(vs,vt);
 				while (++vo,++vi<vl); // read hi-res pixels
 			else
 			{
-				if (video_hi_x_res&1) // 1st pixel?
+				if (vq) // 1st pixel?
 				{
 					if ((vt=*vo)!=(vs=*vi)) *vo=vs,*vi=VIDEO_FILTER_SRGB(vs,vt);
 					++vo,++vi; // 1st pixel
 				}
+				do
+					if ((vt=*vo)!=(vs=*vi)) vo[1]=*vo=vs,vi[1]=*vi=VIDEO_FILTER_SRGB(vs,vt);
+				while (vo+=2,(vi+=2)<vl); // skip lo-res pixels
+			}
 			#else
 			{
-			#endif
 				do
-					if ((vt=*vo)!=(vs=*vi)) *vo=vs,vi[1]=*vi=VIDEO_FILTER_SRGB(vs,vt);
+					if ((vt=*vo)!=(vs=*vi)) vo[1]=*vo=vs,vi[1]=*vi=VIDEO_FILTER_SRGB(vs,vt);
 				while (vo+=2,(vi+=2)<vl); // skip lo-res pixels
 			}
 			#endif
+			#endif
 		}
-		#ifndef VIDEO_LO_X_RES
-		vj=video_hi_x_res;
-		#endif
 		vi=vl-VIDEO_PIXELS_X; // rewind
 	}
 	// the order is important: doing PAGEBLEND before LINEBLEND is slow :-(
 	if (video_pageblend) // gigascreen: blend scanlines from previous and current frame!
 	{
-		#ifndef VIDEO_LO_X_RES
-		static BYTE j[VIDEO_PIXELS_Y/2]={0}; BYTE *vj=&j[(video_pos_y-VIDEO_OFFSET_Y)>>1]; // avoid "sticky" pixels when the modes change!
-		#endif
 		vo=&video_blend[((video_pos_y-VIDEO_OFFSET_Y)>>!!VIDEO_HALFBLEND)*VIDEO_PIXELS_X]; // gigascreen
 		#ifdef RAWWW // quick'n'dirty
 		if (video_pos_z&1) // give each gigascreen side its own half
@@ -785,63 +785,77 @@ INLINE void video_drawscanline(void) // call after each drawn scanline; memory c
 		else
 			do vs=*vo,*vo=*vi,*vi=vs,++vo,++vi,*vo=*vi; while (++vo,++vi<vl);
 		#else // standard half'n'half
-		if (!video_fineblend)
-			#ifndef VIDEO_LO_X_RES
-			if ((*vj|video_hi_x_res)&2)
-				do
-					if ((vt=*vo)!=(vs=*vi)) *vo=*vi=VIDEO_FILTER_SRGB(vs,vt); // accumulative
-				while (++vo,++vi<vl); // read hi-res pixels
-			else
-			{
-				if (video_hi_x_res&1) // 1st pixel?
-				{
-					if ((vt=*vo)!=(vs=*vi)) *vo=*vi=VIDEO_FILTER_SRGB(vs,vt); // accumulative
-					++vo,++vi; // 1st pixel
-				}
-			#else
-			{
-			#endif
-				do
-					if ((vt=*vo)!=(vs=*vi)) *vo=vi[1]=*vi=VIDEO_FILTER_SRGB(vs,vt); // accumulative
-				while (vo+=2,(vi+=2)<vl); // skip lo-res pixels
-			}
-		else
-			#ifndef VIDEO_LO_X_RES // do all pixels in hi-res!
-			if ((*vj|video_hi_x_res)&2)
-				do
-					if ((vt=*vo)!=(vs=*vi)) *vo=vs,*vi=VIDEO_FILTER_SRGB(vs,vt); // simple
-				while (++vo,++vi<vl); // read hi-res pixels
-			else
-			{
-				if (video_hi_x_res&1) // 1st pixel?
-				{
-					if ((vt=*vo)!=(vs=*vi)) *vo=vs,*vi=VIDEO_FILTER_SRGB(vs,vt); // simple
-					++vo,++vi; // 1st pixel
-				}
-			#else
-			{
-			#endif
-				do
-					if ((vt=*vo)!=(vs=*vi)) *vo=vs,vi[1]=*vi=VIDEO_FILTER_SRGB(vs,vt); // simple
-				while (vo+=2,(vi+=2)<vl); // skip lo-res pixels
-			}
-		#endif
 		#ifndef VIDEO_LO_X_RES
-		*vj=video_hi_x_res;
+		BYTE vq=*vx==vp?vp:(vp=2);
+		#endif
+		if (!video_fineblend)
+		{
+			#ifndef VIDEO_LO_X_RES
+			if (vq&2)
+				do
+					if ((vt=*vo)!=(vs=*vi)) *vo=*vi=VIDEO_FILTER_SRGB(vs,vt); // accumulative
+				while (++vo,++vi<vl); // read hi-res pixels
+			else
+			{
+				if (vq) // 1st pixel?
+				{
+					if ((vt=*vo)!=(vs=*vi)) *vo=*vi=VIDEO_FILTER_SRGB(vs,vt); // accumulative
+					++vo,++vi; // 1st pixel
+				}
+				do
+					if ((vt=*vo)!=(vs=*vi)) vo[1]=*vo=vi[1]=*vi=VIDEO_FILTER_SRGB(vs,vt); // accumulative
+				while (vo+=2,(vi+=2)<vl); // skip lo-res pixels
+			}
+			#else
+			{
+				do
+					if ((vt=*vo)!=(vs=*vi)) vo[1]=*vo=vi[1]=*vi=VIDEO_FILTER_SRGB(vs,vt); // accumulative
+				while (vo+=2,(vi+=2)<vl); // skip lo-res pixels
+			}
+			#endif
+		}
+		else
+		{
+			#ifndef VIDEO_LO_X_RES // do all pixels in hi-res!
+			if (vq&2)
+				do
+					if ((vt=*vo)!=(vs=*vi)) *vo=vs,*vi=VIDEO_FILTER_SRGB(vs,vt); // simple
+				while (++vo,++vi<vl); // read hi-res pixels
+			else
+			{
+				if (vq) // 1st pixel?
+				{
+					if ((vt=*vo)!=(vs=*vi)) *vo=vs,*vi=VIDEO_FILTER_SRGB(vs,vt); // simple
+					++vo,++vi; // 1st pixel
+				}
+				do
+					if ((vt=*vo)!=(vs=*vi)) vo[1]=*vo=vs,vi[1]=*vi=VIDEO_FILTER_SRGB(vs,vt); // simple
+				while (vo+=2,(vi+=2)<vl); // skip lo-res pixels
+			}
+			#else
+			{
+				do
+					if ((vt=*vo)!=(vs=*vi)) vo[1]=*vo=vs,vi[1]=*vi=VIDEO_FILTER_SRGB(vs,vt); // simple
+				while (vo+=2,(vi+=2)<vl); // skip lo-res pixels
+			}
+			#endif
+		}
 		#endif
 		vi=vl-VIDEO_PIXELS_X; // rewind
 	}
 	// last but not least, let's blur pixels together
 	if (video_filterz&VIDEO_FILTER_MASK_Z)
 	{
-		vi+=video_hi_x_res&1; // 1st pixel
+		#ifndef VIDEO_LO_X_RES
+		if (vp==1) ++vi; // 1st pixel
+		#endif
 		#ifdef VIDEO_FILTER_BLUR0
 		if (!video_finemicro)
 		{
 			VIDEO_FILTER_BLURDATA;
 			vt=*vi,VIDEO_FILTER_BLUR0(vt);
 			#ifndef VIDEO_LO_X_RES // do all pixels in hi-res!
-			if (video_hi_x_res&2)
+			if (vp&2)
 				do {
 					vs=*vi,
 					VIDEO_FILTER_BLUR1(vt,vs),*vi=vt,
@@ -862,7 +876,7 @@ INLINE void video_drawscanline(void) // call after each drawn scanline; memory c
 		{
 			vt=vs=*vi;
 			#ifndef VIDEO_LO_X_RES // do all pixels in hi-res!
-			if (video_hi_x_res&2)
+			if (vp&2)
 				do {
 					if ((vs=*vi)!=vt) *vi=VIDEO_FILTER_SRGB(vs,vt);
 					++vi; // read hi-res pixel
@@ -877,6 +891,9 @@ INLINE void video_drawscanline(void) // call after each drawn scanline; memory c
 				} while ((vi+=2)<vl);
 		}
 	}
+	#ifndef VIDEO_LO_X_RES
+	*vx=video_hi_x_res;
+	#endif
 	// now we can handle the actual masks and scanlines
 	if (video_pos_y>=VIDEO_OFFSET_Y+2) // handle scanlines with 50:50 neighbours
 	{
@@ -937,6 +954,11 @@ INLINE void video_nextscanline(int x) // call before each new scanline: move on 
 	{ frame_pos_y+=2,video_pos_y+=2,video_target+=VIDEO_LENGTH_X*2-video_pos_x; video_target+=video_pos_x=x; session_signal|=session_signal_scanlines; }
 INLINE void video_endscanlines(void) // call after each drawn frame: end the current frame and clean up
 {
+	#ifndef VIDEO_LO_X_RES
+	#ifdef RAWWW
+	if (session_shift) { int j=0,k=0; for (int i=0;i<length(video_loxres);++i) video_loxres[i]==1?++j:video_loxres[i]>1?++k:0; cprintf("%03d+%03d ",j,k); }
+	#endif
+	#endif
 	// handle final scanline (100:0 neighbours, no next line after last!)
 	VIDEO_UNIT *vl=video_frame+VIDEO_OFFSET_X+(VIDEO_OFFSET_Y+VIDEO_PIXELS_Y-2+(video_pos_y&1))*VIDEO_LENGTH_X+VIDEO_PIXELS_X;
 	video_callscanline(vl); // also used in video_drawscanline()
@@ -2679,8 +2701,6 @@ unsigned int session_nextbitmap=1;
 // Optional PNG 24-bit output, once again based on three steps: init, main and exit
 // However, because DEFLATE must see the whole data at once, we have to do things differently
 
-// TODO: perhaps we should dither pixels together in lo-res screenshots, despite the "not worth it" below :-/
-
 #if PNG_OUTPUT_MODE > 1
 #define session_png3_prev session_scratch // more than enough to keep a whole scanline in RGB
 #endif
@@ -2840,14 +2860,14 @@ int session_scrn_exit(void)
 
 #endif
 
-char session_scrn_flag=0;
+char session_scrn_flag=0; // compressed image format flag
 INLINE int session_savebitmap(void) // save a RGB888 BMP/QOI/PNG file; 0 OK, !0 ERROR
 {
 	if (!(session_nextbitmap=session_savenext(session_scrn_flag?"%s%08u." session_scrn_ext:"%s%08u.bmp",session_nextbitmap)))
 		return 1; // too many files!
 	FILE *f; if (!(f=fopen(session_parmtr,"wb")))
 		return 1; // cannot create file!
-	int i; if (session_scrn_flag)
+	int i; if (session_scrn_flag) // compressed format?
 	{
 		if ((i=session_scrn_init(VIDEO_PIXELS_X>>session_filmscale,VIDEO_PIXELS_Y>>session_filmscale))>=0)
 		fwrite1(session_scrn_temp,i,f);
@@ -2855,7 +2875,7 @@ INLINE int session_savebitmap(void) // save a RGB888 BMP/QOI/PNG file; 0 OK, !0 
 			fwrite1(session_scrn_temp,session_scrn_line(session_getscanline(i),VIDEO_PIXELS_X,session_filmscale+1),f);
 		fwrite1(session_scrn_temp,session_scrn_exit(),f);
 	}
-	else
+	else // default to BMP, the uncompressed format
 	{
 		static char h[54]="BM\000\000\000\000\000\000\000\000\066\000\000\000\050\000\000\000\000\000\000\000\000\000\000\000\001\000\030\000"; // zero-padded
 		i=(VIDEO_PIXELS_X*VIDEO_PIXELS_Y*3)>>(2*session_filmscale);
@@ -2869,7 +2889,7 @@ INLINE int session_savebitmap(void) // save a RGB888 BMP/QOI/PNG file; 0 OK, !0 
 			BYTE *t=session_scratch; if (session_filmscale)
 				for (int j=0;j<VIDEO_PIXELS_X;j+=2) // turn two ARGB into one RGB
 				{
-					v=*s++; //if (v!=*s) v=VIDEO_FILTER_SRGB(v,*s); // not worth it
+					v=*s++; //if (v!=*s) v=VIDEO_FILTER_SRGB(v,*s); // TODO: dithering pixels together in lo-res screenshots might, yay or nay?
 					++s,*t++=v,*t++=v>>8,*t++=v>>16; // B, G, R
 				}
 			else

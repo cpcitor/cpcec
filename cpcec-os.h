@@ -582,7 +582,7 @@ INLINE char *session_create(char *s) // create video+audio devices and set menu;
 	RECT r; session_desktop(&r); // unlike SDL2, we lack a true CW_CENTERED option and we must calculate everything :-(
 	if (!(session_hwnd=CreateWindow(wc.lpszClassName,NULL,i,(r.right-session_ideal.right)>>1,(r.bottom-session_ideal.bottom)>>1,
 		session_ideal.right,session_ideal.bottom,NULL,session_hidemenu?NULL:session_menu,wc.hInstance,NULL))||
-		!(video_blend=malloc(sizeof(VIDEO_UNIT[(VIDEO_PIXELS_Y>>!!VIDEO_HALFBLEND)*VIDEO_PIXELS_X])))
+		!(video_blend=malloc(sizeof(VIDEO_UNIT[16+(VIDEO_PIXELS_Y>>!!VIDEO_HALFBLEND)*VIDEO_PIXELS_X])))
 		) return "cannot create window"; // the OS will do DestroyWindow(session_hwnd) ...will it? :-/
 	DragAcceptFiles(session_hwnd,1);
 
