@@ -473,8 +473,8 @@ void ram_setcfg(int x) { ram_depth=((ram_map=x)?x-1:0); ram_bit=(4<<ram_depth)-1
 int ram_getcfg(void) { return ram_map?ram_depth+1:0; }
 
 BYTE *cart=NULL; // external cartridge, empty by default
-#define CART_BITS 23 // 1<<23 = 8 MEGABYTES! "Sword of Ianna" is 704k; late Koei titles are 1M; "King's Valley Enhanced" is 4M; "movie.rom" is 8M!
-#define CART_MASK ((1<<CART_BITS)-1)
+#define CART_BITS 26 // 1<<26 = 64 MEGABYTES! "Sword of Ianna" is 704k; late Koei titles are 1M; "King's Valley Enhanced" is 4M; "movie.rom" is 8M!
+unsigned int cart_mask=0; // no longer the constant ((1<<CART_BITS)-1) but a value that fits the cart size
 #define CART_IDS 10 // supported types, see `mmu_update` below
 
 BYTE sram[1<<15]; // the biggest SRAM chip is 32K long: KOEI SRAM cartridges!
@@ -487,52 +487,57 @@ int sram_makepath(char *s) // build `sram_path` using string `s` as a base; NONZ
 
 char cart_path[STRMAX]="";
 unsigned int cart_sha1_size=0,cart_sha1_list[2<<10][6],cart_bank[8]; // cart_bank[] used to be 4 BYTES but ASCII16X, NEO8 and NEO16 mappers need more words and bits!
-BYTE cart_id=0,cart_log=0; // cart_id is the mapper type, cart_log is the ceiling of the binary logarithm of the cartridge size
-BYTE cart_big=0; // overrides cart_id if nonzero: 1: 32K/48K/64K cartridges that "invade" $0000-$3FFF; 2: 16K/32K/48K cartridges that start at $4000
-BYTE cart_miscel=0; // the "Miscellaneous" type handles multiple "self-signing" subtypes, including ASCII16K and NEO 8K/16K that use more than 8 bits per page!
+BYTE cart_id=0; // cart_id is the general mapper type, most cartridges rely on this field, it's often autodetected and the user can also modify it
+BYTE cart_head=0; // overrides cart_id if nonzero: 1: 32K/48K/64K cartridges that "invade" $0000-$3FFF; 2: 16K/32K/48K cartridges that start at $4000
+BYTE cart_misc=0; // the "Miscellaneous" type handles multiple "self-signing" subtypes, including ASCII16K and NEO 8K/16K that use more than 8 bits per page!
 int cart_insert(char *s) // insert a cartridge; zero OK, nonzero error!
 {
 	FILE *f=puff_fopen(s,"rb"); if (!f) return 1; // cannot open file!
 	int i,o; char q;
 	/**/ if (fgetii(f)==0X4241) // normal case, "AB" appears at the beginning
-		q=2; // cart_big is either 0 or 2
+		q=2; // cart_head is either 0 or 2
 	else if (fseek(f,+0X4000,SEEK_SET),fgetii(f)==0X4241) // "AB" appears at offset +16K (f.e. the "Knight Lore MSX2" remake)
-		q=1; // cart_big is always 1
+		q=1; // cart_head is always 1
 	else if (fseek(f,-0X4000,SEEK_END),fgetii(f)==0X4241) // "AB" appears at offset -16K, we've spotted the fearsome "R-Type"
-		q=0; // cart_big is always 0
+		q=0; // cart_head is always 0
 	else return puff_fclose(f),1; // missing "AB" ID!
-	i=fgetii(f); o=fgetii(f); // "Super Lode Runner" stores $0000 in both fields :-(
+	i=fgetii(f); o=fgetii(f); // "SUPER LODE RUNNER" stores $0000 in both fields :-(
 	if ((i|o)&&(i<0X4004||i>0XBFFF)&&(o<0X4004||o>0XBFFF)) return puff_fclose(f),1; // wrong CART.INIT value! ("Fantasy Zone 2" uses $4004)
 	fseek(f,0,SEEK_END); i=ftell(f); if (i<32||i>(1<<CART_BITS)) return puff_fclose(f),1; // too short (dummy SCCPLUS cart is 32B) or too long!
-	if (!cart) { if (!(cart=malloc(1<<CART_BITS))) return puff_fclose(f),1; } // memory full!
-	memset(cart,255,1<<CART_BITS);
-	fseek(f,0,SEEK_SET); fread1(cart,i,f); puff_fclose(f);
-	cart_miscel=0; cart_log=12; while ((1<<++cart_log)<i) {}
+	if (cart&&cart_mask+1==i) ++cart_mask; else // avoid relocation and possible fragmentation
+	{
+		for (cart_mask=1<<16;cart_mask<i;) cart_mask<<=1; // effectively assuming 64K as the lowest "hard" mask, to ease several later calculations
+		if (free(cart),!(cart=malloc(cart_mask))) return cart_mask=0,puff_fclose(f),1; // memory full!
+	}
+	memset(cart,255,cart_mask); fseek(f,0,SEEK_SET); fread1(cart,i,f); puff_fclose(f);
 	if (i<=(1<<14)) // mirror pages; 16K is special!
 	{
 		// "Nausicaa" (incompatible with MSX-DISK!), "3D Golf Simulation", etc. are tokenized BASIC cartridges (no $4000-$7FFF range); the header is diagnostic
 		memcpy(&cart[1<<14],cart,1<<14); if (!(cart[3]|cart[5]|cart[7])&&cart[9]>=0X80&&cart[9]<0XC0) memset(cart,255,1<<14); // 3D GOLF: $8010; NAUSICAA: $9010
 	}
-	for (int j=1<<15;j<(1<<CART_BITS);j<<=1) if (i<=j) memcpy(&cart[j],cart,j); // mirror pages, if required: 32K, 64K, 128K, etc.
-	cart_big=q<2?q:i>0XC000?0:2; // cartridges where "AB" appears in the second 16K "invade" $0000-$3FFF; above 48K, they carry custom banking; otherwise PSLOT is enough
+	for (int j=1<<15;j<cart_mask;j<<=1) if (i<=j) memcpy(&cart[j],cart,j); // mirror pages, if required: 32K, 64K, 128K, etc.
+	// cartridges where "AB" appears in the second 16K "invade" $0000-$3FFF; above 48K, they carry custom banking; otherwise PSLOT is enough
+	cart_head=q<2?q:i>0XC000?0:2; --cart_mask; // now it's a binary mask rather than the size
 	sccplus_ready=sram_dirt=sram_cart=sram_mask=0; MEMBYTE(sram,-1); MEMBYTE(sccplus_ram,-1);
 	if (sram_makepath(s)) // load SRAM if possible, but don't tag it as dirty yet
 		if (f=puff_fopen(sram_path,"rb")) fread1(sram,sizeof(sram),f),puff_fclose(f);
 	// very modern cartridges include an ASCII string after the standard header;
-	/**/ if (!memcmp(&cart[16],"ROM_",4))
+	if (cart_misc=0,!memcmp(&cart[16],"ROM_",4))
 	{
 		/**/ if (!memcmp(&cart[20],"ASC8",4)) cart_id=4,cprintf("ROM_: ASCII 8K\n");
 		else if (!memcmp(&cart[20],"AS16",4)) cart_id=5,cprintf("ROM_: ASCII 16K\n");
 		else if (!memcmp(&cart[20],"KON4",4)) cart_id=3,cprintf("ROM_: KONAMI 8K\n");
 		else if (!memcmp(&cart[20],"KON5",4)) cart_id=2,cprintf("ROM_: KONAMI SCC\n");
-		else if (!memcmp(&cart[20],"NEO8",4)) cart_id=9,cart_miscel=1,cprintf("ROM_: NEO 8K\n");
-		else if (!memcmp(&cart[20],"NE16",4)) cart_id=9,cart_miscel=2,cprintf("ROM_: NEO 16K\n");
-		/*else if (!memcmp(&cart[20],"YAM8",4)) cart_id=9,cart_miscel=3,cprintf("ROM_: YAMANOOTO\n");*/
+		else if (!memcmp(&cart[20],"NEO8",4)) cart_id=9,cart_misc=1,cprintf("ROM_: NEO 8K\n");
+		else if (!memcmp(&cart[20],"NE16",4)) cart_id=9,cart_misc=2,cprintf("ROM_: NEO 16K\n");
+		/*else if (!memcmp(&cart[20],"YAM8",4)) cart_id=9,cart_misc=3,cprintf("ROM_: YAMANOOTO\n");*/
 	}
 	else if (!memcmp(&cart[16],"ASCII16X",8))
-		cart_id=9,cart_miscel=4,cprintf("ASCI: ASCII16X\n"); // not a simple superset of ASCII 16K
+		cart_id=9,cart_misc=4,cprintf("ASCI: ASCII16X\n"); // not a simple superset of ASCII 16K
 	else
 	{
+		// handle several special cases in advance
+		if (cart_mask==0X1FFFF&&equalsmmmm(&cart[0X1FA74],0X4D453150)) cart_misc=5; // "SUPER LODE RUNNER"
 		// cartridge type detection based on a pre-made SHA-1 list with types: "012356789abcdef012356789abcdef0123567 4" (roughly compatible with FMSX)
 		o=0; sha1_init(); while (o+64<=i) sha1_hash(&cart[o]),o+=64; sha1_exit(&cart[o],i&63);
 		cprintf("SHA-1: %08X%08X%08X%08X%08X",sha1_o[0],sha1_o[1],sha1_o[2],sha1_o[3],sha1_o[4]);
@@ -559,10 +564,10 @@ int cart_insert(char *s) // insert a cartridge; zero OK, nonzero error!
 void cart_reset(void)
 {
 	MEMZERO(cart_bank); // default to zero
-	if (!cart||cart_big||cart_miscel) {} // nothing to bank!
+	if (!cart||cart_head||cart_misc) {} // nothing to bank!
 	else if (cart_id==5) // ASCII 16K: "Gall Force" requires the second bank to boot as 0; "Eggerland 2" suggests that this is normal
 	{
-		if (equalsmmmm(&cart[0X2804C],0X4259444F))
+		if (cart_mask==0X7FFFF&&equalsmmmm(&cart[0X2804C],0X4259444F))
 			cart_bank[0]=15; // special case: "R-Type" is ASCII 16K, but the $4000-$7FFF bank boots as 15 instead of as zero!
 	}
 	else if (cart_id<8)
@@ -571,9 +576,9 @@ void cart_reset(void)
 }
 void cart_remove(void) // remove the cartridge
 {
-	int i=sram_dirt?sram_mask+1:0; sccplus_ready=sram_dirt=cart_log=cart_big=0; if (cart)
+	int i=sram_dirt?sram_mask+1:0; sccplus_ready=sram_dirt=cart_head=0; if (cart)
 	{
-		free(cart),cart=NULL,cart_reset();
+		free(cart),cart=NULL,cart_mask=0,cart_reset();
 		if (i&&sram_cart) if (sram_makepath(cart_path))
 			{ FILE *f=puff_fopen(sram_path,"wb"); if (f) fwrite1(sram,i<<13,f),puff_fclose(f); }
 	}
@@ -611,7 +616,7 @@ int cart_hotfix(char *s) // patch cartridge according to IPS file `s`; zero OK, 
 {
 	if (!cart) return 1; // no cartridge, nothing to do
 	FILE *f=puff_fopen(s,"rb"); if (!f) return 1; // cannot open file!
-	int i=fgetmmmm(f),j,k,l=1<<cart_log; if (i!=0X50415443||fgetc(f)!=0X48) return puff_fclose(f),1; // wrong file!
+	int i=fgetmmmm(f),j,k,l=cart_mask+1; if (i!=0X50415443||fgetc(f)!=0X48) return puff_fclose(f),1; // wrong file!
 	while ((i=fgetmmm(f)),(j=fgetmm(f))>=0&&i>=0)
 		if (j) // normal patch?
 			if (i+j>l) break; else cprintf("IPS:%06X:%04X\n",i,j),fread1(cart+i,j,f); // quit if the patch overflows!
@@ -641,7 +646,7 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 	/**/ if (!z) s=&mem_rom[0X00000-0X0000]; // BIOS!
 	else if (z==slots_ram) s=t=&mem_ram[(((ram_cfg[0]^3)&ram_bit)<<14)-0X0000];
 	else if (z==slots_1st) // normal cartridge (1/4)
-		{ if (cart) if (cart_big==1) s=&cart[0X0000-0X0000]; }
+		{ if (cart) if (cart_head==1) s=&cart[0X0000-0X0000]; }
 	else if (z==slots_sub) // EXT.! (MSX2)
 		{ /*if (equalsii(&mem_rom[0X10000],0X4443))*/ s=&mem_rom[0X10000-0X0000]; }
 	mmu_rom[ 0]=mmu_rom[ 1]=mmu_rom[ 2]=mmu_rom[ 3]=s;
@@ -651,7 +656,7 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 	/**/ if (!z) s=&mem_rom[0X04000-0X4000]; // BAS.!
 	else if (z==slots_ram) s=t=&mem_ram[(((ram_cfg[1]^3)&ram_bit)<<14)-0X4000];
 	else if (z==slots_1st) // normal cartridge (2/4) // "KONAMI'S SYNTHESIZER" DAC
-		{ if (cart) s=cart_big==1?&cart[0X4000-0X4000]:&cart[0X0000-0X4000]; }
+		{ if (cart) s=&cart[(cart_head==1?0X4000:0X0000)-0X4000]; }
 	else if (z==slots_dsk) // DISK without C-BIOS LOGO?
 		{ if (!disc_disabled&&!equalsii(&mem_rom[0X08000],0X2D43)) s=disc_mapping[1],mmu_bit[ 7]=3; } // WD1793 handler (2/4)
 	else if (z==slots_sub)
@@ -665,7 +670,7 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 	/**/ if (!z) { /*if (!equalsii(&mem_rom[0X18000],0X4443))*/ s=&mem_rom[0X08000-0X8000]; } // LOGO! (C-BIOS)
 	else if (z==slots_ram) s=t=&mem_ram[(((ram_cfg[2]^3)&ram_bit)<<14)-0X8000];
 	else if (z==slots_1st) // normal cartridge (3/4)
-		{ if (cart) s=cart_big==1?&cart[0X8000-0X8000]:&cart[0X4000-0X8000]; }
+		{ if (cart) s=&cart[(cart_head==1?0X8000:0X4000)-0X8000]; }
 	else if (z==slots_dsk) // DISK without C-BIOS LOGO?
 		{ if (!disc_disabled&&!equalsii(&mem_rom[0X08000],0X2D43)) s=disc_mapping[2],mmu_bit[11]=3; } // WD1793 handler (3/4)
 	else if (z==slots_sub)
@@ -678,7 +683,7 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 	/**/ if (!z) ;//s=&mem_rom[0X0C000-0X0000]; // XYZ1! (is there any machine where this is NOT like bad_rom?)
 	else if (z==slots_ram) s=t=&mem_ram[(((ram_cfg[3]^3)&ram_bit)<<14)-0XC000];
 	else if (z==slots_1st) // normal cartridge (4/4)
-		{ if (cart) s=cart_big==1?&cart[0XC000-0XC000]:&cart[0X8000-0XC000]; }
+		{ if (cart) s=&cart[(cart_head==1?0XC000:0X8000)-0XC000]; }
 	else if (z==slots_sub) // XYZ2! (MSX2) (ditto, is there any machine where this is NOT like bad_rom?)
 		;//{ /*if (equalsii(&mem_rom[0X10000],0X4443))*/ s=&mem_rom[0X1C000-0X0000]; }
 	mmu_rom[12]=mmu_rom[13]=mmu_rom[14]=mmu_rom[15]=s;
@@ -687,7 +692,7 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 	{
 		// nothing!
 	}
-	else if (cart_big) // small special cartridges go here
+	else if (cart_head) // small special cartridges go here
 	{
 		if (ps_slot[1]==slots_1st)
 		{
@@ -700,25 +705,25 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 		case 0: // Generic 8K
 			if (ps_slot[1]==slots_1st)
 				//mmu_ram[ 4]=mmu_ram[ 5]=mmu_ram[ 6]=mmu_ram[ 7]=&bad_ram[0-0X4000],
-				mmu_rom[ 4]=mmu_rom[ 5]=&cart[((cart_bank[0]<<13)&CART_MASK)-0X4000],
-				mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[1]<<13)&CART_MASK)-0X6000],
+				mmu_rom[ 4]=mmu_rom[ 5]=&cart[((cart_bank[0]<<13)&cart_mask)-0X4000],
+				mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[1]<<13)&cart_mask)-0X6000],
 				mmu_bit[ 4]=mmu_bit[ 5]=mmu_bit[ 6]=mmu_bit[ 7]=2; // detect POKE
 			if (ps_slot[2]==slots_1st)
 				//mmu_ram[ 8]=mmu_ram[ 9]=mmu_ram[10]=mmu_ram[11]=&bad_ram[0-0X8000],
-				mmu_rom[ 8]=mmu_rom[ 9]=&cart[((cart_bank[2]<<13)&CART_MASK)-0X8000],
-				mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[3]<<13)&CART_MASK)-0XA000],
+				mmu_rom[ 8]=mmu_rom[ 9]=&cart[((cart_bank[2]<<13)&cart_mask)-0X8000],
+				mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[3]<<13)&cart_mask)-0XA000],
 				mmu_bit[ 8]=mmu_bit[ 9]=mmu_bit[10]=mmu_bit[11]=2; // detect POKE
 			break;
 		case 1: // Generic 16K
 			if (ps_slot[1]==slots_1st)
 				//mmu_ram[ 4]=mmu_ram[ 5]=mmu_ram[ 6]=mmu_ram[ 7]=&bad_ram[0-0X4000],
 				mmu_rom[ 4]=mmu_rom[ 5]=
-				mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[0]<<14)&CART_MASK)-0X4000],
+				mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[0]<<14)&cart_mask)-0X4000],
 				mmu_bit[ 4]=mmu_bit[ 5]=mmu_bit[ 6]=mmu_bit[ 7]=2; // detect POKE
 			if (ps_slot[2]==slots_1st)
 				//mmu_ram[ 8]=mmu_ram[ 9]=mmu_ram[10]=mmu_ram[11]=&bad_ram[0-0X8000],
 				mmu_rom[ 8]=mmu_rom[ 9]=
-				mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[1]<<14)&CART_MASK)-0X8000],
+				mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[1]<<14)&cart_mask)-0X8000],
 				mmu_bit[ 8]=mmu_bit[ 9]=mmu_bit[10]=mmu_bit[11]=2; // detect POKE
 			break;
 		case 2: // Konami SCC
@@ -738,8 +743,8 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 						mmu_ram[ 6]=mmu_ram[ 7]=mmu_rom[ 6];
 				}
 				else
-					mmu_rom[ 4]=mmu_rom[ 5]=&cart[((cart_bank[0]<<13)&CART_MASK)-0X4000],
-					mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[1]<<13)&CART_MASK)-0X6000],
+					mmu_rom[ 4]=mmu_rom[ 5]=&cart[((cart_bank[0]<<13)&cart_mask)-0X4000],
+					mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[1]<<13)&cart_mask)-0X6000],
 					mmu_bit[ 5]=mmu_bit[ 7]=2; // detect POKE at $5000-$77FF
 			}
 			if (ps_slot[2]==slots_1st)
@@ -755,8 +760,8 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 					mmu_bit[11]=3; // SCC+ I/O and SCCPLUS MODE register!
 				}
 				else
-					mmu_rom[ 8]=mmu_rom[ 9]=&cart[((cart_bank[2]<<13)&CART_MASK)-0X8000],
-					mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[3]<<13)&CART_MASK)-0XA000],
+					mmu_rom[ 8]=mmu_rom[ 9]=&cart[((cart_bank[2]<<13)&cart_mask)-0X8000],
+					mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[3]<<13)&cart_mask)-0XA000],
 					mmu_bit[ 9]=mmu_bit[11]=3; // detect POKE+PEEK at $9000-$BFFF
 			}
 			break;
@@ -771,7 +776,7 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 					s=&sram[(cart_bank[1]&32)<<7],
 					mmu_rom[ 7]=(mmu_rom[ 6]=s-0X6000)-0X1000;
 				else
-					mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[1]<<13)&CART_MASK)-0X6000];
+					mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[1]<<13)&cart_mask)-0X6000];
 			}
 			if (ps_slot[2]==slots_1st)
 			{
@@ -781,12 +786,12 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 					s=&sram[(cart_bank[2]&32)<<7],
 					mmu_rom[ 9]=(mmu_rom[ 8]=s-0X8000)-0X1000;
 				else
-					mmu_rom[ 8]=mmu_rom[ 9]=&cart[((cart_bank[2]<<13)&CART_MASK)-0X8000];
+					mmu_rom[ 8]=mmu_rom[ 9]=&cart[((cart_bank[2]<<13)&cart_mask)-0X8000];
 				if (cart_bank[3]&sram_cart)
 					s=&sram[(cart_bank[3]&32)<<7],sram_dirt=1,
 					mmu_ram[11]=mmu_rom[11]=(mmu_rom[10]=s-0XA000)-0X1000;
 				else
-					mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[3]<<13)&CART_MASK)-0XA000];
+					mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[3]<<13)&cart_mask)-0XA000];
 			}
 			break;
 		case 8: // ASCII 16K + SRAM (2/8K SRAM set by BIT 4)
@@ -796,7 +801,7 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 				if (cart_bank[0]&sram_cart)
 					mmu_rom[ 6]=mmu_rom[ 7]=(mmu_rom[ 4]=mmu_rom[ 5]=&sram[0X0000-0X4000])-0X2000;
 				else
-					mmu_rom[ 4]=mmu_rom[ 5]=mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[0]<<14)&CART_MASK)-0X4000];
+					mmu_rom[ 4]=mmu_rom[ 5]=mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[0]<<14)&cart_mask)-0X4000];
 				mmu_bit[ 6]=mmu_bit[ 7]=2; // detect POKE at $6000-$7FFF
 			}
 			if (ps_slot[2]==slots_1st)
@@ -804,7 +809,7 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 				if (cart_bank[1]&sram_cart)
 					mmu_ram[10]=mmu_ram[11]=mmu_rom[10]=mmu_rom[11]=(mmu_ram[ 8]=mmu_ram[ 9]=mmu_rom[ 8]=mmu_rom[ 9]=&sram[0X0000-0X8000])-0X2000,sram_dirt=1;
 				else
-					mmu_rom[ 8]=mmu_rom[ 9]=mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[1]<<14)&CART_MASK)-0X8000];
+					mmu_rom[ 8]=mmu_rom[ 9]=mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[1]<<14)&cart_mask)-0X8000];
 				//mmu_ram[ 8]=mmu_ram[ 9]=mmu_ram[10]=mmu_ram[11]=&bad_ram[0-0X8000],
 			}
 			break;
@@ -814,8 +819,8 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 			if (ps_slot[1]==slots_1st)
 			{
 				//mmu_ram[ 4]=mmu_ram[ 5]=mmu_ram[ 6]=mmu_ram[ 7]=&bad_ram[0-0X4000],
-				mmu_rom[ 4]=mmu_rom[ 5]=(cart_bank[0]&sram_cart)?&sram[((sram_mask&cart_bank[0])<<13)-0X4000]:&cart[((cart_bank[0]<<13)&CART_MASK)-0X4000];
-				mmu_rom[ 6]=mmu_rom[ 7]=(cart_bank[1]&sram_cart)?&sram[((sram_mask&cart_bank[1])<<13)-0X6000]:&cart[((cart_bank[1]<<13)&CART_MASK)-0X6000];
+				mmu_rom[ 4]=mmu_rom[ 5]=(cart_bank[0]&sram_cart)?&sram[((sram_mask&cart_bank[0])<<13)-0X4000]:&cart[((cart_bank[0]<<13)&cart_mask)-0X4000];
+				mmu_rom[ 6]=mmu_rom[ 7]=(cart_bank[1]&sram_cart)?&sram[((sram_mask&cart_bank[1])<<13)-0X6000]:&cart[((cart_bank[1]<<13)&cart_mask)-0X6000];
 				mmu_bit[ 6]=mmu_bit[ 7]=2; // detect POKE at $6000-$7FFF
 			}
 			if (ps_slot[2]==slots_1st)
@@ -823,37 +828,37 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 				if (cart_bank[2]&sram_cart)
 					t=s=&sram[((sram_mask&cart_bank[2])<<13)-0X8000],sram_dirt=1;
 				else
-					t=&bad_ram[0-0X8000],s=&cart[((cart_bank[2]<<13)&CART_MASK)-0X8000];
+					t=&bad_ram[0-0X8000],s=&cart[((cart_bank[2]<<13)&cart_mask)-0X8000];
 				mmu_ram[ 8]=mmu_ram[ 9]=t,mmu_rom[ 8]=mmu_rom[ 9]=s;
 				if (cart_bank[3]&sram_cart)
 					t=s=&sram[((sram_mask&cart_bank[3])<<13)-0XA000],sram_dirt=1;
 				else
-					t=&bad_ram[0-0X8000],s=&cart[((cart_bank[3]<<13)&CART_MASK)-0XA000];
+					t=&bad_ram[0-0X8000],s=&cart[((cart_bank[3]<<13)&cart_mask)-0XA000];
 				mmu_ram[10]=mmu_ram[11]=t,mmu_rom[10]=mmu_rom[11]=s;
 			}
 			break;
 		}
 		case 9: // Miscellaneous
-			switch (cart_miscel)
+			switch (cart_misc)
 			{
 				case 1: // NEO 8K
 					if (ps_slot[0]==slots_1st)
 					{
 						mmu_bit[ 0]=mmu_bit[ 1]=mmu_bit[ 2]=mmu_bit[ 3]=2; // detect POKE at $1000-$3FFF
-						mmu_rom[ 0]=mmu_rom[ 1]=&cart[((cart_bank[0]<<13)&CART_MASK)-0X0000];
-						mmu_rom[ 2]=mmu_rom[ 3]=&cart[((cart_bank[1]<<13)&CART_MASK)-0X2000];
+						mmu_rom[ 0]=mmu_rom[ 1]=&cart[((cart_bank[0]<<13)&cart_mask)-0X0000];
+						mmu_rom[ 2]=mmu_rom[ 3]=&cart[((cart_bank[1]<<13)&cart_mask)-0X2000];
 					}
 					if (ps_slot[1]==slots_1st)
 					{
 						mmu_bit[ 4]=mmu_bit[ 5]=mmu_bit[ 6]=mmu_bit[ 7]=2; // detect POKE at $5000-$7FFF
-						mmu_rom[ 4]=mmu_rom[ 5]=&cart[((cart_bank[2]<<13)&CART_MASK)-0X4000];
-						mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[3]<<13)&CART_MASK)-0X6000];
+						mmu_rom[ 4]=mmu_rom[ 5]=&cart[((cart_bank[2]<<13)&cart_mask)-0X4000];
+						mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[3]<<13)&cart_mask)-0X6000];
 					}
 					if (ps_slot[2]==slots_1st)
 					{
 						mmu_bit[ 8]=mmu_bit[ 9]=mmu_bit[10]=mmu_bit[11]=2; // detect POKE at $9000-$BFFF
-						mmu_rom[ 8]=mmu_rom[ 9]=&cart[((cart_bank[4]<<13)&CART_MASK)-0X8000];
-						mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[5]<<13)&CART_MASK)-0XA000];
+						mmu_rom[ 8]=mmu_rom[ 9]=&cart[((cart_bank[4]<<13)&cart_mask)-0X8000];
+						mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[5]<<13)&cart_mask)-0XA000];
 					}
 					if (ps_slot[3]==slots_1st) // "Implementations of the NEO mapper should return the value FFh if page 3 is read..."
 					{
@@ -865,17 +870,17 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 					if (ps_slot[0]==slots_1st)
 					{
 						mmu_bit[ 0]=mmu_bit[ 1]=mmu_bit[ 2]=mmu_bit[ 3]=2; // detect POKE at $1000-$3FFF
-						mmu_rom[ 0]=mmu_rom[ 1]=mmu_rom[ 2]=mmu_rom[ 3]=&cart[((cart_bank[0]<<14)&CART_MASK)-0X0000];
+						mmu_rom[ 0]=mmu_rom[ 1]=mmu_rom[ 2]=mmu_rom[ 3]=&cart[((cart_bank[0]<<14)&cart_mask)-0X0000];
 					}
 					if (ps_slot[1]==slots_1st)
 					{
 						mmu_bit[ 4]=mmu_bit[ 5]=mmu_bit[ 6]=mmu_bit[ 7]=2; // detect POKE at $5000-$7FFF
-						mmu_rom[ 4]=mmu_rom[ 5]=mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[1]<<14)&CART_MASK)-0X4000];
+						mmu_rom[ 4]=mmu_rom[ 5]=mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[1]<<14)&cart_mask)-0X4000];
 					}
 					if (ps_slot[2]==slots_1st)
 					{
 						mmu_bit[ 8]=mmu_bit[ 9]=mmu_bit[10]=mmu_bit[11]=2; // detect POKE at $9000-$BFFF
-						mmu_rom[ 8]=mmu_rom[ 9]=mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[2]<<14)&CART_MASK)-0X8000];
+						mmu_rom[ 8]=mmu_rom[ 9]=mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[2]<<14)&cart_mask)-0X8000];
 					}
 					if (ps_slot[3]==slots_1st) // identical to NEO 8K
 					{
@@ -885,25 +890,33 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 					break;
 				/*case 3: // YAMANOOTO, like KONAMI SCC and KONAMI 8K, but configurable on the fly
 					if (ps_slot[1]==slots_1st)
-						mmu_rom[ 4]=mmu_rom[ 5]=&cart[((cart_bank[0]<<13)&CART_MASK)-0X4000],
-						mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[1]<<13)&CART_MASK)-0X6000],
+						mmu_rom[ 4]=mmu_rom[ 5]=&cart[((cart_bank[0]<<13)&cart_mask)-0X4000],
+						mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[1]<<13)&cart_mask)-0X6000],
 						mmu_bit[ 4]=mmu_bit[ 5]=mmu_bit[ 6]=mmu_bit[ 7]=2; // detect POKE at $4000-$7FFF
 					if (ps_slot[2]==slots_1st)
-						mmu_rom[ 8]=mmu_rom[ 9]=&cart[((cart_bank[2]<<13)&CART_MASK)-0X8000],
-						mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[3]<<13)&CART_MASK)-0XA000],
+						mmu_rom[ 8]=mmu_rom[ 9]=&cart[((cart_bank[2]<<13)&cart_mask)-0X8000],
+						mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[3]<<13)&cart_mask)-0XA000],
 						mmu_bit[ 8]=mmu_bit[ 9]=mmu_bit[10]=mmu_bit[11]=2; // detect POKE at $8000-$BFFF
 					break;*/
 				case 4: // ASCII16X, like ASCII 16K but wider-paged and (AFAIK) without SRAM
 					if (ps_slot[1]==slots_1st)
 					{
-						mmu_rom[ 4]=mmu_rom[ 5]=mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[0]<<14)&CART_MASK)-0X4000];
+						mmu_rom[ 4]=mmu_rom[ 5]=mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[0]<<14)&cart_mask)-0X4000];
 						mmu_bit[ 6]=mmu_bit[ 7]=2; // detect POKE at $6000-$7FFF
 					}
 					if (ps_slot[2]==slots_1st)
 					{
-						mmu_rom[ 8]=mmu_rom[ 9]=mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[1]<<14)&CART_MASK)-0X8000];
+						mmu_rom[ 8]=mmu_rom[ 9]=mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[1]<<14)&cart_mask)-0X8000];
 						mmu_bit[10]=mmu_bit[11]=2; // detect POKE at $A000-$BFFF (used by any title?)
 					}
+					break;
+				case 5: // "SUPER LODE RUNNER"
+					if (ps_slot[1]==slots_1st)
+						mmu_rom[ 4]=mmu_rom[ 5]=mmu_rom[ 6]=mmu_rom[ 7]=&bad_rom[0-0X4000];
+					if (ps_slot[2]==slots_1st)
+						mmu_bit[ 0]=2, // detect POKE at $0000
+						mmu_rom[ 8]=mmu_rom[ 9]=
+						mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[1]<<14)&cart_mask)-0X8000];
 					break;
 				default:
 					/**/ if (equalsmmmm(&cart[0X05350],0X64426553)) // "CROSS BLAIM"
@@ -912,24 +925,15 @@ void mmu_update(void) // the MMU requires the PIO because PORT A is the PSLOT bi
 							mmu_bit[ 4]=2; // detect POKE at $4045
 						if (ps_slot[2]==slots_1st)
 							mmu_rom[ 8]=mmu_rom[ 9]=
-							mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[1]<<14)&CART_MASK)-0X8000];
-					}
-					else if (equalsmmmm(&cart[0X1FA74],0X4D453150)) // "SUPER LODE RUNNER"
-					{
-						if (ps_slot[1]==slots_1st)
-							mmu_rom[ 4]=mmu_rom[ 5]=mmu_rom[ 6]=mmu_rom[ 7]=&bad_rom[0-0X4000];
-						if (ps_slot[2]==slots_1st)
-							mmu_bit[ 0]=2, // detect POKE at $0000
-							mmu_rom[ 8]=mmu_rom[ 9]=
-							mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[1]<<14)&CART_MASK)-0X8000];
+							mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[1]<<14)&cart_mask)-0X8000];
 					}
 					else if (equalsmmmm(&cart[0X004E4],0X384C7C78)) // "HARRY FOX: YUKI NO MAOH"
 					{
 						if (ps_slot[1]==slots_1st)
 							mmu_bit[ 6]=mmu_bit[ 7]=2, // detect POKE at $6000-$7FFF
-							mmu_rom[ 4]=mmu_rom[ 5]=mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[0]<<15)&CART_MASK)-0X4000];
+							mmu_rom[ 4]=mmu_rom[ 5]=mmu_rom[ 6]=mmu_rom[ 7]=&cart[((cart_bank[0]<<15)&cart_mask)-0X4000];
 						if (ps_slot[2]==slots_1st)
-							mmu_rom[ 8]=mmu_rom[ 9]=mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[1]<<15)&CART_MASK)+0X4000-0X8000];
+							mmu_rom[ 8]=mmu_rom[ 9]=mmu_rom[10]=mmu_rom[11]=&cart[((cart_bank[1]<<15)&cart_mask)+0X4000-0X8000];
 					}
 					/*
 					else if (equalsmmmm(&cart[0X00018],0X50414332)) // "PAC2" <= "PAC2OPLL"
@@ -991,7 +995,7 @@ void mmu_slowpoke(WORD w,BYTE b) // notice that the caller already filters out i
 	{
 		// nothing!
 	}
-	else if (cart_big) // small special cartridges go here
+	else if (cart_head) // small special cartridges go here
 	{
 		if (w==0X4000&&equalsmmmm(&cart[0X7F64],0X37343120))
 			{ dac_extra=1<<7,dac_delay=0,dac_voice=((b-128)*10922)>>8; } // "KONAMI'S SYNTHESIZER" DAC: unsigned 8-bit sample; see also psg_outputs[]
@@ -1036,7 +1040,7 @@ void mmu_slowpoke(WORD w,BYTE b) // notice that the caller already filters out i
 				cart_bank[(w>>12)- 6]=b,mmu_update();
 			break;
 		case 9: // Miscellaneous
-			switch (cart_miscel)
+			switch (cart_misc)
 			{
 				case 1: // NEO 8K
 					cprintf("NEO 8K: %08X:%04X,%02X\n",z80_pc.w,w,b);
@@ -1055,15 +1059,13 @@ void mmu_slowpoke(WORD w,BYTE b) // notice that the caller already filters out i
 					cprintf("ASCII16X: %08X:%04X,%02X\n",z80_pc.w,w,b);
 					cart_bank[(w>>12)&1]=(w&0X0F00)|b,mmu_update();
 					break;
+				case 5: // "SUPER LODE RUNNER"
+					if (w==0X0000) cart_bank[1]=b,mmu_update(); // the cartridge traps pokes to the BIOS!
+					break;
 				default: // cartridges that "attack" unique addresses
 					/**/ if (w==0X4045)
 					{
 						if (equalsmmmm(&cart[0X05350],0X64426553)) // "CROSS BLAIM"
-							cart_bank[1]=b,mmu_update();
-					}
-					else if (w==0X0000) // this pokes the BIOS, but the cartridge traps it!
-					{
-						if (equalsmmmm(&cart[0X1FA74],0X4D453150)) // "SUPER LODE RUNNER"
 							cart_bank[1]=b,mmu_update();
 					}
 					else if (!(w&0X0FFF)) // AFAIK only $6000 and $7000 are used here
@@ -2876,17 +2878,17 @@ BYTE debug_bigdigit(int i) { return (i&=31)<10?i+'0':i+'A'-10; }
 BYTE debug_bigshiny(int i) { return debug_bigdigit(i)+128; }
 void debug_info(int q)
 {
-	if (cart&&!cart_big)
+	if (cart&&!cart_head)
 	{
-		if (cart_miscel) // extended fields!
+		if (cart_misc) // extended fields!
 		{
-			if (cart_miscel==1) // NEO 8K has six fields!
+			if (cart_misc==1) // NEO 8K has six fields!
 				sprintf(DEBUG_INFOZ( 0),"1:%c%02X%c%02X%c%02X%c%02X%c%02X%c%02X",
 					debug_bigshiny(cart_bank[0]>>8),cart_bank[0]&255,debug_bigshiny(cart_bank[1]>>8),cart_bank[1]&255,
 					debug_bigshiny(cart_bank[2]>>8),cart_bank[2]&255,debug_bigshiny(cart_bank[3]>>8),cart_bank[3]&255,
 					debug_bigshiny(cart_bank[4]>>8),cart_bank[4]&255,debug_bigshiny(cart_bank[5]>>8),cart_bank[5]&255);
 			else // NEO 16K and others have four fields
-				sprintf(DEBUG_INFOZ( 0),"%c:--:%c%02X:%c%02X:%c%02X:%c%02X",hexa1[cart_miscel],
+				sprintf(DEBUG_INFOZ( 0),"%c:--:%c%02X:%c%02X:%c%02X:%c%02X",hexa1[cart_misc],
 					debug_bigdigit(cart_bank[0]>>8),cart_bank[0]&255,debug_bigdigit(cart_bank[0]>>8),cart_bank[1]&255,
 					debug_bigdigit(cart_bank[0]>>8),cart_bank[2]&255,debug_bigdigit(cart_bank[0]>>8),cart_bank[3]&255);
 		}
@@ -3887,7 +3889,7 @@ void session_user(int k) // handle the user's commands
 		case 0x8508: // ASCII 8K + SRAM (KOEI SRAM)
 		case 0x8509: // ASCII 16K + SRAM MAPPER
 		case 0x850A: // MISCELLANEOUS MAPPER
-			if (cart_id!=(k-=0x8501)) { cart_id=k; if (cart&&!cart_big) all_reset(); } // don't reset if nothing changes
+			if (cart_id!=(k-=0x8501)) { cart_id=k; if (cart&&!cart_head) all_reset(); } // don't reset if nothing changes
 			break;
 		case 0x850E: // MSX-MUSIC OPLL
 			opll_internal=!opll_internal; opll_playing=0;

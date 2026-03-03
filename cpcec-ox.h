@@ -200,11 +200,11 @@ unsigned char kbd_map[256]; // key-to-key translation map
 // general engine functions and procedures -------------------------- //
 
 #ifdef _WIN32
-char basepath[STRMAX]; // is this long enough for the GetFullPathName() target buffer?
+char wildcard[]="*.*",basepath[STRMAX]; // is this long enough for the GetFullPathName() target buffer?
 char *makebasepath(const char *s) // fetch the absolute path of a relative path; returns NULL on error
 	{ char *m; return GetFullPathName(s,sizeof(basepath),basepath,&m)?basepath:NULL; }
 #else
-char basepath[8<<9];  // the buffer of realpath() is unlike other STRMAX-length strings, it depends on the irregular PATH_MAX definition:
+char wildcard[]="*",basepath[8<<9];  // the buffer of realpath() is unlike other STRMAX-length strings, it depends on the irregular PATH_MAX definition:
 #define makebasepath(s) realpath((s),basepath) // the target must be at least 4096 bytes long in Linux 4.10.0-38-generic, Linux 4.15.0-96-generic...!
 #endif
 
@@ -1231,7 +1231,6 @@ int getftype(const char *s) // <0 = invalid path / nothing, 0 = file, >0 = direc
 }
 int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_filedialog; q here means TAB is available or not, and f means the starting TAB value (q) or whether we're reading (!q)
 {
-	if (!*s) return 0; // empty!
 	int i; char *m,*n,pastname[STRMAX],pastfile[STRMAX],basefind[STRMAX];
 	session_ui_fileflags=f;
 	if (!r) r=session_path; // NULL path = default!
@@ -1261,7 +1260,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 			if (j<0&&!strcmp(pastname,prevpath)) j=i; // search parent link
 			++i,m+=sortedinsert(m,0,prevpath);
 		}
-		WIN32_FIND_DATA wfd; HANDLE h; strcpy(basefind,basepath); strcat(basefind,"*");
+		WIN32_FIND_DATA wfd; HANDLE h; strcpy(basefind,basepath); strcat(basefind,wildcard);
 		if ((h=FindFirstFile(basefind,&wfd))!=INVALID_HANDLE_VALUE)
 		{
 			do
@@ -1277,7 +1276,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 		{
 			do
 				if (!(wfd.dwFileAttributes&FILE_ATTRIBUTE_HIDDEN)&&!(wfd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)) // reject invisible files
-					if (multiglobbing(s,n=wfd.cFileName,1)) // add file name
+					if (!s||multiglobbing(s,n=wfd.cFileName,1)) // add file name
 						++i,m=&half[sortedinsert(half,m-half,n)];
 			while (FindNextFile(h,&wfd)&&m-(char*)session_scratch<sizeof(session_scratch)-STRMAX);
 			FindClose(h);
@@ -1309,7 +1308,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 		if (d=opendir(basepath))
 		{
 			while ((e=readdir(d))&&m-(char*)session_scratch<sizeof(session_scratch)-STRMAX)
-				if (n=e->d_name,*n!='.'&&multiglobbing(s,n,1)) // reject ".*" entries again
+				if (n=e->d_name,*n!='.'&&(!s||multiglobbing(s,n,1))) // reject ".*" entries again
 					if (!getftype(strcat(strcpy(basefind,basepath),n))) // add file name
 						++i,m=&half[sortedinsert(half,m-half,n)];
 			closedir(d);
@@ -1325,7 +1324,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 		if (q||f||*pastname) i=j; // point to the entry that fits the previous name
 		*m=0; // end of list
 
-		sprintf(session_tmpstr,"%s -- %s",t,basepath); //,s
+		sprintf(session_tmpstr,"%s -- %s",t,basepath);
 		if (session_ui_list(i,session_scratch,session_tmpstr,q?session_ui_filedialog_tabkey:NULL,0)<0)
 			return 0; // user closed the dialog!
 
@@ -1360,7 +1359,7 @@ int session_ui_filedialog(char *r,char *s,char *t,int q,int f) // see session_fi
 				strcpy(session_parmtr,pastfile); // reuse previous name if possible
 				if (session_ui_line(t)>0)
 				{
-					if (!multiglobbing(s,session_parmtr,1)) // unknown extension?
+					if (s&&!multiglobbing(s,session_parmtr,1)) // unknown extension?
 					{
 						m=session_parmtr; n=s;
 						while (*m) // go to end of target string

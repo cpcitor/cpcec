@@ -12,7 +12,7 @@
 // knowledge of the emulation's intrinsic properties.
 
 #define MY_LICENSE "Copyright (C) 2019-2026 Cesar Nicolas-Gonzalez"
-#define MY_VERSION "20260131" // all emulators share the same release date
+#define MY_VERSION "20260303" // all emulators share the same release date
 
 #define INLINE // 'inline' is useless in TCC and GCC4, and harmful in GCC5!
 #define UNUSED // '__attribute__((unused))' may be missing outside GCC
@@ -1527,7 +1527,7 @@ char *puff_session_subdialog(char *r,const char *s,const char *t,char *zz,int qq
 	{
 		static char x[]={'*',PATHCHAR,'.','*',0}; // exclude hidden folders and files
 		if (*puff_name!='.'&&puff_name[strlen(puff_name)-1]!=PATHCHAR&&!globbing(x,puff_name,0)) // visible/hidden? file/folder?
-			if (multiglobbing(s,puff_name,1))
+			if (!s||multiglobbing(s,puff_name,1))
 				++l,z=&session_scratch[sortedinsert(session_scratch,z-session_scratch,puff_name)];
 		puff_body(0);
 		if (z>=&session_scratch[length(session_scratch)-STRMAX])
@@ -1547,8 +1547,8 @@ char *puff_session_subdialog(char *r,const char *s,const char *t,char *zz,int qq
 
 char *puff_session_filedialog(char *r,char *s,char *t,int q,int f) // ZIP archive wrapper for session_getfile
 {
-	char rr[STRMAX],ss[STRMAX],*z,*zz;
-	sprintf(ss,"%s;%s",puff_pattern,s); if (!r) r=session_path; strcpy(rr,r); // NULL path = default!
+	char rr[STRMAX],ss[STRMAX],*z,*zz; if (s) sprintf(ss,"%s;%s",puff_pattern,s);
+	if (!r) r=session_path; strcpy(rr,r); // NULL path = default!
 	for (int qq=0;;) // try either a file list or the file dialog until the user either chooses a file or quits
 	{
 		if (zz=strrstr(rr,PUFF_STR)) // 'rr' holds the path, does it contain the separator already?
@@ -1557,7 +1557,7 @@ char *puff_session_filedialog(char *r,char *s,char *t,int q,int f) // ZIP archiv
 			if (z=puff_session_subdialog(rr,s,t,zz,qq))
 				return z;
 		}
-		if (!(z=(q?session_getfilereadonly(rr,ss,t,f):session_getfile(rr,ss,t)))) // what did the user choose?
+		z=s?ss:s; if (!(z=(q?session_getfilereadonly(rr,z,t,f):session_getfile(rr,z,t)))) // what did the user choose?
 			return NULL; // user cancel: give up
 		if (!multiglobbing(puff_pattern,z,1))
 			return z; // normal file: accept it
@@ -1724,7 +1724,7 @@ BYTE debug_break,debug_inter=0; // do special opcodes trigger the debugger? (f.e
 BYTE debug_config; // store the general debugger options here; the CPU-specific ones go elsewhere
 int main_t=0,stop_t=0; // the global tick counter, used by the debugger, and optionally by the emulator
 
-FILE *debug_logfile; int debug_logsize; BYTE debug_logtemp[1<<9]; // the byte recorder datas
+char debug_source[STRMAX],debug_binary[STRMAX]; int debug_length=0; FILE *debug_logfile; int debug_logsize; BYTE debug_logtemp[1<<9]; // the byte recorder datas
 
 #define debug_setup() (debug_dirty=session_signal&SESSION_SIGNAL_DEBUG,MEMZERO(debug_point),debug_logfile=NULL)
 #define debug_configread(i) (debug_config=(i)/4,debug_break=(i)&2,debug_mode=(i)&1)
@@ -1734,10 +1734,11 @@ int debug_logbyte(BYTE z) // log a byte, if possible; 0 OK, !0 ERROR
 {
 	if (!debug_logfile) // try creating a log file?
 	{
-		char *s; if (s=session_newfile(NULL,"*","Register log file"))
+		char *s; if (s=session_newfile(debug_binary,NULL,"Register log file"))
 			debug_logfile=fopen(s,"wb"),debug_logsize=0;
 		if (!debug_logfile) // do we have a valid file?
 			return 1; // ERROR!
+		strcpy(debug_binary,s); // valid file, remember
 	}
 	debug_logtemp[debug_logsize]=z;
 	if (++debug_logsize>=length(debug_logtemp))
@@ -1842,9 +1843,9 @@ void session_debug_print(char *t,int x,int y,int n) // print a line of `n` chara
 		switch (((config=debug_config&=15)>>2)&3)
 		{
 			case 1: MEMLOAD(debug_chrs,onscreen_chrs); break; // THIN
-			case 2: for (int i=0,j=0;i<sizeof(debug_chrs);++i) j=onscreen_chrs[i]>>1,debug_chrs[i]=(i%ONSCREEN_SIZE)>=ONSCREEN_SIZE/2?(j<<1)|j:j; break; // ITALIC
-			case 0: for (int i=0,j=0;i<sizeof(debug_chrs);++i) j=onscreen_chrs[i],debug_chrs[i]=j|(j>>1); break; // NORMAL
-			case 3: for (int i=0,j=0;i<sizeof(debug_chrs);++i) j=onscreen_chrs[i],debug_chrs[i]=(j<<1)|j|(j>>1); break; // BOLD
+			case 2: for (int i=0,j;i<sizeof(debug_chrs);++i) j=onscreen_chrs[i]>>1,debug_chrs[i]=(i%ONSCREEN_SIZE)>=ONSCREEN_SIZE/2?(j<<1)|j:j; break;
+			case 0: for (int i=0,j;i<sizeof(debug_chrs);++i) j=onscreen_chrs[i],debug_chrs[i]=j|(j>>1); break; // NORMAL
+			case 3: for (int i=0,j;i<sizeof(debug_chrs);++i) j=onscreen_chrs[i],debug_chrs[i]=(j<<1)|j|(j>>1); break; // BOLD
 		}
 	for (;n>0;++x,--n)
 	{
@@ -2083,9 +2084,10 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 		else if (k=='I') // INPUT BYTES FROM FILE..
 		{
 			char *s; FILE *f; int w=debug_grafx_i;
-			if (s=puff_session_getfile(NULL,"*","Input file"))
+			if (s=puff_session_getfile(debug_binary,NULL,"Input file"))
 				if (f=puff_fopen(s,"rb"))
 				{
+					strcpy(debug_binary,s); // valid file, remember
 					while (i=fread1(session_substr,256,f)) // better than fgetc()
 						for (int j=0;j<i;++j)
 							grafx_poke(w++,session_substr[j]);
@@ -2096,11 +2098,12 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 		else if (k=='O') // OUTPUT BYTES INTO FILE..
 		{
 			char *s; FILE *f; int w=debug_grafx_i;
-			if (*session_parmtr=0,session_line("Output length")>=0)
+			if (sprintf(session_parmtr,"%04X",debug_length),session_line("Output length")>=0)
 				if ((i=session_debug_eval(session_parmtr))>0&&i<=(debug_grafx_m+1))
-					if (s=session_newfile(NULL,"*","Output file"))
+					if ((debug_length=i),(s=session_newfile(debug_binary,NULL,"Output file")))
 						if (f=fopen(s,"wb"))
 						{
+							strcpy(debug_binary,s); // valid file, remember
 							while (i)
 							{
 								int j; for (j=0;j<i&&j<256;++j)
@@ -2256,9 +2259,10 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 			if (!(debug_panel&1))
 			{
 				char *s; FILE *f; WORD w=debug_panel?debug_panel2_w:debug_panel0_w;
-				if (s=puff_session_getfile(NULL,"*","Input file"))
+				if (s=puff_session_getfile(debug_binary,NULL,"Input file"))
 					if (f=puff_fopen(s,"rb"))
 					{
+						strcpy(debug_binary,s); // valid file, remember
 						while (i=fread1(session_substr,256,f)) // better than fgetc()
 							for (int j=0;j<i;++j)
 								debug_poke(w++,session_substr[j]);
@@ -2284,11 +2288,12 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 			if (!(debug_panel&1))
 			{
 				char *s; FILE *f; WORD w=debug_panel?debug_panel2_w:debug_panel0_w;
-				if (*session_parmtr=0,session_line("Output length")>=0)
+				if (sprintf(session_parmtr,"%04X",debug_length),session_line("Output length")>=0)
 					if ((i=session_debug_eval(session_parmtr))>0&&i<=65536)
-						if (s=session_newfile(NULL,"*","Output file"))
+						if ((debug_length=i),(s=session_newfile(debug_binary,NULL,"Output file")))
 							if (f=fopen(s,"wb"))
 							{
+								strcpy(debug_binary,s); // valid file, remember
 								while (i)
 								{
 									int j; if (debug_panel)
@@ -2305,13 +2310,14 @@ int session_debug_user(int k) // handles the debug event `k`; !0 valid event, 0 
 			break;
 		case 'P': // PRINT DISASSEMBLY/HEXDUMP INTO FILE..
 			if (!(debug_panel&1))
-				if (*session_parmtr=0,session_line(debug_panel?"Hexa dump length":"Disassembly length")>=0)
+				if (sprintf(session_parmtr,"%04X",debug_length),session_line(debug_panel?"Hexa dump length":"Disassembly length")>=0)
 				{
 					char *s,*t; FILE *f; WORD w=debug_panel?debug_panel2_w:debug_panel0_w,u;
 					if ((i=session_debug_eval(session_parmtr))>0&&i<=65536)
-						if (s=session_newfile(NULL,"*.TXT",debug_panel?"Print hexa dump":"Print disassembly"))
+						if ((debug_length=i),(s=session_newfile(debug_source,"*.txt",debug_panel?"Print hexa dump":"Print disassembly")))
 							if (f=fopen(s,"w"))
 							{
+								strcpy(debug_source,s); // valid file, remember
 								if (debug_panel) // HEXDUMP?
 								{
 									k=0; do // WRAP!
@@ -2969,6 +2975,7 @@ int session_prae(char *s) // load configuration and set stuff up; `s` is argv[0]
 		s[1]=0; // keep separator
 	else
 		*session_path=0; // no path (?)
+	strcpy(debug_source,strcpy(debug_binary,session_path));
 	FILE *f; if ((f=session_configfile(1)))
 	{
 		while (fgets(session_parmtr,STRMAX-1,f)) session_configreadmore(session_configread());

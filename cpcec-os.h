@@ -240,7 +240,7 @@ unsigned char kbd_map[256]; // key-to-key translation map
 
 // general engine functions and procedures -------------------------- //
 
-char basepath[STRMAX]; // is this long enough for the GetFullPathName() target buffer?
+char wildcard[]="*.*",basepath[STRMAX]; // is this long enough for the GetFullPathName() target buffer?
 char *makebasepath(const char *s) // fetch the absolute path of a relative path; returns NULL on error
 	{ char *m; return GetFullPathName(s,sizeof(basepath),basepath,&m)?basepath:NULL; }
 
@@ -913,7 +913,7 @@ int getftype(const char *s) // <0 = invalid path / nothing, 0 = file, >0 = direc
 }
 int session_filedialog(char *r,const char *s,const char *t,int q,int f) // auxiliar function, see below
 {
-	if (!*s) return 0; // empty! GetOpenFileName and co. return ZERO when an error happens or the user hits "CANCEL"
+	if (!s) s=wildcard; // default = all files!
 	session_please();
 	memset(&session_ofn,0,sizeof(session_ofn));
 	session_ofn.lStructSize=sizeof(session_ofn);
@@ -952,6 +952,7 @@ int session_filedialog(char *r,const char *s,const char *t,int q,int f) // auxil
 	session_ofn.nFilterIndex=1;
 	session_ofn.lpstrDefExt=((t=strrchr(s,'.'))&&(*++t!='*'))?t:NULL;
 	session_ofn.Flags=OFN_PATHMUSTEXIST|OFN_NONETWORKBUTTON|OFN_NOCHANGEDIR|(q?OFN_OVERWRITEPROMPT:(OFN_FILEMUSTEXIST|f));
+	// GetOpenFileName and co. return ZERO when an error happens or the user hits "CANCEL", hence the wrappers below
 	return q?GetSaveFileName(&session_ofn):GetOpenFileName(&session_ofn);
 }
 #define session_filedialog_get_readonly() (session_ofn.Flags&OFN_READONLY)

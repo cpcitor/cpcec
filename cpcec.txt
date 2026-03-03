@@ -1363,3 +1363,8 @@ Megachur).
 filters whenever hi-res graphics (MODE 2 in CPCEC, 512 px modes in MSXEC) shared
 screen with lo-res, and tweaked the behavior of the MODE 2 pixel shift in the
 Plus ASIC so the non-MODE 2 pixels are handled as lo-res.
+- 20260303 -- minor patch raising the MSX maximum cartridge size to 64 MB
+(requested by Aoineko) while reducing the memory usage (no need to allocate 64
+MB for a 16 KB cart), letting the debugger's file dialogs remember recent paths
+and files (requested by Megachur) and simplifying the inner handling of
+wildcards.

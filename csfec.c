@@ -2741,7 +2741,7 @@ int m6510_what; // it doesn't need to stick, but putting this in M65XX_LOCAL hur
 //#define M65XX_TRAP_0X20 if (UNLIKELY(M65XX_PC.w==0XF53A&&mmu_mcr==m6510_t64ok)) { t64_loadfile(); M65XX_X=mem_ram[0X00AC],M65XX_Y=mem_ram[0X00AD],M65XX_PC.w=0XF8D1; } // load T64 file
 #define M65XX_REU
 
-#define bios_magick() (debug_point[0XFFCF]=debug_point[0XF539]=debug_point[0XFD6E]=debug_point[0XE4E4]=DEBUG_MAGICK)
+#define bios_magick() (debug_point[0XFFCF]=debug_point[0XF830]=debug_point[0XF539]=debug_point[0XFD6E]=debug_point[0XE4E4]=DEBUG_MAGICK)
 void m6510_magick(void) // virtual magick!
 {
 	//cprintf("MAGICK:%08X ",m6510_pc.w);
@@ -2767,6 +2767,8 @@ void m6510_magick(void) // virtual magick!
 					M65XX_A=*autorun_s++,M65XX_P&=~1,M65XX_PC.w=0XE194; if (!*autorun_s) autorun_m=0; // stop only after typing RUN
 			}
 		} else autorun_m=0; } } // just in case someone uses a non-100% compatible BIOS!
+	else if (m6510_pc.w==0XF830) // waiting for the tape to PLAY; notice that a T64 will NOT trigger this breakpoint!
+		{ if (tape&&mmu_mcr==power_boost&&mem_rom[0X1830]==0X24) session_dirty=tape_enabled=!0; } // shall we tie this to power-up boost?
 	else if (m6510_pc.w==0XF539) // load T64 file
 		{ if (mmu_mcr==m6510_t64ok&&mem_rom[0X1539]==0X20) { t64_loadfile(); M65XX_X=mem_ram[0X00AC],M65XX_Y=mem_ram[0X00AD],M65XX_PC.w=0XF8D0; } }
 	else if (m6510_pc.w==0XFD6E) // power-up boost (memory test)
@@ -3102,7 +3104,7 @@ int snap_load(char *s) // loads snapshot file `s`; 0 OK, !0 ERROR
 	m6510_s=header[0x26];
 	m6510_int=header[0x27]&(128+2+1); // avoid accidents; see `m6510_irq` below!
 	mmu_cfg[0]=header[0x30];
-	mmu_cfg[1]=header[0x31]; tape_enabled=!(mmu_cfg[1]&32)&&tape&&tape_physical(); // shall we play the tape?
+	mmu_cfg[1]=header[0x31]; //tape_enabled=!(mmu_cfg[1]&32)&&tape&&tape_physical(); // shall we play the tape?
 	//if (!(mmu_out=header[0x32])) mmu_out=0XFF; // *!* temporary bugfix
 	// CIA #1
 	memcpy(CIA_TABLE_0,&header[0x40],0X10);

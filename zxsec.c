@@ -275,7 +275,7 @@ int trdos_open(char *s,int d,int canwrite) // insert a BETA128 disc from path `s
 		if (diskette_canwrite[d]=0,!(trdos[d]=puff_fopen(s,"rb"))) // fall back to "rb" if "rb+" is unfeasible!
 			return trdos_close(d),1; // file error!
 	int i=fread1(diskette_mem[d],9,trdos[d]); if (i<9) return trdos_close(d),1; // truncated!!
-	if (!memcmp(diskette_mem[d],"SINCLAIR",8)&&diskette_mem[d][8]<'B') // valid SCL header?
+	if (!memcmp(diskette_mem[d],"SINCLAIR",8)&&diskette_mem[d][8]<=128) // valid SCL header?
 	{
 		int j,k=diskette_mem[d][8];
 		memset(diskette_mem[d],0,4096);
